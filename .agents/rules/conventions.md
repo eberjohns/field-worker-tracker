@@ -1,0 +1,11 @@
+# Code conventions
+- Python 3.12, full type hints, `ruff` clean, `pyright` clean. No bare `except`. No `print` (use `structlog`).
+- Pydantic v2 models for all request/response bodies. Never return ORM objects from routes.
+- SQLAlchemy 2.0 async. Every schema change is an Alembic migration with a working `downgrade`.
+- Primary keys are UUIDs, except `sync_changes.id` (bigint identity, used as the sync cursor).
+- Records are deactivated (`is_active = false`), not deleted. Editable records carry a `version` integer for optimistic locking.
+- Every state-changing service function writes an audit entry (actor, action, entity, safe diff, reason).
+- Error responses use RFC 7807 (`application/problem+json`) with a stable `code` string.
+- Names: modules and files `snake_case`, classes `PascalCase`, API paths `kebab-case`, JSON fields `snake_case`.
+- Functions stay small and single-purpose. Prefer clear names over comments; comment the *why*.
+- Tests: write example-based unit tests for everything in `rules/`. The QA team owns broader testing.
