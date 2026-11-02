@@ -14,3 +14,4 @@ export const Reports: React.FC = () => {
     </div>
   );
 };
+

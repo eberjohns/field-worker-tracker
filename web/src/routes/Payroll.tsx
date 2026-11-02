@@ -14,3 +14,4 @@ export const Payroll: React.FC = () => {
     </div>
   );
 };
+

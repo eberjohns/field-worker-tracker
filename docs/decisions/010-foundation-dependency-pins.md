@@ -23,3 +23,4 @@ This locks in proven, actively maintained packages across both stacks, avoids th
 
 ## Consequences
 All CI pipelines and local workflows use `uv` and `pnpm` with immutable lockfiles. Any dependency addition or upgrade must follow the `add-dependency` skill and update `docs/17-dependencies.md`.
+

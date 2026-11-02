@@ -14,3 +14,4 @@ export const Settings: React.FC = () => {
     </div>
   );
 };
+

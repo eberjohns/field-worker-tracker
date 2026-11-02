@@ -14,3 +14,4 @@ export const LiveMap: React.FC = () => {
     </div>
   );
 };
+

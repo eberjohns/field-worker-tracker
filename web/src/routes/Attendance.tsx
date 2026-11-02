@@ -14,3 +14,4 @@ export const Attendance: React.FC = () => {
     </div>
   );
 };
+
