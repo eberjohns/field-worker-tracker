@@ -13,6 +13,7 @@ One decision per file, numbered. Use the `write-adr` skill. Status: Proposed, Ac
 | 007 | [Multi-country operation in one deployment](007-multi-country-single-deployment.md) | Superseded by 009 |
 | 008 | [Effective-dated configuration and time rules](008-effective-dated-configuration.md) | Accepted |
 | 009 | [One stack per country, and hosting](009-country-deployments-and-hosting.md) | Accepted |
+| 010 | [Foundation dependency pins and verification](010-foundation-dependency-pins.md) | Accepted |
 
 See also [decision-register.md](decision-register.md) for business decisions awaiting client confirmation.
 
