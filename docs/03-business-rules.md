@@ -80,10 +80,10 @@ Detailed algorithms live in docs 04, 05 and 06.
 - **BR-PY-11** The job budget uses the salary revision file (grade cost with its own provisions) and the job items; it is for display and comparison only **[DEC-29]**.
 
 ## 7. Settings and overrides
-- **BR-ST-01** Schedule/break values resolve by precedence employee, then team (supervisor's team), then the country's value, then the global value, **as of the work date**. Overrides have effective date ranges.
+- **BR-ST-01** Schedule/break values resolve by precedence: **EMPLOYEE > TEAM > DRIVERS > COMPANY**, as of the work date. Within the same scope, narrower `applies_to` (`OUTDOOR_ONLY` / `INDOOR_ONLY`) wins over `ALL`. When multiple manager team rules match, direct `SUPERVISOR` beats `SUPERINTENDENT`, which beats `ENGINEER`, then most recent `start_date` wins. Unspecified/blank fields inherit down the candidate chain (**ADR-012**, **[DEC-03, DEC-41]**).
 - **BR-ST-02** Changing a setting never rewrites finalized attendance or payroll.
-- **BR-ST-03** Public holidays are organization-wide per country.
-- **BR-ST-04** All settings, time rules and overrides are **effective-dated**. Attendance for a date is always judged by the values in force on that date, including when it is recalculated later **[DEC-35]**.
+- **BR-ST-03** Public holidays are organization-wide per country (stored in `public_holidays`).
+- **BR-ST-04** All settings, time rules and overrides are **effective-dated**. Attendance for a date is always judged by the values in force on that date, including when it is recalculated later. Setting updates close previous active rows at `new_effective_from - 1 day` (**ADR-008, ADR-012**, **[DEC-35]**).
 - **BR-ST-05** **Work-period rules** (Ramadan, summer midday break, any seasonal rule) apply between two dates, per country, to all jobs or outdoor jobs only. They can change the day's working minutes, the break, and/or define a blocked window that counts as break. The scheduler's daily capacity and attendance's required time follow them **[DEC-35]**.
 
 ## 8. Countries

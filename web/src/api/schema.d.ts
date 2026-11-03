@@ -470,6 +470,166 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Resolved Settings */
+        get: operations["list_resolved_settings_api_v1_settings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Setting */
+        put: operations["update_setting_api_v1_settings__key__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/{key}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Setting History */
+        get: operations["get_setting_history_api_v1_settings__key__history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/time-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Time Rules */
+        get: operations["list_time_rules_api_v1_time_rules_get"];
+        put?: never;
+        /** Create Time Rule */
+        post: operations["create_time_rule_api_v1_time_rules_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/time-rules/{rule_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Time Rule */
+        delete: operations["delete_time_rule_api_v1_time_rules__rule_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Time Rule */
+        patch: operations["update_time_rule_api_v1_time_rules__rule_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/time-rules/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Resolve Time Rules
+         * @description Resolve 5-point planned schedule and explain which rule won.
+         */
+        get: operations["resolve_time_rules_api_v1_time_rules_resolve_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public-holidays": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Public Holidays */
+        get: operations["list_public_holidays_api_v1_public_holidays_get"];
+        put?: never;
+        /** Create Public Holiday */
+        post: operations["create_public_holiday_api_v1_public_holidays_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public-holidays/{holiday_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Public Holiday */
+        delete: operations["delete_public_holiday_api_v1_public_holidays__holiday_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/consent-policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Consent Policies */
+        get: operations["list_consent_policies_api_v1_consent_policies_get"];
+        put?: never;
+        /** Create Consent Policy */
+        post: operations["create_consent_policy_api_v1_consent_policies_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -546,6 +706,82 @@ export interface components {
             reason?: string | null;
             /** Ip */
             ip?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** CompanySettingRead */
+        CompanySettingRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Setting Key */
+            setting_key: string;
+            /** Country */
+            country: string | null;
+            /** Value */
+            value: unknown;
+            /** Unit */
+            unit: string | null;
+            /**
+             * Effective From
+             * Format: date
+             */
+            effective_from: string;
+            /** Effective To */
+            effective_to: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** CompanySettingUpdate */
+        CompanySettingUpdate: {
+            /** Value */
+            value: unknown;
+            /** Country */
+            country?: string | null;
+            /** Effective From */
+            effective_from?: string | null;
+            /** Unit */
+            unit?: string | null;
+        };
+        /** ConsentPolicyCreate */
+        ConsentPolicyCreate: {
+            /** Version */
+            version: number;
+            /** Language */
+            language: string;
+            /** Title */
+            title: string;
+            /** Body */
+            body: string;
+        };
+        /** ConsentPolicyRead */
+        ConsentPolicyRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Version */
+            version: number;
+            /** Language */
+            language: string;
+            /** Title */
+            title: string;
+            /** Body */
+            body: string;
+            /**
+             * Published At
+             * Format: date-time
+             */
+            published_at: string;
             /**
              * Created At
              * Format: date-time
@@ -799,12 +1035,65 @@ export interface components {
             /** Password */
             password: string;
         };
+        /** MatchedRuleExplanationRead */
+        MatchedRuleExplanationRead: {
+            /** Rule Id */
+            rule_id: string;
+            /** Rule Name */
+            rule_name: string;
+            /** Scope Type */
+            scope_type: string;
+            /** Applies To */
+            applies_to: string;
+            /** Priority Score */
+            priority_score: number;
+            /** Is Match */
+            is_match: boolean;
+            /** Status */
+            status: string;
+            /** Reasons */
+            reasons?: string[];
+        };
         /** PasswordChangeRequest */
         PasswordChangeRequest: {
             /** Current Password */
             current_password: string;
             /** New Password */
             new_password: string;
+        };
+        /** PublicHolidayCreate */
+        PublicHolidayCreate: {
+            /**
+             * Holiday Date
+             * Format: date
+             */
+            holiday_date: string;
+            /** Name */
+            name: string;
+            /** Country */
+            country: string;
+        };
+        /** PublicHolidayRead */
+        PublicHolidayRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Holiday Date
+             * Format: date
+             */
+            holiday_date: string;
+            /** Name */
+            name: string;
+            /** Country */
+            country: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** ReadinessResponse */
         ReadinessResponse: {
@@ -905,6 +1194,174 @@ export interface components {
              */
             must_change_password: boolean;
         };
+        /** TimeRuleCreate */
+        TimeRuleCreate: {
+            /** Name */
+            name: string;
+            /** Country */
+            country?: string | null;
+            /** Scope Type */
+            scope_type: string;
+            /** Scope Employee Id */
+            scope_employee_id?: string | null;
+            /**
+             * Applies To
+             * @default ALL
+             */
+            applies_to: string;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /** End Date */
+            end_date?: string | null;
+            /** Accommodation Start */
+            accommodation_start?: string | null;
+            /** First Site Start */
+            first_site_start?: string | null;
+            /** Break Minutes */
+            break_minutes?: number | null;
+            /** Last Site End */
+            last_site_end?: string | null;
+            /** Accommodation End */
+            accommodation_end?: string | null;
+            /** Standard Hours Change Minutes */
+            standard_hours_change_minutes?: number | null;
+            /** Notes */
+            notes?: string | null;
+        };
+        /** TimeRuleRead */
+        TimeRuleRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Country */
+            country: string | null;
+            /** Scope Type */
+            scope_type: string;
+            /** Scope Employee Id */
+            scope_employee_id: string | null;
+            /** Applies To */
+            applies_to: string;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /** End Date */
+            end_date: string | null;
+            /** Accommodation Start */
+            accommodation_start: string | null;
+            /** First Site Start */
+            first_site_start: string | null;
+            /** Break Minutes */
+            break_minutes: number | null;
+            /** Last Site End */
+            last_site_end: string | null;
+            /** Accommodation End */
+            accommodation_end: string | null;
+            /** Standard Hours Change Minutes */
+            standard_hours_change_minutes: number | null;
+            /** Notes */
+            notes: string | null;
+            /** Is Active */
+            is_active: boolean;
+            /** Version */
+            version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** TimeRuleResolveResponse */
+        TimeRuleResolveResponse: {
+            /**
+             * Employee Id
+             * Format: uuid
+             */
+            employee_id: string;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Is Outdoor */
+            is_outdoor: boolean | null;
+            /** Accommodation Start */
+            accommodation_start: string | null;
+            /** First Site Start */
+            first_site_start: string | null;
+            /** Break Minutes */
+            break_minutes: number;
+            /** Last Site End */
+            last_site_end: string | null;
+            /** Accommodation End */
+            accommodation_end: string | null;
+            /** Planned Total Minutes */
+            planned_total_minutes: number;
+            /** Planned Worked Minutes */
+            planned_worked_minutes: number;
+            /** Standard Hours Change Minutes */
+            standard_hours_change_minutes: number;
+            /** Has Accommodation */
+            has_accommodation: boolean;
+            /** Winning Rule Id */
+            winning_rule_id: string | null;
+            /** Winning Rule Name */
+            winning_rule_name: string | null;
+            /** Winning Sources */
+            winning_sources: {
+                [key: string]: components["schemas"]["WinningFieldSourceRead"];
+            };
+            /** Matched Rules */
+            matched_rules: components["schemas"]["MatchedRuleExplanationRead"][];
+        };
+        /** TimeRuleUpdate */
+        TimeRuleUpdate: {
+            /** Version */
+            version: number;
+            /** Name */
+            name?: string | null;
+            /** Country */
+            country?: string | null;
+            /** Scope Type */
+            scope_type?: string | null;
+            /** Scope Employee Id */
+            scope_employee_id?: string | null;
+            /** Applies To */
+            applies_to?: string | null;
+            /** Start Date */
+            start_date?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            /** Accommodation Start */
+            accommodation_start?: string | null;
+            /** First Site Start */
+            first_site_start?: string | null;
+            /** Break Minutes */
+            break_minutes?: number | null;
+            /** Last Site End */
+            last_site_end?: string | null;
+            /** Accommodation End */
+            accommodation_end?: string | null;
+            /** Standard Hours Change Minutes */
+            standard_hours_change_minutes?: number | null;
+            /** Notes */
+            notes?: string | null;
+            /** Is Active */
+            is_active?: boolean | null;
+        };
         /** TokenResponse */
         TokenResponse: {
             /** Access Token */
@@ -964,6 +1421,19 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** WinningFieldSourceRead */
+        WinningFieldSourceRead: {
+            /** Rule Id */
+            rule_id: string;
+            /** Rule Name */
+            rule_name: string;
+            /** Scope Type */
+            scope_type: string;
+            /** Field Name */
+            field_name: string;
+            /** Value */
+            value: unknown;
         };
         /** ZoneCreate */
         ZoneCreate: {
@@ -2154,6 +2624,454 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditLogRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_resolved_settings_api_v1_settings_get: {
+        parameters: {
+            query?: {
+                country?: string | null;
+                as_of?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanySettingRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_setting_api_v1_settings__key__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompanySettingUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanySettingRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_setting_history_api_v1_settings__key__history_get: {
+        parameters: {
+            query?: {
+                country?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanySettingRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_time_rules_api_v1_time_rules_get: {
+        parameters: {
+            query?: {
+                scope_type?: string | null;
+                country?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimeRuleRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_time_rule_api_v1_time_rules_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimeRuleCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimeRuleRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_time_rule_api_v1_time_rules__rule_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimeRuleRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_time_rule_api_v1_time_rules__rule_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimeRuleUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimeRuleRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_time_rules_api_v1_time_rules_resolve_get: {
+        parameters: {
+            query: {
+                employee_id: string;
+                date?: string;
+                is_outdoor?: boolean | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimeRuleResolveResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_public_holidays_api_v1_public_holidays_get: {
+        parameters: {
+            query?: {
+                country?: string | null;
+                year?: number | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicHolidayRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_public_holiday_api_v1_public_holidays_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublicHolidayCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicHolidayRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_public_holiday_api_v1_public_holidays__holiday_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                holiday_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_consent_policies_api_v1_consent_policies_get: {
+        parameters: {
+            query?: {
+                language?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentPolicyRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_consent_policy_api_v1_consent_policies_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConsentPolicyCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentPolicyRead"];
                 };
             };
             /** @description Validation Error */

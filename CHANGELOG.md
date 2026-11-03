@@ -3,6 +3,16 @@ All notable changes. Format: Keep a Changelog. Mobile-contract changes are also 
 
 ## [Unreleased]
 ### Added
+- PHASE-02 (Settings, time rules and calendars):
+  - Pure domain rules resolver for time rules (`fw.rules.time_rules`): scope hierarchy (`EMPLOYEE > TEAM > DRIVERS > COMPANY`), manager relationship weighting (`SUPERVISOR > SUPERINTENDENT > ENGINEER`), specificity (`OUTDOOR_ONLY` / `INDOOR_ONLY` > `ALL`), and field-level inheritance with full explainability.
+  - Verification of the client 5-point planned schedule calculation: 05:00 / 06:00 / 0:30 / 15:30 / 17:00 => 12:00 total (720 min), 09:00 worked (540 min).
+  - Database migration `0003_settings_and_time_rules.py` adding `time_rules`, `public_holidays`, and `consent_policies` tables with foreign keys and check constraints; seeded catalog settings, default company time rule, statutory public holidays (AE & SA), and consent policy v1.
+  - Settings service & schemas supporting effective-dated updates (closing prior active records at `new_effective_from - 1 day`), setting history tracking, and time rule CRUD with scope protection for Engineers.
+  - Explainer API endpoint `GET /time-rules/resolve` returning effective schedule, planned total/worked minutes, standard hours adjustments, winning primary rule, and field-level source traces.
+  - Public holidays endpoints (`GET /public-holidays`, `POST /public-holidays`, `DELETE /public-holidays/{id}`) and consent policy endpoints (`GET /consent-policies`, `POST /consent-policies`).
+  - Web Dashboard Settings view (`web/src/routes/Settings.tsx`): 7 tabs (Company Settings with effective-dated edit modal & history drawer, Time Rules table with create modal, Resolver Check Tool with visual 5-point schedule & candidate trace, Public Holidays, Budget-Only Staff Types checklist, Default Password policy, and Consent Notice publisher).
+  - ADR-012: Time rules resolver hierarchy, field inheritance, and scope.
+  - Automated demo script for Phase 02 (`backend/tools/demo_phase02.py`).
 - PHASE-01 (Access and people):
   - Pure domain rules for hierarchy validation: cycle prevention in directed management graph, single supervisor constraint, and transitive descendant scope resolution (`fw.rules.hierarchy`).
   - Pure password policy rules: default password detection, strength validation, and expiration/locking after `default_password_max_days` (`fw.rules.password`).

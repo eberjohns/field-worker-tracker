@@ -13,7 +13,7 @@ Users: Admin (all), Engineer (their scope), others read. Rules: BR-AT-06/13, `05
 Planned **total time** = accommodation end - accommodation start (12:00). Planned **worked time** = last-site end - first-site start - break (09:00). Standard hours (8/10/12) come from the salary structure and can be changed by a rule (Ramadan -120 min).
 
 ## Levels and precedence
-COMPANY (default) -> **DRIVERS** -> **TEAM** (everyone linked to a chosen supervisor, superintendent or engineer, e.g. Mr. Dawood's labourers) -> **EMPLOYEE** (one person, e.g. an indoor technician). The most specific rule in force on the date wins; blank fields inherit from the next rule. A rule may apply to ALL jobs, OUTDOOR_ONLY or INDOOR_ONLY (seasonal summer break for outdoor jobs). A job item can also carry its own longer break. Rules have a date range (a **season**) and are never edited in place once attendance exists: add a new rule from a date.
+COMPANY (default) -> **DRIVERS** -> **TEAM** (everyone linked to a chosen supervisor, superintendent or engineer, e.g. Mr. Dawood's labourers) -> **EMPLOYEE** (one person, e.g. an indoor technician). The most specific rule in force on the date wins; blank fields inherit from lower-priority rules (ADR-012). A rule may apply to ALL jobs, OUTDOOR_ONLY or INDOOR_ONLY (seasonal summer break for outdoor jobs). Within the same scope, narrower applies-to wins over ALL. When multiple manager team rules match, direct SUPERVISOR beats SUPERINTENDENT beats ENGINEER, followed by most recent start_date. A job item can also carry its own longer break. Rules have a date range (a **season**) and are never edited in place once attendance exists: add a new rule from a date.
 Starting presets (editable): Winter first site 06:00-06:30, last site 16:00-16:30, break 1 h; Summer first site 05:00-05:30, last site 16:30-17:00, break 2.5 h (outdoor); Ramadan 05:30-12:30, break 0, standard hours -2 h; drivers and indoor teams are exceptions.
 
 ## Screen: Time rules
@@ -25,8 +25,8 @@ Summer          Company          Outdoor  15 Jun 27   15 Sep 27   04:30     05:0
 Ramadan         Company          All      08 Feb 27   09 Mar 27   05:00     05:30      0:00  12:30     13:30    -2 h
 Dawood team     Team: Dawood     All      01 Jan 26   -           05:30     06:30      1:00  16:00     17:30    -
 ```
-- **New rule**: choose scope (pick the team/person), applies-to, dates, the five times, standard-hours change; preview "affects N workers"; save.
-- **Check tool**: pick a person and a date -> shows the effective plan and **which rule won** (explainability).
+- **New rule**: choose scope (pick the team/person), applies-to, dates, the five times, standard-hours change; save.
+- **Check tool (`GET /time-rules/resolve`)**: pick a person and a date -> shows the effective plan, planned total/worked minutes, and **which rule won** with field-level inheritance sources (explainability, ADR-012).
 - Engineers see and edit only rules for their teams/people; Admin edits company/driver rules.
 
 ## Daily attendance table (report 1)
