@@ -51,7 +51,7 @@ All client questions are answered. **CONFIRMED** = the client decided; **PROPOSE
 | DEC-48 | Budget-only list | (see DEC-09) | 03 | CONFIRMED |
 | DEC-49 | Who is measured how | Everyone by site visits; only drivers accommodation-to-accommodation; no-accommodation workers have n/a accommodation columns | 05 | CONFIRMED |
 | DEC-50 | Product name | Field Worker Tracker (FWT) | all | CONFIRMED |
-| DEC-51 | Import rules | Admin only; preview with new/updated (old->new)/unchanged/clashes; blank keeps, `_` clears; no deletion, deactivate used records; keys editable on screen, not by import | 11, D6 | CONFIRMED |
+| DEC-51 | Import rules | Admin only; preview with new/updated (old->new)/unchanged/clashes; blank keeps, `_` clears; no deletion, deactivate used records; keys editable on screen, not by import | 11, D6, ADR-013 | CONFIRMED |
 | DEC-52 | Suggestions | Same grade group first-class eligible, exact staff type first | 04 | CONFIRMED |
 | DEC-53 | Accounts | Username = worker ID; one default password for all (setting), forced change at first login, lock after `default_password_max_days`, Admin-only reset, workers bound to first device | 02, 09 | CONFIRMED |
 | DEC-54 | Saudi Arabia | Separate stack inside the Kingdom when Saudi goes live; UAE stack stays; ADR-009 | 13, ADR-009 | HUMAN |

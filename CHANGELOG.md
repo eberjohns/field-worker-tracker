@@ -3,6 +3,21 @@ All notable changes. Format: Keep a Changelog. Mobile-contract changes are also 
 
 ## [Unreleased]
 ### Added
+- PHASE-03 (Import framework, master data import and salary structures):
+  - Pure domain rules for payroll salary arithmetic (`fw.rules.payroll.salary`): fixed salary portion calculation, standard round-to-cents money rounding, upcoming 1st-of-month effective date computation, and salary delta computation.
+  - Pure domain rules for workbook normalization and validation (`fw.rules.imports.normalizer`, `fw.rules.imports.validator`): text normalization, grade code year suffix stripping, controlled Staff Grade Description (SGD) aliases with unknown flag, cell semantics (`_` clears optional, blank preserves, error on clearing required), date range checks, intra-file natural key clash detection, and reporting line hierarchy issue detection (cycles, self-reference, multi-supervisor).
+  - Database migration `0004_import_and_salary.py` adding `import_batches`, `import_rows`, and `employee_salary` tables with foreign keys and check constraints.
+  - Imports module (`fw.modules.imports`): Code-driven single source of truth `SHEET_REGISTRY` covering 14 sheets, dynamic Excel template generator (`tools/generate_import_template.py` and `generator.py`), multipart/raw workbook parser with composite same-file foreign key resolution, preview engine with field-level diffs (`old -> new`), atomic multi-sheet commit in dependency order, user provisioning for web roles, and guarded safe rollback (`POST /imports/{id}/rollback`).
+  - Payroll module (`fw.modules.payroll`): Effective-dated worker salary structure management, revision history, and query services.
+  - Web API endpoints mounted under `/api/v1`:
+    - Imports: `GET /imports/template`, `POST /imports`, `GET /imports/{id}/preview`, `POST /imports/{id}/commit`, `POST /imports/{id}/rollback`, `GET /imports/{id}/errors.xlsx`, `GET /imports`.
+    - Salary: `GET /employees/{id}/salary`, `POST /employees/{id}/salary`, `GET /salary-structures`.
+  - React Web Dashboard views:
+    - `/imports` view (`web/src/routes/Imports.tsx`): Excel upload zone, cell rule guide, preview summary metrics, filterable rows with status badges and visual diffs, error report generator, batch history with safe rollback.
+    - `/salary-structures` view (`web/src/routes/SalaryStructures.tsx`): List of workers with current salary structure, standard hours, active fixed salary portion, last change date and difference delta, revision history drawer, and salary revision modal.
+    - Employee Detail (`web/src/routes/EmployeeDetail.tsx`): New Salary tab displaying active structure, last change badge, and revision history.
+  - ADR-013: Import pipeline framework, registry single-source, and salary structures.
+  - Automated demo script for Phase 03 (`backend/tools/demo_phase03.py`).
 - PHASE-02 (Settings, time rules and calendars):
   - Pure domain rules resolver for time rules (`fw.rules.time_rules`): scope hierarchy (`EMPLOYEE > TEAM > DRIVERS > COMPANY`), manager relationship weighting (`SUPERVISOR > SUPERINTENDENT > ENGINEER`), specificity (`OUTDOOR_ONLY` / `INDOOR_ONLY` > `ALL`), and field-level inheritance with full explainability.
   - Verification of the client 5-point planned schedule calculation: 05:00 / 06:00 / 0:30 / 15:30 / 17:00 => 12:00 total (720 min), 09:00 worked (540 min).

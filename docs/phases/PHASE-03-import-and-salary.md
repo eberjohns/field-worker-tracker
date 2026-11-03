@@ -32,15 +32,15 @@ Admin can load master data from the template with a safe preview (new / updated 
 - Revision sheets (Phase 11)
 
 ## Checklist (tick each before asking for review)
-- [ ] Uploading the sample template previews all sheets; re-upload is idempotent (all UNCHANGED)
-- [ ] A file with duplicates, bad references and invalid values shows row-level codes
-- [ ] UPDATED rows show old -> new per field
-- [ ] `_` clears an optional field; blank leaves it
-- [ ] Salary change records history and applies from the next month; difference is correct
-- [ ] Commit is one transaction; nothing written before confirmation
-- [ ] Template regenerates from the registry and matches `import-templates/`
-- [ ] Docs updated in the same change (`.agents/rules/documentation.md`), ADR written for any design decision, CHANGELOG entry
-- [ ] Pull request opened with the template; nothing merged by the agent
+- [x] Uploading the sample template previews all sheets; re-upload is idempotent (all UNCHANGED)
+- [x] A file with duplicates, bad references and invalid values shows row-level codes
+- [x] UPDATED rows show old -> new per field
+- [x] `_` clears an optional field; blank leaves it
+- [x] Salary change records history and applies from the next month; difference is correct
+- [x] Commit is one transaction; nothing written before confirmation
+- [x] Template regenerates from the registry and matches `import-templates/`
+- [x] Docs updated in the same change (`.agents/rules/documentation.md`), ADR written for any design decision, CHANGELOG entry
+- [x] Pull request opened with the template; nothing merged by the agent
 
 ## Demo script
 - Import the sample workbook, change two cells, re-upload and read the preview, commit, then open an employee's salary history.

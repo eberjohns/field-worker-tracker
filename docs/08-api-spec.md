@@ -128,6 +128,8 @@ Roles: A = Admin, E = Engineer, S = Superintendent, V = Supervisor. "scope" = li
 | POST | /payroll/runs/{id}/approve | A | approves the draft: snapshots, locks the month, stores final reports |
 | GET | /payroll/records?employee_id=&period= | A, E (scope) | snapshots |
 | GET | /employees/{id}/salary | A, E (scope), self | salary history, last change date and difference |
+| POST | /employees/{id}/salary | A | record a new salary structure revision for an employee |
+| GET | /salary-structures | A, E (scope) | list workers with current salary structure, standard hours, last change date and delta |
 | GET | /generated-reports?kind=&report=&period=&country= | by role | **Generated reports** section: every month-end and on-demand file with its name; `GET /generated-reports/{id}/download` |
 
 ### Reports, dashboard, import, ops
