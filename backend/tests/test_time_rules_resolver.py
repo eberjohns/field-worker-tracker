@@ -352,4 +352,3 @@ def test_ramadan_rule_standard_hours_reduction():
     res_before = resolve_time_schedule(rules, worker, target_date=date(2027, 1, 15))
     assert res_before.winning_rule_id == company_rule.id
     assert res_before.standard_hours_change_minutes == 0
-

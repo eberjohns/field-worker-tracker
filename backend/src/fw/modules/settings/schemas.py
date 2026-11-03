@@ -156,4 +156,3 @@ class ConsentPolicyCreate(BaseModel):
     language: str
     title: str
     body: str
-

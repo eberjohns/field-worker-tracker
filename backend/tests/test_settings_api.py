@@ -35,6 +35,7 @@ async def test_effective_dated_settings_resolution_and_history():
     )
 
     mock_res1 = MagicMock()
+    mock_res1.scalars.return_value.all.return_value = [row1]
     mock_res1.scalar_one_or_none.return_value = row1
     session.execute.return_value = mock_res1
 
