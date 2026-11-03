@@ -13,6 +13,9 @@ import {
   Plus,
   AlertCircle,
   CheckCircle,
+  DollarSign,
+  TrendingUp,
+  TrendingDown,
 } from "lucide-react";
 
 export const EmployeeDetail: React.FC = () => {
@@ -24,7 +27,8 @@ export const EmployeeDetail: React.FC = () => {
   const [documents, setDocuments] = useState<any[]>([]);
   const [devices, setDevices] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<"profile" | "hierarchy" | "documents" | "device" | "history">("profile");
+  const [salaryHistory, setSalaryHistory] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<"profile" | "salary" | "hierarchy" | "documents" | "device" | "history">("profile");
   const [loading, setLoading] = useState(true);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -62,7 +66,11 @@ export const EmployeeDetail: React.FC = () => {
       const docRes = await fetch(`/api/v1/employees/${employeeId}/documents`, { headers });
       if (docRes.ok) setDocuments(await docRes.json());
 
-      // 4. Devices (Admin only)
+      // 4. Salary history
+      const salRes = await fetch(`/api/v1/employees/${employeeId}/salary`, { headers });
+      if (salRes.ok) setSalaryHistory(await salRes.json());
+
+      // 5. Devices (Admin only)
       if (user?.role === "ADMIN") {
         const devRes = await fetch(`/api/v1/employees/${employeeId}/devices`, { headers });
         if (devRes.ok) setDevices(await devRes.json());
@@ -245,6 +253,17 @@ export const EmployeeDetail: React.FC = () => {
         </button>
 
         <button
+          onClick={() => setActiveTab("salary")}
+          className={`pb-3 text-sm font-medium flex items-center gap-2 border-b-2 transition ${
+            activeTab === "salary"
+              ? "border-indigo-600 text-indigo-600"
+              : "border-transparent text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          <DollarSign className="h-4 w-4" /> Salary Structure
+        </button>
+
+        <button
           onClick={() => setActiveTab("hierarchy")}
           className={`pb-3 text-sm font-medium flex items-center gap-2 border-b-2 transition ${
             activeTab === "hierarchy"
@@ -369,6 +388,136 @@ export const EmployeeDetail: React.FC = () => {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {activeTab === "salary" && (
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm max-w-3xl space-y-6">
+          <div className="flex items-center justify-between border-b pb-4">
+            <div>
+              <h3 className="text-base font-bold text-slate-900">Worker Salary Structure</h3>
+              <p className="text-xs text-slate-500">
+                Effective-dated salary portions and historical revisions.
+              </p>
+            </div>
+            {salaryHistory?.last_change_difference !== null && salaryHistory?.last_change_difference !== undefined && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-400">Last change:</span>
+                <span
+                  className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full ${
+                    salaryHistory.last_change_difference > 0
+                      ? "bg-emerald-100 text-emerald-800"
+                      : salaryHistory.last_change_difference < 0
+                      ? "bg-red-100 text-red-800"
+                      : "bg-slate-100 text-slate-700"
+                  }`}
+                >
+                  {salaryHistory.last_change_difference > 0 && <TrendingUp className="h-3.5 w-3.5" />}
+                  {salaryHistory.last_change_difference < 0 && <TrendingDown className="h-3.5 w-3.5" />}
+                  {salaryHistory.last_change_difference > 0
+                    ? `+${salaryHistory.last_change_difference}`
+                    : salaryHistory.last_change_difference}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Current Active Structure Card */}
+          {salaryHistory?.current_salary ? (
+            <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-indigo-900 uppercase tracking-wider">
+                  Active Structure (as of {salaryHistory.current_salary.effective_from})
+                </span>
+                <span className="text-xs font-mono text-slate-500">
+                  Standard Hours: {salaryHistory.current_salary.standard_hours} hrs/day
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-1">
+                <div className="bg-white p-3 rounded-lg border border-indigo-100">
+                  <span className="text-xs text-slate-400 block mb-1">Basic Salary</span>
+                  <span className="text-base font-bold text-slate-900">
+                    {Number(salaryHistory.current_salary.basic_salary).toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                    })}
+                  </span>
+                </div>
+                <div className="bg-white p-3 rounded-lg border border-indigo-100">
+                  <span className="text-xs text-slate-400 block mb-1">Special Allowance</span>
+                  <span className="text-base font-bold text-slate-900">
+                    {Number(salaryHistory.current_salary.special_allowance).toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                    })}
+                  </span>
+                </div>
+                <div className="bg-white p-3 rounded-lg border border-indigo-100">
+                  <span className="text-xs text-slate-400 block mb-1">Other Allowances</span>
+                  <span className="text-base font-bold text-slate-900">
+                    {(
+                      Number(salaryHistory.current_salary.fixed_ot_amount) +
+                      Number(salaryHistory.current_salary.bonus) +
+                      Number(salaryHistory.current_salary.telephone_allowance) +
+                      Number(salaryHistory.current_salary.housing_transport_allowance)
+                    ).toFixed(2)}
+                  </span>
+                </div>
+                <div className="bg-white p-3 rounded-lg border border-indigo-200">
+                  <span className="text-xs text-indigo-700 block mb-1 font-semibold">Total Fixed Portion</span>
+                  <span className="text-base font-extrabold text-indigo-600">
+                    {Number(salaryHistory.current_salary.salary_portion).toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                    })}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="p-8 text-center text-slate-400 rounded-lg border border-dashed border-slate-200">
+              No active salary structure found for this worker. Upload the template or record a salary revision.
+            </div>
+          )}
+
+          {/* Revisions History */}
+          <div className="space-y-3 pt-2">
+            <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+              Revision History ({salaryHistory?.history?.length ?? 0})
+            </h4>
+
+            {salaryHistory?.history && salaryHistory.history.length > 0 ? (
+              <div className="divide-y divide-slate-100 border border-slate-200 rounded-lg overflow-hidden text-xs">
+                {salaryHistory.history.map((rev: any) => (
+                  <div key={rev.id} className="p-3 flex items-center justify-between hover:bg-slate-50">
+                    <div className="space-y-0.5">
+                      <div className="font-semibold text-slate-900">
+                        Effective {rev.effective_from}
+                      </div>
+                      <div className="text-slate-400 text-[11px]">
+                        Basic: {rev.basic_salary} • Standard: {rev.standard_hours} hrs
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                      <span className="font-bold text-slate-800 text-sm">
+                        {rev.salary_portion}
+                      </span>
+                      {rev.difference !== 0 ? (
+                        <span
+                          className={`px-2 py-0.5 rounded font-semibold ${
+                            rev.difference > 0 ? "text-emerald-700 bg-emerald-50" : "text-red-700 bg-red-50"
+                          }`}
+                        >
+                          {rev.difference > 0 ? `+${rev.difference}` : rev.difference}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">-</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
         </div>
       )}
 

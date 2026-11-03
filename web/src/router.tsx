@@ -17,6 +17,8 @@ import { EmployeeDetail } from "./routes/EmployeeDetail";
 import { UsersAdmin } from "./routes/Users";
 import { AuditLogs } from "./routes/AuditLogs";
 import { Login } from "./routes/Login";
+import { Imports } from "./routes/Imports";
+import { SalaryStructures } from "./routes/SalaryStructures";
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -98,6 +100,18 @@ const settingsRoute = createRoute({
   component: Settings,
 });
 
+const importsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/imports",
+  component: Imports,
+});
+
+const salaryStructuresRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/salary-structures",
+  component: SalaryStructures,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
@@ -111,6 +125,8 @@ const routeTree = rootRoute.addChildren([
   payrollRoute,
   reportsRoute,
   settingsRoute,
+  importsRoute,
+  salaryStructuresRoute,
 ]);
 
 export const router = createRouter({ routeTree });

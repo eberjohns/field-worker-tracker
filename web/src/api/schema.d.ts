@@ -630,6 +630,174 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/imports/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Import Template
+         * @description Download the generated master data import template workbook.
+         */
+        get: operations["download_import_template_api_v1_imports_template_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Import Batches
+         * @description List history of past import batches.
+         */
+        get: operations["list_import_batches_api_v1_imports_get"];
+        put?: never;
+        /**
+         * Upload Workbook
+         * @description Upload workbook (multipart or raw bytes) and return safe preview with field-level diffs without committing.
+         */
+        post: operations["upload_workbook_api_v1_imports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/{batch_id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Import Preview
+         * @description Get preview details, counts, and filtered rows for an import batch.
+         */
+        get: operations["get_import_preview_api_v1_imports__batch_id__preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/{batch_id}/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Commit Import Batch
+         * @description Commit an uploaded and previewed import batch in a single atomic transaction.
+         */
+        post: operations["commit_import_batch_api_v1_imports__batch_id__commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/{batch_id}/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rollback Import Batch
+         * @description Rollback a committed import batch if safe.
+         */
+        post: operations["rollback_import_batch_api_v1_imports__batch_id__rollback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/{batch_id}/errors.xlsx": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Error Report
+         * @description Download an Excel report of errors and warnings for a batch.
+         */
+        get: operations["download_error_report_api_v1_imports__batch_id__errors_xlsx_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/employees/{employee_id}/salary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Employee Salary History
+         * @description Get salary history, current salary structure, last change date and difference.
+         */
+        get: operations["get_employee_salary_history_api_v1_employees__employee_id__salary_get"];
+        put?: never;
+        /**
+         * Create Or Update Employee Salary
+         * @description Create or update an effective-dated salary structure for an employee.
+         */
+        post: operations["create_or_update_employee_salary_api_v1_employees__employee_id__salary_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/salary-structures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Salary Structures
+         * @description List active salary structures across all workers.
+         */
+        get: operations["list_salary_structures_api_v1_salary_structures_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -926,6 +1094,110 @@ export interface components {
              */
             updated_at: string;
         };
+        /** EmployeeSalaryCreate */
+        EmployeeSalaryCreate: {
+            /** Effective From */
+            effective_from?: string | null;
+            /**
+             * Standard Hours
+             * @default 8.0
+             */
+            standard_hours: number | string;
+            /** Basic Salary */
+            basic_salary: number | string;
+            /**
+             * Special Allowance
+             * @default 0.00
+             */
+            special_allowance: number | string;
+            /**
+             * Fixed Ot Amount
+             * @default 0.00
+             */
+            fixed_ot_amount: number | string;
+            /**
+             * Bonus
+             * @default 0.00
+             */
+            bonus: number | string;
+            /**
+             * Telephone Allowance
+             * @default 0.00
+             */
+            telephone_allowance: number | string;
+            /**
+             * Housing Transport Allowance
+             * @default 0.00
+             */
+            housing_transport_allowance: number | string;
+        };
+        /** EmployeeSalaryHistoryResponse */
+        EmployeeSalaryHistoryResponse: {
+            /**
+             * Employee Id
+             * Format: uuid
+             */
+            employee_id: string;
+            /** Tally Id */
+            tally_id: string;
+            /** Employee Name */
+            employee_name: string;
+            current_salary?: components["schemas"]["EmployeeSalaryRead"] | null;
+            /** Last Change Date */
+            last_change_date?: string | null;
+            /** Last Change Difference */
+            last_change_difference?: string | null;
+            /** History */
+            history?: components["schemas"]["EmployeeSalaryRead"][];
+        };
+        /** EmployeeSalaryRead */
+        EmployeeSalaryRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Employee Id
+             * Format: uuid
+             */
+            employee_id: string;
+            /** Tally Id */
+            tally_id?: string | null;
+            /** Employee Name */
+            employee_name?: string | null;
+            /**
+             * Effective From
+             * Format: date
+             */
+            effective_from: string;
+            /** Standard Hours */
+            standard_hours: string;
+            /** Basic Salary */
+            basic_salary: string;
+            /** Special Allowance */
+            special_allowance: string;
+            /** Fixed Ot Amount */
+            fixed_ot_amount: string;
+            /** Bonus */
+            bonus: string;
+            /** Telephone Allowance */
+            telephone_allowance: string;
+            /** Housing Transport Allowance */
+            housing_transport_allowance: string;
+            /** Salary Portion */
+            salary_portion: string;
+            /**
+             * Difference
+             * @default 0.00
+             */
+            difference: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** EmployeeUpdate */
         EmployeeUpdate: {
             /** Name */
@@ -1024,6 +1296,132 @@ export interface components {
             relationship?: string | null;
             /** Subordinates */
             subordinates?: unknown[];
+        };
+        /** ImportBatchRead */
+        ImportBatchRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Filename */
+            filename: string;
+            /** File Hash */
+            file_hash: string;
+            /** Template Version */
+            template_version: string;
+            /**
+             * Uploaded By User Id
+             * Format: uuid
+             */
+            uploaded_by_user_id: string;
+            /** Status */
+            status: string;
+            /** Summary */
+            summary?: {
+                [key: string]: unknown;
+            };
+            /** Committed At */
+            committed_at?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** ImportCommitResponse */
+        ImportCommitResponse: {
+            /**
+             * Batch Id
+             * Format: uuid
+             */
+            batch_id: string;
+            /** Status */
+            status: string;
+            /**
+             * Committed At
+             * Format: date-time
+             */
+            committed_at: string;
+            /** Summary */
+            summary?: {
+                [key: string]: unknown;
+            };
+        };
+        /** ImportPreviewResponse */
+        ImportPreviewResponse: {
+            /**
+             * Batch Id
+             * Format: uuid
+             */
+            batch_id: string;
+            /** Filename */
+            filename: string;
+            /** Template Version */
+            template_version: string;
+            /** Status */
+            status: string;
+            /** Can Commit */
+            can_commit: boolean;
+            /** Summary */
+            summary?: {
+                [key: string]: unknown;
+            };
+            /** Rows */
+            rows?: components["schemas"]["ImportRowRead"][];
+        };
+        /** ImportRollbackResponse */
+        ImportRollbackResponse: {
+            /**
+             * Batch Id
+             * Format: uuid
+             */
+            batch_id: string;
+            /** Status */
+            status: string;
+            /** Summary */
+            summary?: {
+                [key: string]: unknown;
+            };
+        };
+        /** ImportRowRead */
+        ImportRowRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Batch Id
+             * Format: uuid
+             */
+            batch_id: string;
+            /** Sheet */
+            sheet: string;
+            /** Row Number */
+            row_number: number;
+            /** Natural Key */
+            natural_key: string;
+            /** Action */
+            action: string;
+            /** Status */
+            status: string;
+            /** Codes */
+            codes?: string[];
+            /** Messages */
+            messages?: {
+                [key: string]: unknown;
+            }[];
+            /** Diff */
+            diff?: {
+                [key: string]: unknown;
+            };
+            /** Normalized */
+            normalized?: {
+                [key: string]: unknown;
+            };
         };
         /** LoginRequest */
         LoginRequest: {
@@ -1193,6 +1591,40 @@ export interface components {
              * @default true
              */
             must_change_password: boolean;
+        };
+        /** SalaryStructureListItem */
+        SalaryStructureListItem: {
+            /**
+             * Employee Id
+             * Format: uuid
+             */
+            employee_id: string;
+            /** Tally Id */
+            tally_id: string;
+            /** Name */
+            name: string;
+            /** Role */
+            role: string;
+            /** Country */
+            country: string;
+            /** Standard Hours */
+            standard_hours: string;
+            /** Salary Portion */
+            salary_portion: string;
+            /** Basic Salary */
+            basic_salary: string;
+            /**
+             * Effective From
+             * Format: date
+             */
+            effective_from: string;
+            /** Last Change Date */
+            last_change_date?: string | null;
+            /**
+             * Difference
+             * @default 0.00
+             */
+            difference: string;
         };
         /** TimeRuleCreate */
         TimeRuleCreate: {
@@ -3072,6 +3504,344 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConsentPolicyRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_import_template_api_v1_imports_template_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_import_batches_api_v1_imports_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportBatchRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_workbook_api_v1_imports_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportPreviewResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_import_preview_api_v1_imports__batch_id__preview_get: {
+        parameters: {
+            query?: {
+                sheet?: string | null;
+                row_status?: string | null;
+                action?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                batch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportPreviewResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    commit_import_batch_api_v1_imports__batch_id__commit_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                batch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportCommitResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rollback_import_batch_api_v1_imports__batch_id__rollback_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                batch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportRollbackResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_error_report_api_v1_imports__batch_id__errors_xlsx_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                batch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_employee_salary_history_api_v1_employees__employee_id__salary_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                employee_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeSalaryHistoryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_or_update_employee_salary_api_v1_employees__employee_id__salary_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                employee_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmployeeSalaryCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeSalaryRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_salary_structures_api_v1_salary_structures_get: {
+        parameters: {
+            query?: {
+                country?: string | null;
+                as_of?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SalaryStructureListItem"][];
                 };
             };
             /** @description Validation Error */
