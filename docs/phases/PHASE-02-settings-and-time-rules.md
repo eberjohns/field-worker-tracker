@@ -32,14 +32,14 @@ All configuration is effective-dated and explainable: company settings, planned-
 - Import of settings/rules (Phase 03)
 
 ## Checklist (tick each before asking for review)
-- [ ] Resolver unit tests: company, team, driver, employee, season and outdoor/indoor precedence
-- [ ] The client example (05:00 / 06:00 / 0:30 / 15:30 / 17:00 => 12:00 total, 09:00 worked) computes
-- [ ] A change adds a new dated row; past dates still resolve to the old value
-- [ ] Engineer cannot edit another engineer's team rule
-- [ ] Banner and history view show effective dates
-- [ ] Docs 03/07/D3 updated
-- [ ] Docs updated in the same change (`.agents/rules/documentation.md`), ADR written for any design decision, CHANGELOG entry
-- [ ] Pull request opened with the template; nothing merged by the agent
+- [x] Resolver unit tests: company, team, driver, employee, season and outdoor/indoor precedence
+- [x] The client example (05:00 / 06:00 / 0:30 / 15:30 / 17:00 => 12:00 total, 09:00 worked) computes
+- [x] A change adds a new dated row; past dates still resolve to the old value
+- [x] Engineer cannot edit another engineer's team rule
+- [x] Banner and history view show effective dates
+- [x] Docs 03/07/D3 updated
+- [x] Docs updated in the same change (`.agents/rules/documentation.md`), ADR written for any design decision, CHANGELOG entry
+- [x] Pull request opened with the template; nothing merged by the agent
 
 ## Demo script
 - Add a Ramadan rule and a team rule, then use the explainer for a worker on two dates.

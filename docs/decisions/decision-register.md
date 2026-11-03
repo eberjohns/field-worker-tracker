@@ -5,7 +5,7 @@ All client questions are answered. **CONFIRMED** = the client decided; **PROPOSE
 | ID | Topic | Final decision | Docs | Status |
 |---|---|---|---|---|
 | DEC-01 | Overtime | OT rate = basic / 208 x 1.25 (OT1) or x 1.5 (OT2). OT2 = all hours on public holidays and OT2 weekdays (default Sunday, setting). OT1 = hours beyond the worker's **standard hours** (8/10/12 from the salary structure) on normal assigned days, and **all hours** on weekly-off days and days with no assignment. Fixed OT paid as given. OT is reviewed and approved before payment | 03, 05, 06 | CONFIRMED |
-| DEC-03 | Break and planned times | Resolved from time rules (employee > team > drivers > company, season, outdoor/indoor); job-item break override; effective-dated | 03, 05, D3 | CONFIRMED |
+| DEC-03 | Break and planned times | Resolved from time rules (employee > team > drivers > company, season, outdoor/indoor); job-item break override; effective-dated | 03, 05, D3, ADR-012 | CONFIRMED |
 | DEC-04 | Tracking gaps | Flag only; show unaccounted time = tracking-off minutes inside the shift minus the break | 05 | CONFIRMED |
 | DEC-05 | Missing exit | Estimate from last location, mark for review ("Estimated exit") | 05 | CONFIRMED |
 | DEC-06 | Salary changes | From the next payroll month; mid-month special cases outside the system | 06 | CONFIRMED |
@@ -35,13 +35,13 @@ All client questions are answered. **CONFIRMED** = the client decided; **PROPOSE
 | DEC-32 | Pending visits | Day-close detection; OPEN > EXPLAINED > RESCHEDULED/CLOSED | 05, 12 | PROPOSED |
 | DEC-33 | Document types | Visa, Passport, Emirates ID, Labour Card, Driving Licence; validity dates only; Admin alerted | 07, 12 | CONFIRMED |
 | DEC-34 | Countries | One rule pack per country; each record carries a country | 03, 13 | CONFIRMED |
-| DEC-35 | Effective-dated configuration | Settings and time rules resolved as of the work date | 03, ADR-008 | CONFIRMED |
+| DEC-35 | Effective-dated configuration | Settings and time rules resolved as of the work date | 03, ADR-008, ADR-012 | CONFIRMED |
 | DEC-36 | Permanent vs Remote | PERMANENT: only that job that day; REMOTE: several while hours remain | 03, 04 | CONFIRMED |
 | DEC-37 | Revision lookup (budget) | Latest revision containing the grade; partial revisions allowed; grade year suffix ignored | 06 | PROPOSED |
 | DEC-38 | Retention | 13 months live, encrypted yearly archive for a fixed period, then deletion; payroll/attendance 7 years. Client wants "forever" | 14, legal | HUMAN |
 | DEC-39 | Provisions | Actual: five provisions from company settings, one value for everyone, plus calculated gratuity and leave salary; budget: the revision file's own provisions | 06 | CONFIRMED |
 | DEC-40 | Out of scope | Checklists, manual shift confirmation, WPS | 01 | CONFIRMED |
-| DEC-41 | Time rules | Five-point planned schedule (accommodation start, first site, break, last site, accommodation end); company default, overridden for a team, drivers or one person, by season and outdoor/indoor; engineers manage within scope | 05, D3 | CONFIRMED |
+| DEC-41 | Time rules | Five-point planned schedule (accommodation start, first site, break, last site, accommodation end); company default, overridden for a team, drivers or one person, by season and outdoor/indoor; engineers manage within scope | 05, D3, ADR-012 | CONFIRMED |
 | DEC-42 | Planner | Yearly standing assignments, weekly roster as main view, allocated hours vs standard hours in a side panel, markers for skipped/off/leave/to-be-covered | 04, D1 | CONFIRMED |
 | DEC-43 | Approvals | Engineer approves leave, temporary reassignments (3 days notice) and attendance rows with variation, flags or overtime; clean rows are automatic | 04, 05, D2 | CONFIRMED |
 | DEC-44 | Transport | Drivers section: vehicles and daily runs (driver, ordered stops, passengers) synced to the driver and the workers | D5 | CONFIRMED |

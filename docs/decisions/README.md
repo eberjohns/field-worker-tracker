@@ -15,6 +15,7 @@ One decision per file, numbered. Use the `write-adr` skill. Status: Proposed, Ac
 | 009 | [One stack per country, and hosting](009-country-deployments-and-hosting.md) | Accepted |
 | 010 | [Foundation dependency pins and verification](010-foundation-dependency-pins.md) | Accepted |
 | 011 | [Transitive scope resolution and session token rotation](011-transitive-scope-and-session-tokens.md) | Accepted |
+| 012 | [Time rules resolver hierarchy, field inheritance, and scope](012-time-rules-resolver-and-scope.md) | Accepted |
 
 See also [decision-register.md](decision-register.md) for business decisions awaiting client confirmation.
 
