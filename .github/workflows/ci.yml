@@ -1,0 +1,129 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, feat/*, fix/*]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  backend-lint-and-test:
+    name: Backend Lint, Types & Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.13.6"
+          enable-cache: true
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Ruff Lint Check
+        run: uv run ruff check
+
+      - name: Ruff Format Check
+        run: uv run ruff format --check
+
+      - name: Pyright Type Check
+        run: uv run pyright
+
+      - name: Import Boundaries Contract Check (import-linter)
+        run: uv run lint-imports
+
+      - name: Unit Tests
+        run: uv run pytest
+
+  migration-check:
+    name: Database Migration Check
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: fw_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.13.6"
+          enable-cache: true
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run Alembic Upgrade Head
+        env:
+          DATABASE_MIGRATOR_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/fw_db
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/fw_db
+        run: uv run alembic upgrade head
+
+      - name: Run Alembic Check
+        env:
+          DATABASE_MIGRATOR_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/fw_db
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/fw_db
+        run: uv run alembic check
+
+      - name: Run Alembic Downgrade -1
+        env:
+          DATABASE_MIGRATOR_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/fw_db
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/fw_db
+        run: uv run alembic downgrade -1
+
+  frontend-check:
+    name: Frontend Lint & Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.16.1
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type Check (lint)
+        run: pnpm run lint
+
+      - name: Production Build
+        run: pnpm run build
+

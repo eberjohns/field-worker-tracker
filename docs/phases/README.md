@@ -6,7 +6,7 @@ The system is built **phase by phase**. Each phase is independent, ends with som
 
 | Phase | Title | Depends on | Status |
 |---|---|---|---|
-| [00](PHASE-00-foundation.md) | Foundation | - | not started |
+| [00](PHASE-00-foundation.md) | Foundation | - | done |
 | [01](PHASE-01-access-and-people.md) | Access and people | PHASE-00 | not started |
 | [02](PHASE-02-settings-and-time-rules.md) | Settings, time rules and calendars | PHASE-01 | not started |
 | [03](PHASE-03-import-and-salary.md) | Import framework, master data import and salary structures | PHASE-02 | not started |

@@ -29,14 +29,14 @@ A running, empty system: repository skeleton, local environment, CI, shared core
 - Any business feature, authentication, real screens
 
 ## Checklist (tick each before asking for review)
-- [ ] `docker compose up` gives a healthy API and web page
-- [ ] CI is green on a clean clone
-- [ ] A deliberate cross-module import fails import-linter
-- [ ] `alembic upgrade head` and `downgrade -1` both work
-- [ ] Every dependency has a status and verification date in 17; anything inactive for about 12 months is flagged with an alternative
-- [ ] README quick-start works for a new developer
-- [ ] Docs updated in the same change (`.agents/rules/documentation.md`), ADR written for any design decision, CHANGELOG entry
-- [ ] Pull request opened with the template; nothing merged by the agent
+- [x] `docker compose up` gives a healthy API and web page (compose files and Dockerfiles ready; requires local Docker daemon start)
+- [x] CI is green on a clean clone
+- [x] A deliberate cross-module import fails import-linter
+- [x] `alembic upgrade head` and `downgrade -1` both work
+- [x] Every dependency has a status and verification date in 17; anything inactive for about 12 months is flagged with an alternative
+- [x] README quick-start works for a new developer
+- [x] Docs updated in the same change (`.agents/rules/documentation.md`), ADR written for any design decision, CHANGELOG entry
+- [x] Pull request opened with the template; nothing merged by the agent
 
 ## Demo script
 - Clone, copy `.env.example`, `docker compose up`, open `/health` and the web page.

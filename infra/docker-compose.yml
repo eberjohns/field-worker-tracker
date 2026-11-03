@@ -1,0 +1,74 @@
+# Symbolic reference / mirror of root docker-compose.yml
+# Use `docker compose up` from repository root, or `docker compose -f infra/docker-compose.yml up`
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fw_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d fw_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - ../.env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://fw_app:fw_secret@db:5432/fw_db
+      - DATABASE_MIGRATOR_URL=postgresql+asyncpg://fw_migrator:fw_migrator_secret@db:5432/fw_db
+      - SMTP_HOST=mail
+    depends_on:
+      db:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: ["uv", "run", "python", "-m", "fw.worker"]
+    env_file:
+      - ../.env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://fw_app:fw_secret@db:5432/fw_db
+      - DATABASE_MIGRATOR_URL=postgresql+asyncpg://fw_migrator:fw_migrator_secret@db:5432/fw_db
+      - SMTP_HOST=mail
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ../web
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+
+  mail:
+    image: axllent/mailpit:v1.21
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+volumes:
+  pgdata:
+
