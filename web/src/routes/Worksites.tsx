@@ -435,14 +435,26 @@ export const Worksites: React.FC = () => {
                         )}
                       </td>
                       <td className="py-3.5 px-4 text-right">
-                        <Link
-                          to="/worksites/$worksiteId"
-                          params={{ worksiteId: ws.id }}
-                          className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-800"
-                        >
-                          View & Edit
-                          <ExternalLink className="h-3 w-3" />
-                        </Link>
+                        {ws.has_boundary ? (
+                          <Link
+                            to="/worksites/$worksiteId"
+                            params={{ worksiteId: ws.id }}
+                            className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-800"
+                          >
+                            View & Edit
+                            <ExternalLink className="h-3 w-3" />
+                          </Link>
+                        ) : (
+                          <Link
+                            to="/worksites/$worksiteId"
+                            params={{ worksiteId: ws.id }}
+                            search={{ tab: "boundary" } as any}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-xs font-semibold shadow-xs"
+                          >
+                            <MapPin className="h-3 w-3" />
+                            Draw Boundary
+                          </Link>
+                        )}
                       </td>
                     </tr>
                   ))

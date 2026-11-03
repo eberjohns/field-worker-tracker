@@ -152,6 +152,7 @@ async def test_upload_sample_template_and_idempotency(admin_client):
     ws_emp.cell(row=5, column=5, value="G1C")
     ws_emp.cell(row=5, column=6, value="Gardener Helper")
     ws_emp.cell(row=5, column=7, value="AE")
+    ws_emp.cell(row=5, column=10, value=acc_code)
 
     buf = io.BytesIO()
     wb.save(buf)
@@ -219,6 +220,7 @@ async def test_cell_rules_diff_and_clear(admin_client):
     ws_emp.cell(row=5, column=6, value="Gardener Helper")
     ws_emp.cell(row=5, column=7, value="AE")
     ws_emp.cell(row=5, column=8, value="FRIDAY")
+    ws_emp.cell(row=5, column=10, value="")  # Clear leftover template example accommodation
     ws_emp.cell(row=5, column=18, value="+971500000000")  # phone
 
     buf = io.BytesIO()

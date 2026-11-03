@@ -20,22 +20,44 @@ export const PlaceSearch: React.FC<PlaceSearchProps> = ({ map }) => {
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!query.trim() || !apiKey) return;
+    if (!query.trim()) return;
 
     setIsLoading(true);
     setIsOpen(true);
     try {
-      const url = `https://api.maptiler.com/geocoding/${encodeURIComponent(
+      if (apiKey) {
+        const url = `https://api.maptiler.com/geocoding/${encodeURIComponent(
+          query.trim()
+        )}.json?key=${apiKey}&limit=5`;
+        const res = await fetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          const features = data.features || [];
+          if (features.length > 0) {
+            setResults(
+              features.map((f: any) => ({
+                place_name: f.place_name,
+                center: f.center,
+              }))
+            );
+            return;
+          }
+        }
+      }
+
+      // Fallback to OpenStreetMap Nominatim (works worldwide including Kerala, India, Dubai without API key)
+      const nomUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
         query.trim()
-      )}.json?key=${apiKey}&limit=5`;
-      const res = await fetch(url);
-      if (res.ok) {
-        const data = await res.json();
-        const features = data.features || [];
+      )}&limit=5`;
+      const nomRes = await fetch(nomUrl, {
+        headers: { "Accept-Language": "en" },
+      });
+      if (nomRes.ok) {
+        const nomData = await nomRes.json();
         setResults(
-          features.map((f: any) => ({
-            place_name: f.place_name,
-            center: f.center,
+          nomData.map((item: any) => ({
+            place_name: item.display_name,
+            center: [parseFloat(item.lon), parseFloat(item.lat)],
           }))
         );
       }

@@ -42,6 +42,8 @@ export const MapContainer: React.FC<MapContainerProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
+  const currentCenterRef = useRef<[number, number]>(initialCenter);
+  const currentZoomRef = useRef<number>(initialZoom);
   const [mapStyle, setMapStyle] = useState<"streets" | "satellite" | "osm">("satellite");
   const apiKey = (import.meta as any).env?.VITE_MAP_API_KEY;
 
@@ -57,18 +59,30 @@ export const MapContainer: React.FC<MapContainerProps> = ({
 
   useEffect(() => {
     if (!containerRef.current) return;
-    if (mapRef.current) return; // Map already initialized
 
     const initialStyleUrl = getStyleUrl(mapStyle);
     const map = new MapLibreMap({
       container: containerRef.current,
       style: initialStyleUrl,
-      center: initialCenter,
-      zoom: initialZoom,
+      center: currentCenterRef.current,
+      zoom: currentZoomRef.current,
       attributionControl: { compact: true },
     });
 
     map.addControl(new NavigationControl({ showCompass: true }), "top-right");
+
+    map.on("moveend", () => {
+      const c = map.getCenter();
+      currentCenterRef.current = [c.lng, c.lat];
+      currentZoomRef.current = map.getZoom();
+    });
+
+    map.on("error", (e) => {
+      console.warn("MapLibre error:", e);
+      if (mapStyle === "streets" && e?.error?.message?.includes("Failed to fetch")) {
+        setMapStyle("osm");
+      }
+    });
 
     map.on("load", () => {
       mapRef.current = map;
@@ -81,12 +95,11 @@ export const MapContainer: React.FC<MapContainerProps> = ({
       map.remove();
       mapRef.current = null;
     };
-  }, [apiKey]);
+  }, [mapStyle, apiKey]);
 
   const handleStyleChange = (nextStyle: "streets" | "satellite" | "osm") => {
-    setMapStyle(nextStyle);
-    if (mapRef.current) {
-      mapRef.current.setStyle(getStyleUrl(nextStyle));
+    if (nextStyle !== mapStyle) {
+      setMapStyle(nextStyle);
     }
   };
 

@@ -10,13 +10,14 @@ import { TerraDrawMapLibreGLAdapter } from "terra-draw-maplibre-gl-adapter";
 import area from "@turf/area";
 import booleanValid from "@turf/boolean-valid";
 import kinks from "@turf/kinks";
-import { CheckCircle2, AlertCircle, Trash2, Save, MousePointer, Hexagon } from "lucide-react";
+import { CheckCircle2, AlertCircle, Trash2, Save, MousePointer, Hexagon, Info } from "lucide-react";
 
 interface PolygonEditorProps {
   map: MapLibreMap | null;
   initialPolygon?: GeoJSON.Polygon | null;
   onSave: (polygon: GeoJSON.Polygon) => Promise<void> | void;
   isSaving?: boolean;
+  className?: string;
 }
 
 export const PolygonEditor: React.FC<PolygonEditorProps> = ({
@@ -24,6 +25,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   initialPolygon,
   onSave,
   isSaving = false,
+  className = "w-full",
 }) => {
   const drawRef = useRef<TerraDraw | null>(null);
   const [currentMode, setCurrentMode] = useState<string>("select");
@@ -42,6 +44,21 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
         modes: [
           new TerraDrawPolygonMode({
             pointerDistance: 40,
+            styles: {
+              fillColor: "#2563eb",
+              fillOpacity: 0.35,
+              outlineColor: "#1d4ed8",
+              outlineWidth: 3,
+              outlineOpacity: 1,
+              closingPointColor: "#10b981",
+              closingPointWidth: 9,
+              closingPointOutlineColor: "#ffffff",
+              closingPointOutlineWidth: 2,
+              coordinatePointColor: "#2563eb",
+              coordinatePointWidth: 6,
+              coordinatePointOutlineColor: "#ffffff",
+              coordinatePointOutlineWidth: 2,
+            },
           }),
           new TerraDrawSelectMode({
             flags: {
@@ -58,6 +75,17 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
                 },
               },
             },
+            styles: {
+              selectedPolygonColor: "#3b82f6",
+              selectedPolygonFillOpacity: 0.4,
+              selectedPolygonOutlineColor: "#1d4ed8",
+              selectedPolygonOutlineWidth: 3,
+              selectionPointColor: "#ffffff",
+              selectionPointOutlineColor: "#1d4ed8",
+              selectionPointWidth: 6,
+              midPointColor: "#60a5fa",
+              midPointWidth: 5,
+            },
           }),
           new TerraDrawRenderMode({ modeName: "render", styles: {} as any }),
         ],
@@ -66,8 +94,10 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
       draw.start();
       drawRef.current = draw;
 
+      // Preserve any in-progress polygon or initial polygon
+      const existingPolygon = currentPolygon || initialPolygon;
       const hasInitial = Boolean(
-        initialPolygon && initialPolygon.coordinates && initialPolygon.coordinates.length > 0
+        existingPolygon && existingPolygon.coordinates && existingPolygon.coordinates.length > 0
       );
 
       // Start in select mode if polygon already exists; otherwise start in polygon mode ready to draw
@@ -75,21 +105,21 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
       draw.setMode(startingMode);
       setCurrentMode(startingMode);
 
-      // Load initial polygon if exists
-      if (hasInitial && initialPolygon) {
+      // Load existing polygon if exists
+      if (hasInitial && existingPolygon) {
         draw.addFeatures([
           {
             id: crypto.randomUUID(),
             type: "Feature",
-            geometry: initialPolygon,
+            geometry: existingPolygon,
             properties: { mode: "polygon" },
           },
         ]);
-        evaluateGeometry(initialPolygon);
+        evaluateGeometry(existingPolygon);
 
-        // Fit map bounds to the initial polygon
+        // Fit map bounds to the polygon
         try {
-          const ring = initialPolygon.coordinates[0];
+          const ring = existingPolygon.coordinates[0];
           if (ring && ring.length > 0) {
             const bounds = ring.reduce(
               (b, c) => [
@@ -226,86 +256,116 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   };
 
   return (
-    <div className="absolute bottom-3 left-3 right-3 z-20 flex flex-wrap items-center justify-between gap-3 bg-white/95 backdrop-blur-sm p-3 rounded-lg border border-slate-200 shadow-md">
-      {/* Drawing Toolbar Modes */}
-      <div className="flex items-center gap-1.5">
-        <button
-          type="button"
-          onClick={() => handleSetMode("polygon")}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition ${
-            currentMode === "polygon"
-              ? "bg-indigo-600 text-white shadow-sm"
-              : "bg-slate-100 hover:bg-slate-200 text-slate-700"
-          }`}
-          title="Click vertices on map to draw polygon"
-        >
-          <Hexagon className="h-3.5 w-3.5" />
-          Draw Polygon
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleSetMode("select")}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition ${
-            currentMode === "select"
-              ? "bg-indigo-600 text-white shadow-sm"
-              : "bg-slate-100 hover:bg-slate-200 text-slate-700"
-          }`}
-          title="Drag vertices or move polygon"
-        >
-          <MousePointer className="h-3.5 w-3.5" />
-          Select / Edit
-        </button>
-
-        <button
-          type="button"
-          onClick={handleClear}
-          className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-red-50 hover:text-red-600 rounded text-xs font-medium text-slate-600 transition"
-          title="Delete current boundary"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-          Clear
-        </button>
+    <div className={`space-y-2.5 ${className}`}>
+      {/* Visual Step-by-Step Helper Banner */}
+      <div
+        className={`px-3.5 py-2 rounded-lg text-xs flex items-center justify-between border transition ${
+          currentMode === "polygon"
+            ? "bg-blue-50 border-blue-200 text-blue-900"
+            : "bg-slate-50 border-slate-200 text-slate-700"
+        }`}
+      >
+        <div className="flex items-center gap-2">
+          <Info className="h-4 w-4 shrink-0 text-blue-600" />
+          {currentMode === "polygon" ? (
+            <span>
+              <strong>Drawing Mode Active:</strong> Click corners on the map to trace the site. Click the{" "}
+              <strong className="text-emerald-700 underline">green starting point</strong>, press{" "}
+              <strong className="underline">Enter</strong>, or <strong>double-click</strong> to close and complete the boundary.
+            </span>
+          ) : (
+            <span>
+              <strong>Select & Edit Mode:</strong> Click the polygon to select it. Drag corner handles to reshape, or drag midpoints to add vertices.
+            </span>
+          )}
+        </div>
+        <span className="font-mono text-[11px] font-semibold uppercase px-2 py-0.5 rounded bg-white border border-slate-200">
+          Mode: {currentMode === "polygon" ? "Drawing" : "Select/Edit"}
+        </span>
       </div>
 
-      {/* Geometry Status & Area Display */}
-      <div className="flex items-center gap-3 text-xs">
-        {currentPolygon && (
-          <div className="flex items-center gap-1.5">
-            {isValid && areaSqM > 0 ? (
-              <span className="flex items-center gap-1 text-emerald-700 font-medium">
-                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                {validationMessage}
-              </span>
-            ) : (
-              <span className="flex items-center gap-1 text-red-700 font-medium">
-                <AlertCircle className="h-4 w-4 text-red-600" />
-                {validationMessage}
-              </span>
-            )}
-          </div>
-        )}
+      {/* Main Control Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-lg border border-slate-200 shadow-xs">
+        {/* Drawing Toolbar Modes */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => handleSetMode("polygon")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition ${
+              currentMode === "polygon"
+                ? "bg-indigo-600 text-white shadow-xs"
+                : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+            }`}
+            title="Click corners on map to draw polygon"
+          >
+            <Hexagon className="h-3.5 w-3.5" />
+            Draw Polygon
+          </button>
 
-        {areaSqM > 0 && (
-          <span className="bg-slate-100 text-slate-800 px-2.5 py-1 rounded font-mono font-medium">
-            Area: {formatArea(areaSqM)}
-          </span>
-        )}
+          <button
+            type="button"
+            onClick={() => handleSetMode("select")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition ${
+              currentMode === "select"
+                ? "bg-indigo-600 text-white shadow-xs"
+                : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+            }`}
+            title="Drag vertices or move polygon"
+          >
+            <MousePointer className="h-3.5 w-3.5" />
+            Select / Edit
+          </button>
 
-        {/* Save Button */}
-        <button
-          type="button"
-          disabled={!currentPolygon || !isValid || areaSqM <= 0 || isSaving}
-          onClick={handleSave}
-          className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded text-xs font-medium transition shadow-sm ${
-            !currentPolygon || !isValid || areaSqM <= 0 || isSaving
-              ? "bg-slate-200 text-slate-400 cursor-not-allowed"
-              : "bg-emerald-600 hover:bg-emerald-700 text-white"
-          }`}
-        >
-          <Save className="h-3.5 w-3.5" />
-          {isSaving ? "Saving..." : "Save Boundary"}
-        </button>
+          <button
+            type="button"
+            onClick={handleClear}
+            className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-red-50 hover:text-red-600 rounded-md text-xs font-medium text-slate-600 transition"
+            title="Delete current boundary"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Clear
+          </button>
+        </div>
+
+        {/* Geometry Status & Area Display */}
+        <div className="flex items-center gap-3 text-xs">
+          {currentPolygon && (
+            <div className="flex items-center gap-1.5">
+              {isValid && areaSqM > 0 ? (
+                <span className="flex items-center gap-1 text-emerald-700 font-medium">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                  {validationMessage}
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-red-700 font-medium">
+                  <AlertCircle className="h-4 w-4 text-red-600" />
+                  {validationMessage}
+                </span>
+              )}
+            </div>
+          )}
+
+          {areaSqM > 0 && (
+            <span className="bg-slate-100 text-slate-800 px-2.5 py-1 rounded font-mono font-bold text-xs">
+              Area: {formatArea(areaSqM)}
+            </span>
+          )}
+
+          {/* Save Button */}
+          <button
+            type="button"
+            disabled={!currentPolygon || !isValid || areaSqM <= 0 || isSaving}
+            onClick={handleSave}
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-bold transition shadow-xs ${
+              !currentPolygon || !isValid || areaSqM <= 0 || isSaving
+                ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+                : "bg-emerald-600 hover:bg-emerald-700 text-white"
+            }`}
+          >
+            <Save className="h-3.5 w-3.5" />
+            {isSaving ? "Saving..." : "Save Boundary"}
+          </button>
+        </div>
       </div>
     </div>
   );
