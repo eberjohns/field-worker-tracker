@@ -130,7 +130,19 @@ async def update_employee(
     elif current_user.role == "ENGINEER":
         scoped_ids = await ScopeService.get_scoped_employee_ids(session, current_user)
         # Verify engineer is only updating allowed fields
-        disallowed_fields = {"name", "phone", "email", "role", "grade_code", "staff_grade_description", "country", "join_date", "employment_end_date", "is_active", "is_driver"}
+        disallowed_fields = {
+            "name",
+            "phone",
+            "email",
+            "role",
+            "grade_code",
+            "staff_grade_description",
+            "country",
+            "join_date",
+            "employment_end_date",
+            "is_active",
+            "is_driver",
+        }
         attempted_fields = set(request.model_dump(exclude_unset=True, exclude={"version"}).keys())
         if attempted_fields.intersection(disallowed_fields):
             raise AppError(
@@ -139,7 +151,9 @@ async def update_employee(
                 status_code=403,
             )
     else:
-        raise AppError(code="FORBIDDEN", message="You are not authorized to update employees.", status_code=403)
+        raise AppError(
+            code="FORBIDDEN", message="You are not authorized to update employees.", status_code=403
+        )
 
     employee = await OrgService.update_employee(
         session=session,

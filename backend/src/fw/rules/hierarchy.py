@@ -100,4 +100,3 @@ def compute_transitive_scope(
                 queue.append(subordinate)
 
     return scope
-

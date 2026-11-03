@@ -59,4 +59,3 @@ async def test_audit_service_list_logs_filter() -> None:
     logs = await AuditService.list_logs(session=session, entity_type="employee")
     assert len(logs) == 1
     assert logs[0].entity_id == "emp-456"
-

@@ -100,9 +100,7 @@ class OrgService:
             query = query.where(Employee.is_active == is_active)
         if q:
             search = f"%{q}%"
-            query = query.where(
-                or_(Employee.name.ilike(search), Employee.tally_id.ilike(search))
-            )
+            query = query.where(or_(Employee.name.ilike(search), Employee.tally_id.ilike(search)))
         if manager_id:
             subquery = select(EmployeeReportingLine.employee_id).where(
                 EmployeeReportingLine.manager_id == manager_id
@@ -120,7 +118,11 @@ class OrgService:
         scoped_ids: set[UUID] | None = None,
     ) -> Employee:
         if scoped_ids is not None and employee_id not in scoped_ids:
-            raise AppError(code="OUT_OF_SCOPE", message="Employee is out of your reporting scope.", status_code=403)
+            raise AppError(
+                code="OUT_OF_SCOPE",
+                message="Employee is out of your reporting scope.",
+                status_code=403,
+            )
 
         query = select(Employee).where(Employee.id == employee_id)
         result = await session.execute(query)
@@ -385,9 +387,7 @@ class OrgService:
         actor_user_id: UUID,
         actor_role: str,
     ) -> None:
-        query = select(EmployeeReportingLine).where(
-            EmployeeReportingLine.id == reporting_line_id
-        )
+        query = select(EmployeeReportingLine).where(EmployeeReportingLine.id == reporting_line_id)
         result = await session.execute(query)
         link = result.scalar_one_or_none()
         if not link:
@@ -567,9 +567,7 @@ class OrgService:
 
     @staticmethod
     async def list_accommodations(session: AsyncSession) -> list[Accommodation]:
-        result = await session.execute(
-            select(Accommodation).order_by(Accommodation.name.asc())
-        )
+        result = await session.execute(select(Accommodation).order_by(Accommodation.name.asc()))
         return list(result.scalars().all())
 
     @staticmethod

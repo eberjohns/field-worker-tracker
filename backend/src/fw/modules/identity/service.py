@@ -167,7 +167,9 @@ class AuthService:
 
         user_session, user = row
         if user_session.revoked_at is not None or user_session.expires_at < now:
-            raise AppError(code="TOKEN_EXPIRED", message="Session expired or revoked.", status_code=401)
+            raise AppError(
+                code="TOKEN_EXPIRED", message="Session expired or revoked.", status_code=401
+            )
 
         if not user.is_active:
             raise AppError(code="ACCOUNT_INACTIVE", message="Account inactive.", status_code=403)

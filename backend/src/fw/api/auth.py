@@ -101,7 +101,9 @@ async def refresh_tokens(
     session: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
     if not refresh_token:
-        raise AppError(code="UNAUTHENTICATED", message="Missing refresh token cookie.", status_code=401)
+        raise AppError(
+            code="UNAUTHENTICATED", message="Missing refresh token cookie.", status_code=401
+        )
 
     user, new_access_token, new_raw_refresh = await AuthService.refresh_tokens(
         session=session,
@@ -160,4 +162,3 @@ async def get_me(
             "scoped_employee_count": len(scoped_ids) if scoped_ids is not None else "ALL",
         },
     }
-

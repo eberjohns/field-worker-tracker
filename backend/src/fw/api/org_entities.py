@@ -124,4 +124,3 @@ async def update_accommodation(
         session, acc_id, request, actor_user_id=current_user.id, actor_role=current_user.role
     )
     return AccommodationRead.model_validate(acc)
-

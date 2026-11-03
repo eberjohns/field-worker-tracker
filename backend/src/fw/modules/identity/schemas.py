@@ -43,4 +43,3 @@ class UserUpdate(BaseModel):
 class ResetPasswordResponse(BaseModel):
     message: str
     must_change_password: bool = True
-

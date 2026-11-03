@@ -275,4 +275,3 @@ class RegisteredDevice(Base):
         onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )
-

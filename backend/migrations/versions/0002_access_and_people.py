@@ -52,9 +52,8 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("code"),
     )
-    op.create_index("ix_groups_code", "groups", ["code"])
+    op.create_index("ix_groups_code", "groups", ["code"], unique=True)
 
     # 3. zones
     op.create_table(
@@ -67,9 +66,8 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("code"),
     )
-    op.create_index("ix_zones_code", "zones", ["code"])
+    op.create_index("ix_zones_code", "zones", ["code"], unique=True)
 
     # 4. accommodations
     op.create_table(
@@ -96,9 +94,13 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("accommodation_code"),
     )
-    op.create_index("ix_accommodations_code", "accommodations", ["accommodation_code"])
+    op.create_index(
+        "ix_accommodations_accommodation_code",
+        "accommodations",
+        ["accommodation_code"],
+        unique=True,
+    )
 
     # 5. employees
     op.create_table(
@@ -133,7 +135,6 @@ def upgrade() -> None:
         ),
         sa.ForeignKeyConstraint(["accommodation_id"], ["accommodations.id"], ondelete="RESTRICT"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("tally_id"),
     )
     op.create_index("ix_employees_country", "employees", ["country"])
     op.create_index("ix_employees_grade_code", "employees", ["grade_code"])
@@ -141,7 +142,7 @@ def upgrade() -> None:
     op.create_index(
         "ix_employees_staff_grade_description", "employees", ["staff_grade_description"]
     )
-    op.create_index("ix_employees_tally_id", "employees", ["tally_id"])
+    op.create_index("ix_employees_tally_id", "employees", ["tally_id"], unique=True)
 
     # 6. users
     op.create_table(
@@ -166,11 +167,9 @@ def upgrade() -> None:
         ),
         sa.ForeignKeyConstraint(["employee_id"], ["employees.id"], ondelete="RESTRICT"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("employee_id"),
-        sa.UniqueConstraint("username"),
     )
-    op.create_index("ix_users_employee_id", "users", ["employee_id"])
-    op.create_index("ix_users_username", "users", ["username"])
+    op.create_index("ix_users_employee_id", "users", ["employee_id"], unique=True)
+    op.create_index("ix_users_username", "users", ["username"], unique=True)
 
     # 7. user_sessions
     op.create_table(
@@ -183,9 +182,8 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("token_hash"),
     )
-    op.create_index("ix_user_sessions_token_hash", "user_sessions", ["token_hash"])
+    op.create_index("ix_user_sessions_token_hash", "user_sessions", ["token_hash"], unique=True)
     op.create_index("ix_user_sessions_user_id", "user_sessions", ["user_id"])
 
     # 8. employee_reporting_lines
@@ -283,9 +281,7 @@ def upgrade() -> None:
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.CheckConstraint(
-            "platform IN ('ANDROID', 'IOS')", name="check_device_platform_valid"
-        ),
+        sa.CheckConstraint("platform IN ('ANDROID', 'IOS')", name="check_device_platform_valid"),
         sa.ForeignKeyConstraint(["employee_id"], ["employees.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(["revoked_by_user_id"], ["users.id"], ondelete="RESTRICT"),
         sa.PrimaryKeyConstraint("id"),
@@ -335,4 +331,3 @@ def downgrade() -> None:
     op.drop_table("zones")
     op.drop_table("groups")
     op.drop_table("audit_logs")
-

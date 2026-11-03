@@ -120,7 +120,9 @@ async def run_demo() -> None:
     unrelated_worker_id = uuid4()
     active_lines = [
         EmployeeReportingLine(employee_id=worker_id, manager_id=sup1_id, relationship="SUPERVISOR"),
-        EmployeeReportingLine(employee_id=unrelated_worker_id, manager_id=uuid4(), relationship="SUPERVISOR"),
+        EmployeeReportingLine(
+            employee_id=unrelated_worker_id, manager_id=uuid4(), relationship="SUPERVISOR"
+        ),
     ]
 
     mock_rep_lines = MagicMock()
@@ -132,8 +134,12 @@ async def run_demo() -> None:
 
     assert scoped_ids is not None
     assert worker_id in scoped_ids, "Worker WRK999 MUST be in Supervisor's scope"
-    assert unrelated_worker_id not in scoped_ids, "Unrelated worker MUST NOT be in Supervisor's scope"
-    print(" -> SUCCESS: Supervisor sees ONLY their own team (WRK999) and cannot see unrelated workers!")
+    assert unrelated_worker_id not in scoped_ids, (
+        "Unrelated worker MUST NOT be in Supervisor's scope"
+    )
+    print(
+        " -> SUCCESS: Supervisor sees ONLY their own team (WRK999) and cannot see unrelated workers!"
+    )
     print("\n" + "=" * 60)
     print("ALL DEMO CHECKS PASSED PERFECTLY!")
     print("=" * 60)

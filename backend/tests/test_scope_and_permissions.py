@@ -110,4 +110,3 @@ async def test_out_of_scope_access_raises_forbidden() -> None:
 
     assert exc.value.code == "OUT_OF_SCOPE"
     assert exc.value.status_code == 403
-

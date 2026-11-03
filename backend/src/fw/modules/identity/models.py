@@ -73,4 +73,3 @@ class UserSession(Base):
         default=lambda: datetime.now(UTC),
         nullable=False,
     )
-

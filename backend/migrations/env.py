@@ -7,6 +7,10 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+import fw.modules.audit.models  # noqa: F401
+import fw.modules.identity.models  # noqa: F401
+import fw.modules.org.models  # noqa: F401
+import fw.modules.settings.models  # noqa: F401
 from fw.core.config import get_settings
 from fw.core.db import Base
 
@@ -81,6 +85,14 @@ def include_object(obj, name, type_, reflected, compare_to) -> bool:
         if name in EXCLUDED_TABLES or any(
             name.startswith(prefix) for prefix in EXCLUDED_TABLE_PREFIXES
         ):
+            return False
+    elif type_ == "index":
+        if hasattr(obj, "table") and (
+            obj.table.name in EXCLUDED_TABLES
+            or any(obj.table.name.startswith(prefix) for prefix in EXCLUDED_TABLE_PREFIXES)
+        ):
+            return False
+        if name and any(name.startswith(prefix) for prefix in EXCLUDED_TABLE_PREFIXES):
             return False
     return True
 

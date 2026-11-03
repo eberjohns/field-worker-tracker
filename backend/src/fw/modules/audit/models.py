@@ -38,4 +38,3 @@ class AuditLog(Base):
         nullable=False,
         index=True,
     )
-
