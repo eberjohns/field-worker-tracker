@@ -70,6 +70,9 @@ ignore = [
 [tool.pyright]
 include = ["src", "tests"]
 exclude = ["**/__pycache__", "migrations"]
+extraPaths = ["src"]
+venvPath = "."
+venv = ".venv"
 pythonVersion = "3.12"
 typeCheckingMode = "standard"
 strictParameterNoneValue = true

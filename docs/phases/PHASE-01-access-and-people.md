@@ -33,14 +33,14 @@ Users can log in with role-based, scope-limited access; Admin can manage people,
 - Salary data (Phase 03)
 
 ## Checklist (tick each before asking for review)
-- [ ] Each role sees only its scope (matrix in 02) - verified with seed users
-- [ ] Every write creates an audit entry
-- [ ] Optimistic locking returns 409 on conflict
-- [ ] Hierarchy cycles and a second supervisor are refused
-- [ ] Default password forces a change; an unchanged account locks after the configured days
-- [ ] Admin can reset a worker to the default; non-Admin cannot
-- [ ] Docs 02/07/08 updated for any difference; CHANGELOG entry
-- [ ] Docs updated in the same change (`.agents/rules/documentation.md`), ADR written for any design decision, CHANGELOG entry
+- [x] Each role sees only its scope (matrix in 02) - verified with seed users
+- [x] Every write creates an audit entry
+- [x] Optimistic locking returns 409 on conflict
+- [x] Hierarchy cycles and a second supervisor are refused
+- [x] Default password forces a change; an unchanged account locks after the configured days
+- [x] Admin can reset a worker to the default; non-Admin cannot
+- [x] Docs 02/07/08 updated for any difference; CHANGELOG entry
+- [x] Docs updated in the same change (`.agents/rules/documentation.md`), ADR written for any design decision, CHANGELOG entry
 - [ ] Pull request opened with the template; nothing merged by the agent
 
 ## Demo script

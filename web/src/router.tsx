@@ -12,6 +12,11 @@ import { Attendance } from "./routes/Attendance";
 import { Payroll } from "./routes/Payroll";
 import { Reports } from "./routes/Reports";
 import { Settings } from "./routes/Settings";
+import { Employees } from "./routes/Employees";
+import { EmployeeDetail } from "./routes/EmployeeDetail";
+import { UsersAdmin } from "./routes/Users";
+import { AuditLogs } from "./routes/AuditLogs";
+import { Login } from "./routes/Login";
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -25,6 +30,36 @@ const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
   component: Dashboard,
+});
+
+const loginRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/login",
+  component: Login,
+});
+
+const employeesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/employees",
+  component: Employees,
+});
+
+const employeeDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/employees/$employeeId",
+  component: EmployeeDetail,
+});
+
+const usersRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/users",
+  component: UsersAdmin,
+});
+
+const auditLogsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/audit-logs",
+  component: AuditLogs,
 });
 
 const liveRoute = createRoute({
@@ -65,6 +100,11 @@ const settingsRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
+  loginRoute,
+  employeesRoute,
+  employeeDetailRoute,
+  usersRoute,
+  auditLogsRoute,
   liveRoute,
   plannerRoute,
   attendanceRoute,
@@ -80,4 +120,3 @@ declare module "@tanstack/react-router" {
     router: typeof router;
   }
 }
-

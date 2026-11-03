@@ -1,3 +1,9 @@
 """Public interface for settings module."""
 
-__all__: list[str] = []
+from fw.modules.settings.models import CompanySettingValue
+from fw.modules.settings.service import SettingsService
+
+__all__ = [
+    "CompanySettingValue",
+    "SettingsService",
+]

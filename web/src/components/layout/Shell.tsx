@@ -9,27 +9,46 @@ import {
   FileBarChart,
   Settings as SettingsIcon,
   ShieldCheck,
+  Users,
+  UserCheck,
+  History,
+  LogOut,
 } from "lucide-react";
+import { useAuth } from "../../context/AuthContext";
+import { Login } from "../../routes/Login";
 
 interface NavItem {
   label: string;
   to: string;
   icon: React.ComponentType<{ className?: string }>;
+  roles?: string[];
 }
 
 const navItems: NavItem[] = [
   { label: "Dashboard", to: "/", icon: LayoutDashboard },
+  { label: "Employees", to: "/employees", icon: Users, roles: ["ADMIN", "ENGINEER", "SUPERINTENDENT", "SUPERVISOR"] },
   { label: "Live Map", to: "/live", icon: MapPin },
   { label: "Planner", to: "/planner", icon: CalendarDays },
   { label: "Attendance", to: "/attendance", icon: Clock },
-  { label: "Payroll", to: "/payroll", icon: DollarSign },
+  { label: "Payroll", to: "/payroll", icon: DollarSign, roles: ["ADMIN", "ENGINEER"] },
   { label: "Reports", to: "/reports", icon: FileBarChart },
-  { label: "Settings", to: "/settings", icon: SettingsIcon },
+  { label: "Users & Security", to: "/users", icon: UserCheck, roles: ["ADMIN"] },
+  { label: "Audit Logs", to: "/audit-logs", icon: History, roles: ["ADMIN"] },
+  { label: "Settings", to: "/settings", icon: SettingsIcon, roles: ["ADMIN", "ENGINEER"] },
 ];
 
 export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const routerState = useRouterState();
   const currentPath = routerState.location.pathname;
+  const { user, isAuthenticated, logout } = useAuth();
+
+  if (!isAuthenticated || user?.must_change_password) {
+    return <Login />;
+  }
+
+  const allowedNavItems = navItems.filter(
+    (item) => !item.roles || (user && item.roles.includes(user.role))
+  );
 
   return (
     <div className="flex h-screen w-full bg-slate-50">
@@ -42,8 +61,8 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
           <span className="font-semibold text-slate-900 tracking-tight">Field Worker Tracker</span>
         </div>
 
-        <nav className="flex-1 px-4 py-4 space-y-1">
-          {navItems.map((item) => {
+        <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto">
+          {allowedNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentPath === item.to;
             return (
@@ -66,8 +85,8 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
         <div className="p-4 border-t border-slate-200">
           <div className="flex items-center justify-between text-xs text-slate-500">
             <span className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
-              Core System Ready
+              <span className="h-2 w-2 rounded-full bg-emerald-500 inline-block"></span>
+              Phase 01 Active
             </span>
             <span className="px-2 py-0.5 rounded bg-slate-100 font-mono text-[10px] text-slate-600">
               v0.1.0
@@ -90,8 +109,21 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
               <ShieldCheck className="h-3.5 w-3.5 text-slate-500" />
               <span>Deployment: <strong>AE</strong> (UAE North)</span>
             </div>
-            <div className="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-semibold text-slate-700">
-              AD
+
+            <div className="flex items-center gap-3 pl-4 border-l border-slate-200">
+              <div className="text-right">
+                <div className="text-xs font-semibold text-slate-800">{user?.username}</div>
+                <div className="text-[10px] font-medium text-indigo-600 uppercase tracking-wide">
+                  {user?.role}
+                </div>
+              </div>
+              <button
+                onClick={logout}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition"
+                title="Sign out"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
             </div>
           </div>
         </header>
@@ -104,4 +136,3 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     </div>
   );
 };
-
