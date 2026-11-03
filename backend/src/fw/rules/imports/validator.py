@@ -107,3 +107,17 @@ def detect_reporting_issues(
                 row_errors[idx].append("HIERARCHY_CYCLE")
 
     return row_errors
+
+
+def validate_worksite_job_number(job_number: Any) -> str | None:
+    """Validate worksite job number format (BR-JB-01, DEC-23). Returns error code if invalid."""
+    if not job_number or not isinstance(job_number, str):
+        return "INVALID_JOB_NUMBER"
+    s = str(job_number).strip()
+    if "-" in s or "/" in s or "," in s or " " in s:
+        return "INVALID_JOB_NUMBER"
+    import re
+
+    if not re.match(r"^\d{2}[ABC]\d{5}$", s):
+        return "INVALID_JOB_NUMBER"
+    return None

@@ -26,5 +26,18 @@ MapLibre GL JS 6.x is released frequently (v6.15 on 18 Oct 2026; v6.0 is ESM-onl
 3. Open sample worksites in Dubai and KSA in the satellite style and note how recent the imagery is. Where imagery is outdated for fast-changing sites, allow boundary import (GeoJSON/KML) from client site plans.
 4. OpenLayers (supported by Terra Draw) is the fallback renderer if MapLibre drawing proves blocked; verify its recency at that time.
 
+## Gate Outcome (Passed 2026-11-03 during Phase 04)
+1. **Compatibility Gate Result: PASSED**.
+   - Installed `maplibre-gl@6.16.0` alongside `terra-draw@1.39.0`, `terra-draw-maplibre-gl-adapter@1.5.0`, and modular Turf `@turf/*@7.4.0`.
+   - Verified that `terra-draw-maplibre-gl-adapter@1.5.0` works with `maplibre-gl@6.16.0` without runtime errors or rendering glitches.
+   - Tested interactive polygon creation, vertex editing, mid-point splitting, and coordinate extraction.
+   - Verified `@turf/area`, `@turf/boolean-valid`, and `@turf/kinks` provide instant frontend self-intersection and validity checks.
+2. **Tile & Basemap Verification**:
+   - MapTiler satellite & streets vector styles verified with `VITE_MAP_API_KEY`.
+   - Forward geocoding place search in Dubai and KSA verified via MapTiler geocoding endpoint.
+   - When API key is absent (e.g. initial dev or air-gapped test container), a setup prompt banner directs the developer on how to add their key to `.env.local`, falling back gracefully to OpenStreetMap raster tiles.
+3. **Status**:
+   - Status updated to **Accepted & Verified**. Fallback to MapLibre 5.x or OpenLayers is not required.
+
 ## Consequences
 Map libraries are the most version-sensitive part of the frontend; they are isolated in `web/src/features/map/` behind a small wrapper API so a renderer or provider change touches one folder. A paid tile plan is needed for commercial use (budget is small at ~100 dashboard users; confirm current pricing). See `docs/10-ui-views.md` and `docs/13-architecture.md`.

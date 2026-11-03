@@ -62,7 +62,9 @@ Roles: A = Admin, E = Engineer, S = Superintendent, V = Supervisor. "scope" = li
 | GET | /worksites | scope | list; filters `q, group_id, zone_id, country, has_boundary, is_active` |
 | POST/PATCH | /worksites, /worksites/{id} | A | |
 | GET | /worksites/{id} | scope | detail with items and staffing summary |
-| PUT | /worksites/{id}/boundary | A | GeoJSON Polygon; validates (valid ring, area > 0, SRID 4326) and emits `SITE_BOUNDARY` sync changes |
+| PUT | /worksites/{id}/boundary | A E | GeoJSON Polygon; validates (valid ring, area > 0, SRID 4326) and emits `SITE_BOUNDARY` sync changes |
+| POST | /worksites/{id}/copy-boundary | A E | Copy boundary polygon from source worksite into this worksite |
+| POST | /worksites/{id}/copy-boundary-to | A E | Copy this worksite's boundary to target worksites list (`target_worksite_ids`) |
 | GET | /worksites/search-map | scope | by text/number for the boundary editor |
 | GET | /boundary-queue | A E | worksites and accommodations with no boundary yet, with progress counts; each links to the boundary editor |
 | GET/POST | /worksites/{id}/job-items | A (write), scope (read) | |

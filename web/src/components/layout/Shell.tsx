@@ -15,6 +15,8 @@ import {
   LogOut,
   UploadCloud,
   Banknote,
+  Building2,
+  Hexagon,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { Login } from "../../routes/Login";
@@ -29,6 +31,8 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: "Dashboard", to: "/", icon: LayoutDashboard },
   { label: "Employees", to: "/employees", icon: Users, roles: ["ADMIN", "ENGINEER", "SUPERINTENDENT", "SUPERVISOR"] },
+  { label: "Worksites & Jobs", to: "/worksites", icon: Building2, roles: ["ADMIN", "ENGINEER", "SUPERINTENDENT", "SUPERVISOR"] },
+  { label: "Boundary Queue", to: "/boundaries", icon: Hexagon, roles: ["ADMIN", "ENGINEER"] },
   { label: "Live Map", to: "/live", icon: MapPin },
   { label: "Planner", to: "/planner", icon: CalendarDays },
   { label: "Attendance", to: "/attendance", icon: Clock },

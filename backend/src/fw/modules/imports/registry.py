@@ -487,10 +487,10 @@ SHEET_REGISTRY: dict[str, SheetDef] = {
     "Worksites": SheetDef(
         name="Worksites",
         title="Worksites / parent jobs. One row per worksite.",
-        description="Worksites with boundary polygons. Deferred to Phase 04.",
+        description="Worksites with boundary polygons.",
         primary_key=["job_number"],
         commit_order=7,
-        is_in_scope_phase_03=False,
+        is_in_scope_phase_03=True,
         columns=[
             ColumnDef(
                 "job_number",
@@ -571,10 +571,10 @@ SHEET_REGISTRY: dict[str, SheetDef] = {
     "Job_Items": SheetDef(
         name="Job_Items",
         title="Work items under a worksite. One row per item.",
-        description="Staffing line items and recurring schedules. Deferred to Phase 04.",
+        description="Staffing line items and recurring schedules.",
         primary_key=["job_number", "sub_item_code"],
         commit_order=8,
-        is_in_scope_phase_03=False,
+        is_in_scope_phase_03=True,
         columns=[
             ColumnDef(
                 "job_number",

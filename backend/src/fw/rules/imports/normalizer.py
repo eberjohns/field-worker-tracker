@@ -101,6 +101,45 @@ def normalize_sgd(raw: str | None) -> tuple[str | None, str | None]:
     return (cleaned, "SGD_UNKNOWN")
 
 
+FREQUENCY_PHRASE_MAP: dict[str, tuple[str, Decimal, int]] = {
+    "daily": ("WEEK", Decimal("6"), 1),
+    "daily (6 days a week)": ("WEEK", Decimal("6"), 1),
+    "daily (6 days)": ("WEEK", Decimal("6"), 1),
+    "one time / week": ("WEEK", Decimal("1"), 1),
+    "one time/week": ("WEEK", Decimal("1"), 1),
+    "1 time / week": ("WEEK", Decimal("1"), 1),
+    "once a week": ("WEEK", Decimal("1"), 1),
+    "one time / 2 weeks": ("WEEK", Decimal("1"), 2),
+    "one time/2 weeks": ("WEEK", Decimal("1"), 2),
+    "1 time / 2 weeks": ("WEEK", Decimal("1"), 2),
+    "three time / week": ("WEEK", Decimal("3"), 1),
+    "three times / week": ("WEEK", Decimal("3"), 1),
+    "3 time / week": ("WEEK", Decimal("3"), 1),
+    "3 times / week": ("WEEK", Decimal("3"), 1),
+    "two time / month": ("MONTH", Decimal("2"), 1),
+    "two times / month": ("MONTH", Decimal("2"), 1),
+    "2 time / month": ("MONTH", Decimal("2"), 1),
+    "2 times / month": ("MONTH", Decimal("2"), 1),
+    "monthly": ("MONTH", Decimal("1"), 1),
+    "one time / month": ("MONTH", Decimal("1"), 1),
+    "quarterly": ("QUARTER", Decimal("1"), 1),
+    "one time / quarter": ("QUARTER", Decimal("1"), 1),
+    "three time / year": ("YEAR", Decimal("3"), 1),
+    "three times / year": ("YEAR", Decimal("3"), 1),
+    "3 time / year": ("YEAR", Decimal("3"), 1),
+    "3 times / year": ("YEAR", Decimal("3"), 1),
+}
+
+
+def normalize_frequency_text(raw_text: str | None) -> tuple[str, Decimal, int] | None:
+    """Normalize common client free-text frequency phrases to (unit, occurrences, interval)."""
+    cleaned = normalize_text(raw_text)
+    if not cleaned:
+        return None
+    lower_val = cleaned.lower()
+    return FREQUENCY_PHRASE_MAP.get(lower_val)
+
+
 def parse_cell_value(
     raw_val: Any,
     col_type: str,

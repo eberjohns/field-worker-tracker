@@ -3851,6 +3851,1225 @@
           }
         }
       }
+    },
+    "/api/v1/worksites": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "List Worksites",
+        "description": "List worksites with optional filtering.",
+        "operationId": "list_worksites_api_v1_worksites_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Search by job number or name",
+              "title": "Q"
+            },
+            "description": "Search by job number or name"
+          },
+          {
+            "name": "group_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Group Id"
+            }
+          },
+          {
+            "name": "zone_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Zone Id"
+            }
+          },
+          {
+            "name": "country",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Country"
+            }
+          },
+          {
+            "name": "has_boundary",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Boundary"
+            }
+          },
+          {
+            "name": "is_active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": true,
+              "title": "Is Active"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WorksiteResponse"
+                  },
+                  "title": "Response List Worksites Api V1 Worksites Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Create Worksite",
+        "description": "Create a worksite record (Admin only).",
+        "operationId": "create_worksite_api_v1_worksites_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorksiteCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorksiteResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/worksites/{worksite_id}": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Get Worksite Detail",
+        "description": "Get full details of a worksite including items and boundary GeoJSON.",
+        "operationId": "get_worksite_detail_api_v1_worksites__worksite_id__get",
+        "parameters": [
+          {
+            "name": "worksite_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Worksite Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorksiteDetailResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Update Worksite",
+        "description": "Update worksite metadata with optimistic locking (Admin only).",
+        "operationId": "update_worksite_api_v1_worksites__worksite_id__patch",
+        "parameters": [
+          {
+            "name": "worksite_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Worksite Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorksiteUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorksiteResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/boundary-queue": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Get Boundary Queue",
+        "description": "Get boundary setup queue with progress and unset entities (D6).",
+        "operationId": "get_boundary_queue_api_v1_boundary_queue_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoundaryQueueResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/worksites/{worksite_id}/boundary": {
+      "put": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Update Worksite Boundary",
+        "description": "Set or update worksite polygon boundary.",
+        "operationId": "update_worksite_boundary_api_v1_worksites__worksite_id__boundary_put",
+        "parameters": [
+          {
+            "name": "worksite_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Worksite Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BoundaryUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorksiteDetailResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/worksites/{worksite_id}/copy-boundary": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Copy Boundary From",
+        "description": "Copy boundary polygon from source worksite into this worksite.",
+        "operationId": "copy_boundary_from_api_v1_worksites__worksite_id__copy_boundary_post",
+        "parameters": [
+          {
+            "name": "worksite_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Worksite Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BoundaryCopyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorksiteDetailResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/worksites/{worksite_id}/copy-boundary-to": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Copy Boundary To Targets",
+        "description": "Copy this worksite's boundary to one or more target worksites.",
+        "operationId": "copy_boundary_to_targets_api_v1_worksites__worksite_id__copy_boundary_to_post",
+        "parameters": [
+          {
+            "name": "worksite_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Worksite Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BoundaryCopyToRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WorksiteResponse"
+                  },
+                  "title": "Response Copy Boundary To Targets Api V1 Worksites  Worksite Id  Copy Boundary To Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accommodations/{accommodation_id}/boundary": {
+      "put": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Update Accommodation Boundary",
+        "description": "Update accommodation camp boundary polygon.",
+        "operationId": "update_accommodation_boundary_api_v1_accommodations__accommodation_id__boundary_put",
+        "parameters": [
+          {
+            "name": "accommodation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Accommodation Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BoundaryUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/worksites/{worksite_id}/job-items": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Create Job Item",
+        "description": "Create a job item under a worksite.",
+        "operationId": "create_job_item_api_v1_worksites__worksite_id__job_items_post",
+        "parameters": [
+          {
+            "name": "worksite_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Worksite Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobItemCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobItemResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/job-items/{job_item_id}": {
+      "patch": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Update Job Item",
+        "description": "Update a job item with optimistic locking.",
+        "operationId": "update_job_item_api_v1_job_items__job_item_id__patch",
+        "parameters": [
+          {
+            "name": "job_item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Job Item Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobItemUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobItemResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/job-items/{job_item_id}/generate-occurrences": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Generate Occurrences",
+        "description": "Trigger occurrence generation for a job item across rolling horizon.",
+        "operationId": "generate_occurrences_api_v1_job_items__job_item_id__generate_occurrences_post",
+        "parameters": [
+          {
+            "name": "job_item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Job Item Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateOccurrencesRequest",
+                "default": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/JobOccurrenceResponse"
+                  },
+                  "title": "Response Generate Occurrences Api V1 Job Items  Job Item Id  Generate Occurrences Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/job-items/{job_item_id}/validation": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Get Job Item Validation",
+        "description": "Get validation calculations for job item validation panel.",
+        "operationId": "get_job_item_validation_api_v1_job_items__job_item_id__validation_get",
+        "parameters": [
+          {
+            "name": "job_item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Job Item Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobItemValidationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/occurrences": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "List Occurrences",
+        "description": "List job occurrences with filtering.",
+        "operationId": "list_occurrences_api_v1_occurrences_get",
+        "parameters": [
+          {
+            "name": "job_item_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Job Item Id"
+            }
+          },
+          {
+            "name": "worksite_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Worksite Id"
+            }
+          },
+          {
+            "name": "from_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From Date"
+            }
+          },
+          {
+            "name": "to_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To Date"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 200,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/JobOccurrenceResponse"
+                  },
+                  "title": "Response List Occurrences Api V1 Occurrences Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/occurrences/{occurrence_id}": {
+      "patch": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Update Occurrence",
+        "description": "Update occurrence due date or status.",
+        "operationId": "update_occurrence_api_v1_occurrences__occurrence_id__patch",
+        "parameters": [
+          {
+            "name": "occurrence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Occurrence Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobOccurrenceUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobOccurrenceResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4137,6 +5356,134 @@
           "created_at"
         ],
         "title": "AuditLogRead"
+      },
+      "BoundaryCopyRequest": {
+        "properties": {
+          "source_worksite_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Worksite Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_worksite_id"
+        ],
+        "title": "BoundaryCopyRequest"
+      },
+      "BoundaryCopyToRequest": {
+        "properties": {
+          "target_worksite_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Target Worksite Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "target_worksite_ids"
+        ],
+        "title": "BoundaryCopyToRequest"
+      },
+      "BoundaryQueueItemResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "entity_type": {
+            "type": "string",
+            "title": "Entity Type",
+            "description": "WORKSITE or ACCOMMODATION"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "zone_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zone Name"
+          },
+          "country": {
+            "type": "string",
+            "title": "Country"
+          },
+          "has_boundary": {
+            "type": "boolean",
+            "title": "Has Boundary"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "entity_type",
+          "code",
+          "name",
+          "country",
+          "has_boundary"
+        ],
+        "title": "BoundaryQueueItemResponse"
+      },
+      "BoundaryQueueResponse": {
+        "properties": {
+          "total_count": {
+            "type": "integer",
+            "title": "Total Count"
+          },
+          "done_count": {
+            "type": "integer",
+            "title": "Done Count"
+          },
+          "unset_count": {
+            "type": "integer",
+            "title": "Unset Count"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BoundaryQueueItemResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_count",
+          "done_count",
+          "unset_count",
+          "items"
+        ],
+        "title": "BoundaryQueueResponse"
+      },
+      "BoundaryUpdateRequest": {
+        "properties": {
+          "boundary": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Boundary",
+            "description": "GeoJSON Polygon geometry (coordinates array: [ [ [lng, lat], ... ] ])"
+          }
+        },
+        "type": "object",
+        "required": [
+          "boundary"
+        ],
+        "title": "BoundaryUpdateRequest"
       },
       "CompanySettingRead": {
         "properties": {
@@ -5213,6 +6560,36 @@
         ],
         "title": "EmployeeUpdate"
       },
+      "GenerateOccurrencesRequest": {
+        "properties": {
+          "from_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Date"
+          },
+          "to_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Date"
+          }
+        },
+        "type": "object",
+        "title": "GenerateOccurrencesRequest"
+      },
       "GradeChangeRequest": {
         "properties": {
           "new_grade_code": {
@@ -5625,6 +7002,727 @@
           "status"
         ],
         "title": "ImportRowRead"
+      },
+      "JobItemCreate": {
+        "properties": {
+          "sub_item_code": {
+            "type": "string",
+            "title": "Sub Item Code"
+          },
+          "staff_grade_description": {
+            "type": "string",
+            "title": "Staff Grade Description"
+          },
+          "planned_grade_code": {
+            "type": "string",
+            "title": "Planned Grade Code"
+          },
+          "frequency_unit": {
+            "type": "string",
+            "title": "Frequency Unit",
+            "description": "WEEK, MONTH, QUARTER, YEAR"
+          },
+          "occurrences_per_period": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Occurrences Per Period"
+          },
+          "period_interval": {
+            "type": "integer",
+            "title": "Period Interval",
+            "default": 1
+          },
+          "weekday_pattern": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekday Pattern"
+          },
+          "required_staff_count": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Required Staff Count"
+          },
+          "hours_per_occurrence_per_staff": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Hours Per Occurrence Per Staff"
+          },
+          "declared_activities_per_year": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declared Activities Per Year"
+          },
+          "declared_total_hours_per_year": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declared Total Hours Per Year"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Start Date"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "deployment_type": {
+            "type": "string",
+            "title": "Deployment Type",
+            "description": "PERMANENT or REMOTE"
+          },
+          "break_override_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Break Override Minutes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sub_item_code",
+          "staff_grade_description",
+          "planned_grade_code",
+          "frequency_unit",
+          "occurrences_per_period",
+          "required_staff_count",
+          "hours_per_occurrence_per_staff",
+          "start_date",
+          "deployment_type"
+        ],
+        "title": "JobItemCreate"
+      },
+      "JobItemResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "worksite_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Worksite Id"
+          },
+          "sub_item_code": {
+            "type": "string",
+            "title": "Sub Item Code"
+          },
+          "staff_grade_description": {
+            "type": "string",
+            "title": "Staff Grade Description"
+          },
+          "planned_grade_code": {
+            "type": "string",
+            "title": "Planned Grade Code"
+          },
+          "frequency_unit": {
+            "type": "string",
+            "title": "Frequency Unit"
+          },
+          "occurrences_per_period": {
+            "type": "string",
+            "title": "Occurrences Per Period"
+          },
+          "period_interval": {
+            "type": "integer",
+            "title": "Period Interval"
+          },
+          "weekday_pattern": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekday Pattern"
+          },
+          "required_staff_count": {
+            "type": "integer",
+            "title": "Required Staff Count"
+          },
+          "hours_per_occurrence_per_staff": {
+            "type": "string",
+            "title": "Hours Per Occurrence Per Staff"
+          },
+          "declared_activities_per_year": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declared Activities Per Year"
+          },
+          "declared_total_hours_per_year": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declared Total Hours Per Year"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Start Date"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "deployment_type": {
+            "type": "string",
+            "title": "Deployment Type"
+          },
+          "break_override_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Break Override Minutes"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "expected_activities_per_year": {
+            "type": "string",
+            "title": "Expected Activities Per Year"
+          },
+          "expected_annual_hours": {
+            "type": "string",
+            "title": "Expected Annual Hours"
+          },
+          "days_per_occurrence": {
+            "type": "integer",
+            "title": "Days Per Occurrence"
+          },
+          "job_unit_day_split": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Job Unit Day Split"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "worksite_id",
+          "sub_item_code",
+          "staff_grade_description",
+          "planned_grade_code",
+          "frequency_unit",
+          "occurrences_per_period",
+          "period_interval",
+          "required_staff_count",
+          "hours_per_occurrence_per_staff",
+          "start_date",
+          "deployment_type",
+          "is_active",
+          "version",
+          "expected_activities_per_year",
+          "expected_annual_hours",
+          "days_per_occurrence",
+          "job_unit_day_split",
+          "created_at"
+        ],
+        "title": "JobItemResponse"
+      },
+      "JobItemUpdate": {
+        "properties": {
+          "sub_item_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sub Item Code"
+          },
+          "staff_grade_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Staff Grade Description"
+          },
+          "planned_grade_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned Grade Code"
+          },
+          "frequency_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frequency Unit"
+          },
+          "occurrences_per_period": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurrences Per Period"
+          },
+          "period_interval": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Interval"
+          },
+          "weekday_pattern": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekday Pattern"
+          },
+          "required_staff_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Required Staff Count"
+          },
+          "hours_per_occurrence_per_staff": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hours Per Occurrence Per Staff"
+          },
+          "declared_activities_per_year": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declared Activities Per Year"
+          },
+          "declared_total_hours_per_year": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declared Total Hours Per Year"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "deployment_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deployment Type"
+          },
+          "break_override_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Break Override Minutes"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version",
+            "description": "Optimistic locking version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version"
+        ],
+        "title": "JobItemUpdate"
+      },
+      "JobItemValidationResponse": {
+        "properties": {
+          "job_item_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Job Item Id"
+          },
+          "sub_item_code": {
+            "type": "string",
+            "title": "Sub Item Code"
+          },
+          "staff_grade_description": {
+            "type": "string",
+            "title": "Staff Grade Description"
+          },
+          "declared_activities_per_year": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declared Activities Per Year"
+          },
+          "calculated_activities_per_year": {
+            "type": "string",
+            "title": "Calculated Activities Per Year"
+          },
+          "declared_total_hours_per_year": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declared Total Hours Per Year"
+          },
+          "calculated_annual_hours": {
+            "type": "string",
+            "title": "Calculated Annual Hours"
+          },
+          "expected_occurrences_count": {
+            "type": "integer",
+            "title": "Expected Occurrences Count"
+          },
+          "days_per_occurrence": {
+            "type": "integer",
+            "title": "Days Per Occurrence"
+          },
+          "daily_hours_split": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Daily Hours Split"
+          },
+          "eligible_workers_count": {
+            "type": "integer",
+            "title": "Eligible Workers Count"
+          },
+          "difference_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difference Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_item_id",
+          "sub_item_code",
+          "staff_grade_description",
+          "declared_activities_per_year",
+          "calculated_activities_per_year",
+          "declared_total_hours_per_year",
+          "calculated_annual_hours",
+          "expected_occurrences_count",
+          "days_per_occurrence",
+          "daily_hours_split",
+          "eligible_workers_count",
+          "difference_note"
+        ],
+        "title": "JobItemValidationResponse"
+      },
+      "JobOccurrenceResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "job_item_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Job Item Id"
+          },
+          "window_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Window Start"
+          },
+          "window_end": {
+            "type": "string",
+            "format": "date",
+            "title": "Window End"
+          },
+          "slot_index": {
+            "type": "integer",
+            "title": "Slot Index"
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "required_staff_count": {
+            "type": "integer",
+            "title": "Required Staff Count"
+          },
+          "required_hours_per_staff": {
+            "type": "string",
+            "title": "Required Hours Per Staff"
+          },
+          "needs_review": {
+            "type": "boolean",
+            "title": "Needs Review"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "job_item_id",
+          "window_start",
+          "window_end",
+          "slot_index",
+          "due_date",
+          "status",
+          "source",
+          "required_staff_count",
+          "required_hours_per_staff",
+          "needs_review",
+          "created_at"
+        ],
+        "title": "JobOccurrenceResponse"
+      },
+      "JobOccurrenceUpdate": {
+        "properties": {
+          "due_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "title": "JobOccurrenceUpdate"
       },
       "LoginRequest": {
         "properties": {
@@ -6957,6 +9055,657 @@
           "value"
         ],
         "title": "WinningFieldSourceRead"
+      },
+      "WorksiteCreate": {
+        "properties": {
+          "job_number": {
+            "type": "string",
+            "title": "Job Number",
+            "description": "Job number matching 2 digits + letter (A/B/C) + 5 digits"
+          },
+          "job_name": {
+            "type": "string",
+            "title": "Job Name"
+          },
+          "renewal_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Renewal Reference"
+          },
+          "group_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Group Id"
+          },
+          "zone_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Zone Id"
+          },
+          "customer_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Type"
+          },
+          "is_outdoor": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Outdoor"
+          },
+          "country": {
+            "type": "string",
+            "maxLength": 2,
+            "title": "Country"
+          },
+          "contract_group_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Group Ref"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "budget_amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget Amount"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_number",
+          "job_name",
+          "group_id",
+          "zone_id",
+          "country"
+        ],
+        "title": "WorksiteCreate"
+      },
+      "WorksiteDetailResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "job_number": {
+            "type": "string",
+            "title": "Job Number"
+          },
+          "job_name": {
+            "type": "string",
+            "title": "Job Name"
+          },
+          "renewal_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Renewal Reference"
+          },
+          "group_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Group Id"
+          },
+          "group_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Name"
+          },
+          "zone_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Zone Id"
+          },
+          "zone_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zone Name"
+          },
+          "customer_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Type"
+          },
+          "is_outdoor": {
+            "type": "boolean",
+            "title": "Is Outdoor"
+          },
+          "country": {
+            "type": "string",
+            "title": "Country"
+          },
+          "contract_group_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Group Ref"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "has_boundary": {
+            "type": "boolean",
+            "title": "Has Boundary"
+          },
+          "rep_latitude": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rep Latitude"
+          },
+          "rep_longitude": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rep Longitude"
+          },
+          "budget_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget Amount"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "boundary_geojson": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Boundary Geojson"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/JobItemResponse"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "job_number",
+          "job_name",
+          "group_id",
+          "zone_id",
+          "is_outdoor",
+          "country",
+          "has_boundary",
+          "is_active",
+          "version",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "WorksiteDetailResponse"
+      },
+      "WorksiteResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "job_number": {
+            "type": "string",
+            "title": "Job Number"
+          },
+          "job_name": {
+            "type": "string",
+            "title": "Job Name"
+          },
+          "renewal_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Renewal Reference"
+          },
+          "group_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Group Id"
+          },
+          "group_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Name"
+          },
+          "zone_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Zone Id"
+          },
+          "zone_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zone Name"
+          },
+          "customer_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Type"
+          },
+          "is_outdoor": {
+            "type": "boolean",
+            "title": "Is Outdoor"
+          },
+          "country": {
+            "type": "string",
+            "title": "Country"
+          },
+          "contract_group_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Group Ref"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "has_boundary": {
+            "type": "boolean",
+            "title": "Has Boundary"
+          },
+          "rep_latitude": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rep Latitude"
+          },
+          "rep_longitude": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rep Longitude"
+          },
+          "budget_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget Amount"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "job_number",
+          "job_name",
+          "group_id",
+          "zone_id",
+          "is_outdoor",
+          "country",
+          "has_boundary",
+          "is_active",
+          "version",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "WorksiteResponse"
+      },
+      "WorksiteUpdate": {
+        "properties": {
+          "job_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Name"
+          },
+          "renewal_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Renewal Reference"
+          },
+          "group_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Id"
+          },
+          "zone_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zone Id"
+          },
+          "customer_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Type"
+          },
+          "is_outdoor": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Outdoor"
+          },
+          "contract_group_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Group Ref"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "budget_amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget Amount"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version",
+            "description": "Optimistic locking version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version"
+        ],
+        "title": "WorksiteUpdate"
       },
       "ZoneCreate": {
         "properties": {

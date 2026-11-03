@@ -8,7 +8,7 @@ Status: **VERIFIED** (checked), **GATE** (checked, but a compatibility test is r
 |---|---|---|---|---|
 | Map renderer | maplibre-gl 6.x | VERIFIED | 2026-10-28 | v6.15 released 18 Oct 2026; ESM-only, WebGL2 required, BSD |
 | Map wrapper | react-map-gl 8.1.2 (`/maplibre`) | VERIFIED | 2026-10-28 | released 29 Jul 2026; supports MapLibre v6 |
-| Map drawing | terra-draw + terra-draw-maplibre-gl-adapter | **GATE** | 2026-10-28 | maintained; adapter docs list MapLibre v4/v5; v6 support unconfirmed (ADR-006 gate). Fallback: pin maplibre-gl 5.x |
+| Map drawing | terra-draw + terra-draw-maplibre-gl-adapter | VERIFIED | 2026-11-03 | terra-draw 1.39.0 + terra-draw-maplibre-gl-adapter 1.5.0 verified with maplibre-gl 6.16.0 (ADR-006 gate passed); polygon drawing, vertex dragging, area & kinks checks verified |
 | Geometry (web) | @turf/* 7.3.x (modular) | VERIFIED | 2026-10-28 | MIT; released through 2026; import only needed modules |
 | Basemap tiles | MapTiler Cloud (alt: Stadia Maps) | VERIFIED (service) | 2026-10-28 | planet data release cycle visible; confirm plan/pricing at purchase; satellite imagery recency unverified |
 | Place search | MapTiler Geocoding API | VERIFIED (service) | 2026-11-02 | REST forward search endpoint; query text only; domain-restricted API key; free tier 100k req/mo |
