@@ -91,3 +91,4 @@ async def reset_password(
         message=f"User '{user.username}' password reset to company default.",
         must_change_password=True,
     )
+

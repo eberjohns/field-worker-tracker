@@ -23,3 +23,4 @@ async def revoke_device(
         actor_role=current_user.role,
     )
     return RegisteredDeviceRead.model_validate(device)
+

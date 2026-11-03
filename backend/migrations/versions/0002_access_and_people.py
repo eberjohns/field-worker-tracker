@@ -335,3 +335,4 @@ def downgrade() -> None:
     op.drop_table("zones")
     op.drop_table("groups")
     op.drop_table("audit_logs")
+

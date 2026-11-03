@@ -64,3 +64,4 @@ async def test_reset_password_user_not_found() -> None:
         )
     assert exc.value.code == "NOT_FOUND"
     assert exc.value.status_code == 404
+

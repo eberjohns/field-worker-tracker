@@ -160,3 +160,4 @@ async def get_me(
             "scoped_employee_count": len(scoped_ids) if scoped_ids is not None else "ALL",
         },
     }
+

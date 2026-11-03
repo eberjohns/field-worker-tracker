@@ -28,3 +28,4 @@ Two key architectural questions arose during implementation:
 ## Consequences
 - The pure domain rules engine (`fw.rules.hierarchy`) calculates transitive closure over directed reporting links and enforces cycle-free graph integrity.
 - Database migration `0002_access_and_people.py` adds `user_sessions` table with cascade deletion upon user removal.
+

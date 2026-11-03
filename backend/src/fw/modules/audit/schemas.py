@@ -29,3 +29,4 @@ class AuditLogRead(BaseModel):
     reason: str | None = None
     ip: str | None = None
     created_at: datetime
+

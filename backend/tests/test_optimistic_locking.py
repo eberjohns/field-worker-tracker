@@ -76,3 +76,4 @@ async def test_user_update_optimistic_locking_conflict() -> None:
 
     assert exc.value.code == "VERSION_CONFLICT"
     assert exc.value.status_code == 409
+

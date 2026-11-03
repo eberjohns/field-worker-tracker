@@ -77,3 +77,4 @@ def test_compute_transitive_scope() -> None:
     # Worker W1's scope should be just self
     w1_scope = compute_transitive_scope("W1", links)
     assert w1_scope == {"W1"}
+

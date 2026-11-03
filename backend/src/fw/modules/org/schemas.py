@@ -230,3 +230,4 @@ class HierarchyTreeNode(BaseModel):
     employee: EmployeeRead
     relationship: str | None = None
     subordinates: list[Any] = Field(default_factory=list)
+
