@@ -110,6 +110,9 @@ Replaces single supervisor/superintendent/engineer columns. One row per link: `e
 ### users
 `employee_id` FK (unique), `username` (= employee ID, unique), `credential_hash` (Argon2id), `role`, `is_active`, `must_change_password` bool, `password_changed_at`, `failed_attempts`, `locked_until`, `last_login_at`. Every user starts with the company default password and must change it at first login; an account that still has the default after `default_password_max_days` is locked. Only Admin resets a user (back to the default).
 
+### user_sessions
+`id` uuid PK, `user_id` FK users(id) ON DELETE CASCADE, `token_hash` string(128) unique, `expires_at` timestamptz, `revoked_at` timestamptz nullable, `created_at` timestamptz. Used for refresh token rotation and revocation (ADR-011).
+
 ### registered_devices
 `employee_id` (unique while active), `device_identifier` (app-generated install id), `platform` (ANDROID/IOS), `device_model`, `app_version`, `os_version`, `push_token`, `registered_at`, `last_seen_at`, `last_acked_cursor` bigint default 0, `location_permission_state`, `revoked_at`, `revoked_by_user_id`, `is_active`.
 **Partial unique index**: one active device per employee: `unique (employee_id) where is_active`.

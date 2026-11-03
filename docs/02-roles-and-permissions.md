@@ -11,7 +11,7 @@ Roles are **fixed**: ADMIN, ENGINEER, SUPERINTENDENT, SUPERVISOR, WORKER. There 
 ## Reporting scope
 Visibility is by reporting relationship. Reporting lines are stored as links `(employee, manager, relationship)` in `employee_reporting_lines`, where relationship is SUPERVISOR, SUPERINTENDENT or ENGINEER. A person may have **several superintendents and several engineers** (and at most one supervisor). For user U (an employee), `scope(U)` is the set of employees E where:
 - `E.id = U.id` (self), or
-- a link exists with `manager_id = U.id` and `employee_id = E.id` (any relationship).
+- a direct or indirect (transitive) reporting link exists where `U` manages `E` across any relationship (ADR-011).
 
 ADMIN sees everything. WORKER sees self only. Superintendents are view-only, except that they may create temporary reassignments (see the matrix).
 

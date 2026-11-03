@@ -117,3 +117,23 @@ async def generic_exception_handler(request: Request, exc: Exception) -> JSONRes
         content=content,
         media_type="application/problem+json",
     )
+
+
+class AppError(ProblemDetailsException):
+    """Convenience domain error mapping to RFC 7807 ProblemDetailsException."""
+
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        status_code: int = 400,
+        title: str | None = None,
+        extra: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(
+            status_code=status_code,
+            title=title or code.replace("_", " ").title(),
+            detail=message,
+            code=code,
+            extra=extra,
+        )
