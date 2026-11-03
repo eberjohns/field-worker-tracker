@@ -8,8 +8,8 @@ The system is built **phase by phase**. Each phase is independent, ends with som
 |---|---|---|---|
 | [00](PHASE-00-foundation.md) | Foundation | - | done |
 | [01](PHASE-01-access-and-people.md) | Access and people | PHASE-00 | done |
-| [02](PHASE-02-settings-and-time-rules.md) | Settings, time rules and calendars | PHASE-01 | not started |
-| [03](PHASE-03-import-and-salary.md) | Import framework, master data import and salary structures | PHASE-02 | not started |
+| [02](PHASE-02-settings-and-time-rules.md) | Settings, time rules and calendars | PHASE-01 | done |
+| [03](PHASE-03-import-and-salary.md) | Import framework, master data import and salary structures | PHASE-02 | done |
 | [04](PHASE-04-sites-boundaries-jobs.md) | Sites, boundaries and job items | PHASE-03 | not started |
 | [05](PHASE-05-planner.md) | Planner: yearly plan and weekly roster | PHASE-04 | not started |
 | [06](PHASE-06-leave-reassignment-approvals.md) | Leave, temporary reassignment and approvals | PHASE-05 | not started |
