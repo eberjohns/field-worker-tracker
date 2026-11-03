@@ -79,23 +79,32 @@ class SettingsService:
         """Insert a new effective-dated setting row and close previous row on new_date - 1 day."""
         eff_from = effective_from or datetime.now(UTC).date()
 
-        # Close existing active row if any (inclusive non-overlapping date boundary)
+        # Close existing active rows if any (inclusive non-overlapping date boundary)
         query = select(CompanySettingValue).where(
             CompanySettingValue.setting_key == key,
-            CompanySettingValue.country == country,
             CompanySettingValue.effective_to.is_(None),
         )
+        if country is not None:
+            query = query.where(CompanySettingValue.country == country)
+        else:
+            query = query.where(CompanySettingValue.country.is_(None))
+
         res = await session.execute(query)
-        prev = res.scalar_one_or_none()
-        if prev and prev.effective_from < eff_from:
-            prev.effective_to = eff_from - timedelta(days=1)
-        elif prev and prev.effective_from == eff_from:
-            # Overwrite current day's setting if effective_from is identical
-            prev.value = value
-            if unit is not None:
-                prev.unit = unit
+        prev_rows = list(res.scalars().all())
+
+        matched_same_day = False
+        for prev in prev_rows:
+            if prev.effective_from < eff_from:
+                prev.effective_to = eff_from - timedelta(days=1)
+            elif prev.effective_from == eff_from:
+                prev.value = value
+                if unit is not None:
+                    prev.unit = unit
+                matched_same_day = True
+
+        if matched_same_day and prev_rows:
             await session.flush()
-            return prev
+            return prev_rows[0]
 
         row = CompanySettingValue(
             setting_key=key,

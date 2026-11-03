@@ -42,3 +42,4 @@ Client decisions DEC-03, DEC-21, DEC-35, and DEC-41 define how planned work hour
 - Pure business rule in `backend/src/fw/rules/time_rules.py` implements the resolver with zero external dependencies.
 - `GET /time-rules/resolve` provides full explainability (`winning_sources` and candidate trace) for auditability.
 - Migration `0003_settings_and_time_rules.py` adds `time_rules`, `public_holidays`, and `consent_policies` with foreign keys to users and employees.
+
