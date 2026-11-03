@@ -46,6 +46,7 @@ interface WorksiteDetail {
   is_active: boolean;
   version: number;
   job_items: any[];
+  items?: any[];
 }
 
 interface Occurrence {
@@ -66,9 +67,16 @@ export const WorksiteDetail: React.FC = () => {
   const { worksiteId } = useParams({ strict: false }) as { worksiteId: string };
   const { token, user } = useAuth();
 
+  const searchParams = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+  const requestedTab = searchParams.get("tab");
+  const initialTab =
+    requestedTab === "boundary" || requestedTab === "items" || requestedTab === "schedule"
+      ? (requestedTab as "overview" | "items" | "boundary" | "schedule")
+      : "overview";
+
   const [worksite, setWorksite] = useState<WorksiteDetail | null>(null);
   const [occurrences, setOccurrences] = useState<Occurrence[]>([]);
-  const [activeTab, setActiveTab] = useState<"overview" | "items" | "boundary" | "schedule">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "items" | "boundary" | "schedule">(initialTab);
   const [loading, setLoading] = useState(true);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -126,6 +134,14 @@ export const WorksiteDetail: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, [worksiteId]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+    const tab = params.get("tab");
+    if (tab === "boundary" || tab === "items" || tab === "schedule" || tab === "overview") {
+      setActiveTab(tab);
+    }
+  }, [typeof window !== "undefined" ? window.location.search : ""]);
 
   const handleSaveMetadata = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -204,7 +220,8 @@ export const WorksiteDetail: React.FC = () => {
         if (!res.ok) throw new Error("Failed to generate occurrences.");
       } else {
         // Generate for all active items
-        for (const item of worksite.job_items) {
+        const currentItems = worksite.items || worksite.job_items || [];
+        for (const item of currentItems) {
           await fetch(`/api/v1/job-items/${item.id}/generate-occurrences`, {
             method: "POST",
             headers: {
@@ -240,6 +257,8 @@ export const WorksiteDetail: React.FC = () => {
       </div>
     );
   }
+
+  const itemsList = worksite.items || worksite.job_items || [];
 
   const initialCenter: [number, number] =
     worksite.rep_longitude && worksite.rep_latitude
@@ -357,7 +376,7 @@ export const WorksiteDetail: React.FC = () => {
           }`}
         >
           <Layers className="h-4 w-4" />
-          Job Items ({worksite.job_items?.length || 0})
+          Job Items ({itemsList.length})
         </button>
         <button
           onClick={() => setActiveTab("boundary")}
@@ -534,7 +553,7 @@ export const WorksiteDetail: React.FC = () => {
                 <div className="flex justify-between items-center py-1">
                   <span className="text-slate-500">Total Scopes (Items)</span>
                   <span className="font-bold text-indigo-600">
-                    {worksite.job_items?.length || 0} items
+                    {itemsList.length} items
                   </span>
                 </div>
               </div>
@@ -594,7 +613,7 @@ export const WorksiteDetail: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {worksite.job_items?.map((item: any) => (
+                {itemsList.map((item: any) => (
                   <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
                     <td className="px-4 py-3 font-mono font-bold text-slate-900">
                       {item.sub_item_code}
@@ -680,7 +699,7 @@ export const WorksiteDetail: React.FC = () => {
                     </td>
                   </tr>
                 ))}
-                {(!worksite.job_items || worksite.job_items.length === 0) && (
+                {itemsList.length === 0 && (
                   <tr>
                     <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
                       No job items configured for this worksite.

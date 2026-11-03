@@ -103,6 +103,8 @@ async def update_worksite(
 # --- Boundaries & Queue ---
 @router.get("/boundary-queue", response_model=BoundaryQueueResponse)
 async def get_boundary_queue(
+    status: str = Query("ALL", pattern="^(ALL|UNSET|SET)$"),
+    entity_type: str | None = Query(None, pattern="^(WORKSITE|ACCOMMODATION)$"),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
@@ -111,6 +113,8 @@ async def get_boundary_queue(
     """Get boundary setup queue with progress and unset entities (D6)."""
     return await JobsService.get_boundary_queue(
         session=session,
+        status=status,
+        entity_type=entity_type,
         limit=limit,
         offset=offset,
     )

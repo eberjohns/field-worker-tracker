@@ -23,13 +23,21 @@ interface QueueItem {
   zone_name: string | null;
   country: string;
   has_boundary: boolean;
+  rep_latitude?: number | string | null;
+  rep_longitude?: number | string | null;
+  boundary_geojson?: GeoJSON.Polygon | null;
 }
 
 interface BoundaryQueueData {
-  worksites_unset_count: number;
-  worksites_total_count: number;
-  accommodations_unset_count: number;
-  accommodations_total_count: number;
+  total_count: number;
+  done_count: number;
+  unset_count: number;
+  worksites_unset_count?: number;
+  worksites_total_count?: number;
+  worksites_done_count?: number;
+  accommodations_unset_count?: number;
+  accommodations_total_count?: number;
+  accommodations_done_count?: number;
   items: QueueItem[];
 }
 
@@ -39,6 +47,7 @@ export const Boundaries: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("ALL");
+  const [statusFilter, setStatusFilter] = useState<string>("ALL");
 
   // Accommodation boundary modal
   const [drawingAccommodation, setDrawingAccommodation] = useState<QueueItem | null>(null);
@@ -51,7 +60,10 @@ export const Boundaries: React.FC = () => {
     setLoading(true);
     try {
       const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-      const res = await fetch("/api/v1/boundary-queue?limit=200", { headers });
+      const params = new URLSearchParams({ limit: "200" });
+      if (statusFilter !== "ALL") params.set("status", statusFilter);
+      if (typeFilter !== "ALL") params.set("entity_type", typeFilter);
+      const res = await fetch(`/api/v1/boundary-queue?${params.toString()}`, { headers });
       if (res.ok) {
         setData(await res.json());
       }
@@ -64,7 +76,7 @@ export const Boundaries: React.FC = () => {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [statusFilter, typeFilter]);
 
   const handleSaveAccommodationBoundary = async (polygon: GeoJSON.Polygon) => {
     if (!drawingAccommodation) return;
@@ -189,7 +201,7 @@ export const Boundaries: React.FC = () => {
               Worksites Queue
             </span>
             <span className="text-xs font-semibold text-slate-600">
-              {data ? data.worksites_total_count - data.worksites_unset_count : 0} /{" "}
+              {data ? (data.worksites_total_count ?? 0) - (data.worksites_unset_count ?? 0) : 0} /{" "}
               {data?.worksites_total_count || 0}
             </span>
           </div>
@@ -211,7 +223,7 @@ export const Boundaries: React.FC = () => {
               Accommodations Queue
             </span>
             <span className="text-xs font-semibold text-slate-600">
-              {data ? data.accommodations_total_count - data.accommodations_unset_count : 0} /{" "}
+              {data ? (data.accommodations_total_count ?? 0) - (data.accommodations_unset_count ?? 0) : 0} /{" "}
               {data?.accommodations_total_count || 0}
             </span>
           </div>
@@ -240,17 +252,32 @@ export const Boundaries: React.FC = () => {
           <Search className="absolute left-3 top-2 h-3.5 w-3.5 text-slate-400" />
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <span className="text-xs font-semibold text-slate-600">Filter:</span>
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            className="px-3 py-1.5 text-xs border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-          >
-            <option value="ALL">All Entity Types</option>
-            <option value="WORKSITE">Worksites Only</option>
-            <option value="ACCOMMODATION">Accommodations Only</option>
-          </select>
+        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-semibold text-slate-600">Type:</span>
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="px-3 py-1.5 text-xs border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            >
+              <option value="ALL">All Entity Types</option>
+              <option value="WORKSITE">Worksites Only</option>
+              <option value="ACCOMMODATION">Accommodations Only</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-semibold text-slate-600">Status:</span>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-3 py-1.5 text-xs border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            >
+              <option value="ALL">All Statuses</option>
+              <option value="SET">Boundary Set Only</option>
+              <option value="UNSET">Missing Boundary (Queue)</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -294,28 +321,44 @@ export const Boundaries: React.FC = () => {
                   {item.country}
                 </td>
                 <td className="px-5 py-3.5 text-center">
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-red-50 text-red-700 border border-red-200">
-                    <AlertTriangle className="h-3 w-3" />
-                    Missing
-                  </span>
+                  {item.has_boundary ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      <CheckCircle2 className="h-3 w-3" />
+                      Boundary Set
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                      <AlertTriangle className="h-3 w-3" />
+                      Missing
+                    </span>
+                  )}
                 </td>
                 <td className="px-5 py-3.5 text-right">
                   {item.entity_type === "WORKSITE" ? (
                     <Link
                       to="/worksites/$worksiteId"
                       params={{ worksiteId: item.id }}
-                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold text-xs inline-flex items-center gap-1.5 shadow-xs"
+                      search={{ tab: "boundary" } as any}
+                      className={`px-3 py-1.5 rounded-lg font-semibold text-xs inline-flex items-center gap-1.5 shadow-xs ${
+                        item.has_boundary
+                          ? "bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200"
+                          : "bg-indigo-600 hover:bg-indigo-700 text-white"
+                      }`}
                     >
                       <MapPin className="h-3 w-3" />
-                      Draw Boundary
+                      {item.has_boundary ? "Edit Boundary" : "Draw Boundary"}
                     </Link>
                   ) : (
                     <button
                       onClick={() => setDrawingAccommodation(item)}
-                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-xs inline-flex items-center gap-1.5 shadow-xs"
+                      className={`px-3 py-1.5 rounded-lg font-semibold text-xs inline-flex items-center gap-1.5 shadow-xs ${
+                        item.has_boundary
+                          ? "bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200"
+                          : "bg-blue-600 hover:bg-blue-700 text-white"
+                      }`}
                     >
                       <MapPin className="h-3 w-3" />
-                      Draw Boundary
+                      {item.has_boundary ? "Edit Boundary" : "Draw Boundary"}
                     </button>
                   )}
                 </td>
@@ -325,8 +368,8 @@ export const Boundaries: React.FC = () => {
               <tr>
                 <td colSpan={7} className="px-5 py-12 text-center text-slate-400">
                   {loading
-                    ? "Loading boundary queue..."
-                    : "No unset items found! All boundaries have been successfully drawn."}
+                    ? "Loading boundary data..."
+                    : "No matching items found for selected filters."}
                 </td>
               </tr>
             )}
@@ -342,7 +385,7 @@ export const Boundaries: React.FC = () => {
               <div>
                 <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
                   <Home className="h-5 w-5 text-blue-600" />
-                  Draw Boundary for {drawingAccommodation.name} ({drawingAccommodation.code})
+                  {drawingAccommodation.has_boundary ? "Edit" : "Draw"} Boundary for {drawingAccommodation.name} ({drawingAccommodation.code})
                 </h2>
                 <p className="text-xs text-slate-500">
                   Camp / Accommodation polygon setup for night-time rest and departure verification.
@@ -365,6 +408,7 @@ export const Boundaries: React.FC = () => {
 
               <PolygonEditor
                 map={mapInstance}
+                initialPolygon={drawingAccommodation.boundary_geojson as GeoJSON.Polygon | null}
                 onSave={handleSaveAccommodationBoundary}
                 isSaving={savingBoundary}
               />

@@ -27,7 +27,7 @@ export const PlaceSearch: React.FC<PlaceSearchProps> = ({ map }) => {
     try {
       const url = `https://api.maptiler.com/geocoding/${encodeURIComponent(
         query.trim()
-      )}.json?key=${apiKey}&country=ae,sa&limit=5`;
+      )}.json?key=${apiKey}&limit=5`;
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
@@ -58,13 +58,13 @@ export const PlaceSearch: React.FC<PlaceSearchProps> = ({ map }) => {
   };
 
   return (
-    <div className="absolute top-3 left-44 z-20 w-72">
+    <div className="absolute top-3 left-64 z-20 w-72">
       <form onSubmit={handleSearch} className="relative">
         <input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search place in Dubai / KSA..."
+          placeholder="Search place worldwide (e.g. Dubai, Riyadh, Kerala)..."
           className="w-full pl-8 pr-8 py-1.5 bg-white/95 backdrop-blur-sm border border-slate-300 rounded shadow-sm text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
         />
         <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
@@ -92,3 +92,4 @@ export const PlaceSearch: React.FC<PlaceSearchProps> = ({ map }) => {
     </div>
   );
 };
+

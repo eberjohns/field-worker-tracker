@@ -60,6 +60,10 @@ class Accommodation(ModelBase):
     rep_latitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6), nullable=True)
     rep_longitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6), nullable=True)
 
+    @property
+    def has_boundary(self) -> bool:
+        return self.boundary is not None
+
 
 class Employee(ModelBase):
     """Employee record representing field workers and operations staff."""

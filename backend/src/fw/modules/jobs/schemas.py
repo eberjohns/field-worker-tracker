@@ -167,6 +167,7 @@ class JobItemResponse(BaseModel):
 class WorksiteDetailResponse(WorksiteResponse):
     boundary_geojson: dict[str, Any] | None = None
     items: list[JobItemResponse] = []
+    job_items: list[JobItemResponse] = []
 
 
 class BoundaryUpdateRequest(BaseModel):
@@ -192,12 +193,21 @@ class BoundaryQueueItemResponse(BaseModel):
     zone_name: str | None = None
     country: str
     has_boundary: bool
+    rep_latitude: Decimal | None = None
+    rep_longitude: Decimal | None = None
+    boundary_geojson: dict[str, Any] | None = None
 
 
 class BoundaryQueueResponse(BaseModel):
     total_count: int
     done_count: int
     unset_count: int
+    worksites_total_count: int = 0
+    worksites_done_count: int = 0
+    worksites_unset_count: int = 0
+    accommodations_total_count: int = 0
+    accommodations_done_count: int = 0
+    accommodations_unset_count: int = 0
     items: list[BoundaryQueueItemResponse]
 
 

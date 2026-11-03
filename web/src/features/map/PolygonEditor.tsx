@@ -66,16 +66,51 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
       draw.start();
       drawRef.current = draw;
 
+      const hasInitial = Boolean(
+        initialPolygon && initialPolygon.coordinates && initialPolygon.coordinates.length > 0
+      );
+
+      // Start in select mode if polygon already exists; otherwise start in polygon mode ready to draw
+      const startingMode = hasInitial ? "select" : "polygon";
+      draw.setMode(startingMode);
+      setCurrentMode(startingMode);
+
       // Load initial polygon if exists
-      if (initialPolygon && initialPolygon.coordinates && initialPolygon.coordinates.length > 0) {
+      if (hasInitial && initialPolygon) {
         draw.addFeatures([
           {
+            id: crypto.randomUUID(),
             type: "Feature",
             geometry: initialPolygon,
             properties: { mode: "polygon" },
           },
         ]);
         evaluateGeometry(initialPolygon);
+
+        // Fit map bounds to the initial polygon
+        try {
+          const ring = initialPolygon.coordinates[0];
+          if (ring && ring.length > 0) {
+            const bounds = ring.reduce(
+              (b, c) => [
+                Math.min(b[0], c[0]),
+                Math.min(b[1], c[1]),
+                Math.max(b[2], c[0]),
+                Math.max(b[3], c[1]),
+              ],
+              [ring[0][0], ring[0][1], ring[0][0], ring[0][1]]
+            );
+            map.fitBounds(
+              [
+                [bounds[0], bounds[1]],
+                [bounds[2], bounds[3]],
+              ],
+              { padding: 80, maxZoom: 18 }
+            );
+          }
+        } catch (fitErr) {
+          console.warn("Failed to fit bounds:", fitErr);
+        }
       }
 
       draw.on("change", () => {
@@ -108,6 +143,25 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
       console.error("TerraDraw init error:", err);
     }
   }, [map]);
+
+  // Sync if initialPolygon arrives or updates after initial map load
+  useEffect(() => {
+    if (!drawRef.current || !map || !initialPolygon) return;
+    const snapshot = drawRef.current.getSnapshot();
+    if (snapshot.length === 0 && initialPolygon.coordinates?.length > 0) {
+      drawRef.current.addFeatures([
+        {
+          id: crypto.randomUUID(),
+          type: "Feature",
+          geometry: initialPolygon,
+          properties: { mode: "polygon" },
+        },
+      ]);
+      drawRef.current.setMode("select");
+      setCurrentMode("select");
+      evaluateGeometry(initialPolygon);
+    }
+  }, [initialPolygon, map]);
 
   const evaluateGeometry = (geom: GeoJSON.Polygon) => {
     try {

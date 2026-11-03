@@ -223,6 +223,7 @@ class JobsService:
             updated_at=ws.updated_at,
             boundary_geojson=boundary_dict,
             items=item_responses,
+            job_items=item_responses,
         )
 
     @staticmethod
@@ -602,10 +603,12 @@ class JobsService:
     @staticmethod
     async def get_boundary_queue(
         session: AsyncSession,
+        status: str = "ALL",
+        entity_type: str | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> BoundaryQueueResponse:
-        """Retrieve progress stats and queue items for unset worksites & accommodations (D6)."""
+        """Retrieve progress stats and queue items for worksites & accommodations (D6)."""
         # Worksites counts
         ws_total = await session.scalar(select(func.count(Worksite.id))) or 0
         ws_done = (
@@ -614,6 +617,7 @@ class JobsService:
             )
             or 0
         )
+        ws_unset = ws_total - ws_done
 
         # Accommodations counts
         acc_total = await session.scalar(select(func.count(Accommodation.id))) or 0
@@ -623,6 +627,7 @@ class JobsService:
             )
             or 0
         )
+        acc_unset = acc_total - acc_done
 
         total_count = ws_total + acc_total
         done_count = ws_done + acc_done
@@ -630,56 +635,82 @@ class JobsService:
 
         items: list[BoundaryQueueItemResponse] = []
 
-        # Unset worksites first
-        ws_query = (
-            select(Worksite, Zone.name.label("zone_name"))
-            .join(Zone, Worksite.zone_id == Zone.id)
-            .where(Worksite.boundary.is_(None), Worksite.is_active.is_(True))
-            .order_by(Worksite.job_number)
-            .offset(offset)
-            .limit(limit)
-        )
-        ws_rows = (await session.execute(ws_query)).all()
-        for ws, z_name in ws_rows:
-            items.append(
-                BoundaryQueueItemResponse(
-                    id=ws.id,
-                    entity_type="WORKSITE",
-                    code=ws.job_number,
-                    name=ws.job_name,
-                    zone_name=z_name,
-                    country=ws.country,
-                    has_boundary=False,
+        # Worksites
+        if not entity_type or entity_type == "WORKSITE":
+            ws_query = (
+                select(
+                    Worksite,
+                    Zone.name.label("zone_name"),
+                    func.ST_AsGeoJSON(Worksite.boundary).label("geojson"),
                 )
+                .join(Zone, Worksite.zone_id == Zone.id)
+                .where(Worksite.is_active.is_(True))
             )
+            if status == "UNSET":
+                ws_query = ws_query.where(Worksite.boundary.is_(None))
+            elif status == "SET":
+                ws_query = ws_query.where(Worksite.boundary.is_not(None))
 
-        # Unset accommodations if limit remains
-        remaining_limit = limit - len(items)
-        if remaining_limit > 0:
-            acc_query = (
-                select(Accommodation)
-                .where(Accommodation.boundary.is_(None), Accommodation.is_active.is_(True))
-                .order_by(Accommodation.accommodation_code)
-                .limit(remaining_limit)
-            )
-            acc_rows = (await session.execute(acc_query)).scalars().all()
-            for acc in acc_rows:
+            ws_query = ws_query.order_by(Worksite.job_number).offset(offset).limit(limit)
+            ws_rows = (await session.execute(ws_query)).all()
+            for ws, z_name, geojson_str in ws_rows:
                 items.append(
                     BoundaryQueueItemResponse(
-                        id=acc.id,
-                        entity_type="ACCOMMODATION",
-                        code=acc.accommodation_code,
-                        name=acc.name,
-                        zone_name=None,
-                        country="AE",
-                        has_boundary=False,
+                        id=ws.id,
+                        entity_type="WORKSITE",
+                        code=ws.job_number,
+                        name=ws.job_name,
+                        zone_name=z_name,
+                        country=ws.country,
+                        has_boundary=ws.boundary is not None,
+                        rep_latitude=ws.rep_latitude,
+                        rep_longitude=ws.rep_longitude,
+                        boundary_geojson=json.loads(geojson_str) if geojson_str else None,
                     )
                 )
+
+        # Accommodations
+        if not entity_type or entity_type == "ACCOMMODATION":
+            remaining_limit = limit - len(items) if not entity_type else limit
+            if remaining_limit > 0:
+                acc_query = select(
+                    Accommodation,
+                    func.ST_AsGeoJSON(Accommodation.boundary).label("geojson"),
+                ).where(Accommodation.is_active.is_(True))
+
+                if status == "UNSET":
+                    acc_query = acc_query.where(Accommodation.boundary.is_(None))
+                elif status == "SET":
+                    acc_query = acc_query.where(Accommodation.boundary.is_not(None))
+
+                acc_query = acc_query.order_by(Accommodation.accommodation_code).limit(remaining_limit)
+                acc_rows = (await session.execute(acc_query)).all()
+                for acc, geojson_str in acc_rows:
+                    items.append(
+                        BoundaryQueueItemResponse(
+                            id=acc.id,
+                            entity_type="ACCOMMODATION",
+                            code=acc.accommodation_code,
+                            name=acc.name,
+                            zone_name=acc.address,
+                            country="AE",
+                            has_boundary=acc.boundary is not None,
+                            rep_latitude=acc.rep_latitude,
+                            rep_longitude=acc.rep_longitude,
+                            boundary_geojson=json.loads(geojson_str) if geojson_str else None,
+                        )
+                    )
 
         return BoundaryQueueResponse(
             total_count=total_count,
             done_count=done_count,
             unset_count=unset_count,
+            worksites_total_count=ws_total,
+            worksites_done_count=ws_done,
+            worksites_unset_count=ws_unset,
+            accommodations_total_count=acc_total,
+            accommodations_done_count=acc_done,
+            accommodations_unset_count=acc_unset,
             items=items,
         )
 

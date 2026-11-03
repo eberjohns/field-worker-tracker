@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Map as MapLibreMap, NavigationControl } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { AlertTriangle, Layers } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 
 interface MapContainerProps {
   initialCenter?: [number, number]; // [lng, lat]
@@ -42,23 +42,27 @@ export const MapContainer: React.FC<MapContainerProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
-  const [mapStyle, setMapStyle] = useState<"streets" | "satellite">("streets");
+  const [mapStyle, setMapStyle] = useState<"streets" | "satellite" | "osm">("satellite");
   const apiKey = (import.meta as any).env?.VITE_MAP_API_KEY;
+
+  const getStyleUrl = (style: "streets" | "satellite" | "osm"): any => {
+    if (style === "osm" || !apiKey) {
+      return FALLBACK_STYLE;
+    }
+    if (style === "satellite") {
+      return `https://api.maptiler.com/maps/satellite/style.json?key=${apiKey}`;
+    }
+    return `https://api.maptiler.com/maps/streets-v2/style.json?key=${apiKey}`;
+  };
 
   useEffect(() => {
     if (!containerRef.current) return;
+    if (mapRef.current) return; // Map already initialized
 
-    let styleUrl: any = FALLBACK_STYLE;
-    if (apiKey) {
-      styleUrl =
-        mapStyle === "satellite"
-          ? `https://api.maptiler.com/maps/satellite/style.json?key=${apiKey}`
-          : `https://api.maptiler.com/maps/streets-v2/style.json?key=${apiKey}`;
-    }
-
+    const initialStyleUrl = getStyleUrl(mapStyle);
     const map = new MapLibreMap({
       container: containerRef.current,
-      style: styleUrl,
+      style: initialStyleUrl,
       center: initialCenter,
       zoom: initialZoom,
       attributionControl: { compact: true },
@@ -77,11 +81,13 @@ export const MapContainer: React.FC<MapContainerProps> = ({
       map.remove();
       mapRef.current = null;
     };
-  }, [mapStyle, apiKey]);
+  }, [apiKey]);
 
-  const toggleStyle = () => {
-    const nextStyle = mapStyle === "streets" ? "satellite" : "streets";
+  const handleStyleChange = (nextStyle: "streets" | "satellite" | "osm") => {
     setMapStyle(nextStyle);
+    if (mapRef.current) {
+      mapRef.current.setStyle(getStyleUrl(nextStyle));
+    }
   };
 
   return (
@@ -121,18 +127,42 @@ export const MapContainer: React.FC<MapContainerProps> = ({
       )}
 
       {/* Satellite / Street Switcher Button */}
-      {apiKey && (
-        <div className="absolute top-3 left-3 z-20">
-          <button
-            type="button"
-            onClick={toggleStyle}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 rounded shadow-sm text-xs font-medium text-slate-700 transition"
-          >
-            <Layers className="h-3.5 w-3.5 text-slate-500" />
-            Switch to {mapStyle === "streets" ? "Satellite" : "Streets"}
-          </button>
-        </div>
-      )}
+      <div className="absolute top-3 left-3 z-20 flex items-center bg-white/95 backdrop-blur-sm border border-slate-300 rounded shadow-sm overflow-hidden text-xs font-medium">
+        <button
+          type="button"
+          onClick={() => handleStyleChange("satellite")}
+          className={`px-2.5 py-1.5 transition ${
+            mapStyle === "satellite"
+              ? "bg-indigo-600 text-white font-semibold"
+              : "text-slate-700 hover:bg-slate-100"
+          }`}
+        >
+          Satellite
+        </button>
+        <button
+          type="button"
+          onClick={() => handleStyleChange("streets")}
+          className={`px-2.5 py-1.5 border-l border-slate-200 transition ${
+            mapStyle === "streets"
+              ? "bg-indigo-600 text-white font-semibold"
+              : "text-slate-700 hover:bg-slate-100"
+          }`}
+        >
+          Vector Streets
+        </button>
+        <button
+          type="button"
+          onClick={() => handleStyleChange("osm")}
+          className={`px-2.5 py-1.5 border-l border-slate-200 transition ${
+            mapStyle === "osm"
+              ? "bg-indigo-600 text-white font-semibold"
+              : "text-slate-700 hover:bg-slate-100"
+          }`}
+          title="OpenStreetMap Standard Raster (Reliable fallback)"
+        >
+          OSM Streets
+        </button>
+      </div>
 
       {/* Map Canvas */}
       <div ref={containerRef} className="w-full h-full" />
