@@ -52,4 +52,3 @@ async def health_ready(db: AsyncSession = Depends(get_db)) -> JSONResponse:
                 "detail": str(exc),
             },
         )
-

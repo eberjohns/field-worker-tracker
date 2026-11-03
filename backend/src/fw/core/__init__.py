@@ -20,4 +20,3 @@ __all__ = [
     "get_db",
     "get_settings",
 ]
-
