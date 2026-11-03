@@ -44,3 +44,4 @@ Per client requirements and decisions DEC-39 and DEC-51:
 - Alembic migration `0004_import_and_salary.py` creates `import_batches`, `import_rows`, and `employee_salary` tables.
 - Pure business rules in `backend/src/fw/rules/imports/` and `backend/src/fw/rules/payroll/salary.py` enforce cell semantics, normalizations, and salary arithmetic without database or framework ties.
 - React web dashboard provides `/imports` (upload, preview diffs, commit, history, error download) and `/salary-structures` (active portions, last change deltas, revision modals).
+

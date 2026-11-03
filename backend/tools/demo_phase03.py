@@ -162,7 +162,9 @@ async def run_demo() -> None:
 
         for r in prev2.rows:
             if r.status == "ERROR":
-                print(f" -> ERROR ROW: Sheet [{r.sheet}], Key [{r.natural_key}], Codes: {r.codes}, Msgs: {r.messages}")
+                print(
+                    f" -> ERROR ROW: Sheet [{r.sheet}], Key [{r.natural_key}], Codes: {r.codes}, Msgs: {r.messages}"
+                )
             if r.action == "UPDATED":
                 print(f" -> UPDATED ROW: Sheet [{r.sheet}], Key [{r.natural_key}]")
                 for field_name, delta in r.diff.items():
