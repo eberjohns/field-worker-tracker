@@ -11,6 +11,7 @@ Verifies:
 """
 
 import io
+import socket
 from datetime import date
 from uuid import uuid4
 
@@ -20,15 +21,33 @@ from httpx import ASGITransport, AsyncClient
 
 from fw.core.db import async_session_factory, engine
 from fw.main import app
-from fw.modules.identity import AuthService, User
+from fw.modules.identity import AuthService, User, get_current_user
 from fw.modules.imports import generate_import_template_bytes
 from fw.modules.org import Employee
 from fw.rules.payroll import compute_next_payroll_month_start
 
 
+def is_db_available() -> bool:
+    """Check if PostgreSQL is running and accepting connections on localhost:5432."""
+    try:
+        with socket.create_connection(("127.0.0.1", 5432), timeout=0.5):
+            return True
+    except OSError:
+        return False
+
+
+db_required = pytest.mark.skipif(
+    not is_db_available(),
+    reason="Database integration tests require PostgreSQL running on localhost:5432",
+)
+
+
 @pytest.fixture
 async def admin_client():
-    """Async test client authenticated as an ADMIN user."""
+    """Async test client authenticated as an ADMIN user against a running database."""
+    if not is_db_available():
+        pytest.skip("PostgreSQL not available on localhost:5432")
+
     admin_id = uuid4()
     emp_id = uuid4()
 
@@ -70,18 +89,33 @@ async def admin_client():
 
 
 @pytest.mark.asyncio
-async def test_download_template(admin_client):
-    client, _, _ = admin_client
-    resp = await client.get("/api/v1/imports/template")
-    assert resp.status_code == 200
-    assert "spreadsheetml.sheet" in resp.headers["content-type"]
-    wb = openpyxl.load_workbook(io.BytesIO(resp.content), data_only=True)
-    assert "Groups" in wb.sheetnames
-    assert "Employees" in wb.sheetnames
-    assert "Employee_Salary" in wb.sheetnames
-    assert "Lists" in wb.sheetnames
+async def test_download_template():
+    """Verify template generator and download endpoint without requiring live DB."""
+    admin_user = User(
+        id=uuid4(),
+        employee_id=uuid4(),
+        username="ADMIN01",
+        role="ADMIN",
+        credential_hash="fake",
+        is_active=True,
+    )
+    app.dependency_overrides[get_current_user] = lambda: admin_user
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.get("/api/v1/imports/template")
+            assert resp.status_code == 200
+            assert "spreadsheetml.sheet" in resp.headers["content-type"]
+            wb = openpyxl.load_workbook(io.BytesIO(resp.content), data_only=True)
+            assert "Groups" in wb.sheetnames
+            assert "Employees" in wb.sheetnames
+            assert "Employee_Salary" in wb.sheetnames
+            assert "Lists" in wb.sheetnames
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
 
 
+@db_required
 @pytest.mark.asyncio
 async def test_upload_sample_template_and_idempotency(admin_client):
     client, _, _ = admin_client
@@ -166,6 +200,7 @@ async def test_upload_sample_template_and_idempotency(admin_client):
     assert counts["UNCHANGED"] > 0
 
 
+@db_required
 @pytest.mark.asyncio
 async def test_cell_rules_diff_and_clear(admin_client):
     client, _, _ = admin_client
@@ -234,6 +269,7 @@ async def test_cell_rules_diff_and_clear(admin_client):
     assert row["diff"]["weekly_off_day"]["new"] == "SUNDAY"
 
 
+@db_required
 @pytest.mark.asyncio
 async def test_error_reporting_codes(admin_client):
     client, _, _ = admin_client
@@ -272,6 +308,7 @@ async def test_error_reporting_codes(admin_client):
     assert prev.json()["can_commit"] is False
 
 
+@db_required
 @pytest.mark.asyncio
 async def test_salary_structure_effective_date_and_difference(admin_client):
     client, _, emp_id = admin_client
