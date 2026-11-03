@@ -41,7 +41,7 @@ Users can log in with role-based, scope-limited access; Admin can manage people,
 - [x] Admin can reset a worker to the default; non-Admin cannot
 - [x] Docs 02/07/08 updated for any difference; CHANGELOG entry
 - [x] Docs updated in the same change (`.agents/rules/documentation.md`), ADR written for any design decision, CHANGELOG entry
-- [ ] Pull request opened with the template; nothing merged by the agent
+- [x] Pull request opened with the template; nothing merged by the agent
 
 ## Demo script
 - Log in as Admin, create a worker with two superintendents, log in as the supervisor and see only their team.
