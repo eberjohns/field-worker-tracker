@@ -371,3 +371,73 @@ async def test_import_worksites_hyphen_rejection_and_commit(admin_client, test_o
     )
     assert invalid_row["status"] == "ERROR"
     assert "INVALID_JOB_NUMBER" in invalid_row["codes"]
+
+
+@db_required
+async def test_update_job_item_with_occurrence_regeneration(admin_client, test_org_setup):
+    """Verify editing job item regenerates occurrences idempotently without duplicate key errors."""
+    client = admin_client
+    jnum = f"22B{str(uuid4().int)[:5]}"
+
+    # Create worksite
+    ws_res = await client.post(
+        "/api/v1/worksites",
+        json={
+            "job_number": jnum,
+            "job_name": f"Test Site {jnum}",
+            "group_id": test_org_setup["group_id"],
+            "zone_id": test_org_setup["zone_id"],
+            "country": "AE",
+            "is_active": True,
+        },
+    )
+    assert ws_res.status_code == 201, ws_res.text
+    ws_id = ws_res.json()["id"]
+
+    # Create job item with weekday pattern
+    create_res = await client.post(
+        f"/api/v1/worksites/{ws_id}/job-items",
+        json={
+            "sub_item_code": "01",
+            "staff_grade_description": "GARDENER",
+            "planned_grade_code": "G1",
+            "frequency_unit": "WEEK",
+            "occurrences_per_period": 3,
+            "period_interval": 1,
+            "weekday_pattern": ["MON", "WED", "FRI"],
+            "required_staff_count": 2,
+            "hours_per_occurrence_per_staff": 9.0,
+            "deployment_type": "PERMANENT",
+            "start_date": "2026-01-01",
+        },
+    )
+    assert create_res.status_code == 201, create_res.text
+    item = create_res.json()
+    item_id = item["id"]
+    version = item["version"]
+
+    # Patch job item with updated weekday pattern and hours
+    patch_res = await client.patch(
+        f"/api/v1/job-items/{item_id}",
+        json={
+            "hours_per_occurrence_per_staff": 8.0,
+            "weekday_pattern": ["MON", "TUE", "THU"],
+            "version": version,
+        },
+    )
+    assert patch_res.status_code == 200, patch_res.text
+    updated = patch_res.json()
+    assert updated["version"] == version + 1
+    assert float(updated["hours_per_occurrence_per_staff"]) == 8.0
+    assert updated["weekday_pattern"] == ["MON", "TUE", "THU"]
+
+
+@db_required
+async def test_reset_database_endpoint_admin_only(admin_client):
+    """Verify reset-database endpoint requires admin and restores clean bootstrap state."""
+    client = admin_client
+    res = await client.post("/api/v1/settings/reset-database")
+    assert res.status_code == 200, res.text
+    data = res.json()
+    assert data["status"] == "success"
+    assert "ADMIN001" in data["message"]

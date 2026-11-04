@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "@tanstack/react-router";
 import { useAuth } from "../context/AuthContext";
-import { Search, Filter, Layers, CheckSquare, Square, RefreshCw } from "lucide-react";
+import { Search, Filter, Layers, CheckSquare, Square, RefreshCw, ChevronDown, ChevronRight } from "lucide-react";
 
 interface Employee {
   id: string;
@@ -17,6 +17,14 @@ interface Employee {
   version: number;
 }
 
+interface SupervisorGroup {
+  managerId: string;
+  managerName: string;
+  managerTallyId: string;
+  managerRole: string;
+  members: Employee[];
+}
+
 export const Employees: React.FC = () => {
   const { token, user } = useAuth();
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -25,6 +33,10 @@ export const Employees: React.FC = () => {
   const [roleFilter, setRoleFilter] = useState<string>("");
   const [groupBySupervisor, setGroupBySupervisor] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  // Hierarchy grouping state
+  const [supervisorGroups, setSupervisorGroups] = useState<SupervisorGroup[]>([]);
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
 
   // Bulk update dialog state
   const [bulkModalOpen, setBulkModalOpen] = useState(false);
@@ -44,7 +56,9 @@ export const Employees: React.FC = () => {
       });
       if (res.ok) {
         const data = await res.json();
-        setEmployees(data);
+        // Exclude system bootstrap ADMIN001 from operational employee views
+        const filtered = data.filter((e: any) => e.tally_id !== "ADMIN001" && e.role !== "ADMIN");
+        setEmployees(filtered);
       }
     } catch (err) {
       console.error(err);
@@ -53,9 +67,76 @@ export const Employees: React.FC = () => {
     }
   };
 
+  const fetchHierarchy = async () => {
+    try {
+      const res = await fetch("/api/v1/employees/hierarchy", {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) {
+        const tree = await res.json();
+        const groups: SupervisorGroup[] = [];
+        const directMembers: Employee[] = [];
+
+        const collectDescendants = (subordinates: any[]): Employee[] => {
+          const list: Employee[] = [];
+          for (const sub of subordinates) {
+            if (sub.employee && sub.employee.tally_id !== "ADMIN001") {
+              list.push(sub.employee);
+              if (sub.subordinates && sub.subordinates.length > 0) {
+                list.push(...collectDescendants(sub.subordinates));
+              }
+            }
+          }
+          return list;
+        };
+
+        for (const root of tree) {
+          if (root.employee.tally_id === "ADMIN001") continue;
+          if (root.subordinates && root.subordinates.length > 0) {
+            groups.push({
+              managerId: root.employee.id,
+              managerName: root.employee.name,
+              managerTallyId: root.employee.tally_id,
+              managerRole: root.employee.role,
+              members: collectDescendants(root.subordinates),
+            });
+          } else {
+            directMembers.push(root.employee);
+          }
+        }
+
+        if (directMembers.length > 0) {
+          groups.push({
+            managerId: "unassigned",
+            managerName: "Direct / Independent Staff",
+            managerTallyId: "—",
+            managerRole: "DIRECT",
+            members: directMembers,
+          });
+        }
+        setSupervisorGroups(groups);
+      }
+    } catch (err) {
+      console.error("Failed to load hierarchy:", err);
+    }
+  };
+
   useEffect(() => {
     fetchEmployees();
   }, [search, roleFilter]);
+
+  useEffect(() => {
+    if (groupBySupervisor) {
+      fetchHierarchy();
+    }
+  }, [groupBySupervisor]);
+
+  const toggleGroupCollapse = (managerId: string) => {
+    setCollapsedGroups((prev) => ({
+      ...prev,
+      [managerId]: !prev[managerId],
+    }));
+  };
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) =>
@@ -187,57 +268,173 @@ export const Employees: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {employees.map((emp) => {
-                const isSelected = selectedIds.includes(emp.id);
-                return (
-                  <tr key={emp.id} className="hover:bg-slate-50 transition">
-                    <td className="p-4">
-                      <button
-                        onClick={() => toggleSelect(emp.id)}
-                        className="text-slate-400 hover:text-indigo-600"
+              {groupBySupervisor ? (
+                supervisorGroups.map((group) => {
+                  const isCollapsed = collapsedGroups[group.managerId];
+                  const filteredMembers = group.members.filter((m) => {
+                    if (search) {
+                      const q = search.toLowerCase();
+                      return (
+                        m.name.toLowerCase().includes(q) ||
+                        m.tally_id.toLowerCase().includes(q)
+                      );
+                    }
+                    if (roleFilter && m.role !== roleFilter) return false;
+                    return true;
+                  });
+
+                  return (
+                    <React.Fragment key={group.managerId}>
+                      <tr
+                        onClick={() => toggleGroupCollapse(group.managerId)}
+                        className="bg-slate-100/90 hover:bg-slate-200/80 cursor-pointer font-semibold text-xs text-slate-800 transition select-none"
                       >
-                        {isSelected ? (
-                          <CheckSquare className="h-4 w-4 text-indigo-600" />
+                        <td colSpan={9} className="px-4 py-2.5">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              {isCollapsed ? (
+                                <ChevronRight className="h-4 w-4 text-slate-500" />
+                              ) : (
+                                <ChevronDown className="h-4 w-4 text-slate-500" />
+                              )}
+                              <span className="font-bold text-slate-900">
+                                {group.managerTallyId !== "—"
+                                  ? `${group.managerName} (${group.managerTallyId})`
+                                  : group.managerName}
+                              </span>
+                              {group.managerRole !== "DIRECT" && (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700 uppercase">
+                                  {group.managerRole}
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-slate-500 font-normal">
+                              {filteredMembers.length} team member{filteredMembers.length === 1 ? "" : "s"}
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                      {!isCollapsed &&
+                        (filteredMembers.length === 0 ? (
+                          <tr>
+                            <td colSpan={9} className="px-8 py-3 text-xs text-slate-400 italic">
+                              No matching team members in this reporting group.
+                            </td>
+                          </tr>
                         ) : (
-                          <Square className="h-4 w-4" />
-                        )}
-                      </button>
-                    </td>
-                    <td className="p-4 font-mono font-medium text-slate-900">
-                      <Link
-                        to="/employees/$employeeId"
-                        params={{ employeeId: emp.id }}
-                        className="text-indigo-600 hover:underline"
-                      >
-                        {emp.tally_id}
-                      </Link>
-                    </td>
-                    <td className="p-4 font-medium text-slate-900">{emp.name}</td>
-                    <td className="p-4">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
-                        {emp.role}
-                      </span>
-                    </td>
-                    <td className="p-4">{emp.staff_grade_description || "—"}</td>
-                    <td className="p-4 font-mono text-xs">{emp.grade_code || "—"}</td>
-                    <td className="p-4">{emp.weekly_off_day || "SUNDAY"}</td>
-                    <td className="p-4">
-                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100">
-                        {emp.country}
-                      </span>
-                    </td>
-                    <td className="p-4">
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                          emp.is_active ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"
-                        }`}
-                      >
-                        {emp.is_active ? "Active" : "Inactive"}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
+                          filteredMembers.map((m) => {
+                            const isSelected = selectedIds.includes(m.id);
+                            return (
+                              <tr key={m.id} className="hover:bg-slate-50 transition">
+                                <td className="p-4">
+                                  <button
+                                    onClick={() => toggleSelect(m.id)}
+                                    className="text-slate-400 hover:text-indigo-600"
+                                  >
+                                    {isSelected ? (
+                                      <CheckSquare className="h-4 w-4 text-indigo-600" />
+                                    ) : (
+                                      <Square className="h-4 w-4" />
+                                    )}
+                                  </button>
+                                </td>
+                                <td className="p-4 font-mono font-medium text-slate-900">
+                                  <div className="flex items-center gap-1.5 pl-4">
+                                    <span className="text-slate-300 font-mono">└</span>
+                                    <Link
+                                      to="/employees/$employeeId"
+                                      params={{ employeeId: m.id }}
+                                      className="text-indigo-600 hover:underline"
+                                    >
+                                      {m.tally_id}
+                                    </Link>
+                                  </div>
+                                </td>
+                                <td className="p-4 font-medium text-slate-900">{m.name}</td>
+                                <td className="p-4">
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
+                                    {m.role}
+                                  </span>
+                                </td>
+                                <td className="p-4">{m.staff_grade_description || "—"}</td>
+                                <td className="p-4 font-mono text-xs">{m.grade_code || "—"}</td>
+                                <td className="p-4">{m.weekly_off_day || "SUNDAY"}</td>
+                                <td className="p-4">
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100">
+                                    {m.country}
+                                  </span>
+                                </td>
+                                <td className="p-4">
+                                  <span
+                                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                                      m.is_active
+                                        ? "bg-emerald-50 text-emerald-700"
+                                        : "bg-red-50 text-red-700"
+                                    }`}
+                                  >
+                                    {m.is_active ? "Active" : "Inactive"}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        ))}
+                    </React.Fragment>
+                  );
+                })
+              ) : (
+                employees.map((emp) => {
+                  const isSelected = selectedIds.includes(emp.id);
+                  return (
+                    <tr key={emp.id} className="hover:bg-slate-50 transition">
+                      <td className="p-4">
+                        <button
+                          onClick={() => toggleSelect(emp.id)}
+                          className="text-slate-400 hover:text-indigo-600"
+                        >
+                          {isSelected ? (
+                            <CheckSquare className="h-4 w-4 text-indigo-600" />
+                          ) : (
+                            <Square className="h-4 w-4" />
+                          )}
+                        </button>
+                      </td>
+                      <td className="p-4 font-mono font-medium text-slate-900">
+                        <Link
+                          to="/employees/$employeeId"
+                          params={{ employeeId: emp.id }}
+                          className="text-indigo-600 hover:underline"
+                        >
+                          {emp.tally_id}
+                        </Link>
+                      </td>
+                      <td className="p-4 font-medium text-slate-900">{emp.name}</td>
+                      <td className="p-4">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
+                          {emp.role}
+                        </span>
+                      </td>
+                      <td className="p-4">{emp.staff_grade_description || "—"}</td>
+                      <td className="p-4 font-mono text-xs">{emp.grade_code || "—"}</td>
+                      <td className="p-4">{emp.weekly_off_day || "SUNDAY"}</td>
+                      <td className="p-4">
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100">
+                          {emp.country}
+                        </span>
+                      </td>
+                      <td className="p-4">
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                            emp.is_active ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"
+                          }`}
+                        >
+                          {emp.is_active ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         )}

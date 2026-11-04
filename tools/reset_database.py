@@ -33,15 +33,15 @@ async def reset_db():
             "employee_reporting_lines",
             "registered_devices",
             "user_sessions",
+            "consent_policies",
+            "time_rules",
+            "company_setting_values",
+            "public_holidays",
             "users",
             "employees",
             "accommodations",
             "groups",
             "zones",
-            "public_holidays",
-            "company_setting_values",
-            "time_rules",
-            "consent_policies",
         ]
         
         for table in tables:

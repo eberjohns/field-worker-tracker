@@ -609,13 +609,14 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   const handleSetMode = (mode: "polygon" | "select") => {
     if (!drawRef.current) return;
     if (mode === "polygon" && currentPolygon) {
-      drawRef.current.clear();
-      setCurrentPolygon(null);
-      currentPolygonRef.current = null;
-      setAreaSqM(0);
-      setIsValid(false);
-      setValidationMessage("Click corners on the map to draw new boundary.");
-      updatePreviewSource(map, null);
+      // Keep existing polygon visible and editable in select mode
+      drawRef.current.setMode("select");
+      setCurrentMode("select");
+      setValidationMessage("Boundary is loaded. Drag corner handles to reshape, or click Clear to redraw from scratch.");
+      if (map) {
+        bringBoundaryLayersToTop(map);
+      }
+      return;
     }
     drawRef.current.setMode(mode);
     setCurrentMode(mode);
@@ -630,9 +631,11 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
     setCurrentPolygon(null);
     currentPolygonRef.current = null;
     setAreaSqM(0);
-    setIsValid(true);
-    setValidationMessage("Boundary cleared.");
+    setIsValid(false);
+    setValidationMessage("Boundary cleared. Click corners on map to draw new boundary.");
     updatePreviewSource(map, null);
+    drawRef.current.setMode("polygon");
+    setCurrentMode("polygon");
   };
 
   const handleSave = async () => {

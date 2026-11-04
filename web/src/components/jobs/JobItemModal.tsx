@@ -11,7 +11,7 @@ interface JobItem {
   frequency_unit: "WEEK" | "MONTH" | "QUARTER" | "YEAR";
   occurrences_per_period: number;
   period_interval: number;
-  weekday_pattern: number[] | null;
+  weekday_pattern: string[] | number[] | null;
   required_staff_count: number;
   hours_per_occurrence_per_staff: number | string;
   deployment_type: "PERMANENT" | "REMOTE";
@@ -42,14 +42,28 @@ const COMMON_SGDS = [
 ];
 
 const WEEKDAYS = [
-  { day: 0, label: "Mon" },
-  { day: 1, label: "Tue" },
-  { day: 2, label: "Wed" },
-  { day: 3, label: "Thu" },
-  { day: 4, label: "Fri" },
-  { day: 5, label: "Sat" },
-  { day: 6, label: "Sun" },
+  { code: "MON", label: "Mon" },
+  { code: "TUE", label: "Tue" },
+  { code: "WED", label: "Wed" },
+  { code: "THU", label: "Thu" },
+  { code: "FRI", label: "Fri" },
+  { code: "SAT", label: "Sat" },
+  { code: "SUN", label: "Sun" },
 ];
+
+const INDEX_TO_CODE = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
+
+const normalizeWeekdays = (pattern: any): string[] => {
+  if (!Array.isArray(pattern)) return [];
+  return pattern
+    .map((item) => {
+      if (typeof item === "number" && item >= 0 && item < INDEX_TO_CODE.length) {
+        return INDEX_TO_CODE[item];
+      }
+      return String(item).toUpperCase();
+    })
+    .filter((code) => INDEX_TO_CODE.includes(code));
+};
 
 export const JobItemModal: React.FC<JobItemModalProps> = ({
   isOpen,
@@ -65,7 +79,14 @@ export const JobItemModal: React.FC<JobItemModalProps> = ({
   const [frequencyUnit, setFrequencyUnit] = useState<"WEEK" | "MONTH" | "QUARTER" | "YEAR">("WEEK");
   const [occurrencesPerPeriod, setOccurrencesPerPeriod] = useState<number>(6);
   const [periodInterval, setPeriodInterval] = useState<number>(1);
-  const [selectedWeekdays, setSelectedWeekdays] = useState<number[]>([0, 1, 2, 3, 4, 5]); // Mon-Sat
+  const [selectedWeekdays, setSelectedWeekdays] = useState<string[]>([
+    "MON",
+    "TUE",
+    "WED",
+    "THU",
+    "FRI",
+    "SAT",
+  ]);
   const [requiredStaff, setRequiredStaff] = useState<number>(1);
   const [hoursPerOccurrence, setHoursPerOccurrence] = useState<number | string>(9.0);
   const [deploymentType, setDeploymentType] = useState<"PERMANENT" | "REMOTE">("PERMANENT");
@@ -82,7 +103,11 @@ export const JobItemModal: React.FC<JobItemModalProps> = ({
       setFrequencyUnit(initialData.frequency_unit);
       setOccurrencesPerPeriod(initialData.occurrences_per_period);
       setPeriodInterval(initialData.period_interval);
-      setSelectedWeekdays(initialData.weekday_pattern || []);
+      setSelectedWeekdays(
+        initialData.weekday_pattern && initialData.weekday_pattern.length > 0
+          ? normalizeWeekdays(initialData.weekday_pattern)
+          : ["MON", "TUE", "WED", "THU", "FRI", "SAT"]
+      );
       setRequiredStaff(initialData.required_staff_count);
       setHoursPerOccurrence(initialData.hours_per_occurrence_per_staff);
       setDeploymentType(initialData.deployment_type);
@@ -94,7 +119,7 @@ export const JobItemModal: React.FC<JobItemModalProps> = ({
       setFrequencyUnit("WEEK");
       setOccurrencesPerPeriod(6);
       setPeriodInterval(1);
-      setSelectedWeekdays([0, 1, 2, 3, 4, 5]);
+      setSelectedWeekdays(["MON", "TUE", "WED", "THU", "FRI", "SAT"]);
       setRequiredStaff(1);
       setHoursPerOccurrence(9.0);
       setDeploymentType("PERMANENT");
@@ -121,11 +146,11 @@ export const JobItemModal: React.FC<JobItemModalProps> = ({
   const daysPerOccurrence = parsedHours > 0 ? Math.ceil(parsedHours / 9.0) : 1;
   const isMultiDay = parsedHours > 9.0;
 
-  const toggleWeekday = (day: number) => {
-    if (selectedWeekdays.includes(day)) {
-      setSelectedWeekdays(selectedWeekdays.filter((d) => d !== day));
+  const toggleWeekday = (code: string) => {
+    if (selectedWeekdays.includes(code)) {
+      setSelectedWeekdays(selectedWeekdays.filter((c) => c !== code));
     } else {
-      setSelectedWeekdays([...selectedWeekdays, day].sort());
+      setSelectedWeekdays([...selectedWeekdays, code]);
     }
   };
 
@@ -346,12 +371,12 @@ export const JobItemModal: React.FC<JobItemModalProps> = ({
                 </label>
                 <div className="flex flex-wrap gap-1.5">
                   {WEEKDAYS.map((w) => {
-                    const isSelected = selectedWeekdays.includes(w.day);
+                    const isSelected = selectedWeekdays.includes(w.code);
                     return (
                       <button
                         type="button"
-                        key={w.day}
-                        onClick={() => toggleWeekday(w.day)}
+                        key={w.code}
+                        onClick={() => toggleWeekday(w.code)}
                         className={`px-3 py-1 text-xs font-semibold rounded-md border transition-colors ${
                           isSelected
                             ? "bg-indigo-600 border-indigo-600 text-white shadow-xs"

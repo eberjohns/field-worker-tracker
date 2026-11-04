@@ -838,6 +838,12 @@ class JobsService:
         diff: dict[str, Any] = {}
         regen_needed = False
 
+        if payload.sub_item_code is not None:
+            diff["sub_item_code"] = payload.sub_item_code
+            item.sub_item_code = payload.sub_item_code.strip()
+        if payload.deployment_type is not None:
+            diff["deployment_type"] = payload.deployment_type
+            item.deployment_type = payload.deployment_type.strip()
         if payload.staff_grade_description is not None:
             diff["staff_grade_description"] = payload.staff_grade_description
             item.staff_grade_description = payload.staff_grade_description.strip()
@@ -986,14 +992,23 @@ class JobsService:
             budget_only_types=budget_types,
         )
 
-        # Existing occurrences for this item in window
+        # Existing occurrences for this item
         existing_stmt = select(JobOccurrence).where(
             JobOccurrence.job_item_id == job_item_id,
-            JobOccurrence.window_start >= start,
-            JobOccurrence.window_end <= end,
         )
         existing_rows = (await session.execute(existing_stmt)).scalars().all()
         existing_map = {(row.window_start, row.slot_index): row for row in existing_rows}
+
+        # Clean up unassigned generated occurrences that are no longer in the generated schedule
+        generated_keys = {(slot.window_start, slot.slot_index) for slot in slots}
+        if slots:
+            min_win = min(s.window_start for s in slots)
+            max_win = max(s.window_end for s in slots)
+            for row in existing_rows:
+                if row.window_start >= min_win and row.window_end <= max_win:
+                    if (row.window_start, row.slot_index) not in generated_keys and row.status == "GENERATED":
+                        await session.delete(row)
+                        existing_map.pop((row.window_start, row.slot_index), None)
 
         results: list[JobOccurrence] = []
         for slot in slots:

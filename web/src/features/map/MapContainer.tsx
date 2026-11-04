@@ -74,6 +74,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
       center: currentCenterRef.current,
       zoom: currentZoomRef.current,
       attributionControl: { compact: true },
+      maxTileCacheSize: 200,
     });
 
     map.addControl(new NavigationControl({ showCompass: true }), "top-right");

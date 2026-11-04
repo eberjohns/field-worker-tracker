@@ -90,6 +90,8 @@ class OrgService:
 
         if role:
             query = query.where(Employee.role == role)
+        else:
+            query = query.where(Employee.tally_id != "ADMIN001")
         if sgd:
             query = query.where(Employee.staff_grade_description == sgd)
         if grade_code:
