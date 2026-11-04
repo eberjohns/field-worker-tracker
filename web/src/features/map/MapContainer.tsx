@@ -1,7 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Map as MapLibreMap, NavigationControl } from "maplibre-gl";
+import { Map as MapLibreMap, NavigationControl, setWorkerUrl } from "maplibre-gl";
+import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { AlertTriangle } from "lucide-react";
+
+// Ensure MapLibre Web Worker loads correctly in Vite development and production builds
+setWorkerUrl(maplibreWorkerUrl);
 
 interface MapContainerProps {
   initialCenter?: [number, number]; // [lng, lat]
@@ -89,6 +93,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
 
     map.on("load", () => {
       mapRef.current = map;
+      (window as any).__map = map;
       map.resize();
       setTimeout(() => map.resize(), 100);
       setTimeout(() => map.resize(), 500);

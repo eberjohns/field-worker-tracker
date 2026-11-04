@@ -131,12 +131,22 @@ function buildPreviewFeatures(polygon: GeoJSON.Polygon | null): GeoJSON.FeatureC
   return { type: "FeatureCollection", features };
 }
 
+function isMapReady(map: MapLibreMap | null): boolean {
+  if (!map) return false;
+  try {
+    const style = map.getStyle();
+    return Boolean(style && style.layers && style.layers.length > 0);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Ensures all Terra Draw and boundary preview layers are positioned at the very top of
  * the MapLibre layer stack so satellite and street tiles cannot occlude them.
  */
 function bringBoundaryLayersToTop(map: MapLibreMap) {
-  if (!map || !map.isStyleLoaded()) return;
+  if (!isMapReady(map)) return;
   const style = map.getStyle();
   if (!style || !style.layers || style.layers.length === 0) return;
 
@@ -162,9 +172,14 @@ function bringBoundaryLayersToTop(map: MapLibreMap) {
  * Creates or updates the native preview GeoJSON source and layers.
  */
 function initPreviewLayers(map: MapLibreMap, initialGeom: GeoJSON.Polygon | null = null) {
-  if (!map || !map.isStyleLoaded()) return;
+  if (!map) return;
+  if (!isMapReady(map)) {
+    map.once("styledata", () => initPreviewLayers(map, initialGeom));
+    return;
+  }
 
   const initialData = buildPreviewFeatures(initialGeom);
+  (window as any).__previewData = initialData;
 
   if (!map.getSource(PREVIEW_SOURCE_ID)) {
     map.addSource(PREVIEW_SOURCE_ID, {
@@ -243,13 +258,19 @@ function initPreviewLayers(map: MapLibreMap, initialGeom: GeoJSON.Polygon | null
  * Updates the native preview source data and repaints the canvas.
  */
 function updatePreviewSource(map: MapLibreMap | null, geom: GeoJSON.Polygon | null) {
-  if (!map || !map.isStyleLoaded()) return;
+  if (!map) return;
+  if (!isMapReady(map)) {
+    map.once("styledata", () => updatePreviewSource(map, geom));
+    return;
+  }
+  const features = buildPreviewFeatures(geom);
+  (window as any).__previewData = features;
   const src = map.getSource(PREVIEW_SOURCE_ID) as any;
   if (!src || typeof src.setData !== "function") {
     initPreviewLayers(map, geom);
     return;
   }
-  src.setData(buildPreviewFeatures(geom));
+  src.setData(features);
   bringBoundaryLayersToTop(map);
   map.triggerRepaint();
 }
@@ -333,6 +354,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
 
         draw.start();
         drawRef.current = draw;
+        (window as any).__draw = draw;
 
         // Initialize our native preview layers on top
         const existingPolygon = currentPolygonRef.current || initialPolygon;
@@ -484,13 +506,16 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
 
     let cleanupListeners: (() => void) | undefined;
 
-    if (map.isStyleLoaded()) {
+    const runSetup = () => {
+      if (isDisposed || cleanupListeners) return;
       cleanupListeners = setupEditor();
+    };
+
+    if (isMapReady(map)) {
+      runSetup();
     } else {
-      const onMapLoad = () => {
-        cleanupListeners = setupEditor();
-      };
-      map.once("load", onMapLoad);
+      map.once("styledata", runSetup);
+      map.once("load", runSetup);
     }
 
     return () => {
@@ -524,8 +549,15 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   // Sync if initialPolygon arrives or updates after initial map load
   useEffect(() => {
     if (!drawRef.current || !map || !initialPolygon) return;
+    const ring = initialPolygon.coordinates?.[0];
+    if (!ring || ring.length === 0) return;
+
+    currentPolygonRef.current = initialPolygon;
+    setCurrentPolygon(initialPolygon);
+    evaluateGeometry(initialPolygon);
+
     const snapshot = drawRef.current.getSnapshot();
-    if (snapshot.length === 0 && initialPolygon.coordinates?.length > 0) {
+    if (snapshot.length === 0) {
       drawRef.current.addFeatures([
         {
           type: "Feature",
@@ -535,10 +567,9 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
       ]);
       drawRef.current.setMode("select");
       setCurrentMode("select");
-      currentPolygonRef.current = initialPolygon;
-      evaluateGeometry(initialPolygon);
-      updatePreviewSource(map, initialPolygon);
     }
+
+    updatePreviewSource(map, initialPolygon);
   }, [initialPolygon, map]);
 
   const evaluateGeometry = (geom: GeoJSON.Polygon) => {
