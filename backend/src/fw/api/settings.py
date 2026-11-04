@@ -440,7 +440,7 @@ async def reset_database(
         text(
             """
             INSERT INTO employees (
-                id, tally_id, name, email, role, country, is_driver, 
+                id, tally_id, name, email, role, country, is_driver,
                 join_date, is_active, version, created_at, updated_at
             ) VALUES (
                 gen_random_uuid(), 'ADMIN001', 'System Administrator', 'admin@fieldworkertracker.local',
@@ -483,4 +483,7 @@ async def reset_database(
     )
 
     await session.commit()
-    return {"status": "success", "message": "Database reset to clean bootstrap state. Only ADMIN001 is retained."}
+    return {
+        "status": "success",
+        "message": "Database reset to clean bootstrap state. Only ADMIN001 is retained.",
+    }

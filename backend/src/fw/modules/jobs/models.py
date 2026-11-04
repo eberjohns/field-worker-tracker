@@ -11,6 +11,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
@@ -30,6 +31,7 @@ class Worksite(ModelBase):
     __tablename__ = "worksites"
     __table_args__ = (
         CheckConstraint("country IN ('AE', 'SA')", name="ck_worksites_country_valid"),
+        Index("ix_worksites_is_active", "is_active"),
     )
 
     job_number: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
@@ -85,6 +87,7 @@ class JobItem(ModelBase):
             name="ck_job_items_deployment_type",
         ),
         UniqueConstraint("worksite_id", "sub_item_code", name="uq_job_items_worksite_sub_item"),
+        Index("ix_job_items_is_active", "is_active"),
     )
 
     worksite_id: Mapped[UUID] = mapped_column(

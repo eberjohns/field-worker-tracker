@@ -52,9 +52,9 @@ async def admin_client():
     created_temp = False
     async with async_session_factory() as session:
         # Check if bootstrap ADMIN001 already exists
-        user = (await session.execute(
-            select(User).where(User.username == "ADMIN001")
-        )).scalar_one_or_none()
+        user = (
+            await session.execute(select(User).where(User.username == "ADMIN001"))
+        ).scalar_one_or_none()
 
         if user:
             admin_id = user.id

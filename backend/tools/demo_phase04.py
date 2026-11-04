@@ -168,7 +168,9 @@ async def run_demo() -> None:
             filename="Phase04_Demo_Jobs.xlsx",
             user_id=admin_user_id,
         )
-        print(f"[Import Preview] Total Rows={prev.summary.get('total_rows')}, Counts={prev.summary.get('counts')}, can_commit={prev.can_commit}")
+        print(
+            f"[Import Preview] Total Rows={prev.summary.get('total_rows')}, Counts={prev.summary.get('counts')}, can_commit={prev.can_commit}"
+        )
         assert prev.can_commit is True
 
         commit_res = await ImportService.commit_batch(
@@ -177,7 +179,9 @@ async def run_demo() -> None:
             user_id=admin_user_id,
         )
         await session.commit()
-        print(f"[Import Commit] Batch {commit_res.batch_id} committed: status={commit_res.status} at {commit_res.committed_at}")
+        print(
+            f"[Import Commit] Batch {commit_res.batch_id} committed: status={commit_res.status} at {commit_res.committed_at}"
+        )
 
     # 3. Verify Worksites and Check Boundary Queue
     print("\n" + "-" * 50)
@@ -188,11 +192,17 @@ async def run_demo() -> None:
         all_ws = await JobsService.list_worksites(session=session, q="26")
         ws1 = next(w for w in all_ws if w.job_number == job1_num)
         ws2 = next(w for w in all_ws if w.job_number == job2_num)
-        print(f"Worksite 1: {ws1.job_number} '{ws1.job_name}' | is_outdoor={ws1.is_outdoor} | has_boundary={ws1.has_boundary}")
-        print(f"Worksite 2: {ws2.job_number} '{ws2.job_name}' | is_outdoor={ws2.is_outdoor} | has_boundary={ws2.has_boundary}")
+        print(
+            f"Worksite 1: {ws1.job_number} '{ws1.job_name}' | is_outdoor={ws1.is_outdoor} | has_boundary={ws1.has_boundary}"
+        )
+        print(
+            f"Worksite 2: {ws2.job_number} '{ws2.job_name}' | is_outdoor={ws2.is_outdoor} | has_boundary={ws2.has_boundary}"
+        )
 
         queue = await JobsService.get_boundary_queue(session=session)
-        print(f"Boundary Queue: {queue.unset_count} unset boundaries out of {queue.total_count} total entities.")
+        print(
+            f"Boundary Queue: {queue.unset_count} unset boundaries out of {queue.total_count} total entities."
+        )
         assert ws1.has_boundary is False
         assert ws2.has_boundary is False
 
@@ -225,8 +235,12 @@ async def run_demo() -> None:
         )
         await session.commit()
         print(f"Worksite 1 updated: has_boundary={updated_ws1.has_boundary}")
-        print(f"Boundary GeoJSON: type={updated_ws1.boundary_geojson['type']}, vertices={len(updated_ws1.boundary_geojson['coordinates'][0])}")
-        print(f"Representative Point: lat={updated_ws1.rep_latitude}, lng={updated_ws1.rep_longitude}")
+        print(
+            f"Boundary GeoJSON: type={updated_ws1.boundary_geojson['type']}, vertices={len(updated_ws1.boundary_geojson['coordinates'][0])}"
+        )
+        print(
+            f"Representative Point: lat={updated_ws1.rep_latitude}, lng={updated_ws1.rep_longitude}"
+        )
 
     # 5. Copy Boundary from Worksite 1 to Worksite 2
     print("\n" + "-" * 50)
@@ -243,7 +257,9 @@ async def run_demo() -> None:
         )
         await session.commit()
         print(f"Worksite 2 updated via copy: has_boundary={updated_ws2.has_boundary}")
-        print(f"Representative Point matches: lat={updated_ws2.rep_latitude}, lng={updated_ws2.rep_longitude}")
+        print(
+            f"Representative Point matches: lat={updated_ws2.rep_latitude}, lng={updated_ws2.rep_longitude}"
+        )
         assert updated_ws2.has_boundary is True
         assert updated_ws2.rep_latitude == updated_ws1.rep_latitude
         assert updated_ws2.rep_longitude == updated_ws1.rep_longitude
@@ -261,7 +277,9 @@ async def run_demo() -> None:
             to_date=date(2026, 12, 31),
         )
         print(f"Total occurrences for Worksite 1 in December 2026: {len(december_occs)}")
-        print(f"{'Slot':<6} | {'Item ID':<10} | {'Window Start':<12} | {'Due Date':<12} | {'Staff':<6} | {'Hours':<6} | {'Status'}")
+        print(
+            f"{'Slot':<6} | {'Item ID':<10} | {'Window Start':<12} | {'Due Date':<12} | {'Staff':<6} | {'Hours':<6} | {'Status'}"
+        )
         print("-" * 75)
         for occ in december_occs[:10]:
             print(

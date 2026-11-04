@@ -683,7 +683,9 @@ class JobsService:
                 elif status == "SET":
                     acc_query = acc_query.where(Accommodation.boundary.is_not(None))
 
-                acc_query = acc_query.order_by(Accommodation.accommodation_code).limit(remaining_limit)
+                acc_query = acc_query.order_by(Accommodation.accommodation_code).limit(
+                    remaining_limit
+                )
                 acc_rows = (await session.execute(acc_query)).all()
                 for acc, geojson_str in acc_rows:
                     items.append(
@@ -1006,7 +1008,10 @@ class JobsService:
             max_win = max(s.window_end for s in slots)
             for row in existing_rows:
                 if row.window_start >= min_win and row.window_end <= max_win:
-                    if (row.window_start, row.slot_index) not in generated_keys and row.status == "GENERATED":
+                    if (
+                        row.window_start,
+                        row.slot_index,
+                    ) not in generated_keys and row.status == "GENERATED":
                         await session.delete(row)
                         existing_map.pop((row.window_start, row.slot_index), None)
 
