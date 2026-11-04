@@ -7,6 +7,8 @@ interface MapContainerProps {
   initialCenter?: [number, number]; // [lng, lat]
   initialZoom?: number;
   onMapReady?: (map: MapLibreMap) => void;
+  /** Called just before the map is destroyed (style switch or unmount). Use to null-out any stored map reference. */
+  onMapUnmount?: () => void;
   className?: string;
   children?: React.ReactNode;
 }
@@ -37,6 +39,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
   initialCenter = DEFAULT_CENTER,
   initialZoom = 14,
   onMapReady,
+  onMapUnmount,
   className = "w-full h-[500px]",
   children,
 }) => {
@@ -92,6 +95,12 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     });
 
     return () => {
+      // Notify parent BEFORE destroying the map so it can null-out any stored reference
+      // (e.g. PolygonEditor's map prop). This prevents Terra Draw from re-initializing
+      // against an already-destroyed map instance.
+      if (onMapUnmount) {
+        onMapUnmount();
+      }
       map.remove();
       mapRef.current = null;
     };

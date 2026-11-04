@@ -145,8 +145,13 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
 
       draw.on("change", () => {
         const snapshot = draw.getSnapshot();
+        // Filter to completed polygon features (mode="polygon" in properties, or just Polygon type).
+        // During active drawing, Terra Draw may include an in-progress ring with < 4 coords.
         const polygonFeature = snapshot.find(
-          (f) => f.geometry.type === "Polygon" && (f.properties?.mode === "polygon" || f.geometry.coordinates.length > 0)
+          (f) =>
+            f.geometry.type === "Polygon" &&
+            f.geometry.coordinates.length > 0 &&
+            f.geometry.coordinates[0].length >= 3
         );
 
         if (polygonFeature && polygonFeature.geometry.type === "Polygon") {

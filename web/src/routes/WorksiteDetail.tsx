@@ -736,6 +736,7 @@ export const WorksiteDetail: React.FC = () => {
               initialCenter={initialCenter}
               initialZoom={worksite.has_boundary ? 17 : 14}
               onMapReady={(map) => setMapInstance(map)}
+              onMapUnmount={() => setMapInstance(null)}
               className="w-full h-[600px]"
             >
               <PlaceSearch map={mapInstance} />

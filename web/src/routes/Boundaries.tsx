@@ -403,6 +403,7 @@ export const Boundaries: React.FC = () => {
               <MapContainer
                 initialZoom={15}
                 onMapReady={(map) => setMapInstance(map)}
+                onMapUnmount={() => setMapInstance(null)}
                 className="w-full h-[450px]"
               />
 
