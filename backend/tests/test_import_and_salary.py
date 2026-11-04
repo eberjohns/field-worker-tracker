@@ -18,6 +18,7 @@ from uuid import uuid4
 import openpyxl
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import delete, select
 
 from fw.core.db import async_session_factory, engine
 from fw.main import app
@@ -48,44 +49,59 @@ async def admin_client():
     if not is_db_available():
         pytest.skip("PostgreSQL not available on localhost:5432")
 
-    admin_id = uuid4()
-    emp_id = uuid4()
-
+    created_temp = False
     async with async_session_factory() as session:
-        # Create admin employee and user
-        emp = Employee(
-            id=emp_id,
-            tally_id=f"ADM{str(uuid4())[:6]}",
-            name="Admin User",
-            role="ADMIN",
-            country="AE",
-            is_active=True,
-        )
-        session.add(emp)
-        await session.flush()
+        # Check if bootstrap ADMIN001 already exists
+        user = (await session.execute(
+            select(User).where(User.username == "ADMIN001")
+        )).scalar_one_or_none()
 
-        user = User(
-            id=admin_id,
-            employee_id=emp_id,
-            username=emp.tally_id,
-            credential_hash="fakehash",
-            role="ADMIN",
-            is_active=True,
-            must_change_password=False,
-        )
-        session.add(user)
-        await session.commit()
+        if user:
+            admin_id = user.id
+            emp_id = user.employee_id
+        else:
+            admin_id = uuid4()
+            emp_id = uuid4()
+            emp = Employee(
+                id=emp_id,
+                tally_id=f"ADM{str(uuid4())[:6]}",
+                name="Admin User",
+                role="ADMIN",
+                country="AE",
+                is_active=True,
+            )
+            session.add(emp)
+            await session.flush()
+
+            user = User(
+                id=admin_id,
+                employee_id=emp_id,
+                username=emp.tally_id,
+                credential_hash="fakehash",
+                role="ADMIN",
+                is_active=True,
+                must_change_password=False,
+            )
+            session.add(user)
+            await session.commit()
+            created_temp = True
 
     token = AuthService.create_access_token(user)
     transport = ASGITransport(app=app)
-    async with AsyncClient(
-        transport=transport,
-        base_url="http://test",
-        headers={"Authorization": f"Bearer {token}"},
-    ) as client:
-        yield client, admin_id, emp_id
-
-    await engine.dispose()
+    try:
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://test",
+            headers={"Authorization": f"Bearer {token}"},
+        ) as client:
+            yield client, admin_id, emp_id
+    finally:
+        if created_temp:
+            async with async_session_factory() as session:
+                await session.execute(delete(User).where(User.id == admin_id))
+                await session.execute(delete(Employee).where(Employee.id == emp_id))
+                await session.commit()
+        await engine.dispose()
 
 
 @pytest.mark.asyncio

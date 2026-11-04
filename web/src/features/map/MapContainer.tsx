@@ -106,6 +106,19 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     };
   }, [mapStyle, apiKey]);
 
+  // If initialCenter changes (e.g. worksite data arrives after initial render), fly to it
+  useEffect(() => {
+    if (mapRef.current && initialCenter) {
+      currentCenterRef.current = initialCenter;
+      currentZoomRef.current = initialZoom;
+      mapRef.current.flyTo({
+        center: initialCenter,
+        zoom: initialZoom,
+        essential: true,
+      });
+    }
+  }, [initialCenter[0], initialCenter[1], initialZoom]);
+
   const handleStyleChange = (nextStyle: "streets" | "satellite" | "osm") => {
     if (nextStyle !== mapStyle) {
       setMapStyle(nextStyle);

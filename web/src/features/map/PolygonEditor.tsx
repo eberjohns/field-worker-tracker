@@ -44,6 +44,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
         modes: [
           new TerraDrawPolygonMode({
             pointerDistance: 40,
+            showCoordinatePoints: true,
             styles: {
               fillColor: "#2563eb",
               fillOpacity: 0.35,
@@ -55,7 +56,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
               closingPointOutlineColor: "#ffffff",
               closingPointOutlineWidth: 2,
               coordinatePointColor: "#2563eb",
-              coordinatePointWidth: 6,
+              coordinatePointWidth: 7,
               coordinatePointOutlineColor: "#ffffff",
               coordinatePointOutlineWidth: 2,
             },
@@ -106,15 +107,17 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
       setCurrentMode(startingMode);
 
       // Load existing polygon if exists
-      if (hasInitial && existingPolygon) {
-        draw.addFeatures([
+      if (hasInitial && existingPolygon && existingPolygon.coordinates?.length > 0) {
+        const loadResult = draw.addFeatures([
           {
-            id: crypto.randomUUID(),
             type: "Feature",
             geometry: existingPolygon,
             properties: { mode: "polygon" },
           },
         ]);
+        if (loadResult && loadResult[0] && !loadResult[0].valid) {
+          console.warn("TerraDraw initial addFeatures failed:", loadResult[0].reason);
+        }
         evaluateGeometry(existingPolygon);
 
         // Fit map bounds to the polygon
@@ -143,21 +146,30 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
         }
       }
 
+      // When user completes/closes a polygon, switch to select mode so handles are visible
+      draw.on("finish", () => {
+        draw.setMode("select");
+        setCurrentMode("select");
+      });
+
       draw.on("change", () => {
         const snapshot = draw.getSnapshot();
-        // Filter to completed polygon features (mode="polygon" in properties, or just Polygon type).
-        // During active drawing, Terra Draw may include an in-progress ring with < 4 coords.
         const polygonFeature = snapshot.find(
-          (f) =>
-            f.geometry.type === "Polygon" &&
-            f.geometry.coordinates.length > 0 &&
-            f.geometry.coordinates[0].length >= 3
+          (f) => f.geometry.type === "Polygon" && f.geometry.coordinates.length > 0
         );
 
         if (polygonFeature && polygonFeature.geometry.type === "Polygon") {
           const geom = polygonFeature.geometry as GeoJSON.Polygon;
-          setCurrentPolygon(geom);
-          evaluateGeometry(geom);
+          const isDrawing = Boolean(polygonFeature.properties?.currentlyDrawing);
+
+          if (isDrawing) {
+            setCurrentPolygon(geom);
+            setIsValid(false);
+            setValidationMessage("Drawing in progress. Click corners, then click green dot / double-click / press Enter to close.");
+          } else {
+            setCurrentPolygon(geom);
+            evaluateGeometry(geom);
+          }
         } else {
           setCurrentPolygon(null);
           setAreaSqM(0);
@@ -186,7 +198,6 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
     if (snapshot.length === 0 && initialPolygon.coordinates?.length > 0) {
       drawRef.current.addFeatures([
         {
-          id: crypto.randomUUID(),
           type: "Feature",
           geometry: initialPolygon,
           properties: { mode: "polygon" },
@@ -235,6 +246,14 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
 
   const handleSetMode = (mode: "polygon" | "select") => {
     if (!drawRef.current) return;
+    if (mode === "polygon" && currentPolygon) {
+      // Clear existing feature so user can trace fresh boundary vertices
+      drawRef.current.clear();
+      setCurrentPolygon(null);
+      setAreaSqM(0);
+      setIsValid(false);
+      setValidationMessage("Click corners on the map to draw new boundary.");
+    }
     drawRef.current.setMode(mode);
     setCurrentMode(mode);
   };
