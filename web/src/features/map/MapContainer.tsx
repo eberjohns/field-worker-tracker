@@ -89,6 +89,9 @@ export const MapContainer: React.FC<MapContainerProps> = ({
 
     map.on("load", () => {
       mapRef.current = map;
+      map.resize();
+      setTimeout(() => map.resize(), 100);
+      setTimeout(() => map.resize(), 500);
       if (onMapReady) {
         onMapReady(map);
       }

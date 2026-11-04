@@ -20,6 +20,240 @@ interface PolygonEditorProps {
   className?: string;
 }
 
+const PREVIEW_SOURCE_ID = "fwt-boundary-preview-src";
+const PREVIEW_FILL_ID = "fwt-boundary-preview-fill";
+const PREVIEW_LINE_ID = "fwt-boundary-preview-line";
+const PREVIEW_POINTS_ID = "fwt-boundary-preview-points";
+const PREVIEW_CLOSING_ID = "fwt-boundary-preview-closing";
+
+const ALL_BOUNDARY_LAYERS = [
+  "td-polygon",
+  PREVIEW_FILL_ID,
+  "td-polygon-outline",
+  "td-linestring",
+  PREVIEW_LINE_ID,
+  "td-point",
+  PREVIEW_POINTS_ID,
+  "td-point-marker",
+  PREVIEW_CLOSING_ID,
+];
+
+/**
+ * Builds high-contrast GeoJSON features (fill, outline, vertices, closing point)
+ * so MapLibre directly renders the boundary on top of all raster/vector tile layers.
+ */
+function buildPreviewFeatures(polygon: GeoJSON.Polygon | null): GeoJSON.FeatureCollection {
+  if (!polygon || !polygon.coordinates || polygon.coordinates.length === 0) {
+    return { type: "FeatureCollection", features: [] };
+  }
+  const ring = polygon.coordinates[0];
+  if (!ring || ring.length === 0) {
+    return { type: "FeatureCollection", features: [] };
+  }
+
+  const features: GeoJSON.Feature[] = [];
+
+  // 1. Polygon fill (when 3 or more coordinates exist)
+  if (ring.length >= 3) {
+    let fillRing = [...ring];
+    const first = fillRing[0];
+    const last = fillRing[fillRing.length - 1];
+    if (first[0] !== last[0] || first[1] !== last[1]) {
+      fillRing.push([first[0], first[1]]);
+    }
+    if (fillRing.length >= 4) {
+      features.push({
+        type: "Feature",
+        properties: { kind: "fill" },
+        geometry: {
+          type: "Polygon",
+          coordinates: [fillRing],
+        },
+      });
+    }
+  }
+
+  // 2. Outline line connecting points
+  if (ring.length >= 2) {
+    features.push({
+      type: "Feature",
+      properties: { kind: "outline" },
+      geometry: {
+        type: "LineString",
+        coordinates: ring,
+      },
+    });
+  }
+
+  // 3. Vertices (deduplicated consecutive positions)
+  const distinctCoords: [number, number][] = [];
+  for (let i = 0; i < ring.length; i++) {
+    const pt = ring[i];
+    if (
+      distinctCoords.length === 0 ||
+      pt[0] !== distinctCoords[distinctCoords.length - 1][0] ||
+      pt[1] !== distinctCoords[distinctCoords.length - 1][1]
+    ) {
+      distinctCoords.push([pt[0], pt[1]]);
+    }
+  }
+
+  const isClosed =
+    distinctCoords.length > 2 &&
+    distinctCoords[0][0] === distinctCoords[distinctCoords.length - 1][0] &&
+    distinctCoords[0][1] === distinctCoords[distinctCoords.length - 1][1];
+
+  const activePoints = isClosed ? distinctCoords.slice(0, -1) : distinctCoords;
+
+  activePoints.forEach((coord, idx) => {
+    if (idx === 0) {
+      // First point is the target to close the polygon
+      features.push({
+        type: "Feature",
+        properties: { kind: "closing" },
+        geometry: {
+          type: "Point",
+          coordinates: coord,
+        },
+      });
+    } else {
+      features.push({
+        type: "Feature",
+        properties: { kind: "vertex", index: idx },
+        geometry: {
+          type: "Point",
+          coordinates: coord,
+        },
+      });
+    }
+  });
+
+  return { type: "FeatureCollection", features };
+}
+
+/**
+ * Ensures all Terra Draw and boundary preview layers are positioned at the very top of
+ * the MapLibre layer stack so satellite and street tiles cannot occlude them.
+ */
+function bringBoundaryLayersToTop(map: MapLibreMap) {
+  if (!map || !map.isStyleLoaded()) return;
+  const style = map.getStyle();
+  if (!style || !style.layers || style.layers.length === 0) return;
+
+  const currentOrder = style.layers.map((l) => l.id);
+  const presentLayers = ALL_BOUNDARY_LAYERS.filter((id) => currentOrder.includes(id));
+  if (presentLayers.length === 0) return;
+
+  // If already at the top in exact order, no moveLayer calls needed
+  const tail = currentOrder.slice(-presentLayers.length);
+  const alreadyAtTop = presentLayers.every((id, idx) => tail[idx] === id);
+  if (alreadyAtTop) return;
+
+  for (const layerId of presentLayers) {
+    try {
+      map.moveLayer(layerId);
+    } catch {
+      // ignore mid-operation error
+    }
+  }
+}
+
+/**
+ * Creates or updates the native preview GeoJSON source and layers.
+ */
+function initPreviewLayers(map: MapLibreMap, initialGeom: GeoJSON.Polygon | null = null) {
+  if (!map || !map.isStyleLoaded()) return;
+
+  const initialData = buildPreviewFeatures(initialGeom);
+
+  if (!map.getSource(PREVIEW_SOURCE_ID)) {
+    map.addSource(PREVIEW_SOURCE_ID, {
+      type: "geojson",
+      data: initialData,
+    });
+  } else if (initialGeom) {
+    const src = map.getSource(PREVIEW_SOURCE_ID) as any;
+    if (src && typeof src.setData === "function") {
+      src.setData(initialData);
+    }
+  }
+
+  if (!map.getLayer(PREVIEW_FILL_ID)) {
+    map.addLayer({
+      id: PREVIEW_FILL_ID,
+      type: "fill",
+      source: PREVIEW_SOURCE_ID,
+      filter: ["==", ["get", "kind"], "fill"],
+      paint: {
+        "fill-color": "#2563eb",
+        "fill-opacity": 0.35,
+      },
+    });
+  }
+
+  if (!map.getLayer(PREVIEW_LINE_ID)) {
+    map.addLayer({
+      id: PREVIEW_LINE_ID,
+      type: "line",
+      source: PREVIEW_SOURCE_ID,
+      filter: ["==", ["get", "kind"], "outline"],
+      paint: {
+        "line-color": "#1d4ed8",
+        "line-width": 4,
+        "line-opacity": 1,
+      },
+    });
+  }
+
+  if (!map.getLayer(PREVIEW_POINTS_ID)) {
+    map.addLayer({
+      id: PREVIEW_POINTS_ID,
+      type: "circle",
+      source: PREVIEW_SOURCE_ID,
+      filter: ["==", ["get", "kind"], "vertex"],
+      paint: {
+        "circle-radius": 7,
+        "circle-color": "#2563eb",
+        "circle-stroke-color": "#ffffff",
+        "circle-stroke-width": 2.5,
+      },
+    });
+  }
+
+  if (!map.getLayer(PREVIEW_CLOSING_ID)) {
+    map.addLayer({
+      id: PREVIEW_CLOSING_ID,
+      type: "circle",
+      source: PREVIEW_SOURCE_ID,
+      filter: ["==", ["get", "kind"], "closing"],
+      paint: {
+        "circle-radius": 11,
+        "circle-color": "#10b981",
+        "circle-stroke-color": "#ffffff",
+        "circle-stroke-width": 3,
+      },
+    });
+  }
+
+  bringBoundaryLayersToTop(map);
+  map.triggerRepaint();
+}
+
+/**
+ * Updates the native preview source data and repaints the canvas.
+ */
+function updatePreviewSource(map: MapLibreMap | null, geom: GeoJSON.Polygon | null) {
+  if (!map || !map.isStyleLoaded()) return;
+  const src = map.getSource(PREVIEW_SOURCE_ID) as any;
+  if (!src || typeof src.setData !== "function") {
+    initPreviewLayers(map, geom);
+    return;
+  }
+  src.setData(buildPreviewFeatures(geom));
+  bringBoundaryLayersToTop(map);
+  map.triggerRepaint();
+}
+
 export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   map,
   initialPolygon,
@@ -28,167 +262,263 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   className = "w-full",
 }) => {
   const drawRef = useRef<TerraDraw | null>(null);
+  const currentPolygonRef = useRef<GeoJSON.Polygon | null>(initialPolygon || null);
   const [currentMode, setCurrentMode] = useState<string>("select");
   const [currentPolygon, setCurrentPolygon] = useState<GeoJSON.Polygon | null>(initialPolygon || null);
   const [areaSqM, setAreaSqM] = useState<number>(0);
   const [isValid, setIsValid] = useState<boolean>(true);
   const [validationMessage, setValidationMessage] = useState<string>("");
 
-  // Initialize Terra Draw once map is ready
+  // Initialize Terra Draw & preview layers once map is ready
   useEffect(() => {
     if (!map) return;
 
-    try {
-      const draw = new TerraDraw({
-        adapter: new TerraDrawMapLibreGLAdapter({ map }),
-        modes: [
-          new TerraDrawPolygonMode({
-            pointerDistance: 40,
-            showCoordinatePoints: true,
-            styles: {
-              fillColor: "#2563eb",
-              fillOpacity: 0.35,
-              outlineColor: "#1d4ed8",
-              outlineWidth: 3,
-              outlineOpacity: 1,
-              closingPointColor: "#10b981",
-              closingPointWidth: 9,
-              closingPointOutlineColor: "#ffffff",
-              closingPointOutlineWidth: 2,
-              coordinatePointColor: "#2563eb",
-              coordinatePointWidth: 7,
-              coordinatePointOutlineColor: "#ffffff",
-              coordinatePointOutlineWidth: 2,
-            },
-          }),
-          new TerraDrawSelectMode({
-            flags: {
-              polygon: {
-                feature: {
-                  draggable: true,
-                  rotateable: false,
-                  scaleable: false,
-                  coordinates: {
-                    midpoints: true,
+    let isDisposed = false;
+
+    const setupEditor = () => {
+      if (isDisposed) return;
+      try {
+        const draw = new TerraDraw({
+          adapter: new TerraDrawMapLibreGLAdapter({ map }),
+          modes: [
+            new TerraDrawPolygonMode({
+              pointerDistance: 40,
+              showCoordinatePoints: true,
+              styles: {
+                fillColor: "#2563eb",
+                fillOpacity: 0.35,
+                outlineColor: "#1d4ed8",
+                outlineWidth: 3,
+                outlineOpacity: 1,
+                closingPointColor: "#10b981",
+                closingPointWidth: 9,
+                closingPointOutlineColor: "#ffffff",
+                closingPointOutlineWidth: 2,
+                coordinatePointColor: "#2563eb",
+                coordinatePointWidth: 7,
+                coordinatePointOutlineColor: "#ffffff",
+                coordinatePointOutlineWidth: 2,
+              },
+            }),
+            new TerraDrawSelectMode({
+              flags: {
+                polygon: {
+                  feature: {
                     draggable: true,
-                    deletable: true,
+                    rotateable: false,
+                    scaleable: false,
+                    coordinates: {
+                      midpoints: true,
+                      draggable: true,
+                      deletable: true,
+                    },
                   },
                 },
               },
-            },
-            styles: {
-              selectedPolygonColor: "#3b82f6",
-              selectedPolygonFillOpacity: 0.4,
-              selectedPolygonOutlineColor: "#1d4ed8",
-              selectedPolygonOutlineWidth: 3,
-              selectionPointColor: "#ffffff",
-              selectionPointOutlineColor: "#1d4ed8",
-              selectionPointWidth: 6,
-              midPointColor: "#60a5fa",
-              midPointWidth: 5,
-            },
-          }),
-          new TerraDrawRenderMode({ modeName: "render", styles: {} as any }),
-        ],
-      });
+              styles: {
+                selectedPolygonColor: "#3b82f6",
+                selectedPolygonFillOpacity: 0.4,
+                selectedPolygonOutlineColor: "#1d4ed8",
+                selectedPolygonOutlineWidth: 3,
+                selectionPointColor: "#ffffff",
+                selectionPointOutlineColor: "#1d4ed8",
+                selectionPointWidth: 6,
+                midPointColor: "#60a5fa",
+                midPointWidth: 5,
+              },
+            }),
+            new TerraDrawRenderMode({ modeName: "render", styles: {} as any }),
+          ],
+        });
 
-      draw.start();
-      drawRef.current = draw;
+        draw.start();
+        drawRef.current = draw;
 
-      // Preserve any in-progress polygon or initial polygon
-      const existingPolygon = currentPolygon || initialPolygon;
-      const hasInitial = Boolean(
-        existingPolygon && existingPolygon.coordinates && existingPolygon.coordinates.length > 0
-      );
-
-      // Start in select mode if polygon already exists; otherwise start in polygon mode ready to draw
-      const startingMode = hasInitial ? "select" : "polygon";
-      draw.setMode(startingMode);
-      setCurrentMode(startingMode);
-
-      // Load existing polygon if exists
-      if (hasInitial && existingPolygon && existingPolygon.coordinates?.length > 0) {
-        const loadResult = draw.addFeatures([
-          {
-            type: "Feature",
-            geometry: existingPolygon,
-            properties: { mode: "polygon" },
-          },
-        ]);
-        if (loadResult && loadResult[0] && !loadResult[0].valid) {
-          console.warn("TerraDraw initial addFeatures failed:", loadResult[0].reason);
-        }
-        evaluateGeometry(existingPolygon);
-
-        // Fit map bounds to the polygon
-        try {
-          const ring = existingPolygon.coordinates[0];
-          if (ring && ring.length > 0) {
-            const bounds = ring.reduce(
-              (b, c) => [
-                Math.min(b[0], c[0]),
-                Math.min(b[1], c[1]),
-                Math.max(b[2], c[0]),
-                Math.max(b[3], c[1]),
-              ],
-              [ring[0][0], ring[0][1], ring[0][0], ring[0][1]]
-            );
-            map.fitBounds(
-              [
-                [bounds[0], bounds[1]],
-                [bounds[2], bounds[3]],
-              ],
-              { padding: 80, maxZoom: 18 }
-            );
-          }
-        } catch (fitErr) {
-          console.warn("Failed to fit bounds:", fitErr);
-        }
-      }
-
-      // When user completes/closes a polygon, switch to select mode so handles are visible
-      draw.on("finish", () => {
-        draw.setMode("select");
-        setCurrentMode("select");
-      });
-
-      draw.on("change", () => {
-        const snapshot = draw.getSnapshot();
-        const polygonFeature = snapshot.find(
-          (f) => f.geometry.type === "Polygon" && f.geometry.coordinates.length > 0
+        // Initialize our native preview layers on top
+        const existingPolygon = currentPolygonRef.current || initialPolygon;
+        const hasInitial = Boolean(
+          existingPolygon && existingPolygon.coordinates && existingPolygon.coordinates.length > 0
         );
 
-        if (polygonFeature && polygonFeature.geometry.type === "Polygon") {
-          const geom = polygonFeature.geometry as GeoJSON.Polygon;
-          const isDrawing = Boolean(polygonFeature.properties?.currentlyDrawing);
+        initPreviewLayers(map, existingPolygon);
 
-          if (isDrawing) {
-            setCurrentPolygon(geom);
-            setIsValid(false);
-            setValidationMessage("Drawing in progress. Click corners, then click green dot / double-click / press Enter to close.");
-          } else {
+        const startingMode = hasInitial ? "select" : "polygon";
+        draw.setMode(startingMode);
+        setCurrentMode(startingMode);
+
+        if (hasInitial && existingPolygon && existingPolygon.coordinates?.length > 0) {
+          draw.addFeatures([
+            {
+              type: "Feature",
+              geometry: existingPolygon,
+              properties: { mode: "polygon" },
+            },
+          ]);
+          evaluateGeometry(existingPolygon);
+
+          // Fit map bounds to polygon
+          try {
+            const ring = existingPolygon.coordinates[0];
+            if (ring && ring.length > 0) {
+              const bounds = ring.reduce(
+                (b, c) => [
+                  Math.min(b[0], c[0]),
+                  Math.min(b[1], c[1]),
+                  Math.max(b[2], c[0]),
+                  Math.max(b[3], c[1]),
+                ],
+                [ring[0][0], ring[0][1], ring[0][0], ring[0][1]]
+              );
+              map.fitBounds(
+                [
+                  [bounds[0], bounds[1]],
+                  [bounds[2], bounds[3]],
+                ],
+                { padding: 80, maxZoom: 18 }
+              );
+            }
+          } catch (fitErr) {
+            console.warn("Failed to fit bounds:", fitErr);
+          }
+        }
+
+        draw.on("finish", () => {
+          draw.setMode("select");
+          setCurrentMode("select");
+          const snapshot = draw.getSnapshot();
+          const polygonFeature = snapshot.find(
+            (f) => f.geometry.type === "Polygon" && f.geometry.coordinates.length > 0
+          );
+          if (polygonFeature && polygonFeature.geometry.type === "Polygon") {
+            const geom = polygonFeature.geometry as GeoJSON.Polygon;
+            currentPolygonRef.current = geom;
             setCurrentPolygon(geom);
             evaluateGeometry(geom);
+            updatePreviewSource(map, geom);
           }
-        } else {
-          setCurrentPolygon(null);
-          setAreaSqM(0);
-          setIsValid(true);
-          setValidationMessage("No boundary drawn yet.");
-        }
-      });
+        });
 
-      return () => {
-        try {
-          draw.stop();
-        } catch (e) {
-          // ignore cleanup error
-        }
-        drawRef.current = null;
+        draw.on("change", () => {
+          const snapshot = draw.getSnapshot();
+          const polygonFeature = snapshot.find(
+            (f) => f.geometry.type === "Polygon" && f.geometry.coordinates.length > 0
+          );
+
+          if (polygonFeature && polygonFeature.geometry.type === "Polygon") {
+            const geom = polygonFeature.geometry as GeoJSON.Polygon;
+            const isDrawing = Boolean(polygonFeature.properties?.currentlyDrawing);
+
+            currentPolygonRef.current = geom;
+            updatePreviewSource(map, geom);
+
+            if (isDrawing) {
+              setCurrentPolygon(geom);
+              setIsValid(false);
+              setValidationMessage(
+                "Drawing in progress. Click corners, then click green dot / double-click / press Enter to close."
+              );
+            } else {
+              setCurrentPolygon(geom);
+              evaluateGeometry(geom);
+            }
+          } else {
+            const lineFeature = snapshot.find(
+              (f) => f.geometry.type === "LineString" && f.geometry.coordinates.length > 0
+            );
+            if (lineFeature && lineFeature.geometry.type === "LineString") {
+              const lineGeom: GeoJSON.Polygon = {
+                type: "Polygon",
+                coordinates: [lineFeature.geometry.coordinates as [number, number][]],
+              };
+              currentPolygonRef.current = lineGeom;
+              updatePreviewSource(map, lineGeom);
+              setCurrentPolygon(lineGeom);
+              setIsValid(false);
+              setValidationMessage(
+                "Drawing in progress. Click corners, then click green dot to close."
+              );
+            } else {
+              currentPolygonRef.current = null;
+              updatePreviewSource(map, null);
+              setCurrentPolygon(null);
+              setAreaSqM(0);
+              setIsValid(true);
+              setValidationMessage("No boundary drawn yet.");
+            }
+          }
+        });
+
+        // Ensure layers stay on top whenever style or tiles update
+        const handleStyleData = () => {
+          if (!map || !map.isStyleLoaded()) return;
+          if (!map.getSource(PREVIEW_SOURCE_ID)) {
+            initPreviewLayers(map, currentPolygonRef.current);
+          } else {
+            bringBoundaryLayersToTop(map);
+          }
+        };
+
+        const handleSourceData = () => {
+          if (!map || !map.isStyleLoaded()) return;
+          bringBoundaryLayersToTop(map);
+        };
+
+        const handleIdle = () => {
+          if (!map || !map.isStyleLoaded()) return;
+          bringBoundaryLayersToTop(map);
+        };
+
+        map.on("styledata", handleStyleData);
+        map.on("sourcedata", handleSourceData);
+        map.on("idle", handleIdle);
+
+        return () => {
+          map.off("styledata", handleStyleData);
+          map.off("sourcedata", handleSourceData);
+          map.off("idle", handleIdle);
+        };
+      } catch (err) {
+        console.error("TerraDraw init error:", err);
+      }
+    };
+
+    let cleanupListeners: (() => void) | undefined;
+
+    if (map.isStyleLoaded()) {
+      cleanupListeners = setupEditor();
+    } else {
+      const onMapLoad = () => {
+        cleanupListeners = setupEditor();
       };
-    } catch (err) {
-      console.error("TerraDraw init error:", err);
+      map.once("load", onMapLoad);
     }
+
+    return () => {
+      isDisposed = true;
+      if (cleanupListeners) {
+        cleanupListeners();
+      }
+      try {
+        if (drawRef.current) {
+          drawRef.current.stop();
+        }
+      } catch {
+        // ignore cleanup error
+      }
+      drawRef.current = null;
+
+      try {
+        if (map && map.isStyleLoaded()) {
+          if (map.getLayer(PREVIEW_CLOSING_ID)) map.removeLayer(PREVIEW_CLOSING_ID);
+          if (map.getLayer(PREVIEW_POINTS_ID)) map.removeLayer(PREVIEW_POINTS_ID);
+          if (map.getLayer(PREVIEW_LINE_ID)) map.removeLayer(PREVIEW_LINE_ID);
+          if (map.getLayer(PREVIEW_FILL_ID)) map.removeLayer(PREVIEW_FILL_ID);
+          if (map.getSource(PREVIEW_SOURCE_ID)) map.removeSource(PREVIEW_SOURCE_ID);
+        }
+      } catch {
+        // ignore style cleanup error
+      }
+    };
   }, [map]);
 
   // Sync if initialPolygon arrives or updates after initial map load
@@ -205,7 +535,9 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
       ]);
       drawRef.current.setMode("select");
       setCurrentMode("select");
+      currentPolygonRef.current = initialPolygon;
       evaluateGeometry(initialPolygon);
+      updatePreviewSource(map, initialPolygon);
     }
   }, [initialPolygon, map]);
 
@@ -221,7 +553,6 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
         return;
       }
 
-      // Check self-intersection kinks
       const kinkFeatures = kinks(geom);
       if (kinkFeatures.features.length > 0) {
         setIsValid(false);
@@ -247,24 +578,30 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   const handleSetMode = (mode: "polygon" | "select") => {
     if (!drawRef.current) return;
     if (mode === "polygon" && currentPolygon) {
-      // Clear existing feature so user can trace fresh boundary vertices
       drawRef.current.clear();
       setCurrentPolygon(null);
+      currentPolygonRef.current = null;
       setAreaSqM(0);
       setIsValid(false);
       setValidationMessage("Click corners on the map to draw new boundary.");
+      updatePreviewSource(map, null);
     }
     drawRef.current.setMode(mode);
     setCurrentMode(mode);
+    if (map) {
+      bringBoundaryLayersToTop(map);
+    }
   };
 
   const handleClear = () => {
     if (!drawRef.current) return;
     drawRef.current.clear();
     setCurrentPolygon(null);
+    currentPolygonRef.current = null;
     setAreaSqM(0);
     setIsValid(true);
     setValidationMessage("Boundary cleared.");
+    updatePreviewSource(map, null);
   };
 
   const handleSave = async () => {
