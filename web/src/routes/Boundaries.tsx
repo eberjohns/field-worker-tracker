@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "../context/AuthContext";
 import {
   MapPin,
@@ -42,12 +42,13 @@ interface BoundaryQueueData {
 }
 
 export const Boundaries: React.FC = () => {
+  const navigate = useNavigate();
   const { token } = useAuth();
   const [data, setData] = useState<BoundaryQueueData | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("ALL");
-  const [statusFilter, setStatusFilter] = useState<string>("ALL");
+  const [statusFilter, setStatusFilter] = useState<string>("UNSET");
 
   // Accommodation boundary modal
   const [drawingAccommodation, setDrawingAccommodation] = useState<QueueItem | null>(null);
@@ -273,9 +274,9 @@ export const Boundaries: React.FC = () => {
               onChange={(e) => setStatusFilter(e.target.value)}
               className="px-3 py-1.5 text-xs border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
             >
+              <option value="UNSET">Missing Boundary (Queue)</option>
               <option value="ALL">All Statuses</option>
               <option value="SET">Boundary Set Only</option>
-              <option value="UNSET">Missing Boundary (Queue)</option>
             </select>
           </div>
         </div>
@@ -297,7 +298,21 @@ export const Boundaries: React.FC = () => {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {filteredItems.map((item) => (
-              <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
+              <tr
+                key={item.id}
+                onClick={() => {
+                  if (item.entity_type === "WORKSITE") {
+                    navigate({
+                      to: "/worksites/$worksiteId",
+                      params: { worksiteId: item.id },
+                      search: { tab: "boundary" } as any,
+                    });
+                  } else {
+                    setDrawingAccommodation(item);
+                  }
+                }}
+                className="hover:bg-indigo-50/50 cursor-pointer transition-colors"
+              >
                 <td className="px-5 py-3.5">
                   <span
                     className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
@@ -339,6 +354,7 @@ export const Boundaries: React.FC = () => {
                       to="/worksites/$worksiteId"
                       params={{ worksiteId: item.id }}
                       search={{ tab: "boundary" } as any}
+                      onClick={(e) => e.stopPropagation()}
                       className={`px-3 py-1.5 rounded-lg font-semibold text-xs inline-flex items-center gap-1.5 shadow-xs ${
                         item.has_boundary
                           ? "bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200"
@@ -350,7 +366,10 @@ export const Boundaries: React.FC = () => {
                     </Link>
                   ) : (
                     <button
-                      onClick={() => setDrawingAccommodation(item)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDrawingAccommodation(item);
+                      }}
                       className={`px-3 py-1.5 rounded-lg font-semibold text-xs inline-flex items-center gap-1.5 shadow-xs ${
                         item.has_boundary
                           ? "bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200"

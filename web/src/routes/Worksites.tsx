@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "../context/AuthContext";
 import {
   Search,
@@ -45,6 +45,7 @@ interface AccommodationItem {
   rep_latitude: string | number | null;
   rep_longitude: string | number | null;
   has_boundary: boolean;
+  boundary_geojson?: GeoJSON.Polygon | null;
   is_active: boolean;
   version: number;
 }
@@ -62,6 +63,7 @@ interface Zone {
 }
 
 export const Worksites: React.FC = () => {
+  const navigate = useNavigate();
   const { token, user } = useAuth();
   const [activeTab, setActiveTab] = useState<"worksites" | "accommodations">("worksites");
   const [worksites, setWorksites] = useState<Worksite[]>([]);
@@ -80,7 +82,7 @@ export const Worksites: React.FC = () => {
   const [groupFilter, setGroupFilter] = useState("");
   const [zoneFilter, setZoneFilter] = useState("");
   const [countryFilter, setCountryFilter] = useState("");
-  const [boundaryFilter, setBoundaryFilter] = useState<string>("ALL");
+  const [boundaryFilter, setBoundaryFilter] = useState<string>("SET");
 
   // Create Modal
   const [modalOpen, setModalOpen] = useState(false);
@@ -219,6 +221,20 @@ export const Worksites: React.FC = () => {
 
   const isAdminOrEngineer = user?.role === "ADMIN" || user?.role === "ENGINEER";
 
+  const filteredAccommodations = accommodations.filter((acc) => {
+    if (search) {
+      const q = search.toLowerCase();
+      const match =
+        acc.accommodation_code.toLowerCase().includes(q) ||
+        acc.name.toLowerCase().includes(q) ||
+        (acc.address && acc.address.toLowerCase().includes(q));
+      if (!match) return false;
+    }
+    if (boundaryFilter === "SET" && !acc.has_boundary) return false;
+    if (boundaryFilter === "UNSET" && acc.has_boundary) return false;
+    return true;
+  });
+
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6">
       {/* Header */}
@@ -279,7 +295,7 @@ export const Worksites: React.FC = () => {
           }`}
         >
           <Home className="h-4 w-4" />
-          Accommodations ({accommodations.length})
+          Accommodations ({filteredAccommodations.length})
         </button>
       </div>
 
@@ -332,8 +348,8 @@ export const Worksites: React.FC = () => {
             onChange={(e) => setBoundaryFilter(e.target.value)}
             className="text-sm border border-slate-300 rounded-md py-1.5 px-3 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
           >
+            <option value="SET">Boundaries Set (Active)</option>
             <option value="ALL">All Boundaries</option>
-            <option value="SET">Boundary Set</option>
             <option value="UNSET">No Boundary</option>
           </select>
 
@@ -391,7 +407,11 @@ export const Worksites: React.FC = () => {
                   </tr>
                 ) : (
                   worksites.map((ws) => (
-                    <tr key={ws.id} className="hover:bg-slate-50/80 transition">
+                    <tr
+                      key={ws.id}
+                      onClick={() => navigate({ to: "/worksites/$worksiteId", params: { worksiteId: ws.id } })}
+                      className="hover:bg-indigo-50/50 cursor-pointer transition"
+                    >
                       <td className="py-3.5 px-4 font-mono font-medium text-slate-900">
                         {ws.job_number}
                       </td>
@@ -439,6 +459,7 @@ export const Worksites: React.FC = () => {
                           <Link
                             to="/worksites/$worksiteId"
                             params={{ worksiteId: ws.id }}
+                            onClick={(e) => e.stopPropagation()}
                             className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-800"
                           >
                             View & Edit
@@ -449,6 +470,7 @@ export const Worksites: React.FC = () => {
                             to="/worksites/$worksiteId"
                             params={{ worksiteId: ws.id }}
                             search={{ tab: "boundary" } as any}
+                            onClick={(e) => e.stopPropagation()}
                             className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-xs font-semibold shadow-xs"
                           >
                             <MapPin className="h-3 w-3" />
@@ -485,79 +507,60 @@ export const Worksites: React.FC = () => {
                       Loading accommodations...
                     </td>
                   </tr>
-                ) : accommodations.filter((acc) => {
-                    if (search) {
-                      const q = search.toLowerCase();
-                      const match =
-                        acc.accommodation_code.toLowerCase().includes(q) ||
-                        acc.name.toLowerCase().includes(q) ||
-                        (acc.address && acc.address.toLowerCase().includes(q));
-                      if (!match) return false;
-                    }
-                    if (boundaryFilter === "SET" && !acc.has_boundary) return false;
-                    if (boundaryFilter === "UNSET" && acc.has_boundary) return false;
-                    return true;
-                  }).length === 0 ? (
+                ) : filteredAccommodations.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="py-12 text-center text-slate-400">
                       No accommodations found matching your filter criteria.
                     </td>
                   </tr>
                 ) : (
-                  accommodations
-                    .filter((acc) => {
-                      if (search) {
-                        const q = search.toLowerCase();
-                        const match =
-                          acc.accommodation_code.toLowerCase().includes(q) ||
-                          acc.name.toLowerCase().includes(q) ||
-                          (acc.address && acc.address.toLowerCase().includes(q));
-                        if (!match) return false;
-                      }
-                      if (boundaryFilter === "SET" && !acc.has_boundary) return false;
-                      if (boundaryFilter === "UNSET" && acc.has_boundary) return false;
-                      return true;
-                    })
-                    .map((acc) => (
-                      <tr key={acc.id} className="hover:bg-slate-50/80 transition">
-                        <td className="py-3.5 px-4 font-mono font-medium text-slate-900">
-                          {acc.accommodation_code}
-                        </td>
-                        <td className="py-3.5 px-4 font-medium text-slate-800">{acc.name}</td>
-                        <td className="py-3.5 px-4 text-xs text-slate-600">{acc.address || "—"}</td>
-                        <td className="py-3.5 px-4 text-xs font-mono text-slate-500">
-                          {acc.rep_latitude && acc.rep_longitude
-                            ? `${Number(acc.rep_latitude).toFixed(4)}, ${Number(acc.rep_longitude).toFixed(4)}`
-                            : "—"}
-                        </td>
-                        <td className="py-3.5 px-4">
-                          {acc.has_boundary ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                              Boundary Set
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
-                              <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
-                              No Boundary
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-3.5 px-4 text-right">
-                          <button
-                            onClick={() => setDrawingAccommodation(acc)}
-                            className={`px-3 py-1.5 rounded-md text-xs font-semibold inline-flex items-center gap-1.5 shadow-xs transition ${
-                              acc.has_boundary
-                                ? "bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200"
-                                : "bg-blue-600 hover:bg-blue-700 text-white"
-                            }`}
-                          >
-                            <MapPin className="h-3.5 w-3.5" />
-                            {acc.has_boundary ? "Edit Boundary" : "Draw Boundary"}
-                          </button>
-                        </td>
-                      </tr>
-                    ))
+                  filteredAccommodations.map((acc) => (
+                    <tr
+                      key={acc.id}
+                      onClick={() => setDrawingAccommodation(acc)}
+                      className="hover:bg-indigo-50/50 cursor-pointer transition"
+                    >
+                      <td className="py-3.5 px-4 font-mono font-medium text-slate-900">
+                        {acc.accommodation_code}
+                      </td>
+                      <td className="py-3.5 px-4 font-medium text-slate-800">{acc.name}</td>
+                      <td className="py-3.5 px-4 text-xs text-slate-600">{acc.address || "—"}</td>
+                      <td className="py-3.5 px-4 text-xs font-mono text-slate-500">
+                        {acc.rep_latitude && acc.rep_longitude
+                          ? `${Number(acc.rep_latitude).toFixed(4)}, ${Number(acc.rep_longitude).toFixed(4)}`
+                          : "—"}
+                      </td>
+                      <td className="py-3.5 px-4">
+                        {acc.has_boundary ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                            Boundary Set
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                            <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
+                            No Boundary
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3.5 px-4 text-right">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDrawingAccommodation(acc);
+                          }}
+                          className={`px-3 py-1.5 rounded-md text-xs font-semibold inline-flex items-center gap-1.5 shadow-xs transition ${
+                            acc.has_boundary
+                              ? "bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200"
+                              : "bg-blue-600 hover:bg-blue-700 text-white"
+                          }`}
+                        >
+                          <MapPin className="h-3.5 w-3.5" />
+                          {acc.has_boundary ? "Edit Boundary" : "Draw Boundary"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))
                 )}
               </tbody>
             </table>
@@ -597,6 +600,7 @@ export const Worksites: React.FC = () => {
 
               <PolygonEditor
                 map={mapInstance}
+                initialPolygon={drawingAccommodation.boundary_geojson as GeoJSON.Polygon | null}
                 onSave={handleSaveAccommodationBoundary}
                 isSaving={savingAccommodationBoundary}
               />

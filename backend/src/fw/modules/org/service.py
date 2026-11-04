@@ -2,7 +2,7 @@ from collections import defaultdict
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.core.errors import AppError
@@ -568,9 +568,14 @@ class OrgService:
         return zone
 
     @staticmethod
-    async def list_accommodations(session: AsyncSession) -> list[Accommodation]:
-        result = await session.execute(select(Accommodation).order_by(Accommodation.name.asc()))
-        return list(result.scalars().all())
+    async def list_accommodations(session: AsyncSession) -> list[tuple[Accommodation, str | None]]:
+        result = await session.execute(
+            select(
+                Accommodation,
+                func.ST_AsGeoJSON(Accommodation.boundary).label("geojson_str"),
+            ).order_by(Accommodation.name.asc())
+        )
+        return list(result.all())
 
     @staticmethod
     async def create_accommodation(

@@ -103,7 +103,7 @@ async def update_worksite(
 # --- Boundaries & Queue ---
 @router.get("/boundary-queue", response_model=BoundaryQueueResponse)
 async def get_boundary_queue(
-    status: str = Query("ALL", pattern="^(ALL|UNSET|SET)$"),
+    status: str = Query("UNSET", pattern="^(ALL|UNSET|SET)$"),
     entity_type: str | None = Query(None, pattern="^(WORKSITE|ACCOMMODATION)$"),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
