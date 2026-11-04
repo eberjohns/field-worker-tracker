@@ -18,6 +18,13 @@ import {
   Home,
   X,
   Sparkles,
+  Clock,
+  Users,
+  ChevronLeft,
+  ChevronRight,
+  CalendarDays,
+  List,
+  Info,
 } from "lucide-react";
 import { MapContainer, PolygonEditor, PlaceSearch } from "../features/map";
 import { Map as MapLibreMap } from "maplibre-gl";
@@ -54,13 +61,15 @@ interface Occurrence {
   job_item_id: string;
   sub_item_code: string | null;
   staff_grade_description: string | null;
+  planned_grade_code: string | null;
   window_start: string;
   window_end: string;
-  due_date: string;
+  due_date: string | null;
   slot_index: number;
   required_staff_count: number;
   required_hours_per_staff: number;
   status: string;
+  needs_review?: boolean;
 }
 
 export const WorksiteDetail: React.FC = () => {
@@ -80,6 +89,16 @@ export const WorksiteDetail: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Occurrences View and Filter States
+  const [occViewMode, setOccViewMode] = useState<"calendar" | "table">("calendar");
+  const [occGradeFilter, setOccGradeFilter] = useState<string>("");
+  const [occMonthFilter, setOccMonthFilter] = useState<string>("");
+  const [occStatusFilter, setOccStatusFilter] = useState<string>("");
+  const [calendarMonth, setCalendarMonth] = useState<string>(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  });
 
   // Map reference
   const [mapInstance, setMapInstance] = useState<MapLibreMap | null>(null);
@@ -120,9 +139,30 @@ export const WorksiteDetail: React.FC = () => {
       setEditBudget(data.budget_amount != null ? String(data.budget_amount) : "");
 
       // Fetch occurrences
-      const occRes = await fetch(`/api/v1/occurrences?worksite_id=${worksiteId}&limit=100`, { headers });
+      const occRes = await fetch(`/api/v1/occurrences?worksite_id=${worksiteId}&limit=500`, { headers });
       if (occRes.ok) {
-        setOccurrences(await occRes.json());
+        const rawOccs = await occRes.json();
+        const items = data.items || data.job_items || [];
+        const itemsMap = new Map(items.map((i: any) => [i.id, i]));
+        const enriched: Occurrence[] = rawOccs.map((occ: any) => {
+          const parent = itemsMap.get(occ.job_item_id);
+          return {
+            ...occ,
+            sub_item_code: occ.sub_item_code || parent?.sub_item_code || null,
+            staff_grade_description:
+              occ.staff_grade_description || parent?.staff_grade_description || null,
+            planned_grade_code:
+              occ.planned_grade_code || parent?.planned_grade_code || null,
+          };
+        });
+        setOccurrences(enriched);
+        if (enriched.length > 0) {
+          const firstMonth = (enriched[0].due_date || enriched[0].window_start).substring(0, 7);
+          setCalendarMonth((prev) => {
+            const hasPrev = enriched.some((o) => (o.due_date || o.window_start).startsWith(prev));
+            return hasPrev ? prev : firstMonth;
+          });
+        }
       }
     } catch (err: any) {
       setErrorMessage(err.message || "An error occurred.");
@@ -755,90 +795,540 @@ export const WorksiteDetail: React.FC = () => {
       )}
 
       {/* Tab 4: Schedule / Occurrences */}
-      {activeTab === "schedule" && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-500">
-              Generated occurrence slots across 13 months for staff assignments (Phases 05+).
-            </span>
-            <button
-              onClick={() => handleGenerateOccurrences()}
-              className="px-3 py-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 rounded-lg text-xs font-semibold flex items-center gap-1.5"
-            >
-              <RefreshCw className="h-3 w-3" />
-              Regenerate All Slots
-            </button>
-          </div>
+      {activeTab === "schedule" && (() => {
+        const totalOccurrences = occurrences.length;
+        const totalPlannedHours = occurrences.reduce(
+          (sum, o) => sum + Number(o.required_staff_count) * Number(o.required_hours_per_staff),
+          0
+        );
+        const distinctRoles = Array.from(
+          new Set(occurrences.map((o) => o.staff_grade_description).filter(Boolean))
+        ) as string[];
 
-          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
-                <tr>
-                  <th className="px-4 py-3">Scope / Item</th>
-                  <th className="px-4 py-3">Slot #</th>
-                  <th className="px-4 py-3">Window Start</th>
-                  <th className="px-4 py-3">Window End</th>
-                  <th className="px-4 py-3">Due Date</th>
-                  <th className="px-4 py-3 text-center">Staff Needed</th>
-                  <th className="px-4 py-3 text-right">Hours</th>
-                  <th className="px-4 py-3 text-center">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {occurrences.map((occ) => (
-                  <tr key={occ.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="px-4 py-3 font-medium text-slate-900">
-                      {occ.sub_item_code ? (
-                        <>
-                          <span className="font-mono font-bold">{occ.sub_item_code}</span>{" "}
-                          <span className="text-slate-500">({occ.staff_grade_description})</span>
-                        </>
-                      ) : (
-                        "Scope Item"
-                      )}
-                    </td>
-                    <td className="px-4 py-3 font-mono text-slate-600">#{occ.slot_index}</td>
-                    <td className="px-4 py-3 font-mono text-slate-700">{occ.window_start}</td>
-                    <td className="px-4 py-3 font-mono text-slate-700">{occ.window_end}</td>
-                    <td className="px-4 py-3 font-mono font-bold text-slate-900">{occ.due_date}</td>
-                    <td className="px-4 py-3 text-center font-bold text-slate-800">
-                      {occ.required_staff_count}
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono font-bold text-slate-800">
-                      {Number(occ.required_hours_per_staff).toFixed(
-                        occ.required_hours_per_staff % 1 === 0 ? 0 : 3
-                      )}
-                      h
-                    </td>
-                    <td className="px-4 py-3 text-center">
+        const distinctMonths = Array.from(
+          new Set(occurrences.map((o) => (o.due_date || o.window_start).substring(0, 7)))
+        ).sort();
+
+        const minDate = occurrences.length > 0 ? occurrences[0].window_start : "—";
+        const maxDate = occurrences.length > 0 ? occurrences[occurrences.length - 1].window_end : "—";
+
+        const getRoleBadgeStyle = (role: string | null) => {
+          const r = (role || "").toUpperCase();
+          if (r.includes("GARDEN")) return "bg-emerald-50 text-emerald-800 border-emerald-200";
+          if (r.includes("IRRIGAT")) return "bg-sky-50 text-sky-800 border-sky-200";
+          if (r.includes("FOREMAN") || r.includes("SUPERVIS"))
+            return "bg-purple-50 text-purple-800 border-purple-200";
+          if (r.includes("DRIVER")) return "bg-amber-50 text-amber-800 border-amber-200";
+          if (r.includes("CLEAN")) return "bg-teal-50 text-teal-800 border-teal-200";
+          return "bg-indigo-50 text-indigo-800 border-indigo-200";
+        };
+
+        const formatShortDate = (dateStr: string | null) => {
+          if (!dateStr) return "Flexible Window";
+          const [y, m, d] = dateStr.split("-").map(Number);
+          const dt = new Date(y, m - 1, d);
+          return dt.toLocaleDateString("en-US", { weekday: "short", day: "2-digit", month: "short", year: "numeric" });
+        };
+
+        const formatMonthTitle = (monthStr: string) => {
+          if (!monthStr || !monthStr.includes("-")) return monthStr;
+          const [y, m] = monthStr.split("-").map(Number);
+          const dt = new Date(y, m - 1, 1);
+          return dt.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+        };
+
+        const handlePrevMonth = () => {
+          const [y, m] = calendarMonth.split("-").map(Number);
+          const prev = new Date(y, m - 2, 1);
+          setCalendarMonth(`${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}`);
+        };
+
+        const handleNextMonth = () => {
+          const [y, m] = calendarMonth.split("-").map(Number);
+          const next = new Date(y, m, 1);
+          setCalendarMonth(`${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}`);
+        };
+
+        const handleCurrentMonth = () => {
+          const d = new Date();
+          setCalendarMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+        };
+
+        // Filtered occurrences for Calendar View (scoped to calendarMonth)
+        const calendarOccurrences = occurrences.filter((o) => {
+          const dStr = o.due_date || o.window_start;
+          if (!dStr.startsWith(calendarMonth)) return false;
+          if (occGradeFilter && o.staff_grade_description !== occGradeFilter) return false;
+          if (occStatusFilter && o.status !== occStatusFilter) return false;
+          return true;
+        });
+
+        // Group calendar occurrences by week window_start
+        const calendarWeeksMap = new Map<string, { windowStart: string; windowEnd: string; items: Occurrence[] }>();
+        for (const occ of calendarOccurrences) {
+          const key = occ.window_start;
+          if (!calendarWeeksMap.has(key)) {
+            calendarWeeksMap.set(key, { windowStart: occ.window_start, windowEnd: occ.window_end, items: [] });
+          }
+          calendarWeeksMap.get(key)!.items.push(occ);
+        }
+        const calendarWeeks = Array.from(calendarWeeksMap.values()).sort((a, b) =>
+          a.windowStart.localeCompare(b.windowStart)
+        );
+
+        // Filtered occurrences for Table View
+        const tableOccurrences = occurrences.filter((o) => {
+          const dStr = o.due_date || o.window_start;
+          if (occMonthFilter && !dStr.startsWith(occMonthFilter)) return false;
+          if (occGradeFilter && o.staff_grade_description !== occGradeFilter) return false;
+          if (occStatusFilter && o.status !== occStatusFilter) return false;
+          return true;
+        });
+
+        return (
+          <div className="space-y-5">
+            {/* Contextual Info Banner */}
+            <div className="bg-indigo-50/70 border border-indigo-200/80 rounded-xl p-4 text-xs text-indigo-950 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs">
+              <div className="flex items-start gap-3">
+                <Info className="h-5 w-5 text-indigo-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <div className="font-bold text-sm text-indigo-900">
+                    Operational Shift Schedule & Rolling Horizon (13 Months)
+                  </div>
+                  <p className="text-slate-600 leading-relaxed max-w-3xl">
+                    Every contracted job item produces scheduled calendar slots across rolling calendar windows.
+                    Each slot defines the <strong>exact staff role</strong>, <strong>crew count</strong>, and <strong>shift hours</strong>.
+                    In <strong>Phase 05+</strong>, supervisors roster field workers to these slots, and daily mobile GPS geofence check-ins confirm attendance.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => handleGenerateOccurrences()}
+                className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold flex items-center gap-2 shadow-xs shrink-0 self-start md:self-auto transition"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                Regenerate All Slots
+              </button>
+            </div>
+
+            {/* KPI Metric Summary Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs">
+                <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider block">
+                  Total Planned Visits
+                </span>
+                <div className="flex items-baseline gap-1.5 mt-1">
+                  <span className="text-2xl font-bold font-mono text-slate-900">{totalOccurrences}</span>
+                  <span className="text-xs text-slate-400">slots</span>
+                </div>
+              </div>
+
+              <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs">
+                <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider block">
+                  Contracted Effort
+                </span>
+                <div className="flex items-baseline gap-1.5 mt-1">
+                  <span className="text-2xl font-bold font-mono text-slate-900">
+                    {Math.round(totalPlannedHours).toLocaleString()}
+                  </span>
+                  <span className="text-xs text-slate-400">man-hours</span>
+                </div>
+              </div>
+
+              <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs">
+                <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider block">
+                  Contracted Roles
+                </span>
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {distinctRoles.length === 0 ? (
+                    <span className="text-xs text-slate-400">None</span>
+                  ) : (
+                    distinctRoles.map((role) => (
                       <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          occ.status === "SCHEDULED"
-                            ? "bg-slate-100 text-slate-700"
-                            : occ.status === "COMPLETED"
-                            ? "bg-emerald-100 text-emerald-800"
-                            : occ.status === "IN_PROGRESS"
-                            ? "bg-amber-100 text-amber-800"
-                            : "bg-red-100 text-red-800"
-                        }`}
+                        key={role}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getRoleBadgeStyle(role)}`}
                       >
-                        {occ.status}
+                        {role}
                       </span>
-                    </td>
-                  </tr>
-                ))}
-                {occurrences.length === 0 && (
-                  <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
-                      No occurrences found. Click "Generate All Occurrences" to schedule slots.
-                    </td>
-                  </tr>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs">
+                <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider block">
+                  Planning Horizon
+                </span>
+                <div className="mt-1 text-xs font-mono text-slate-700">
+                  <div className="font-semibold text-slate-900">{minDate}</div>
+                  <div className="text-slate-400 text-[10px]">to {maxDate}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Filter and View Mode Switcher */}
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-xs">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                  <button
+                    onClick={() => setOccViewMode("calendar")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition ${
+                      occViewMode === "calendar"
+                        ? "bg-white text-indigo-700 shadow-xs"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    <CalendarDays className="h-3.5 w-3.5" />
+                    Calendar & Timeline
+                  </button>
+                  <button
+                    onClick={() => setOccViewMode("table")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition ${
+                      occViewMode === "table"
+                        ? "bg-white text-indigo-700 shadow-xs"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    <List className="h-3.5 w-3.5" />
+                    Structured List
+                  </button>
+                </div>
+
+                <div className="h-5 w-px bg-slate-200 mx-1" />
+
+                {/* Role filter */}
+                <select
+                  value={occGradeFilter}
+                  onChange={(e) => setOccGradeFilter(e.target.value)}
+                  className="px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white text-slate-700 font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                >
+                  <option value="">All Staff Roles ({distinctRoles.length})</option>
+                  {distinctRoles.map((role) => (
+                    <option key={role} value={role}>
+                      {role}
+                    </option>
+                  ))}
+                </select>
+
+                {/* Status filter */}
+                <select
+                  value={occStatusFilter}
+                  onChange={(e) => setOccStatusFilter(e.target.value)}
+                  className="px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white text-slate-700 font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                >
+                  <option value="">All Statuses</option>
+                  <option value="GENERATED">Generated (Unassigned)</option>
+                  <option value="ASSIGNED">Assigned</option>
+                  <option value="COMPLETED">Completed</option>
+                  <option value="CANCELLED">Cancelled</option>
+                </select>
+
+                {/* Table mode month filter */}
+                {occViewMode === "table" && (
+                  <select
+                    value={occMonthFilter}
+                    onChange={(e) => setOccMonthFilter(e.target.value)}
+                    className="px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white text-slate-700 font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  >
+                    <option value="">All Months ({distinctMonths.length})</option>
+                    {distinctMonths.map((m) => (
+                      <option key={m} value={m}>
+                        {formatMonthTitle(m)}
+                      </option>
+                    ))}
+                  </select>
                 )}
-              </tbody>
-            </table>
+              </div>
+
+              <div className="text-xs text-slate-500">
+                Showing{" "}
+                <strong className="text-slate-900 font-mono">
+                  {occViewMode === "calendar" ? calendarOccurrences.length : tableOccurrences.length}
+                </strong>{" "}
+                of <span className="font-mono">{totalOccurrences}</span> slots
+              </div>
+            </div>
+
+            {/* VIEW 1: Calendar & Timeline View */}
+            {occViewMode === "calendar" && (
+              <div className="space-y-4">
+                {/* Month Navigator Header */}
+                <div className="flex items-center justify-between bg-white px-4 py-3 rounded-xl border border-slate-200 shadow-xs">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handlePrevMonth}
+                      className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 transition"
+                      title="Previous Month"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-slate-900">
+                        {formatMonthTitle(calendarMonth)}
+                      </span>
+                      <select
+                        value={calendarMonth}
+                        onChange={(e) => setCalendarMonth(e.target.value)}
+                        className="text-xs border border-slate-200 rounded px-2 py-0.5 bg-slate-50 text-slate-700 font-medium"
+                      >
+                        {distinctMonths.map((m) => (
+                          <option key={m} value={m}>
+                            {formatMonthTitle(m)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <button
+                      onClick={handleNextMonth}
+                      className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 transition"
+                      title="Next Month"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleCurrentMonth}
+                      className="px-2.5 py-1 text-xs border border-slate-200 hover:bg-slate-50 rounded-md font-medium text-slate-700 transition"
+                    >
+                      This Month
+                    </button>
+                    <span className="text-xs text-slate-500">
+                      <strong>{calendarOccurrences.length}</strong> shifts scheduled
+                    </span>
+                  </div>
+                </div>
+
+                {calendarWeeks.length === 0 ? (
+                  <div className="p-12 text-center bg-white border border-slate-200 rounded-xl space-y-2">
+                    <CalendarDays className="h-8 w-8 text-slate-300 mx-auto" />
+                    <div className="text-sm font-semibold text-slate-700">
+                      No visits scheduled in {formatMonthTitle(calendarMonth)}
+                    </div>
+                    <p className="text-xs text-slate-400">
+                      Try selecting another month or clearing role/status filters.
+                    </p>
+                  </div>
+                ) : (
+                  calendarWeeks.map((week, idx) => {
+                    const weekHours = week.items.reduce(
+                      (acc, i) => acc + Number(i.required_staff_count) * Number(i.required_hours_per_staff),
+                      0
+                    );
+
+                    return (
+                      <div
+                        key={week.windowStart}
+                        className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs space-y-3 p-4"
+                      >
+                        {/* Week Header */}
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-slate-100 text-slate-700 font-mono">
+                              Week {idx + 1}
+                            </span>
+                            <span className="text-xs font-semibold text-slate-900">
+                              {formatShortDate(week.windowStart)} – {formatShortDate(week.windowEnd)}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 text-xs text-slate-500">
+                            <span>
+                              <strong className="text-slate-800">{week.items.length}</strong> visits
+                            </span>
+                            <span>•</span>
+                            <span>
+                              <strong className="text-slate-800">{weekHours.toFixed(0)}</strong> man-hours
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Shift Cards Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                          {week.items.map((occ) => {
+                            const totalEffort =
+                              Number(occ.required_staff_count) * Number(occ.required_hours_per_staff);
+
+                            return (
+                              <div
+                                key={occ.id}
+                                className="border border-slate-200/90 hover:border-indigo-300 rounded-xl p-3.5 bg-slate-50/50 hover:bg-white transition space-y-2.5 shadow-2xs"
+                              >
+                                {/* Top Row: Due Date & Visit # */}
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
+                                    <Calendar className="h-3.5 w-3.5 text-indigo-600" />
+                                    <span>{formatShortDate(occ.due_date)}</span>
+                                  </div>
+                                  <span className="font-mono text-[10px] font-bold px-2 py-0.5 bg-white border border-slate-200 rounded text-slate-700 shadow-2xs">
+                                    Visit #{occ.slot_index + 1}
+                                  </span>
+                                </div>
+
+                                {/* Middle Row: Role & Grade Code */}
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-1.5">
+                                    <span
+                                      className={`px-2 py-0.5 rounded text-xs font-bold border ${getRoleBadgeStyle(
+                                        occ.staff_grade_description
+                                      )}`}
+                                    >
+                                      {occ.staff_grade_description || "STAFF"}
+                                    </span>
+                                    {occ.planned_grade_code && (
+                                      <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-200/80 text-slate-700 font-semibold">
+                                        {occ.planned_grade_code}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="text-[11px] font-mono text-slate-400">
+                                    Scope: {occ.sub_item_code || "01"}
+                                  </span>
+                                </div>
+
+                                {/* Staffing & Hours Details */}
+                                <div className="bg-white border border-slate-100 rounded-lg p-2 text-xs grid grid-cols-2 gap-2 text-slate-700">
+                                  <div className="flex items-center gap-1.5">
+                                    <Users className="h-3.5 w-3.5 text-slate-400" />
+                                    <span>
+                                      <strong>{occ.required_staff_count}</strong> worker
+                                      {occ.required_staff_count > 1 ? "s" : ""}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 text-right justify-end">
+                                    <Clock className="h-3.5 w-3.5 text-slate-400" />
+                                    <span>
+                                      <strong>{Number(occ.required_hours_per_staff).toFixed(1)}h</strong> (
+                                      {totalEffort.toFixed(1)}h total)
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Bottom Row: Status & Phase 05 note */}
+                                <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-[11px]">
+                                  <span className="text-slate-400 font-mono text-[10px]">
+                                    {occ.window_start} ~ {occ.window_end}
+                                  </span>
+                                  <span
+                                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                      occ.status === "GENERATED"
+                                        ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
+                                        : occ.status === "ASSIGNED"
+                                        ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                        : occ.status === "COMPLETED"
+                                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                        : "bg-red-50 text-red-700"
+                                    }`}
+                                  >
+                                    {occ.status === "GENERATED" ? "Generated (Phase 05)" : occ.status}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
+
+            {/* VIEW 2: Structured Table View */}
+            {occViewMode === "table" && (
+              <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
+                    <tr>
+                      <th className="px-4 py-3">Contract Item & Role</th>
+                      <th className="px-4 py-3">Scheduled Due Date</th>
+                      <th className="px-4 py-3">Service Window</th>
+                      <th className="px-4 py-3">Visit Sequence</th>
+                      <th className="px-4 py-3 text-center">Staff Needed</th>
+                      <th className="px-4 py-3 text-right">Hours / Staff</th>
+                      <th className="px-4 py-3 text-right">Total Effort</th>
+                      <th className="px-4 py-3 text-center">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {tableOccurrences.map((occ) => {
+                      const totalEffort =
+                        Number(occ.required_staff_count) * Number(occ.required_hours_per_staff);
+
+                      return (
+                        <tr key={occ.id} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="px-4 py-3 font-medium text-slate-900">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-xs font-bold text-slate-700">
+                                {occ.sub_item_code || "01"}
+                              </span>
+                              <span
+                                className={`px-2 py-0.5 rounded text-[11px] font-bold border ${getRoleBadgeStyle(
+                                  occ.staff_grade_description
+                                )}`}
+                              >
+                                {occ.staff_grade_description || "STAFF"}
+                              </span>
+                              {occ.planned_grade_code && (
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-100 text-slate-600">
+                                  {occ.planned_grade_code}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 font-medium text-slate-900">
+                            <span className="font-bold text-indigo-900">
+                              {formatShortDate(occ.due_date)}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 font-mono text-slate-500">
+                            {occ.window_start} → {occ.window_end}
+                          </td>
+                          <td className="px-4 py-3 font-mono font-semibold text-slate-700">
+                            Visit #{occ.slot_index + 1}
+                          </td>
+                          <td className="px-4 py-3 text-center font-bold text-slate-800">
+                            {occ.required_staff_count} worker
+                            {occ.required_staff_count > 1 ? "s" : ""}
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono font-bold text-slate-800">
+                            {Number(occ.required_hours_per_staff).toFixed(1)}h
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono font-bold text-indigo-700">
+                            {totalEffort.toFixed(1)}h
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                occ.status === "GENERATED"
+                                  ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
+                                  : occ.status === "ASSIGNED"
+                                  ? "bg-amber-100 text-amber-800"
+                                  : occ.status === "COMPLETED"
+                                  ? "bg-emerald-100 text-emerald-800"
+                                  : "bg-red-100 text-red-800"
+                              }`}
+                            >
+                              {occ.status === "GENERATED" ? "Generated (Phase 05)" : occ.status}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {tableOccurrences.length === 0 && (
+                      <tr>
+                        <td colSpan={8} className="px-4 py-12 text-center text-slate-400">
+                          No occurrences found matching your filters.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Job Item Modal */}
       <JobItemModal

@@ -18,7 +18,7 @@ from geoalchemy2.functions import (
 )
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload, selectinload
 
 from fw.core.errors import AppError
 from fw.modules.audit import AuditService
@@ -1046,7 +1046,26 @@ class JobsService:
                 results.append(occ)
 
         await session.flush()
-        return [JobOccurrenceResponse.model_validate(r) for r in results]
+        return [
+            JobOccurrenceResponse(
+                id=r.id,
+                job_item_id=r.job_item_id,
+                sub_item_code=item.sub_item_code,
+                staff_grade_description=item.staff_grade_description,
+                planned_grade_code=item.planned_grade_code,
+                window_start=r.window_start,
+                window_end=r.window_end,
+                slot_index=r.slot_index,
+                due_date=r.due_date,
+                status=r.status,
+                source=r.source,
+                required_staff_count=r.required_staff_count,
+                required_hours_per_staff=r.required_hours_per_staff,
+                needs_review=r.needs_review,
+                created_at=r.created_at,
+            )
+            for r in results
+        ]
 
     @staticmethod
     async def get_job_item_validation(
@@ -1120,11 +1139,15 @@ class JobsService:
         from_date: date | None = None,
         to_date: date | None = None,
         status: str | None = None,
-        limit: int = 200,
+        limit: int = 500,
         offset: int = 0,
     ) -> list[JobOccurrenceResponse]:
-        """List occurrences with filtering."""
-        query = select(JobOccurrence).join(JobItem, JobOccurrence.job_item_id == JobItem.id)
+        """List occurrences with filtering and joined item descriptors."""
+        query = (
+            select(JobOccurrence)
+            .options(joinedload(JobOccurrence.job_item))
+            .join(JobItem, JobOccurrence.job_item_id == JobItem.id)
+        )
 
         if job_item_id:
             query = query.where(JobOccurrence.job_item_id == job_item_id)
@@ -1143,7 +1166,26 @@ class JobsService:
             .limit(limit)
         )
         rows = (await session.execute(query)).scalars().all()
-        return [JobOccurrenceResponse.model_validate(r) for r in rows]
+        return [
+            JobOccurrenceResponse(
+                id=r.id,
+                job_item_id=r.job_item_id,
+                sub_item_code=r.job_item.sub_item_code if r.job_item else None,
+                staff_grade_description=r.job_item.staff_grade_description if r.job_item else None,
+                planned_grade_code=r.job_item.planned_grade_code if r.job_item else None,
+                window_start=r.window_start,
+                window_end=r.window_end,
+                slot_index=r.slot_index,
+                due_date=r.due_date,
+                status=r.status,
+                source=r.source,
+                required_staff_count=r.required_staff_count,
+                required_hours_per_staff=r.required_hours_per_staff,
+                needs_review=r.needs_review,
+                created_at=r.created_at,
+            )
+            for r in rows
+        ]
 
     @staticmethod
     async def update_occurrence(

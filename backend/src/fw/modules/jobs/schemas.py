@@ -118,6 +118,9 @@ class JobOccurrenceResponse(BaseModel):
 
     id: UUID
     job_item_id: UUID
+    sub_item_code: str | None = None
+    staff_grade_description: str | None = None
+    planned_grade_code: str | None = None
     window_start: date
     window_end: date
     slot_index: int
