@@ -2,12 +2,13 @@ from datetime import UTC, date, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, status
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.core.db import get_db
 from fw.core.errors import AppError
 from fw.modules.audit import AuditService
-from fw.modules.identity import User, get_current_user, require_role
+from fw.modules.identity import User, get_current_user, hash_password, require_role
 from fw.modules.org import OrgService, ScopeService
 from fw.modules.settings import (
     CompanySettingRead,
@@ -397,3 +398,92 @@ async def create_consent_policy(
     )
     await session.commit()
     return ConsentPolicyRead.model_validate(policy)
+
+
+@router.post("/settings/reset-database", response_model=dict[str, str])
+async def reset_database(
+    current_user: User = Depends(require_role("ADMIN")),
+    session: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    """Reset database to clean bootstrap state. Retains only ADMIN001 and company settings."""
+    # 1. Nullify user reference in audit logs
+    await session.execute(text("UPDATE audit_logs SET actor_user_id = NULL;"))
+
+    # 2. Clear transactional and master tables in strict foreign-key dependency order
+    tables = [
+        "import_rows",
+        "import_batches",
+        "job_occurrences",
+        "job_items",
+        "worksites",
+        "employee_salary",
+        "employee_grade_history",
+        "employee_documents",
+        "employee_reporting_lines",
+        "registered_devices",
+        "user_sessions",
+        "consent_policies",
+        "time_rules",
+        "company_setting_values",
+        "public_holidays",
+        "users",
+        "employees",
+        "accommodations",
+        "groups",
+        "zones",
+    ]
+    for table in tables:
+        await session.execute(text(f"DELETE FROM {table};"))
+
+    now = datetime.now(UTC)
+    emp_res = await session.execute(
+        text(
+            """
+            INSERT INTO employees (
+                id, tally_id, name, email, role, country, is_driver,
+                join_date, is_active, version, created_at, updated_at
+            ) VALUES (
+                gen_random_uuid(), 'ADMIN001', 'System Administrator', 'admin@fieldworkertracker.local',
+                'ADMIN', 'AE', false, '2026-01-01', true, 1, :now, :now
+            ) RETURNING id
+        """
+        ),
+        {"now": now},
+    )
+    admin_emp_id = emp_res.scalar()
+
+    default_pwd = "ChangeMe123!"
+    cred_hash = hash_password(default_pwd)
+    await session.execute(
+        text(
+            """
+            INSERT INTO users (
+                id, employee_id, username, credential_hash, role,
+                must_change_password, password_changed_at, is_active, version, created_at, updated_at
+            ) VALUES (
+                gen_random_uuid(), :emp_id, 'ADMIN001', :cred_hash, 'ADMIN',
+                false, :now, true, 1, :now, :now
+            )
+        """
+        ),
+        {"emp_id": admin_emp_id, "cred_hash": cred_hash, "now": now},
+    )
+
+    await SettingsService.set_setting(
+        session,
+        key="default_password",
+        value=default_pwd,
+        effective_from=date(2026, 1, 1),
+    )
+    await SettingsService.set_setting(
+        session,
+        key="default_password_max_days",
+        value=7,
+        effective_from=date(2026, 1, 1),
+    )
+
+    await session.commit()
+    return {
+        "status": "success",
+        "message": "Database reset to clean bootstrap state. Only ADMIN001 is retained.",
+    }

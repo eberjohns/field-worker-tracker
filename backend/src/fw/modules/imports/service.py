@@ -33,6 +33,7 @@ from fw.modules.imports.schemas import (
     ImportRollbackResponse,
     ImportRowRead,
 )
+from fw.modules.jobs import JobItem, JobsService, Worksite
 from fw.modules.org import (
     Accommodation,
     Employee,
@@ -47,10 +48,13 @@ from fw.modules.settings import CompanySettingValue, PublicHoliday, SettingsServ
 from fw.rules.imports import (
     detect_file_key_clashes,
     detect_reporting_issues,
+    normalize_frequency_text,
     normalize_grade_code,
     normalize_sgd,
     parse_cell_value,
+    validate_worksite_job_number,
 )
+from fw.rules.jobs import is_job_outdoor
 from fw.rules.payroll import compute_next_payroll_month_start
 
 
@@ -153,8 +157,45 @@ class ImportService:
             (r.name, r.scope_type, r.scope_employee_id, r.start_date): r
             for r in (await session.execute(select(TimeRule))).scalars().all()
         }
+        existing_worksites = {
+            w.job_number: w for w in (await session.execute(select(Worksite))).scalars().all()
+        }
+        existing_job_items = {
+            (j.worksite_id, j.sub_item_code): j
+            for j in (await session.execute(select(JobItem))).scalars().all()
+        }
 
         # Pre-collect natural keys present in this workbook for same-file foreign key resolution
+        file_groups: set[str] = set()
+        if "Groups" in wb.sheetnames:
+            ws_g = wb["Groups"]
+            for r_idx in range(5, ws_g.max_row + 1):
+                if ws_g.cell(r_idx, 1).value:
+                    continue
+                v = ws_g.cell(r_idx, 2).value
+                if v and str(v).strip():
+                    file_groups.add(str(v).strip())
+
+        file_zones: set[str] = set()
+        if "Zones" in wb.sheetnames:
+            ws_z = wb["Zones"]
+            for r_idx in range(5, ws_z.max_row + 1):
+                if ws_z.cell(r_idx, 1).value:
+                    continue
+                v = ws_z.cell(r_idx, 2).value
+                if v and str(v).strip():
+                    file_zones.add(str(v).strip())
+
+        file_worksites: set[str] = set()
+        if "Worksites" in wb.sheetnames:
+            ws_w = wb["Worksites"]
+            for r_idx in range(5, ws_w.max_row + 1):
+                if ws_w.cell(r_idx, 1).value:
+                    continue
+                v = ws_w.cell(r_idx, 2).value
+                if v and str(v).strip():
+                    file_worksites.add(str(v).strip())
+
         file_accommodations: set[str] = set()
         if "Accommodations" in wb.sheetnames:
             ws_acc = wb["Accommodations"]
@@ -604,6 +645,148 @@ class ImportService:
                     if tr_key in existing_time_rules:
                         row_action = "UNCHANGED"
 
+                # Worksites
+                elif sheet_name == "Worksites":
+                    job_num = normalized_dict.get("job_number", {}).get("value")
+                    # Format check
+                    jn_err = validate_worksite_job_number(job_num)
+                    if jn_err:
+                        row_codes.append(jn_err)
+                        row_messages.append(
+                            {
+                                "field": "job_number",
+                                "code": jn_err,
+                                "message": (
+                                    f"Job number '{job_num}' must match 2 digits + letter (A/B/C) + 5 digits "
+                                    "without hyphens, slashes, or combined formats."
+                                ),
+                            }
+                        )
+                        row_status = "ERROR"
+
+                    # Group check
+                    g_code = normalized_dict.get("group_code", {}).get("value")
+                    if g_code and g_code not in existing_groups and g_code not in file_groups:
+                        row_codes.append("FOREIGN_KEY_MISSING")
+                        row_messages.append(
+                            {
+                                "field": "group_code",
+                                "code": "FOREIGN_KEY_MISSING",
+                                "message": f"Group {g_code} not found.",
+                            }
+                        )
+                        row_status = "ERROR"
+
+                    # Zone check
+                    z_code = normalized_dict.get("zone_code", {}).get("value")
+                    if z_code and z_code not in existing_zones and z_code not in file_zones:
+                        row_codes.append("FOREIGN_KEY_MISSING")
+                        row_messages.append(
+                            {
+                                "field": "zone_code",
+                                "code": "FOREIGN_KEY_MISSING",
+                                "message": f"Zone {z_code} not found.",
+                            }
+                        )
+                        row_status = "ERROR"
+
+                    if job_num and job_num in existing_worksites:
+                        ws_obj = existing_worksites[job_num]
+                        if not ws_obj.is_active:
+                            row_action = "REACTIVATED"
+                        for field_name in (
+                            "job_name",
+                            "renewal_reference",
+                            "customer_type",
+                            "contract_start_date",
+                            "contract_end_date",
+                            "labour_budget_amount",
+                        ):
+                            act = normalized_dict.get(field_name, {}).get("action")
+                            new_v = normalized_dict.get(field_name, {}).get("value")
+                            attr_name = (
+                                "budget_amount"
+                                if field_name == "labour_budget_amount"
+                                else "start_date"
+                                if field_name == "contract_start_date"
+                                else "end_date"
+                                if field_name == "contract_end_date"
+                                else field_name
+                            )
+                            old_v = getattr(ws_obj, attr_name, None)
+                            if act == "CLEAR" and old_v is not None:
+                                row_action = "UPDATED"
+                                row_diff[field_name] = {"old": str(old_v), "new": None}
+                            elif act == "SET" and new_v is not None and str(new_v) != str(old_v):
+                                row_action = "UPDATED"
+                                row_diff[field_name] = {
+                                    "old": str(old_v) if old_v is not None else None,
+                                    "new": str(new_v),
+                                }
+                        if row_action != "REACTIVATED" and not row_diff:
+                            row_action = "UNCHANGED"
+
+                # Job_Items
+                elif sheet_name == "Job_Items":
+                    j_num = normalized_dict.get("job_number", {}).get("value")
+                    sub_code = normalized_dict.get("sub_item_code", {}).get("value")
+
+                    # FK check to worksite
+                    if j_num and j_num not in existing_worksites and j_num not in file_worksites:
+                        row_codes.append("FOREIGN_KEY_MISSING")
+                        row_messages.append(
+                            {
+                                "field": "job_number",
+                                "code": "FOREIGN_KEY_MISSING",
+                                "message": f"Worksite {j_num} not found.",
+                            }
+                        )
+                        row_status = "ERROR"
+
+                    # Free-text frequency normalization
+                    raw_freq = raw_dict.get("frequency_unit")
+                    freq_res = normalize_frequency_text(raw_freq)
+                    if freq_res:
+                        f_unit, f_occ, f_int = freq_res
+                        normalized_dict["frequency_unit"]["value"] = f_unit
+                        normalized_dict["occurrences_per_period"]["value"] = f_occ
+                        normalized_dict["period_interval"]["value"] = f_int
+
+                    ws_id = (
+                        existing_worksites[j_num].id
+                        if j_num and j_num in existing_worksites
+                        else None
+                    )
+                    if ws_id and (ws_id, sub_code) in existing_job_items:
+                        ji_obj = existing_job_items[(ws_id, sub_code)]
+                        if not ji_obj.is_active:
+                            row_action = "REACTIVATED"
+                        for field_name in (
+                            "staff_grade_description",
+                            "planned_grade_code",
+                            "frequency_unit",
+                            "occurrences_per_period",
+                            "period_interval",
+                            "required_staff_count",
+                            "hours_per_occurrence_per_staff",
+                            "deployment_type",
+                            "break_override_minutes",
+                        ):
+                            act = normalized_dict.get(field_name, {}).get("action")
+                            new_v = normalized_dict.get(field_name, {}).get("value")
+                            old_v = getattr(ji_obj, field_name, None)
+                            if act == "CLEAR" and old_v is not None:
+                                row_action = "UPDATED"
+                                row_diff[field_name] = {"old": str(old_v), "new": None}
+                            elif act == "SET" and new_v is not None and str(new_v) != str(old_v):
+                                row_action = "UPDATED"
+                                row_diff[field_name] = {
+                                    "old": str(old_v) if old_v is not None else None,
+                                    "new": str(new_v),
+                                }
+                        if row_action != "REACTIVATED" and not row_diff:
+                            row_action = "UNCHANGED"
+
                 # Tally counts
                 if row_status == "ERROR":
                     counts["ERROR"] += 1
@@ -1031,6 +1214,151 @@ class ImportService:
                             created_by_user_id=user_id,
                         )
                     )
+
+        await session.flush()
+
+        # 10. Worksites
+        group_map = {g.code: g.id for g in (await session.execute(select(Group))).scalars().all()}
+        zone_map = {z.code: z.id for z in (await session.execute(select(Zone))).scalars().all()}
+
+        for r in sheet_to_rows.get("Worksites", []):
+            if r.action in ("NEW", "UPDATED", "REACTIVATED"):
+                j_num = r.normalized.get("job_number")
+                g_code = r.normalized.get("group_code")
+                z_code = r.normalized.get("zone_code")
+                g_id = group_map.get(str(g_code).strip()) if g_code else None
+                z_id = zone_map.get(str(z_code).strip()) if z_code else None
+
+                if not g_id or not z_id or not j_num:
+                    continue
+
+                outdoor = is_job_outdoor(j_num)
+                ws_stmt = select(Worksite).where(Worksite.job_number == j_num)
+                existing_ws = (await session.execute(ws_stmt)).scalar_one_or_none()
+
+                if existing_ws:
+                    if "job_name" in r.normalized:
+                        existing_ws.job_name = r.normalized["job_name"]
+                    if "renewal_reference" in r.normalized:
+                        existing_ws.renewal_reference = r.normalized["renewal_reference"]
+                    if "customer_type" in r.normalized:
+                        existing_ws.customer_type = r.normalized["customer_type"]
+                    if "contract_start_date" in r.normalized:
+                        existing_ws.start_date = to_date_obj(r.normalized["contract_start_date"])
+                    if "contract_end_date" in r.normalized:
+                        existing_ws.end_date = to_date_obj(r.normalized["contract_end_date"])
+                    if "labour_budget_amount" in r.normalized:
+                        existing_ws.budget_amount = r.normalized["labour_budget_amount"]
+                    existing_ws.is_active = True
+                else:
+                    session.add(
+                        Worksite(
+                            job_number=j_num,
+                            job_name=r.normalized.get("job_name", "Untitled Worksite"),
+                            renewal_reference=r.normalized.get("renewal_reference"),
+                            group_id=g_id,
+                            zone_id=z_id,
+                            customer_type=r.normalized.get("customer_type"),
+                            is_outdoor=outdoor,
+                            country=r.normalized.get("country", "AE"),
+                            contract_group_ref=r.normalized.get("contract_group_ref"),
+                            start_date=to_date_obj(r.normalized.get("contract_start_date")),
+                            end_date=to_date_obj(r.normalized.get("contract_end_date")),
+                            budget_amount=r.normalized.get("labour_budget_amount"),
+                        )
+                    )
+
+        await session.flush()
+
+        # 11. Job_Items
+        ws_id_map = {
+            w.job_number: w.id for w in (await session.execute(select(Worksite))).scalars().all()
+        }
+
+        for r in sheet_to_rows.get("Job_Items", []):
+            if r.action in ("NEW", "UPDATED", "REACTIVATED"):
+                j_num = r.normalized.get("job_number")
+                sub_code = r.normalized.get("sub_item_code")
+                ws_id = ws_id_map.get(str(j_num).strip()) if j_num else None
+
+                if not ws_id or not sub_code:
+                    continue
+
+                wp = r.normalized.get("weekday_pattern")
+                wp_list: list[str] | None = None
+                if wp:
+                    if isinstance(wp, list):
+                        wp_list = [str(x).strip().upper() for x in wp]
+                    elif isinstance(wp, str):
+                        wp_list = [x.strip().upper() for x in wp.split(",") if x.strip()]
+
+                ji_stmt = select(JobItem).where(
+                    JobItem.worksite_id == ws_id,
+                    JobItem.sub_item_code == str(sub_code).strip(),
+                )
+                existing_ji = (await session.execute(ji_stmt)).scalar_one_or_none()
+
+                item_obj: JobItem
+                if existing_ji:
+                    for f in (
+                        "staff_grade_description",
+                        "planned_grade_code",
+                        "frequency_unit",
+                        "occurrences_per_period",
+                        "period_interval",
+                        "required_staff_count",
+                        "hours_per_occurrence_per_staff",
+                        "deployment_type",
+                        "break_override_minutes",
+                    ):
+                        if f in r.normalized:
+                            setattr(existing_ji, f, r.normalized[f])
+                    if "start_date" in r.normalized:
+                        existing_ji.start_date = (
+                            to_date_obj(r.normalized["start_date"]) or existing_ji.start_date
+                        )
+                    if "end_date" in r.normalized:
+                        existing_ji.end_date = to_date_obj(r.normalized["end_date"])
+                    if wp_list is not None:
+                        existing_ji.weekday_pattern = wp_list
+                    existing_ji.is_active = True
+                    item_obj = existing_ji
+                else:
+                    item_obj = JobItem(
+                        worksite_id=ws_id,
+                        sub_item_code=str(sub_code).strip(),
+                        staff_grade_description=r.normalized.get(
+                            "staff_grade_description", "Worker"
+                        ),
+                        planned_grade_code=r.normalized.get("planned_grade_code", "G1A"),
+                        frequency_unit=r.normalized.get("frequency_unit", "WEEK"),
+                        occurrences_per_period=Decimal(
+                            str(r.normalized.get("occurrences_per_period", 1))
+                        ),
+                        period_interval=int(r.normalized.get("period_interval", 1)),
+                        weekday_pattern=wp_list,
+                        required_staff_count=int(r.normalized.get("required_staff_count", 1)),
+                        hours_per_occurrence_per_staff=Decimal(
+                            str(r.normalized.get("hours_per_occurrence_per_staff", 9))
+                        ),
+                        start_date=to_date_obj(r.normalized.get("start_date"))
+                        or datetime.now(UTC).date(),
+                        end_date=to_date_obj(r.normalized.get("end_date")),
+                        deployment_type=r.normalized.get("deployment_type", "PERMANENT"),
+                        break_override_minutes=r.normalized.get("break_override_minutes"),
+                    )
+                    session.add(item_obj)
+
+                await session.flush()
+                # Trigger automatic occurrence generation for the committed job item
+                await JobsService.generate_job_occurrences(
+                    session=session,
+                    job_item_id=item_obj.id,
+                    from_date=item_obj.start_date,
+                    to_date=None,
+                    actor_user_id=user_id,
+                    actor_role=actor_role,
+                )
 
         await session.flush()
 

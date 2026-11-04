@@ -57,6 +57,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const data = await res.json();
+    localStorage.setItem("fwt_token", data.access_token);
+    localStorage.setItem("fwt_user", JSON.stringify(data.user));
     setToken(data.access_token);
     setUser(data.user);
     return { must_change_password: data.must_change_password };

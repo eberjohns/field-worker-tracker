@@ -21,6 +21,7 @@ export const Login: React.FC = () => {
     setLoading(true);
     try {
       await login(username, password);
+      window.location.href = "/";
     } catch (err: any) {
       setError(err.message || "Failed to log in");
     } finally {

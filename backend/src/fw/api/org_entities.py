@@ -1,3 +1,4 @@
+import json
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
@@ -97,8 +98,14 @@ async def list_accommodations(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> list[AccommodationRead]:
-    accs = await OrgService.list_accommodations(session)
-    return [AccommodationRead.model_validate(a) for a in accs]
+    rows = await OrgService.list_accommodations(session)
+    items: list[AccommodationRead] = []
+    for acc, geojson_str in rows:
+        read = AccommodationRead.model_validate(acc)
+        if geojson_str:
+            read.boundary_geojson = json.loads(geojson_str)
+        items.append(read)
+    return items
 
 
 @router.post("/accommodations", response_model=AccommodationRead, status_code=201)

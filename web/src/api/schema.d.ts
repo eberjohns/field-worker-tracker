@@ -798,6 +798,274 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/worksites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Worksites
+         * @description List worksites with optional filtering.
+         */
+        get: operations["list_worksites_api_v1_worksites_get"];
+        put?: never;
+        /**
+         * Create Worksite
+         * @description Create a worksite record (Admin only).
+         */
+        post: operations["create_worksite_api_v1_worksites_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/worksites/{worksite_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Worksite Detail
+         * @description Get full details of a worksite including items and boundary GeoJSON.
+         */
+        get: operations["get_worksite_detail_api_v1_worksites__worksite_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Worksite
+         * @description Update worksite metadata with optimistic locking (Admin only).
+         */
+        patch: operations["update_worksite_api_v1_worksites__worksite_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/boundary-queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Boundary Queue
+         * @description Get boundary setup queue with progress and unset entities (D6).
+         */
+        get: operations["get_boundary_queue_api_v1_boundary_queue_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/worksites/{worksite_id}/boundary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Worksite Boundary
+         * @description Set or update worksite polygon boundary.
+         */
+        put: operations["update_worksite_boundary_api_v1_worksites__worksite_id__boundary_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/worksites/{worksite_id}/copy-boundary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Copy Boundary From
+         * @description Copy boundary polygon from source worksite into this worksite.
+         */
+        post: operations["copy_boundary_from_api_v1_worksites__worksite_id__copy_boundary_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/worksites/{worksite_id}/copy-boundary-to": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Copy Boundary To Targets
+         * @description Copy this worksite's boundary to one or more target worksites.
+         */
+        post: operations["copy_boundary_to_targets_api_v1_worksites__worksite_id__copy_boundary_to_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/accommodations/{accommodation_id}/boundary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Accommodation Boundary
+         * @description Update accommodation camp boundary polygon.
+         */
+        put: operations["update_accommodation_boundary_api_v1_accommodations__accommodation_id__boundary_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/worksites/{worksite_id}/job-items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Job Item
+         * @description Create a job item under a worksite.
+         */
+        post: operations["create_job_item_api_v1_worksites__worksite_id__job_items_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/job-items/{job_item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Job Item
+         * @description Update a job item with optimistic locking.
+         */
+        patch: operations["update_job_item_api_v1_job_items__job_item_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/job-items/{job_item_id}/generate-occurrences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate Occurrences
+         * @description Trigger occurrence generation for a job item across rolling horizon.
+         */
+        post: operations["generate_occurrences_api_v1_job_items__job_item_id__generate_occurrences_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/job-items/{job_item_id}/validation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Job Item Validation
+         * @description Get validation calculations for job item validation panel.
+         */
+        get: operations["get_job_item_validation_api_v1_job_items__job_item_id__validation_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/occurrences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Occurrences
+         * @description List job occurrences with filtering.
+         */
+        get: operations["list_occurrences_api_v1_occurrences_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/occurrences/{occurrence_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Occurrence
+         * @description Update occurrence due date or status.
+         */
+        patch: operations["update_occurrence_api_v1_occurrences__occurrence_id__patch"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -879,6 +1147,63 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** BoundaryCopyRequest */
+        BoundaryCopyRequest: {
+            /**
+             * Source Worksite Id
+             * Format: uuid
+             */
+            source_worksite_id: string;
+        };
+        /** BoundaryCopyToRequest */
+        BoundaryCopyToRequest: {
+            /** Target Worksite Ids */
+            target_worksite_ids: string[];
+        };
+        /** BoundaryQueueItemResponse */
+        BoundaryQueueItemResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Entity Type
+             * @description WORKSITE or ACCOMMODATION
+             */
+            entity_type: string;
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /** Zone Name */
+            zone_name?: string | null;
+            /** Country */
+            country: string;
+            /** Has Boundary */
+            has_boundary: boolean;
+        };
+        /** BoundaryQueueResponse */
+        BoundaryQueueResponse: {
+            /** Total Count */
+            total_count: number;
+            /** Done Count */
+            done_count: number;
+            /** Unset Count */
+            unset_count: number;
+            /** Items */
+            items: components["schemas"]["BoundaryQueueItemResponse"][];
+        };
+        /** BoundaryUpdateRequest */
+        BoundaryUpdateRequest: {
+            /**
+             * Boundary
+             * @description GeoJSON Polygon geometry (coordinates array: [ [ [lng, lat], ... ] ])
+             */
+            boundary: {
+                [key: string]: unknown;
+            };
         };
         /** CompanySettingRead */
         CompanySettingRead: {
@@ -1231,6 +1556,13 @@ export interface components {
             /** Version */
             version: number;
         };
+        /** GenerateOccurrencesRequest */
+        GenerateOccurrencesRequest: {
+            /** From Date */
+            from_date?: string | null;
+            /** To Date */
+            to_date?: string | null;
+        };
         /** GradeChangeRequest */
         GradeChangeRequest: {
             /** New Grade Code */
@@ -1422,6 +1754,233 @@ export interface components {
             normalized?: {
                 [key: string]: unknown;
             };
+        };
+        /** JobItemCreate */
+        JobItemCreate: {
+            /** Sub Item Code */
+            sub_item_code: string;
+            /** Staff Grade Description */
+            staff_grade_description: string;
+            /** Planned Grade Code */
+            planned_grade_code: string;
+            /**
+             * Frequency Unit
+             * @description WEEK, MONTH, QUARTER, YEAR
+             */
+            frequency_unit: string;
+            /** Occurrences Per Period */
+            occurrences_per_period: number | string;
+            /**
+             * Period Interval
+             * @default 1
+             */
+            period_interval: number;
+            /** Weekday Pattern */
+            weekday_pattern?: string[] | null;
+            /** Required Staff Count */
+            required_staff_count: number;
+            /** Hours Per Occurrence Per Staff */
+            hours_per_occurrence_per_staff: number | string;
+            /** Declared Activities Per Year */
+            declared_activities_per_year?: number | string | null;
+            /** Declared Total Hours Per Year */
+            declared_total_hours_per_year?: number | string | null;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /** End Date */
+            end_date?: string | null;
+            /**
+             * Deployment Type
+             * @description PERMANENT or REMOTE
+             */
+            deployment_type: string;
+            /** Break Override Minutes */
+            break_override_minutes?: number | null;
+        };
+        /** JobItemResponse */
+        JobItemResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Worksite Id
+             * Format: uuid
+             */
+            worksite_id: string;
+            /** Sub Item Code */
+            sub_item_code: string;
+            /** Staff Grade Description */
+            staff_grade_description: string;
+            /** Planned Grade Code */
+            planned_grade_code: string;
+            /** Frequency Unit */
+            frequency_unit: string;
+            /** Occurrences Per Period */
+            occurrences_per_period: string;
+            /** Period Interval */
+            period_interval: number;
+            /** Weekday Pattern */
+            weekday_pattern?: string[] | null;
+            /** Required Staff Count */
+            required_staff_count: number;
+            /** Hours Per Occurrence Per Staff */
+            hours_per_occurrence_per_staff: string;
+            /** Declared Activities Per Year */
+            declared_activities_per_year?: string | null;
+            /** Declared Total Hours Per Year */
+            declared_total_hours_per_year?: string | null;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /** End Date */
+            end_date?: string | null;
+            /** Deployment Type */
+            deployment_type: string;
+            /** Break Override Minutes */
+            break_override_minutes?: number | null;
+            /** Is Active */
+            is_active: boolean;
+            /** Version */
+            version: number;
+            /** Expected Activities Per Year */
+            expected_activities_per_year: string;
+            /** Expected Annual Hours */
+            expected_annual_hours: string;
+            /** Days Per Occurrence */
+            days_per_occurrence: number;
+            /** Job Unit Day Split */
+            job_unit_day_split: string[];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** JobItemUpdate */
+        JobItemUpdate: {
+            /** Sub Item Code */
+            sub_item_code?: string | null;
+            /** Staff Grade Description */
+            staff_grade_description?: string | null;
+            /** Planned Grade Code */
+            planned_grade_code?: string | null;
+            /** Frequency Unit */
+            frequency_unit?: string | null;
+            /** Occurrences Per Period */
+            occurrences_per_period?: number | string | null;
+            /** Period Interval */
+            period_interval?: number | null;
+            /** Weekday Pattern */
+            weekday_pattern?: string[] | null;
+            /** Required Staff Count */
+            required_staff_count?: number | null;
+            /** Hours Per Occurrence Per Staff */
+            hours_per_occurrence_per_staff?: number | string | null;
+            /** Declared Activities Per Year */
+            declared_activities_per_year?: number | string | null;
+            /** Declared Total Hours Per Year */
+            declared_total_hours_per_year?: number | string | null;
+            /** Start Date */
+            start_date?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            /** Deployment Type */
+            deployment_type?: string | null;
+            /** Break Override Minutes */
+            break_override_minutes?: number | null;
+            /** Is Active */
+            is_active?: boolean | null;
+            /**
+             * Version
+             * @description Optimistic locking version
+             */
+            version: number;
+        };
+        /** JobItemValidationResponse */
+        JobItemValidationResponse: {
+            /**
+             * Job Item Id
+             * Format: uuid
+             */
+            job_item_id: string;
+            /** Sub Item Code */
+            sub_item_code: string;
+            /** Staff Grade Description */
+            staff_grade_description: string;
+            /** Declared Activities Per Year */
+            declared_activities_per_year: string | null;
+            /** Calculated Activities Per Year */
+            calculated_activities_per_year: string;
+            /** Declared Total Hours Per Year */
+            declared_total_hours_per_year: string | null;
+            /** Calculated Annual Hours */
+            calculated_annual_hours: string;
+            /** Expected Occurrences Count */
+            expected_occurrences_count: number;
+            /** Days Per Occurrence */
+            days_per_occurrence: number;
+            /** Daily Hours Split */
+            daily_hours_split: string[];
+            /** Eligible Workers Count */
+            eligible_workers_count: number;
+            /** Difference Note */
+            difference_note: string | null;
+        };
+        /** JobOccurrenceResponse */
+        JobOccurrenceResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Job Item Id
+             * Format: uuid
+             */
+            job_item_id: string;
+            /**
+             * Window Start
+             * Format: date
+             */
+            window_start: string;
+            /**
+             * Window End
+             * Format: date
+             */
+            window_end: string;
+            /** Slot Index */
+            slot_index: number;
+            /** Due Date */
+            due_date: string | null;
+            /** Status */
+            status: string;
+            /** Source */
+            source: string;
+            /** Required Staff Count */
+            required_staff_count: number;
+            /** Required Hours Per Staff */
+            required_hours_per_staff: string;
+            /** Needs Review */
+            needs_review: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** JobOccurrenceUpdate */
+        JobOccurrenceUpdate: {
+            /** Due Date */
+            due_date?: string | null;
+            /** Status */
+            status?: string | null;
         };
         /** LoginRequest */
         LoginRequest: {
@@ -1866,6 +2425,205 @@ export interface components {
             field_name: string;
             /** Value */
             value: unknown;
+        };
+        /** WorksiteCreate */
+        WorksiteCreate: {
+            /**
+             * Job Number
+             * @description Job number matching 2 digits + letter (A/B/C) + 5 digits
+             */
+            job_number: string;
+            /** Job Name */
+            job_name: string;
+            /** Renewal Reference */
+            renewal_reference?: string | null;
+            /**
+             * Group Id
+             * Format: uuid
+             */
+            group_id: string;
+            /**
+             * Zone Id
+             * Format: uuid
+             */
+            zone_id: string;
+            /** Customer Type */
+            customer_type?: string | null;
+            /** Is Outdoor */
+            is_outdoor?: boolean | null;
+            /** Country */
+            country: string;
+            /** Contract Group Ref */
+            contract_group_ref?: string | null;
+            /** Start Date */
+            start_date?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            /** Budget Amount */
+            budget_amount?: number | string | null;
+        };
+        /** WorksiteDetailResponse */
+        WorksiteDetailResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Job Number */
+            job_number: string;
+            /** Job Name */
+            job_name: string;
+            /** Renewal Reference */
+            renewal_reference?: string | null;
+            /**
+             * Group Id
+             * Format: uuid
+             */
+            group_id: string;
+            /** Group Name */
+            group_name?: string | null;
+            /**
+             * Zone Id
+             * Format: uuid
+             */
+            zone_id: string;
+            /** Zone Name */
+            zone_name?: string | null;
+            /** Customer Type */
+            customer_type?: string | null;
+            /** Is Outdoor */
+            is_outdoor: boolean;
+            /** Country */
+            country: string;
+            /** Contract Group Ref */
+            contract_group_ref?: string | null;
+            /** Start Date */
+            start_date?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            /** Has Boundary */
+            has_boundary: boolean;
+            /** Rep Latitude */
+            rep_latitude?: string | null;
+            /** Rep Longitude */
+            rep_longitude?: string | null;
+            /** Budget Amount */
+            budget_amount?: string | null;
+            /** Is Active */
+            is_active: boolean;
+            /** Version */
+            version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Boundary Geojson */
+            boundary_geojson?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["JobItemResponse"][];
+        };
+        /** WorksiteResponse */
+        WorksiteResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Job Number */
+            job_number: string;
+            /** Job Name */
+            job_name: string;
+            /** Renewal Reference */
+            renewal_reference?: string | null;
+            /**
+             * Group Id
+             * Format: uuid
+             */
+            group_id: string;
+            /** Group Name */
+            group_name?: string | null;
+            /**
+             * Zone Id
+             * Format: uuid
+             */
+            zone_id: string;
+            /** Zone Name */
+            zone_name?: string | null;
+            /** Customer Type */
+            customer_type?: string | null;
+            /** Is Outdoor */
+            is_outdoor: boolean;
+            /** Country */
+            country: string;
+            /** Contract Group Ref */
+            contract_group_ref?: string | null;
+            /** Start Date */
+            start_date?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            /** Has Boundary */
+            has_boundary: boolean;
+            /** Rep Latitude */
+            rep_latitude?: string | null;
+            /** Rep Longitude */
+            rep_longitude?: string | null;
+            /** Budget Amount */
+            budget_amount?: string | null;
+            /** Is Active */
+            is_active: boolean;
+            /** Version */
+            version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** WorksiteUpdate */
+        WorksiteUpdate: {
+            /** Job Name */
+            job_name?: string | null;
+            /** Renewal Reference */
+            renewal_reference?: string | null;
+            /** Group Id */
+            group_id?: string | null;
+            /** Zone Id */
+            zone_id?: string | null;
+            /** Customer Type */
+            customer_type?: string | null;
+            /** Is Outdoor */
+            is_outdoor?: boolean | null;
+            /** Contract Group Ref */
+            contract_group_ref?: string | null;
+            /** Start Date */
+            start_date?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            /** Budget Amount */
+            budget_amount?: number | string | null;
+            /** Is Active */
+            is_active?: boolean | null;
+            /**
+             * Version
+             * @description Optimistic locking version
+             */
+            version: number;
         };
         /** ZoneCreate */
         ZoneCreate: {
@@ -3842,6 +4600,552 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SalaryStructureListItem"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_worksites_api_v1_worksites_get: {
+        parameters: {
+            query?: {
+                /** @description Search by job number or name */
+                q?: string | null;
+                group_id?: string | null;
+                zone_id?: string | null;
+                country?: string | null;
+                has_boundary?: boolean | null;
+                is_active?: boolean | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorksiteResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_worksite_api_v1_worksites_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorksiteCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorksiteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_worksite_detail_api_v1_worksites__worksite_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                worksite_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorksiteDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_worksite_api_v1_worksites__worksite_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                worksite_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorksiteUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorksiteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_boundary_queue_api_v1_boundary_queue_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoundaryQueueResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_worksite_boundary_api_v1_worksites__worksite_id__boundary_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                worksite_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BoundaryUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorksiteDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    copy_boundary_from_api_v1_worksites__worksite_id__copy_boundary_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                worksite_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BoundaryCopyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorksiteDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    copy_boundary_to_targets_api_v1_worksites__worksite_id__copy_boundary_to_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                worksite_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BoundaryCopyToRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorksiteResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_accommodation_boundary_api_v1_accommodations__accommodation_id__boundary_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                accommodation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BoundaryUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_job_item_api_v1_worksites__worksite_id__job_items_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                worksite_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JobItemCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobItemResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_job_item_api_v1_job_items__job_item_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                job_item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JobItemUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobItemResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_occurrences_api_v1_job_items__job_item_id__generate_occurrences_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                job_item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["GenerateOccurrencesRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOccurrenceResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_job_item_validation_api_v1_job_items__job_item_id__validation_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                job_item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobItemValidationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_occurrences_api_v1_occurrences_get: {
+        parameters: {
+            query?: {
+                job_item_id?: string | null;
+                worksite_id?: string | null;
+                from_date?: string | null;
+                to_date?: string | null;
+                status?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOccurrenceResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_occurrence_api_v1_occurrences__occurrence_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                occurrence_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JobOccurrenceUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOccurrenceResponse"];
                 };
             };
             /** @description Validation Error */

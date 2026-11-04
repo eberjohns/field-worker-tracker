@@ -19,6 +19,9 @@ import { AuditLogs } from "./routes/AuditLogs";
 import { Login } from "./routes/Login";
 import { Imports } from "./routes/Imports";
 import { SalaryStructures } from "./routes/SalaryStructures";
+import { Worksites } from "./routes/Worksites";
+import { WorksiteDetail } from "./routes/WorksiteDetail";
+import { Boundaries } from "./routes/Boundaries";
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -112,11 +115,32 @@ const salaryStructuresRoute = createRoute({
   component: SalaryStructures,
 });
 
+const worksitesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/worksites",
+  component: Worksites,
+});
+
+const worksiteDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/worksites/$worksiteId",
+  component: WorksiteDetail,
+});
+
+const boundariesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/boundaries",
+  component: Boundaries,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
   employeesRoute,
   employeeDetailRoute,
+  worksitesRoute,
+  worksiteDetailRoute,
+  boundariesRoute,
   usersRoute,
   auditLogsRoute,
   liveRoute,

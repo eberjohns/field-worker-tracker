@@ -83,7 +83,8 @@ export const SalaryStructures: React.FC = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
-        setSalaries(await res.json());
+        const data = await res.json();
+        setSalaries(data.filter((s: any) => s.tally_id !== "ADMIN001"));
       }
     } catch {
       // ignore

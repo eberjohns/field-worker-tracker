@@ -30,15 +30,15 @@ All jobs and their items are defined, outdoor/indoor flagged, boundaries are dra
 - Assignments and scheduling (Phase 05)
 
 ## Checklist (tick each before asking for review)
-- [ ] Gate documented in ADR-006 and the dependency register
-- [ ] Frequency table in 04 gives the expected activities per year
-- [ ] Large hours split into 9-hour days (42.688 h = 4 x 9 + 6.688)
-- [ ] Regenerating keeps assigned/completed occurrences
-- [ ] Hyphenated or combined job numbers are rejected on import
-- [ ] Boundary queue counts progress; copy-to works; invalid polygons refused
-- [ ] Budget-only staff types never produce occurrences
-- [ ] Docs updated in the same change (`.agents/rules/documentation.md`), ADR written for any design decision, CHANGELOG entry
-- [ ] Pull request opened with the template; nothing merged by the agent
+- [x] Gate documented in ADR-006 and the dependency register
+- [x] Frequency table in 04 gives the expected activities per year
+- [x] Large hours split into 9-hour days (42.688 h = 4 x 9 + 6.688)
+- [x] Regenerating keeps assigned/completed occurrences
+- [x] Hyphenated or combined job numbers are rejected on import
+- [x] Boundary queue counts progress; copy-to works; invalid polygons refused
+- [x] Budget-only staff types never produce occurrences
+- [x] Docs updated in the same change (`.agents/rules/documentation.md`), ADR written for any design decision, CHANGELOG entry
+- [x] Pull request opened with the template; nothing merged by the agent
 
 ## Demo script
 - Import two jobs with items, draw one boundary, copy it to the second, view occurrences for a month.

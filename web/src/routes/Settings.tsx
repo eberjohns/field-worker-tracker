@@ -14,6 +14,8 @@ import {
   ArrowRight,
   Sparkles,
   Info,
+  Database,
+  Trash2,
 } from "lucide-react";
 
 interface SettingItem {
@@ -111,8 +113,13 @@ interface ResolvedSchedule {
 export const Settings: React.FC = () => {
   const { token, user } = useAuth();
   const [activeTab, setActiveTab] = useState<
-    "company" | "timerules" | "checktool" | "holidays" | "budget" | "password" | "consent"
+    "company" | "timerules" | "checktool" | "holidays" | "budget" | "password" | "consent" | "database"
   >("company");
+
+  // Reset database state
+  const [resetModalOpen, setResetModalOpen] = useState(false);
+  const [resetConfirmText, setResetConfirmText] = useState("");
+  const [resetting, setResetting] = useState(false);
 
   const [countryFilter, setCountryFilter] = useState<string>("ALL");
   const [asOfDate, setAsOfDate] = useState<string>(new Date().toISOString().split("T")[0]);
@@ -542,6 +549,39 @@ export const Settings: React.FC = () => {
     return `${hrs.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}`;
   };
 
+  const handleResetDatabase = async () => {
+    if (resetConfirmText !== "RESET") return;
+    setResetting(true);
+    setErrorMessage(null);
+    setStatusMessage(null);
+    try {
+      const res = await fetch("/api/v1/settings/reset-database", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to reset database.");
+      }
+      const data = await res.json();
+      setStatusMessage(data.message || "Database reset to clean bootstrap state successfully.");
+      setResetModalOpen(false);
+      setResetConfirmText("");
+      fetchSettings();
+      fetchTimeRules();
+      fetchHolidays();
+      fetchConsentPolicies();
+      fetchEmployees();
+    } catch (err: any) {
+      setErrorMessage(err.message || "Failed to reset database.");
+    } finally {
+      setResetting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -597,6 +637,9 @@ export const Settings: React.FC = () => {
           { id: "budget", label: "Budget-Only Roles", icon: Users },
           { id: "password", label: "Default Password", icon: KeyRound },
           { id: "consent", label: "Consent Notice", icon: ShieldCheck },
+          ...(user?.role === "ADMIN"
+            ? [{ id: "database", label: "Clear Database", icon: Database }]
+            : []),
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -1249,6 +1292,43 @@ export const Settings: React.FC = () => {
         </div>
       )}
 
+      {/* TAB 8: Clear Database (Admin Only) */}
+      {activeTab === "database" && user?.role === "ADMIN" && (
+        <div className="space-y-6 max-w-4xl">
+          <div className="bg-red-50 border border-red-200 rounded-xl p-6 space-y-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <h3 className="text-base font-bold text-red-900">
+                  Danger Zone: Reset Database to Clean State
+                </h3>
+                <p className="text-sm text-red-700 mt-1 leading-relaxed">
+                  This administrative operation completely clears all operational tables, including worksites,
+                  job schedules, occurrence slots, employee profiles, salaries, reporting structures, documents,
+                  and mobile device sessions.
+                </p>
+                <div className="mt-3 bg-white/80 border border-red-200 rounded-lg p-3 text-xs text-red-800 space-y-1 font-mono">
+                  <div>• Retains bootstrap administrator: <strong>ADMIN001</strong></div>
+                  <div>• Retains standard company default settings (password rules, etc.)</div>
+                  <div>• All transactional data and master records will be permanently wiped</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setResetModalOpen(true)}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg shadow-sm flex items-center gap-2 transition"
+              >
+                <Trash2 className="w-4 h-4" />
+                Clear Database
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL: Edit Setting */}
       {editSettingModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -1691,6 +1771,53 @@ export const Settings: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Confirm Database Reset */}
+      {resetModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-red-100 animate-in fade-in zoom-in-95">
+            <div className="flex items-center gap-3 text-red-600">
+              <AlertCircle className="w-6 h-6 flex-shrink-0" />
+              <h3 className="text-lg font-bold text-slate-900">Confirm Complete Database Reset</h3>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              This action cannot be undone. All imported worksites, employees, attendance occurrences, and salaries will be permanently deleted.
+            </p>
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-900">
+              Please type <strong className="font-mono font-bold">RESET</strong> in the field below to confirm:
+            </div>
+            <input
+              type="text"
+              placeholder="Type RESET"
+              value={resetConfirmText}
+              onChange={(e) => setResetConfirmText(e.target.value)}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-red-500"
+            />
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setResetModalOpen(false);
+                  setResetConfirmText("");
+                }}
+                disabled={resetting}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleResetDatabase}
+                disabled={resetConfirmText !== "RESET" || resetting}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-lg shadow-sm flex items-center gap-2 transition"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                {resetting ? "Resetting Database..." : "Permanently Reset Database"}
+              </button>
+            </div>
           </div>
         </div>
       )}

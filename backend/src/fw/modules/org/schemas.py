@@ -74,6 +74,8 @@ class AccommodationRead(BaseModel):
     address: str | None = None
     rep_latitude: Decimal | None = None
     rep_longitude: Decimal | None = None
+    has_boundary: bool = False
+    boundary_geojson: dict[str, Any] | None = None
     is_active: bool
     version: int
 
