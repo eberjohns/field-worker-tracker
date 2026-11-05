@@ -198,6 +198,8 @@ class SchedulingService:
         emp = await self.session.get(Employee, payload.employee_id)
         if not emp or not emp.is_active:
             raise AppError(code="NOT_FOUND", message=f"Active employee {payload.employee_id} not found.", status_code=404)
+        if emp.role == "ADMIN" or emp.tally_id == "ADMIN001":
+            raise AppError(code="VALIDATION_ERROR", message="System Administrator cannot be assigned to field work.", status_code=422)
 
         item = await self.session.get(
             JobItem,
@@ -438,6 +440,8 @@ class SchedulingService:
         emp = await self.session.get(Employee, payload.employee_id)
         if not emp:
             raise AppError(code="NOT_FOUND", message=f"Employee {payload.employee_id} not found.", status_code=404)
+        if emp.role == "ADMIN" or emp.tally_id == "ADMIN001":
+            raise AppError(code="VALIDATION_ERROR", message="System Administrator cannot be assigned to field work.", status_code=422)
 
         item = await self.session.get(
             JobItem,
@@ -816,10 +820,12 @@ class SchedulingService:
             required_hours=req_hours,
         )
 
-        # Fetch active workers in country
+        # Fetch active workers in country (excluding Admin system users)
         emp_stmt = select(Employee).where(
             Employee.country == item.worksite.country,
             Employee.is_active.is_(True),
+            Employee.role != "ADMIN",
+            Employee.tally_id != "ADMIN001",
         )
         employees = (await self.session.execute(emp_stmt)).scalars().all()
 
@@ -996,10 +1002,14 @@ class SchedulingService:
         """Fetch weekly roster grid (Workers x Days) with site chips and day markers."""
         week_end = week_start + timedelta(days=6)
 
-        # Fetch employees matching scope and filters
+        # Fetch employees matching scope and filters (excluding Admin system users)
         emp_stmt = (
             select(Employee)
-            .where(Employee.is_active.is_(True))
+            .where(
+                Employee.is_active.is_(True),
+                Employee.role != "ADMIN",
+                Employee.tally_id != "ADMIN001",
+            )
             .options(selectinload(Employee.accommodation))
         )
         if staff_type:

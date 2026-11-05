@@ -546,7 +546,9 @@ async def test_300_workers_roster_performance(admin_client, sample_test_data):
     """Check performance requirement: roster for 300 workers loads in under 2 seconds."""
     # Seed 300 active workers if needed
     async with async_session_factory() as session:
-        count_stmt = select(func.count(Employee.id)).where(Employee.is_active.is_(True))
+        count_stmt = select(func.count(Employee.id)).where(
+            Employee.is_active.is_(True), Employee.role != "ADMIN"
+        )
         current_count = (await session.execute(count_stmt)).scalar() or 0
 
         to_create = max(0, 300 - current_count)
