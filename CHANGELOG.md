@@ -3,6 +3,38 @@ All notable changes. Format: Keep a Changelog. Mobile-contract changes are also 
 
 ## [Unreleased]
 ### Added
+- PHASE-05 (Planner: yearly plan and weekly roster):
+  - Pure domain rules for scheduling (`fw.rules.scheduling`):
+    - `assignment.py`: Date generator for standing assignments across repeating weekday patterns and holiday skips.
+    - `markers.py`: Day marker evaluator producing `SKIPPED` (public holiday), `WEEKLY_OFF`, `ON_LEAVE`, `TO_BE_COVERED`, and `FREE`.
+    - `validation.py`: Assignment validation engine checking `PERMANENT_EXCLUSIVE`, duplicate assignment, `OVER_STANDARD_HOURS`, `UNDER_STANDARD_HOURS`, `GRADE_GROUP_MISMATCH`, and `PAST_DATE` (Admin allowed, non-admin blocked).
+    - `suggestions.py`: Candidate recommendation and ranking engine implementing DEC-52 (same grade-group first-class eligibility, exact staff type match first with asterisk `*`, site familiarity in past 14 days, supervisor affinity, and available free capacity).
+    - `allocation.py`: Capacity calculation per day/week/month against standard hours from salary structure (default 8 h), including Ramadan -120 min reduction.
+    - `excel.py`: Pure openpyxl roster export matching the client's weekly schedule layout with worker rows, day cells, and hours summaries.
+  - Database migration `0006_planner_and_scheduling.py` introducing `standing_assignments` and `scheduled_work` tables with partial unique indexes, check constraints (`ck_scheduled_work_sequence_positive`), and optimistic locking.
+  - Scheduling module (`fw.modules.scheduling`):
+    - 13-month rolling horizon generation of daily scheduled work from standing assignments linked to occurrences.
+    - Assignment ending lifecycle (`POST /standing-assignments/{id}/end`) with future unstarted row cancellation and audit logging.
+    - Occurrence-linked scheduled work CRUD, dry-run validation, and two-step collision-free sequence reordering.
+    - Weekly roster aggregation with site chips, day markers, and row totals vs standard hours.
+    - Job coverage matrix with assigned vs required staffing and under-staffed slot tracking.
+    - Binary Excel streaming (`/roster?format=xlsx`).
+  - Web API endpoints mounted under `/api/v1`:
+    - `GET /roster`: Weekly roster JSON or streaming Excel export (`?format=xlsx`).
+    - `GET /schedule/coverage`: Job coverage matrix for a week.
+    - `GET /workers/{id}/allocation`: Worker allocated hours per day/week/month vs standard hours.
+    - `GET /occurrences/{id}/recommendations` & `GET /job-items/{id}/recommendations`: Ranked candidate suggestions.
+    - `GET /standing-assignments`, `POST /standing-assignments`, `POST /standing-assignments/{id}/end`: Year plan standing assignments.
+    - `POST /scheduled-work`, `PATCH /scheduled-work/{id}`, `POST /scheduled-work/reorder`, `POST /scheduled-work/validate`: Scheduled work operations.
+  - React Web Dashboard Planner (`web/src/routes/Planner.tsx` and `web/src/features/planner`):
+    - Weekly Roster view with week navigation, compact/expanded chip modes, problems-only filter, and cell click assignment trigger.
+    - Job Coverage view showing site-by-site staffing gaps and TO_BE_COVERED slots.
+    - Year Plan view with standing assignments table and end-assignment action.
+    - Assign Modal with candidate search, dry-run validation warnings, and visit sequence reordering with drag & drop and up/down buttons.
+    - Worker Capacity Side Panel displaying day/week/month allocated hours against effective standard hours (including Ramadan adjustment) and eligible candidate ranking.
+    - Excel export button downloading `.xlsx` roster formatted to the client's specification.
+  - ADR-014: Planner standing assignments, scheduled work, and roster markers.
+  - Integration tests and 300-worker roster performance benchmark (< 2s) in `backend/tests/test_scheduling_api.py`.
 - PHASE-04 (Sites, boundaries and job items):
   - Map-stack compatibility gate (ADR-006): installed and verified `maplibre-gl@6.16.0`, `react-map-gl@8.1.3`, `terra-draw@1.39.0`, `terra-draw-maplibre-gl-adapter@1.5.0`, and modular Turf packages (`@turf/area`, `@turf/boolean-valid`, `@turf/kinks`, `@turf/centroid`). Interactive polygon drawing, vertex editing, area computation, and self-intersection checks verified.
   - Pure domain rules for jobs (`fw.rules.jobs`):

@@ -17,6 +17,7 @@ One decision per file, numbered. Use the `write-adr` skill. Status: Proposed, Ac
 | 011 | [Transitive scope resolution and session token rotation](011-transitive-scope-and-session-tokens.md) | Accepted |
 | 012 | [Time rules resolver hierarchy, field inheritance, and scope](012-time-rules-resolver-and-scope.md) | Accepted |
 | 013 | [Import pipeline framework, registry single-source, and salary structures](013-import-pipeline-and-salary-structures.md) | Accepted |
+| 014 | [Planner: standing assignments, scheduled work, and roster markers](014-planner-standing-assignments-and-markers.md) | Accepted |
 
 See also [decision-register.md](decision-register.md) for business decisions awaiting client confirmation.
 

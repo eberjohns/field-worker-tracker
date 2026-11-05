@@ -83,7 +83,7 @@ Roles: A = Admin, E = Engineer, S = Superintendent, V = Supervisor. "scope" = li
 | GET/POST/PATCH | /standing-assignments | A E (write), scope (read) | year plan: worker <-> job item for a date range; `POST /standing-assignments/{id}/end` ends it from a date |
 | GET | /workers/{id}/allocation?from=&to= | scope | allocated hours per day/week/month against standard hours (feeds the side panel) |
 | GET | /schedule/employees/{id}?week_start= | scope | worker view: ordered daily assignments, weekly hours, leave taken |
-| GET | /occurrences/{id}/recommendations?date= | A E | ranked candidates with reasons and warnings |
+| GET | /occurrences/{id}/recommendations?date=, /job-items/{id}/recommendations?date= | A E | ranked candidates with reasons and warnings |
 | POST | /scheduled-work | A E | create assignment (warnings + ack) |
 | PATCH | /scheduled-work/{id} | A E | change hours/sequence/cancel |
 | POST | /scheduled-work/reorder | A E | `{ employee_id, work_date, ordered_ids }` |

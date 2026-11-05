@@ -30,15 +30,15 @@ Admin and Engineers build the year plan with standing assignments and see/adjust
 - Sync to phones (Phase 07)
 
 ## Checklist (tick each before asking for review)
-- [ ] Roster reproduces the client's sample week layout
-- [ ] Daily and weekly totals reconcile with the side panel
-- [ ] Holiday shows SKIPPED; weekly off and leave show markers; an unavailable slot shows TO_BE_COVERED
-- [ ] PERMANENT job blocks other assignments that day; REMOTE jobs combine up to standard hours
-- [ ] Over/under standard hours show warnings/info
-- [ ] Excel export opens with the same rows
-- [ ] Performance: roster for 300 workers loads in under 2 s
-- [ ] Docs updated in the same change (`.agents/rules/documentation.md`), ADR written for any design decision, CHANGELOG entry
-- [ ] Pull request opened with the template; nothing merged by the agent
+- [x] Roster reproduces the client's sample week layout
+- [x] Daily and weekly totals reconcile with the side panel
+- [x] Holiday shows SKIPPED; weekly off and leave show markers; an unavailable slot shows TO_BE_COVERED
+- [x] PERMANENT job blocks other assignments that day; REMOTE jobs combine up to standard hours
+- [x] Over/under standard hours show warnings/info
+- [x] Excel export opens with the same rows
+- [x] Performance: roster for 300 workers loads in under 2 s
+- [x] Docs updated in the same change (`.agents/rules/documentation.md`), ADR written for any design decision, CHANGELOG entry
+- [x] Pull request opened with the template; nothing merged by the agent
 
 ## Demo script
 - Create a standing team for a daily job, view the roster for a week with a holiday, assign a REMOTE job, export to Excel.

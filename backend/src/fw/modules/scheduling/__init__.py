@@ -1,3 +1,54 @@
 """Public interface for scheduling module."""
 
-__all__: list[str] = []
+from fw.modules.scheduling.models import ScheduledWork, StandingAssignment
+from fw.modules.scheduling.schemas import (
+    CandidateRecommendationRead,
+    CoverageDayCell,
+    CoverageItemRow,
+    CoverageResponse,
+    CoverageWorksiteRow,
+    RosterDayCell,
+    RosterResponse,
+    RosterSiteChip,
+    RosterWorkerRow,
+    ScheduledWorkCreate,
+    ScheduledWorkRead,
+    ScheduledWorkReorderRequest,
+    ScheduledWorkUpdate,
+    ScheduledWorkValidateRequest,
+    StandingAssignmentCreate,
+    StandingAssignmentEndRequest,
+    StandingAssignmentRead,
+    StandingAssignmentUpdate,
+    ValidationIssueRead,
+    ValidationReportRead,
+    WorkerAllocationResponse,
+)
+from fw.modules.scheduling.service import SchedulingService
+
+__all__: list[str] = [
+    "CandidateRecommendationRead",
+    "CoverageDayCell",
+    "CoverageItemRow",
+    "CoverageResponse",
+    "CoverageWorksiteRow",
+    "RosterDayCell",
+    "RosterResponse",
+    "RosterSiteChip",
+    "RosterWorkerRow",
+    "ScheduledWork",
+    "ScheduledWorkCreate",
+    "ScheduledWorkRead",
+    "ScheduledWorkReorderRequest",
+    "ScheduledWorkUpdate",
+    "ScheduledWorkValidateRequest",
+    "SchedulingService",
+    "StandingAssignment",
+    "StandingAssignmentCreate",
+    "StandingAssignmentEndRequest",
+    "StandingAssignmentRead",
+    "StandingAssignmentUpdate",
+    "ValidationIssueRead",
+    "ValidationReportRead",
+    "WorkerAllocationResponse",
+]
