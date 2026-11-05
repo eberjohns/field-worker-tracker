@@ -487,20 +487,22 @@ export const Planner: React.FC = () => {
       </div>
 
       {/* Assignment Modal */}
-      <AssignModal
-        isOpen={isAssignModalOpen}
-        onClose={() => setIsAssignModalOpen(false)}
-        onSuccess={() => {
-          fetchData();
-          if (selectedWorkerId) fetchWorkerAllocation(selectedWorkerId);
-        }}
-        token={token}
-        initialWorkerId={modalInitialWorkerId}
-        initialDate={modalInitialDate}
-        initialJobItemId={modalInitialJobItemId}
-        availableJobItems={availableJobItems}
-        candidates={candidates}
-      />
+      {isAssignModalOpen && (
+        <AssignModal
+          isOpen={isAssignModalOpen}
+          onClose={() => setIsAssignModalOpen(false)}
+          onSuccess={() => {
+            fetchData();
+            if (selectedWorkerId) fetchWorkerAllocation(selectedWorkerId);
+          }}
+          token={token}
+          initialWorkerId={modalInitialWorkerId}
+          initialDate={modalInitialDate}
+          initialJobItemId={modalInitialJobItemId}
+          availableJobItems={availableJobItems}
+          candidates={candidates}
+        />
+      )}
     </div>
   );
 };

@@ -997,7 +997,11 @@ class SchedulingService:
         week_end = week_start + timedelta(days=6)
 
         # Fetch employees matching scope and filters
-        emp_stmt = select(Employee).where(Employee.is_active.is_(True))
+        emp_stmt = (
+            select(Employee)
+            .where(Employee.is_active.is_(True))
+            .options(selectinload(Employee.accommodation))
+        )
         if staff_type:
             emp_stmt = emp_stmt.where(Employee.staff_grade_description.ilike(f"%{staff_type}%"))
         if grade_group:

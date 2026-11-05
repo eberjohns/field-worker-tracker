@@ -81,14 +81,20 @@ export const AssignModal: React.FC<AssignModalProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!isOpen) return;
     if (initialWorkerId) setSelectedWorkerId(initialWorkerId);
     if (initialJobItemId) setSelectedJobItemId(initialJobItemId);
     if (initialDate) setTargetDate(initialDate);
-    setVisitList(existingVisitsForDate);
-  }, [initialWorkerId, initialJobItemId, initialDate, existingVisitsForDate]);
+    if (existingVisitsForDate && existingVisitsForDate.length > 0) {
+      setVisitList(existingVisitsForDate);
+    } else {
+      setVisitList([]);
+    }
+  }, [isOpen, initialWorkerId, initialJobItemId, initialDate]);
 
   // Pre-fill hours from selected job item
   useEffect(() => {
+    if (!isOpen || !selectedJobItemId) return;
     const item = availableJobItems.find((j) => j.id === selectedJobItemId);
     if (item) {
       setAssignedHours(item.hours_per_occurrence);
@@ -96,7 +102,7 @@ export const AssignModal: React.FC<AssignModalProps> = ({
         setSelectedWeekdays(item.weekday_pattern);
       }
     }
-  }, [selectedJobItemId, availableJobItems]);
+  }, [isOpen, selectedJobItemId]);
 
   // Run dry-run validation on change
   useEffect(() => {
