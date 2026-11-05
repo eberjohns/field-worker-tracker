@@ -44,6 +44,13 @@ export interface RosterResponse {
   workers: RosterWorkerRow[];
 }
 
+export interface AssignedWorkerSummary {
+  employee_id: string;
+  name: string;
+  tally_id: string;
+  scheduled_work_id: string;
+}
+
 export interface CoverageDayCell {
   work_date: string;
   weekday: string;
@@ -51,6 +58,7 @@ export interface CoverageDayCell {
   assigned_staff_count: number;
   is_to_be_covered: boolean;
   assigned_workers: string[];
+  assigned_details?: AssignedWorkerSummary[];
 }
 
 export interface CoverageItemRow {
@@ -68,6 +76,8 @@ export interface CoverageWorksiteRow {
   worksite_id: string;
   job_number: string;
   job_name: string;
+  customer_type?: string | null;
+  is_outdoor?: boolean;
   items: CoverageItemRow[];
 }
 
@@ -129,6 +139,9 @@ export interface CandidateRecommendation {
   today_allocated_hours: number | string;
   weekly_allocated_hours: number | string;
   monthly_allocated_hours: number | string;
+  supervisor_id?: string | null;
+  supervisor_name?: string | null;
+  shares_site_group?: boolean;
 }
 
 export interface ValidationIssue {

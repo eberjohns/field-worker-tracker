@@ -2,45 +2,30 @@ import React, { useState, useEffect } from "react";
 import {
   X,
   AlertTriangle,
-  ArrowUp,
-  ArrowDown,
-  GripVertical,
+  Users,
+  CheckCircle2,
+  Trash2,
+  Zap,
+  Calendar,
   Layers,
+  Star,
+  Loader2,
 } from "lucide-react";
-import { CandidateRecommendation, ValidationReport } from "./types";
-
-interface JobItemOption {
-  id: string;
-  worksite_id: string;
-  job_number: string;
-  job_name: string;
-  sub_item_code: string;
-  staff_grade_description: string;
-  planned_grade_code: string;
-  deployment_type: string;
-  hours_per_occurrence: number;
-  weekday_pattern?: string[] | null;
-}
-
-interface ExistingVisitItem {
-  id: string;
-  job_number: string;
-  sub_item_code: string;
-  assigned_hours: number;
-  sequence: number;
-}
+import { CoverageItemRow, CoverageDayCell, CandidateRecommendation } from "./types";
 
 interface AssignModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
   token: string | null;
+  targetJobItem?: CoverageItemRow | null;
+  targetDay?: CoverageDayCell | null;
+  worksiteInfo?: { id: string; job_number: string; job_name: string } | null;
+  // Fallbacks if opened from worker view
   initialWorkerId?: string | null;
-  initialDate?: string | null;
   initialJobItemId?: string | null;
-  availableJobItems: JobItemOption[];
-  candidates: CandidateRecommendation[];
-  existingVisitsForDate?: ExistingVisitItem[];
+  initialDate?: string | null;
+  availableJobItems?: any[];
 }
 
 export const AssignModal: React.FC<AssignModalProps> = ({
@@ -48,199 +33,188 @@ export const AssignModal: React.FC<AssignModalProps> = ({
   onClose,
   onSuccess,
   token,
+  targetJobItem,
+  targetDay,
+  worksiteInfo,
   initialWorkerId,
-  initialDate,
   initialJobItemId,
-  availableJobItems,
-  candidates,
-  existingVisitsForDate = [],
+  initialDate,
+  availableJobItems = [],
 }) => {
-  const [assignmentMode, setAssignmentMode] = useState<"SINGLE" | "RANGE" | "STANDING">("SINGLE");
-  const [selectedWorkerId, setSelectedWorkerId] = useState<string>(initialWorkerId || "");
-  const [selectedJobItemId, setSelectedJobItemId] = useState<string>(initialJobItemId || "");
-  const [targetDate, setTargetDate] = useState<string>(
-    initialDate || new Date().toISOString().split("T")[0]
-  );
-  const [endDate, setEndDate] = useState<string>("");
-  const [assignedHours, setAssignedHours] = useState<number>(8.0);
-  const [selectedWeekdays, setSelectedWeekdays] = useState<string[]>([
-    "MON",
-    "TUE",
-    "WED",
-    "THU",
-    "FRI",
-    "SAT",
-  ]);
-
-  // Reordering state for visits on targetDate
-  const [visitList, setVisitList] = useState<ExistingVisitItem[]>(existingVisitsForDate);
-  const [validationReport, setValidationReport] = useState<ValidationReport | null>(null);
-  const [acknowledgeWarnings, setAcknowledgeWarnings] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [validating, setValidating] = useState(false);
+  const [candidates, setCandidates] = useState<CandidateRecommendation[]>([]);
+  const [selectedWorkerIds, setSelectedWorkerIds] = useState<string[]>([]);
+  const [assignedDetails, setAssignedDetails] = useState<any[]>([]);
+  const [isStandingTeam, setIsStandingTeam] = useState<boolean>(false);
+  const [loadingCandidates, setLoadingCandidates] = useState<boolean>(false);
+  const [submitting, setSubmitting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Active Job Item and Date resolution
+  const activeJobItem =
+    targetJobItem ||
+    (initialJobItemId ? availableJobItems.find((j) => j.id === initialJobItemId) : null);
+
+  const activeDate =
+    targetDay?.work_date || initialDate || new Date().toISOString().split("T")[0];
+
+  const requiredCount = activeJobItem?.required_staff_count || 1;
+  const currentAssignedCount = assignedDetails.length;
+  const neededCount = Math.max(0, requiredCount - currentAssignedCount);
+
+  const authHeaders = {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+
+  // Fetch candidates and sync current assignments when opened
   useEffect(() => {
     if (!isOpen) return;
-    if (initialWorkerId) setSelectedWorkerId(initialWorkerId);
-    if (initialJobItemId) setSelectedJobItemId(initialJobItemId);
-    if (initialDate) setTargetDate(initialDate);
-    if (existingVisitsForDate && existingVisitsForDate.length > 0) {
-      setVisitList(existingVisitsForDate);
-    } else {
-      setVisitList([]);
-    }
-  }, [isOpen, initialWorkerId, initialJobItemId, initialDate]);
 
-  // Pre-fill hours from selected job item
-  useEffect(() => {
-    if (!isOpen || !selectedJobItemId) return;
-    const item = availableJobItems.find((j) => j.id === selectedJobItemId);
-    if (item) {
-      setAssignedHours(item.hours_per_occurrence);
-      if (item.weekday_pattern && item.weekday_pattern.length > 0) {
-        setSelectedWeekdays(item.weekday_pattern);
-      }
-    }
-  }, [isOpen, selectedJobItemId]);
+    setErrorMsg(null);
+    setSelectedWorkerIds(initialWorkerId ? [initialWorkerId] : []);
+    setAssignedDetails(targetDay?.assigned_details || []);
 
-  // Run dry-run validation on change
-  useEffect(() => {
-    if (!selectedWorkerId || !selectedJobItemId || !targetDate || assignmentMode !== "SINGLE") {
-      setValidationReport(null);
-      return;
-    }
+    const fetchRecommendations = async () => {
+      const jId = activeJobItem?.job_item_id || activeJobItem?.id || initialJobItemId;
+      if (!jId) return;
 
-    const runValidation = async () => {
-      setValidating(true);
-      setErrorMsg(null);
+      setLoadingCandidates(true);
       try {
-        const res = await fetch("/api/v1/scheduled-work/validate", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify({
-            employee_id: selectedWorkerId,
-            job_item_id: selectedJobItemId,
-            work_date: targetDate,
-            assigned_hours: assignedHours,
-          }),
-        });
+        const res = await fetch(
+          `/api/v1/job-items/${jId}/recommendations?date=${activeDate}`,
+          { headers: authHeaders }
+        );
         if (res.ok) {
-          const data: ValidationReport = await res.json();
-          setValidationReport(data);
+          const data: CandidateRecommendation[] = await res.json();
+          setCandidates(data);
+        } else {
+          const err = await res.json();
+          setErrorMsg(err.detail || "Failed to load candidate recommendations.");
         }
-      } catch (err) {
-        console.error("Validation error:", err);
+      } catch (err: any) {
+        setErrorMsg(err.message || "Failed to load candidate recommendations.");
       } finally {
-        setValidating(false);
+        setLoadingCandidates(false);
       }
     };
 
-    const timer = setTimeout(runValidation, 300);
-    return () => clearTimeout(timer);
-  }, [selectedWorkerId, selectedJobItemId, targetDate, assignedHours, assignmentMode, token]);
+    fetchRecommendations();
+  }, [isOpen, activeJobItem?.job_item_id, activeJobItem?.id, initialJobItemId, activeDate]);
 
   if (!isOpen) return null;
 
-  // Move visit up/down
-  const moveVisit = (index: number, direction: "up" | "down") => {
-    const newIdx = direction === "up" ? index - 1 : index + 1;
-    if (newIdx < 0 || newIdx >= visitList.length) return;
-    const updated = [...visitList];
-    const [moved] = updated.splice(index, 1);
-    updated.splice(newIdx, 0, moved);
-    setVisitList(updated);
+  // Toggle selection
+  const toggleSelectWorker = (empId: string) => {
+    if (selectedWorkerIds.includes(empId)) {
+      setSelectedWorkerIds(selectedWorkerIds.filter((id) => id !== empId));
+    } else {
+      setSelectedWorkerIds([...selectedWorkerIds, empId]);
+    }
   };
 
-  // Submit assignment
-  const handleAssignSubmit = async () => {
-    setLoading(true);
-    setErrorMsg(null);
-    try {
-      if (assignmentMode === "STANDING") {
-        const res = await fetch("/api/v1/standing-assignments", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify({
-            employee_id: selectedWorkerId,
-            job_item_id: selectedJobItemId,
-            start_date: targetDate,
-            end_date: endDate || null,
-            weekday_pattern: selectedWeekdays,
-            hours_per_day: assignedHours,
-          }),
-        });
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.detail || "Failed to create standing assignment.");
-        }
-      } else {
-        // Single or Range
-        const datesToAssign: string[] = [targetDate];
-        if (assignmentMode === "RANGE" && endDate) {
-          const cur = new Date(targetDate);
-          const end = new Date(endDate);
-          while (cur < end) {
-            cur.setDate(cur.getDate() + 1);
-            datesToAssign.push(cur.toISOString().split("T")[0]);
-          }
-        }
+  // Shortcut: Auto-select top N needed workers
+  const autoSelectNeeded = () => {
+    if (neededCount <= 0 || candidates.length === 0) return;
+    const topIds = candidates
+      .slice(0, neededCount)
+      .map((c) => c.employee_id);
+    setSelectedWorkerIds(topIds);
+  };
 
-        for (const d of datesToAssign) {
-          const res = await fetch("/api/v1/scheduled-work", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            },
-            body: JSON.stringify({
-              employee_id: selectedWorkerId,
-              job_item_id: selectedJobItemId,
-              work_date: d,
-              assigned_hours: assignedHours,
-              acknowledge_warnings: acknowledgeWarnings,
-            }),
-          });
-          if (!res.ok) {
-            const errData = await res.json();
-            throw new Error(errData.detail || `Failed to assign work for ${d}.`);
-          }
-        }
+  // Unassign an existing worker
+  const handleUnassign = async (scheduledWorkId: string) => {
+    try {
+      const res = await fetch(`/api/v1/scheduled-work/${scheduledWorkId}`, {
+        method: "DELETE",
+        headers: authHeaders,
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Failed to unassign worker.");
+      }
+      setAssignedDetails(assignedDetails.filter((a) => a.scheduled_work_id !== scheduledWorkId));
+      onSuccess();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  // Submit batch assignment
+  const handleAssignSubmit = async () => {
+    if (selectedWorkerIds.length === 0) return;
+    const jId = activeJobItem?.job_item_id || activeJobItem?.id || initialJobItemId;
+    if (!jId) return;
+
+    setSubmitting(true);
+    setErrorMsg(null);
+
+    try {
+      const res = await fetch("/api/v1/scheduled-work/batch", {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({
+          employee_ids: selectedWorkerIds,
+          job_item_id: jId,
+          work_date: activeDate,
+          assigned_hours: activeJobItem?.hours_per_occurrence,
+          as_standing_assignment: isStandingTeam,
+          acknowledge_warnings: true,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Failed to assign workers.");
       }
 
       onSuccess();
       onClose();
     } catch (err: any) {
-      setErrorMsg(err.message || "An unexpected error occurred.");
+      setErrorMsg(err.message || "An error occurred while assigning workers.");
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
-  const weekdaysList = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
+  // Find supervisor of selected candidates to boost same group
+  const selectedSupervisors = new Set(
+    candidates
+      .filter((c) => selectedWorkerIds.includes(c.employee_id) && c.supervisor_id)
+      .map((c) => c.supervisor_id)
+  );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-          <div className="flex items-center space-x-2">
-            <div className="h-8 w-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-sm">
-              <Layers className="h-4 w-4" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        {/* Modal Header */}
+        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="h-10 w-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-base shadow-sm">
+              <Users className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900">Assign Field Work</h2>
-              <p className="text-xs text-slate-500">
-                Create scheduled work, date range, or year plan standing team
+              <div className="flex items-center space-x-2">
+                <h2 className="text-base font-bold text-slate-900">
+                  Assign Staff to Job Requirement
+                </h2>
+                <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                  Required: {activeJobItem?.planned_grade_code || "Any"}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 flex items-center space-x-2 mt-0.5">
+                <span className="font-semibold text-slate-700">
+                  {worksiteInfo?.job_number || activeJobItem?.job_number || "Site"}
+                </span>
+                <span>•</span>
+                <span>{worksiteInfo?.job_name || activeJobItem?.job_name || "Job"}</span>
+                <span>•</span>
+                <span className="font-medium text-blue-700">
+                  Item {activeJobItem?.sub_item_code}: {activeJobItem?.staff_grade_description}
+                </span>
               </p>
             </div>
           </div>
+
           <button
             onClick={onClose}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition"
@@ -249,8 +223,44 @@ export const AssignModal: React.FC<AssignModalProps> = ({
           </button>
         </div>
 
-        {/* Body Form */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+        {/* Staffing Status Banner */}
+        <div className="px-6 py-3 bg-blue-50/70 border-b border-blue-100 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-1.5 text-slate-700">
+              <Calendar className="h-4 w-4 text-blue-600" />
+              <span>
+                Date: <strong className="font-mono text-slate-900">{activeDate}</strong>
+              </span>
+            </div>
+            <div className="flex items-center space-x-1.5 text-slate-700">
+              <Layers className="h-4 w-4 text-blue-600" />
+              <span>
+                Daily: <strong>{Number(activeJobItem?.hours_per_occurrence || 8).toFixed(1)}h</strong>
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-3">
+            <span className="text-slate-600">
+              Required: <strong>{requiredCount}</strong>
+            </span>
+            <span className="text-slate-400">|</span>
+            <span className="text-slate-600">
+              Assigned: <strong>{currentAssignedCount}</strong>
+            </span>
+            <span className="text-slate-400">|</span>
+            <span
+              className={`px-2 py-0.5 rounded-full font-bold ${
+                neededCount > 0 ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"
+              }`}
+            >
+              {neededCount > 0 ? `${neededCount} worker(s) needed` : "Fully Staffed"}
+            </span>
+          </div>
+        </div>
+
+        {/* Content Body */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {errorMsg && (
             <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-center space-x-2">
               <AlertTriangle className="h-4 w-4 shrink-0 text-red-600" />
@@ -258,258 +268,234 @@ export const AssignModal: React.FC<AssignModalProps> = ({
             </div>
           )}
 
-          {/* Mode Tabs */}
-          <div className="flex bg-slate-100 p-1 rounded-xl">
-            {(["SINGLE", "RANGE", "STANDING"] as const).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => setAssignmentMode(mode)}
-                className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition ${
-                  assignmentMode === mode
-                    ? "bg-white text-blue-700 shadow-sm"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                {mode === "SINGLE"
-                  ? "Single Day"
-                  : mode === "RANGE"
-                  ? "Date Range"
-                  : "Standing Team (Year Plan)"}
-              </button>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Worker Selection */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Worker</label>
-              <select
-                value={selectedWorkerId}
-                onChange={(e) => setSelectedWorkerId(e.target.value)}
-                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="">-- Choose Worker --</option>
-                {candidates.map((c) => (
-                  <option key={c.employee_id} value={c.employee_id}>
-                    {c.name} ({c.tally_id} - {c.grade_code || "No Grade"} - {c.staff_grade_description})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Job Item Selection */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                Worksite & Job Item
-              </label>
-              <select
-                value={selectedJobItemId}
-                onChange={(e) => setSelectedJobItemId(e.target.value)}
-                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="">-- Choose Job Item --</option>
-                {availableJobItems.map((j) => (
-                  <option key={j.id} value={j.id}>
-                    {j.job_number} Item {j.sub_item_code}: {j.staff_grade_description} (
-                    {j.deployment_type}, {j.hours_per_occurrence}h)
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Dates & Hours */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                {assignmentMode === "STANDING" ? "Start Date" : "Work Date"}
-              </label>
-              <input
-                type="date"
-                value={targetDate}
-                onChange={(e) => setTargetDate(e.target.value)}
-                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
-
-            {(assignmentMode === "RANGE" || assignmentMode === "STANDING") && (
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">End Date</label>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  placeholder="Optional end date"
-                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-            )}
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Hours / Day</label>
-              <input
-                type="number"
-                step="0.5"
-                min="0.5"
-                max="24.0"
-                value={assignedHours}
-                onChange={(e) => setAssignedHours(parseFloat(e.target.value) || 0)}
-                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-
-          {/* Weekday Pattern (for Standing Assignment) */}
-          {assignmentMode === "STANDING" && (
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                Weekday Pattern (Recurring Working Days)
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {weekdaysList.map((day) => {
-                  const isChecked = selectedWeekdays.includes(day);
-                  return (
+          {/* 1. Currently Assigned Workers Section */}
+          {assignedDetails.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Currently Assigned on this Slot ({assignedDetails.length})
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {assignedDetails.map((a: any) => (
+                  <div
+                    key={a.scheduled_work_id}
+                    className="p-2.5 rounded-xl border border-emerald-200 bg-emerald-50/40 flex items-center justify-between text-xs shadow-2xs"
+                  >
+                    <div>
+                      <div className="font-bold text-slate-800">{a.name}</div>
+                      <div className="text-[11px] text-slate-500 font-mono">{a.tally_id}</div>
+                    </div>
                     <button
-                      key={day}
                       type="button"
-                      onClick={() => {
-                        setSelectedWeekdays((prev) =>
-                          isChecked ? prev.filter((d) => d !== day) : [...prev, day]
-                        );
-                      }}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition ${
+                      onClick={() => handleUnassign(a.scheduled_work_id)}
+                      className="px-2 py-1 rounded-lg text-[10px] font-semibold text-red-700 bg-white border border-red-200 hover:bg-red-50 flex items-center space-x-1 transition"
+                      title="Unassign worker from this slot"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      <span>Unassign</span>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 2. Eligible Candidates Section */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Recommended Candidates (Grade: {activeJobItem?.planned_grade_code})
+                </h4>
+                <p className="text-[11px] text-slate-500">
+                  Workers from the same supervisor crew on this site are ranked first
+                </p>
+              </div>
+
+              {neededCount > 0 && candidates.length > 0 && (
+                <button
+                  type="button"
+                  onClick={autoSelectNeeded}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 flex items-center space-x-1.5 transition shadow-2xs"
+                >
+                  <Zap className="h-3.5 w-3.5 fill-amber-500 text-amber-600" />
+                  <span>Auto-Check Top {neededCount} Needed</span>
+                </button>
+              )}
+            </div>
+
+            {loadingCandidates ? (
+              <div className="p-12 text-center text-xs text-blue-700 flex flex-col items-center justify-center space-y-2">
+                <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                <span>Loading eligible candidates and crew recommendations...</span>
+              </div>
+            ) : candidates.length === 0 ? (
+              <div className="p-8 text-center text-xs text-slate-400 bg-slate-50 rounded-xl border border-slate-200">
+                No eligible workers found matching grade group {activeJobItem?.planned_grade_code}.
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl max-h-72 overflow-y-auto">
+                {candidates.map((worker) => {
+                  const isChecked = selectedWorkerIds.includes(worker.employee_id);
+                  const sharesCrewWithSelected =
+                    worker.supervisor_id && selectedSupervisors.has(worker.supervisor_id);
+
+                  return (
+                    <div
+                      key={worker.employee_id}
+                      onClick={() => toggleSelectWorker(worker.employee_id)}
+                      className={`p-3 flex items-start space-x-3 cursor-pointer transition text-xs ${
                         isChecked
-                          ? "bg-blue-600 text-white border-blue-600"
-                          : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                          ? "bg-blue-50/80 border-l-4 border-l-blue-600"
+                          : worker.shares_site_group
+                          ? "bg-amber-50/30 hover:bg-amber-50/60"
+                          : "hover:bg-slate-50"
                       }`}
                     >
-                      {day}
-                    </button>
+                      {/* Checkbox */}
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => {}} // handled by parent div
+                        className="mt-0.5 rounded text-blue-600 focus:ring-blue-500 h-4 w-4 shrink-0"
+                      />
+
+                      {/* Candidate Info */}
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <div className="font-bold text-slate-900 flex items-center space-x-1.5">
+                            <span>{worker.name}</span>
+                            <span className="font-mono text-[11px] text-slate-500 font-normal">
+                              ({worker.tally_id})
+                            </span>
+                            {worker.exact_staff_type_match && (
+                              <span
+                                title="Exact staff type match"
+                                className="inline-flex items-center text-amber-500 font-bold"
+                              >
+                                <Star className="h-3 w-3 fill-amber-400 text-amber-500" />
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center space-x-2">
+                            <span className="font-semibold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded text-[10px]">
+                              {worker.grade_code || "No Grade"}
+                            </span>
+                            <span className="text-[10px] text-slate-500">
+                              Std: {worker.standard_hours}h
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* SGD and Supervisor Crew */}
+                        <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                          <span className="text-slate-600 font-medium">
+                            {worker.staff_grade_description}
+                          </span>
+
+                          {/* Supervisor / Group Tag */}
+                          {worker.supervisor_name && (
+                            <span className="px-1.5 py-0.2 rounded text-[10px] font-medium bg-slate-100 text-slate-700">
+                              Crew: {worker.supervisor_name}
+                            </span>
+                          )}
+
+                          {/* Same Site Group Tag */}
+                          {worker.shares_site_group && (
+                            <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-100 text-amber-800 flex items-center space-x-1">
+                              <span>★ Same Crew on Site</span>
+                            </span>
+                          )}
+
+                          {/* Linked to selected worker's group */}
+                          {sharesCrewWithSelected && !worker.shares_site_group && (
+                            <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-blue-100 text-blue-800">
+                              Same Crew as Selected
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Reasons / Warnings */}
+                        {worker.reasons.length > 0 && (
+                          <div className="text-[10px] text-blue-700 flex flex-wrap gap-1 pt-0.5">
+                            {worker.reasons.slice(0, 2).map((r, rIdx) => (
+                              <span key={rIdx} className="bg-blue-50 px-1 py-0.2 rounded">
+                                ✓ {r}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {worker.warnings.length > 0 && (
+                          <div className="text-[10px] text-amber-700 flex items-center space-x-1">
+                            <AlertTriangle className="h-3 w-3 shrink-0" />
+                            <span>{worker.warnings[0]}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   );
                 })}
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
-          {/* Reordering existing visits for the same date (both drag & drop and up/down buttons) */}
-          {visitList.length > 1 && (
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-              <div className="flex items-center justify-between text-xs font-bold text-slate-700">
-                <span>Daily Visit Sequence on {targetDate}</span>
-                <span className="text-[10px] text-slate-400 font-normal">
-                  Use buttons or drag to order visits
-                </span>
-              </div>
-              <div className="space-y-1">
-                {visitList.map((visit, index) => (
-                  <div
-                    key={visit.id}
-                    className="flex items-center justify-between p-2 bg-white rounded-lg border border-slate-200 text-xs shadow-2xs"
-                  >
-                    <div className="flex items-center space-x-2">
-                      <GripVertical className="h-4 w-4 text-slate-300 cursor-grab" />
-                      <span className="font-bold text-blue-700 w-5">#{index + 1}</span>
-                      <span className="font-semibold text-slate-800">
-                        {visit.job_number} Item {visit.sub_item_code}
-                      </span>
-                      <span className="text-slate-500">({visit.assigned_hours}h)</span>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      <button
-                        type="button"
-                        disabled={index === 0}
-                        onClick={() => moveVisit(index, "up")}
-                        className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-20 rounded"
-                        title="Move Up"
-                      >
-                        <ArrowUp className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        disabled={index === visitList.length - 1}
-                        onClick={() => moveVisit(index, "down")}
-                        className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-20 rounded"
-                        title="Move Down"
-                      >
-                        <ArrowDown className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Dry-run Validation Feedback */}
-          {validationReport && (
-            <div className="space-y-2 pt-2 border-t border-slate-100">
-              {validationReport.errors.length > 0 && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-xl space-y-1">
-                  <div className="font-bold text-red-800 text-xs flex items-center space-x-1.5">
-                    <AlertTriangle className="h-4 w-4 text-red-600" />
-                    <span>Blocking Validation Errors</span>
-                  </div>
-                  <ul className="list-disc list-inside text-xs text-red-700 space-y-0.5 pl-1">
-                    {validationReport.errors.map((e, idx) => (
-                      <li key={idx}>{e.message}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {validationReport.warnings.length > 0 && (
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-2">
-                  <div className="font-bold text-amber-800 text-xs flex items-center space-x-1.5">
-                    <AlertTriangle className="h-4 w-4 text-amber-600" />
-                    <span>Planning Warnings (Needs Confirmation)</span>
-                  </div>
-                  <ul className="list-disc list-inside text-xs text-amber-700 space-y-0.5 pl-1">
-                    {validationReport.warnings.map((w, idx) => (
-                      <li key={idx}>{w.message}</li>
-                    ))}
-                  </ul>
-                  <label className="flex items-center space-x-2 pt-1 text-xs text-amber-900 font-semibold cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={acknowledgeWarnings}
-                      onChange={(e) => setAcknowledgeWarnings(e.target.checked)}
-                      className="rounded text-amber-600 focus:ring-amber-500 h-4 w-4"
-                    />
-                    <span>I acknowledge these warnings and confirm this assignment</span>
-                  </label>
-                </div>
-              )}
-            </div>
-          )}
+          {/* 3. Standing Team Option */}
+          <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+            <label className="flex items-center space-x-2 cursor-pointer font-medium text-xs text-slate-800">
+              <input
+                type="checkbox"
+                checked={isStandingTeam}
+                onChange={(e) => setIsStandingTeam(e.target.checked)}
+                className="rounded text-blue-600 focus:ring-blue-500 h-4 w-4"
+              />
+              <span className="font-bold">Set as Standing Team (Year Plan)</span>
+            </label>
+            <p className="text-[11px] text-slate-500 pl-6">
+              When checked, automatically materializes daily scheduled visits for the whole contract
+              year (13-month rolling horizon) on active working days.
+            </p>
+          </div>
         </div>
 
-        {/* Footer Actions */}
+        {/* Modal Footer */}
         <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-200 rounded-lg transition"
-          >
-            Cancel
-          </button>
-          <div className="flex items-center space-x-2">
-            {validating && (
-              <span className="text-[11px] text-slate-400">Checking conflicts...</span>
+          <div className="text-xs text-slate-600 font-medium">
+            Selected: <strong className="text-blue-700 font-bold">{selectedWorkerIds.length}</strong>{" "}
+            worker(s)
+            {neededCount > 0 && (
+              <span className="text-slate-400"> (needed: {neededCount})</span>
             )}
+          </div>
+
+          <div className="flex items-center space-x-2">
             <button
               type="button"
-              disabled={Boolean(
-                loading ||
-                !selectedWorkerId ||
-                !selectedJobItemId ||
-                (validationReport && !validationReport.is_valid) ||
-                (validationReport && validationReport.warnings.length > 0 && !acknowledgeWarnings)
-              )}
-              onClick={handleAssignSubmit}
-              className="px-5 py-2 text-xs font-bold bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40 transition shadow-sm"
+              onClick={onClose}
+              disabled={submitting}
+              className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-200 transition"
             >
-              {loading ? "Assigning..." : "Confirm Assignment"}
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleAssignSubmit}
+              disabled={submitting || selectedWorkerIds.length === 0}
+              className="px-5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 flex items-center space-x-1.5 transition shadow-sm"
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                  <span>Assigning...</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="h-4 w-4 mr-1" />
+                  <span>
+                    Assign {selectedWorkerIds.length > 0 ? `(${selectedWorkerIds.length})` : ""}{" "}
+                    Workers
+                  </span>
+                </>
+              )}
             </button>
           </div>
         </div>

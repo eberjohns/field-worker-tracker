@@ -13,9 +13,10 @@ from sqlalchemy.orm import selectinload
 from fw.core.errors import AppError
 from fw.modules.audit import AuditService
 from fw.modules.jobs import JobItem, JobOccurrence, Worksite
-from fw.modules.org import Employee
+from fw.modules.org import Employee, EmployeeReportingLine
 from fw.modules.scheduling.models import ScheduledWork, StandingAssignment
 from fw.modules.scheduling.schemas import (
+    AssignedWorkerSummary,
     CandidateRecommendationRead,
     CoverageDayCell,
     CoverageItemRow,
@@ -25,6 +26,7 @@ from fw.modules.scheduling.schemas import (
     RosterResponse,
     RosterSiteChip,
     RosterWorkerRow,
+    ScheduledWorkBatchCreate,
     ScheduledWorkCreate,
     ScheduledWorkRead,
     ScheduledWorkReorderRequest,
@@ -100,6 +102,39 @@ class SchedulingService:
         )
         res = (await self.session.execute(stmt)).scalar_one_or_none()
         return Decimal(str(res)) if res is not None else Decimal("8.0")
+
+    async def get_employees_base_standard_hours(
+        self, employee_ids: list[UUID], work_date: date
+    ) -> dict[UUID, Decimal]:
+        """Batch fetch employee standard hours from salary structure as of work_date (default 8.0)."""
+        if not employee_ids:
+            return {}
+        salary_subq = (
+            select(
+                employee_salary_table.c.employee_id,
+                employee_salary_table.c.standard_hours,
+                func.row_number()
+                .over(
+                    partition_by=employee_salary_table.c.employee_id,
+                    order_by=employee_salary_table.c.effective_from.desc(),
+                )
+                .label("rn"),
+            )
+            .where(
+                employee_salary_table.c.employee_id.in_(employee_ids),
+                employee_salary_table.c.effective_from <= work_date,
+            )
+            .subquery()
+        )
+        salary_stmt = select(
+            salary_subq.c.employee_id, salary_subq.c.standard_hours
+        ).where(salary_subq.c.rn == 1)
+        salary_rows = (await self.session.execute(salary_stmt)).all()
+        return {
+            row[0]: Decimal(str(row[1]))
+            for row in salary_rows
+            if row[1] is not None
+        }
 
     async def get_effective_standard_hours(
         self, employee: Employee, work_date: date
@@ -853,20 +888,48 @@ class SchedulingService:
                     emp_today_hours.get(sw_row.employee_id, Decimal("0")) + sw_row.assigned_hours
                 )
 
-        # Check who worked at this site in the last 14 days
+        # Check who worked at this site in the last 14 days or is scheduled on this site this week
         two_weeks_ago = t_date - timedelta(days=14)
         recent_site_stmt = select(ScheduledWork.employee_id).where(
             ScheduledWork.worksite_id == item.worksite_id,
             ScheduledWork.work_date >= two_weeks_ago,
-            ScheduledWork.work_date <= t_date,
+            ScheduledWork.work_date <= week_end,
             ScheduledWork.status == "ACTIVE",
         ).distinct()
         recent_emp_ids = set((await self.session.execute(recent_site_stmt)).scalars().all())
 
+        # Find active supervisors on this site (crew currently assigned or recent on this worksite)
+        active_site_supervisors: set[UUID] = set()
+        if recent_emp_ids:
+            site_sup_stmt = select(EmployeeReportingLine.manager_id).where(
+                EmployeeReportingLine.employee_id.in_(recent_emp_ids),
+                EmployeeReportingLine.relationship == "SUPERVISOR",
+            ).distinct()
+            active_site_supervisors = set((await self.session.execute(site_sup_stmt)).scalars().all())
+
+        # Load supervisor information for all candidate employees
+        reporting_stmt = (
+            select(EmployeeReportingLine.employee_id, EmployeeReportingLine.manager_id, Employee.name)
+            .join(Employee, EmployeeReportingLine.manager_id == Employee.id)
+            .where(EmployeeReportingLine.relationship == "SUPERVISOR")
+        )
+        rep_rows = (await self.session.execute(reporting_stmt)).all()
+        emp_to_supervisor: dict[UUID, tuple[UUID, str]] = {
+            r[0]: (r[1], r[2]) for r in rep_rows
+        }
+
+        candidate_ids = [emp.id for emp in employees]
+        base_std_map = await self.get_employees_base_standard_hours(candidate_ids, t_date)
+
         candidates: list[CandidateWorker] = []
         for emp in employees:
             is_budget = (emp.staff_grade_description or "").strip().lower() in budget_staff_types
-            base_std = await self.get_employee_base_standard_hours(emp.id, t_date)
+            base_std = base_std_map.get(emp.id, Decimal("8.0"))
+
+            sup_info = emp_to_supervisor.get(emp.id)
+            sup_id = sup_info[0] if sup_info else None
+            sup_name = sup_info[1] if sup_info else None
+            is_same_site_group = bool(sup_id and sup_id in active_site_supervisors)
 
             candidates.append(
                 CandidateWorker(
@@ -883,9 +946,11 @@ class SchedulingService:
                     is_on_leave=False,
                     is_budget_only=is_budget,
                     worked_at_site_recently=emp.id in recent_emp_ids,
-                    shares_supervisor=False,
+                    shares_supervisor=is_same_site_group,
                     weekly_allocated_hours=emp_weekly_hours.get(emp.id, Decimal("0.0")),
                     today_allocated_hours=emp_today_hours.get(emp.id, Decimal("0.0")),
+                    supervisor_id=str(sup_id) if sup_id else None,
+                    supervisor_name=sup_name,
                 )
             )
 
@@ -906,6 +971,9 @@ class SchedulingService:
                 today_allocated_hours=sc.worker.today_allocated_hours,
                 weekly_allocated_hours=sc.worker.weekly_allocated_hours,
                 monthly_allocated_hours=sc.worker.weekly_allocated_hours * Decimal("4"),
+                supervisor_id=UUID(sc.supervisor_id) if sc.supervisor_id else None,
+                supervisor_name=sc.supervisor_name,
+                shares_site_group=sc.shares_site_group,
             )
             for sc in ranked
         ]
@@ -1045,11 +1113,59 @@ class SchedulingService:
         holidays_ae = await self.get_public_holidays("AE", week_start, week_end)
         holidays_sa = await self.get_public_holidays("SA", week_start, week_end)
 
+        # Batch-fetch base standard hours for all employees
+        emp_ids = [e.id for e in employees]
+        base_hours_by_emp = await self.get_employees_base_standard_hours(emp_ids, week_start)
+
+        # Batch-fetch active time rules for all relevant countries
+        unique_countries = {emp.country for emp in employees if emp.country}
+        time_rules_by_country: dict[str, list[TimeRuleDefinition]] = {}
+        if unique_countries:
+            tr_stmt = select(TimeRule).where(
+                TimeRule.country.in_(unique_countries),
+                TimeRule.is_active.is_(True),
+                TimeRule.start_date <= week_start,
+                sa.or_(TimeRule.end_date.is_(None), TimeRule.end_date >= week_start),
+            )
+            time_rules_db = (await self.session.execute(tr_stmt)).scalars().all()
+            for tr in time_rules_db:
+                tr_def = TimeRuleDefinition(
+                    id=tr.id,
+                    name=tr.name,
+                    country=tr.country,
+                    scope_type=TimeRuleScope(tr.scope_type),
+                    scope_employee_id=tr.scope_employee_id,
+                    applies_to=TimeRuleAppliesTo(tr.applies_to),
+                    start_date=tr.start_date,
+                    end_date=tr.end_date,
+                    standard_hours_change_minutes=tr.standard_hours_change_minutes,
+                    is_active=tr.is_active,
+                )
+                if tr.country:
+                    time_rules_by_country.setdefault(tr.country, []).append(tr_def)
+
         worker_rows: list[RosterWorkerRow] = []
 
         for emp in employees:
             holidays = holidays_ae if emp.country == "AE" else holidays_sa
-            eff_hours = await self.get_effective_standard_hours(emp, week_start)
+            base_hours = base_hours_by_emp.get(emp.id, Decimal("8.0"))
+            definitions = time_rules_by_country.get(emp.country, [])
+            worker_ctx = WorkerContext(
+                employee_id=emp.id,
+                country=emp.country,
+                has_accommodation=bool(emp.accommodation_id),
+                is_driver=emp.is_driver,
+            )
+            resolved = resolve_time_schedule(
+                rules=definitions,
+                worker=worker_ctx,
+                target_date=week_start,
+                is_outdoor=True,
+            )
+            eff_hours = compute_effective_standard_hours(
+                base_standard_hours=base_hours,
+                adjustment_minutes=resolved.standard_hours_change_minutes,
+            )
             daily_std = eff_hours.effective_daily_standard_hours
 
             days: list[RosterDayCell] = []
@@ -1257,6 +1373,17 @@ class SchedulingService:
 
                     is_uncovered = is_working_day and (assigned_count < required_count)
 
+                    assigned_details = [
+                        AssignedWorkerSummary(
+                            employee_id=a.employee_id,
+                            name=a.employee.name if a.employee else "Unknown",
+                            tally_id=a.employee.tally_id if a.employee else "",
+                            scheduled_work_id=a.id,
+                        )
+                        for a in assigned
+                        if a.employee
+                    ]
+
                     days.append(
                         CoverageDayCell(
                             work_date=c_date,
@@ -1265,6 +1392,7 @@ class SchedulingService:
                             assigned_staff_count=assigned_count,
                             is_to_be_covered=is_uncovered,
                             assigned_workers=[a.employee.name for a in assigned if a.employee],
+                            assigned_details=assigned_details,
                         )
                     )
 
@@ -1287,6 +1415,8 @@ class SchedulingService:
                         worksite_id=site.id,
                         job_number=site.job_number,
                         job_name=site.job_name,
+                        customer_type=site.customer_type,
+                        is_outdoor=site.is_outdoor,
                         items=item_rows,
                     )
                 )
@@ -1295,4 +1425,75 @@ class SchedulingService:
             week_start=week_start,
             week_end=week_end,
             worksites=site_rows,
+        )
+
+    # -------------------------------------------------------------------------
+    # Batch Scheduling and Direct Cancellation Helpers
+    # -------------------------------------------------------------------------
+
+    async def create_scheduled_work_batch(
+        self,
+        payload: ScheduledWorkBatchCreate,
+        current_user_id: UUID,
+        is_admin: bool = False,
+    ) -> list[ScheduledWorkRead]:
+        """Batch assign multiple workers to a job item for a date or standing horizon."""
+        results: list[ScheduledWorkRead] = []
+
+        item = await self.session.get(JobItem, payload.job_item_id)
+        if not item:
+            raise AppError(code="NOT_FOUND", message=f"Job item {payload.job_item_id} not found.", status_code=404)
+
+        assigned_hours = payload.assigned_hours or item.hours_per_occurrence_per_staff
+
+        for emp_id in payload.employee_ids:
+            if payload.as_standing_assignment:
+                standing_req = StandingAssignmentCreate(
+                    employee_id=emp_id,
+                    job_item_id=payload.job_item_id,
+                    start_date=payload.work_date,
+                    hours_per_day=assigned_hours,
+                )
+                await self.create_standing_assignment(
+                    payload=standing_req,
+                    current_user_id=current_user_id,
+                )
+            else:
+                sw_req = ScheduledWorkCreate(
+                    employee_id=emp_id,
+                    job_item_id=payload.job_item_id,
+                    work_date=payload.work_date,
+                    occurrence_id=payload.occurrence_id,
+                    assigned_hours=assigned_hours,
+                    acknowledge_warnings=payload.acknowledge_warnings,
+                )
+                created = await self.create_scheduled_work(
+                    payload=sw_req,
+                    current_user_id=current_user_id,
+                    is_admin=is_admin,
+                )
+                results.append(created)
+
+        return results
+
+    async def cancel_scheduled_work(
+        self,
+        scheduled_work_id: UUID,
+        current_user_id: UUID,
+    ) -> None:
+        """Cancel an individual daily scheduled work record."""
+        sw = await self.session.get(ScheduledWork, scheduled_work_id)
+        if not sw or sw.status != "ACTIVE":
+            return
+        sw.status = "CANCELLED"
+        sw.version += 1
+        sw.updated_at = datetime.now(UTC)
+
+        await AuditService.log_action(
+            session=self.session,
+            action="CANCEL",
+            entity_type="ScheduledWork",
+            entity_id=str(sw.id),
+            actor_user_id=current_user_id,
+            diff={"status": "CANCELLED"},
         )

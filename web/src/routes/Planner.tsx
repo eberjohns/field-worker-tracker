@@ -30,7 +30,7 @@ export const Planner: React.FC = () => {
   const { token } = useAuth();
 
   // Navigation & Tabs
-  const [activeTab, setActiveTab] = useState<"ROSTER" | "COVERAGE" | "YEAR_PLAN">("ROSTER");
+  const [activeTab, setActiveTab] = useState<"ROSTER" | "COVERAGE" | "YEAR_PLAN">("COVERAGE");
   const [weekStartDate, setWeekStartDate] = useState<string>(() => {
     const now = new Date();
     const day = now.getDay();
@@ -61,6 +61,15 @@ export const Planner: React.FC = () => {
   const [modalInitialWorkerId, setModalInitialWorkerId] = useState<string | null>(null);
   const [modalInitialDate, setModalInitialDate] = useState<string | null>(null);
   const [modalInitialJobItemId, setModalInitialJobItemId] = useState<string | null>(null);
+
+  // Coverage Selected Slot State
+  const [selectedCoverageItem, setSelectedCoverageItem] = useState<CoverageItemRow | null>(null);
+  const [selectedCoverageDay, setSelectedCoverageDay] = useState<CoverageDayCell | null>(null);
+  const [selectedWorksiteInfo, setSelectedWorksiteInfo] = useState<{
+    id: string;
+    job_number: string;
+    job_name: string;
+  } | null>(null);
 
   const [loading, setLoading] = useState<boolean>(false);
   const [exportingExcel, setExportingExcel] = useState<boolean>(false);
@@ -255,14 +264,19 @@ export const Planner: React.FC = () => {
 
   // Slot click in Coverage view
   const handleCoverageSlotClick = (
-    _worksiteId: string,
+    worksiteId: string,
     item: CoverageItemRow,
     day: CoverageDayCell
   ) => {
+    setSelectedCoverageItem(item);
+    setSelectedCoverageDay(day);
+    const ws = coverageData?.worksites.find((w) => w.worksite_id === worksiteId);
+    setSelectedWorksiteInfo(
+      ws ? { id: ws.worksite_id, job_number: ws.job_number, job_name: ws.job_name } : null
+    );
     setModalInitialJobItemId(item.job_item_id);
     setModalInitialDate(day.work_date);
     setModalInitialWorkerId(null);
-    fetchCandidates(item.job_item_id, day.work_date);
     setIsAssignModalOpen(true);
   };
 
@@ -306,16 +320,6 @@ export const Planner: React.FC = () => {
         {/* View Lens Tabs */}
         <div className="flex items-center bg-slate-100 p-1 rounded-xl">
           <button
-            onClick={() => setActiveTab("ROSTER")}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
-              activeTab === "ROSTER"
-                ? "bg-white text-blue-700 shadow-sm"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            Weekly Roster
-          </button>
-          <button
             onClick={() => setActiveTab("COVERAGE")}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
               activeTab === "COVERAGE"
@@ -323,7 +327,17 @@ export const Planner: React.FC = () => {
                 : "text-slate-600 hover:text-slate-900"
             }`}
           >
-            Job Coverage
+            Job Items Planning
+          </button>
+          <button
+            onClick={() => setActiveTab("ROSTER")}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
+              activeTab === "ROSTER"
+                ? "bg-white text-blue-700 shadow-sm"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            Weekly Worker Roster
           </button>
           <button
             onClick={() => setActiveTab("YEAR_PLAN")}
@@ -496,11 +510,13 @@ export const Planner: React.FC = () => {
             if (selectedWorkerId) fetchWorkerAllocation(selectedWorkerId);
           }}
           token={token}
+          targetJobItem={selectedCoverageItem}
+          targetDay={selectedCoverageDay}
+          worksiteInfo={selectedWorksiteInfo}
           initialWorkerId={modalInitialWorkerId}
           initialDate={modalInitialDate}
           initialJobItemId={modalInitialJobItemId}
           availableJobItems={availableJobItems}
-          candidates={candidates}
         />
       )}
     </div>

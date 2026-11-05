@@ -12,6 +12,7 @@ from fw.modules.scheduling import (
     CandidateRecommendationRead,
     CoverageResponse,
     RosterResponse,
+    ScheduledWorkBatchCreate,
     ScheduledWorkCreate,
     ScheduledWorkRead,
     ScheduledWorkReorderRequest,
@@ -213,6 +214,35 @@ async def create_scheduled_work(
     return await service.create_scheduled_work(
         payload=payload, current_user_id=current_user.id, is_admin=is_admin
     )
+
+
+@router.post(
+    "/scheduled-work/batch",
+    response_model=list[ScheduledWorkRead],
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_scheduled_work_batch(
+    payload: ScheduledWorkBatchCreate,
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    session: AsyncSession = Depends(get_db),
+) -> list[ScheduledWorkRead]:
+    """Batch assign multiple workers to a job item on a work date."""
+    service = SchedulingService(session)
+    is_admin = current_user.role == "ADMIN"
+    return await service.create_scheduled_work_batch(
+        payload=payload, current_user_id=current_user.id, is_admin=is_admin
+    )
+
+
+@router.delete("/scheduled-work/{id}", status_code=status.HTTP_204_NO_CONTENT)
+async def cancel_scheduled_work(
+    id: UUID,
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    session: AsyncSession = Depends(get_db),
+) -> None:
+    """Cancel / unassign a scheduled work assignment."""
+    service = SchedulingService(session)
+    await service.cancel_scheduled_work(scheduled_work_id=id, current_user_id=current_user.id)
 
 
 @router.patch("/scheduled-work/{id}", response_model=ScheduledWorkRead)

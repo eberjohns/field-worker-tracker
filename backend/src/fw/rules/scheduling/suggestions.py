@@ -24,10 +24,12 @@ class CandidateWorker:
     is_on_leave: bool
     is_budget_only: bool
     worked_at_site_recently: bool  # within last 14 days
-    shares_supervisor: bool  # reports to the same supervisor
+    shares_supervisor: bool  # reports to the same supervisor / site group
     weekly_allocated_hours: Decimal
     today_allocated_hours: Decimal
     is_scope_accessible: bool = True
+    supervisor_id: str | None = None
+    supervisor_name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -53,6 +55,9 @@ class ScoredCandidate:
     ranking_score: float  # higher is better
     reasons: list[str]
     warnings: list[str]
+    supervisor_id: str | None = None
+    supervisor_name: str | None = None
+    shares_site_group: bool = False
 
 
 def rank_candidates_for_job(
@@ -112,7 +117,8 @@ def rank_candidates_for_job(
             reasons.append("Worked at this site in the last 14 days")
 
         if w.shares_supervisor:
-            reasons.append("Same supervisor as team")
+            crew_label = f" ({w.supervisor_name})" if w.supervisor_name else ""
+            reasons.append(f"Same group/crew{crew_label} active on this site")
 
         # Capacity calculations
         free_weekly_hours = max(
@@ -125,14 +131,14 @@ def rank_candidates_for_job(
             warnings.append("Will exceed standard hours today (planned overtime)")
 
         # Composite score
-        # Exact staff type match is heavily weighted
+        # Same group / crew on site is prioritized first so workers can be managed together
         score = 0.0
+        if w.shares_supervisor:
+            score += 2000.0
         if exact_staff_type:
             score += 1000.0
         if w.worked_at_site_recently:
             score += 100.0
-        if w.shares_supervisor:
-            score += 50.0
         score += float(free_weekly_hours)
 
         scored_list.append(
@@ -144,6 +150,9 @@ def rank_candidates_for_job(
                 ranking_score=score,
                 reasons=reasons,
                 warnings=warnings,
+                supervisor_id=w.supervisor_id,
+                supervisor_name=w.supervisor_name,
+                shares_site_group=w.shares_supervisor,
             )
         )
 

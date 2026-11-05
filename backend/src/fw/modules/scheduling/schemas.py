@@ -58,6 +58,16 @@ class ScheduledWorkCreate(BaseModel):
     acknowledge_warnings: bool = False
 
 
+class ScheduledWorkBatchCreate(BaseModel):
+    employee_ids: list[UUID]
+    job_item_id: UUID
+    work_date: date
+    occurrence_id: UUID | None = None
+    assigned_hours: Decimal | None = None
+    as_standing_assignment: bool = False
+    acknowledge_warnings: bool = False
+
+
 class ScheduledWorkUpdate(BaseModel):
     assigned_hours: Decimal | None = Field(default=None, gt=Decimal("0.0"), le=Decimal("24.0"))
     sequence: int | None = Field(default=None, ge=1)
@@ -168,6 +178,13 @@ class RosterResponse(BaseModel):
 # --- Coverage Schemas ---
 
 
+class AssignedWorkerSummary(BaseModel):
+    employee_id: UUID
+    name: str
+    tally_id: str
+    scheduled_work_id: UUID
+
+
 class CoverageDayCell(BaseModel):
     work_date: date
     weekday: str
@@ -175,6 +192,7 @@ class CoverageDayCell(BaseModel):
     assigned_staff_count: int
     is_to_be_covered: bool
     assigned_workers: list[str]
+    assigned_details: list[AssignedWorkerSummary] = Field(default_factory=list)
 
 
 class CoverageItemRow(BaseModel):
@@ -192,6 +210,8 @@ class CoverageWorksiteRow(BaseModel):
     worksite_id: UUID
     job_number: str
     job_name: str
+    customer_type: str | None = None
+    is_outdoor: bool = True
     items: list[CoverageItemRow]
 
 
@@ -243,4 +263,7 @@ class CandidateRecommendationRead(BaseModel):
     today_allocated_hours: Decimal
     weekly_allocated_hours: Decimal
     monthly_allocated_hours: Decimal
+    supervisor_id: UUID | None = None
+    supervisor_name: str | None = None
+    shares_site_group: bool = False
 

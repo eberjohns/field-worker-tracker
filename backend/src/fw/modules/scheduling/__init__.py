@@ -2,6 +2,7 @@
 
 from fw.modules.scheduling.models import ScheduledWork, StandingAssignment
 from fw.modules.scheduling.schemas import (
+    AssignedWorkerSummary,
     CandidateRecommendationRead,
     CoverageDayCell,
     CoverageItemRow,
@@ -11,6 +12,7 @@ from fw.modules.scheduling.schemas import (
     RosterResponse,
     RosterSiteChip,
     RosterWorkerRow,
+    ScheduledWorkBatchCreate,
     ScheduledWorkCreate,
     ScheduledWorkRead,
     ScheduledWorkReorderRequest,
@@ -27,6 +29,7 @@ from fw.modules.scheduling.schemas import (
 from fw.modules.scheduling.service import SchedulingService
 
 __all__: list[str] = [
+    "AssignedWorkerSummary",
     "CandidateRecommendationRead",
     "CoverageDayCell",
     "CoverageItemRow",
@@ -37,6 +40,7 @@ __all__: list[str] = [
     "RosterSiteChip",
     "RosterWorkerRow",
     "ScheduledWork",
+    "ScheduledWorkBatchCreate",
     "ScheduledWorkCreate",
     "ScheduledWorkRead",
     "ScheduledWorkReorderRequest",
