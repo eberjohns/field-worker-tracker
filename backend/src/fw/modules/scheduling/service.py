@@ -236,11 +236,15 @@ class SchedulingService:
         if emp.role == "ADMIN" or emp.tally_id == "ADMIN001":
             raise AppError(code="VALIDATION_ERROR", message="System Administrator cannot be assigned to field work.", status_code=422)
 
-        item = await self.session.get(
-            JobItem,
-            payload.job_item_id,
-            options=[selectinload(JobItem.worksite), selectinload(JobItem.occurrences)],
+        stmt = (
+            select(JobItem)
+            .where(JobItem.id == payload.job_item_id)
+            .options(
+                selectinload(JobItem.worksite),
+                selectinload(JobItem.occurrences),
+            )
         )
+        item = (await self.session.execute(stmt)).scalar_one_or_none()
         if not item or not item.is_active:
             raise AppError(code="NOT_FOUND", message=f"Active job item {payload.job_item_id} not found.", status_code=404)
 
@@ -279,9 +283,19 @@ class SchedulingService:
         assigned_hours = standing.hours_per_day or item.hours_per_occurrence_per_staff
         created_count = 0
 
+        # Existing active scheduled work for this employee and job_item
+        existing_sw_stmt = select(ScheduledWork.work_date).where(
+            ScheduledWork.employee_id == payload.employee_id,
+            ScheduledWork.job_item_id == payload.job_item_id,
+            ScheduledWork.work_date >= payload.start_date,
+            ScheduledWork.work_date <= target_end,
+            ScheduledWork.status == "ACTIVE",
+        )
+        existing_sw_dates = set((await self.session.execute(existing_sw_stmt)).scalars().all())
+
         # Create scheduled work rows on working days
         for slot in slots:
-            if not slot.is_working_day:
+            if not slot.is_working_day or slot.work_date in existing_sw_dates:
                 continue
 
             # Find or match occurrence for slot.work_date
@@ -478,11 +492,12 @@ class SchedulingService:
         if emp.role == "ADMIN" or emp.tally_id == "ADMIN001":
             raise AppError(code="VALIDATION_ERROR", message="System Administrator cannot be assigned to field work.", status_code=422)
 
-        item = await self.session.get(
-            JobItem,
-            payload.job_item_id,
-            options=[selectinload(JobItem.worksite)],
+        stmt = (
+            select(JobItem)
+            .where(JobItem.id == payload.job_item_id)
+            .options(selectinload(JobItem.worksite))
         )
+        item = (await self.session.execute(stmt)).scalar_one_or_none()
         if not item:
             raise AppError(code="NOT_FOUND", message=f"Job item {payload.job_item_id} not found.", status_code=404)
 
@@ -612,9 +627,12 @@ class SchedulingService:
                 status_code=409,
             )
 
-        item = await self.session.get(
-            JobItem, payload.job_item_id, options=[selectinload(JobItem.worksite)]
+        item_stmt = (
+            select(JobItem)
+            .where(JobItem.id == payload.job_item_id)
+            .options(selectinload(JobItem.worksite))
         )
+        item = (await self.session.execute(item_stmt)).scalar_one_or_none()
         if not item:
             raise AppError(code="NOT_FOUND", message=f"Job item {payload.job_item_id} not found.", status_code=404)
 
@@ -825,20 +843,24 @@ class SchedulingService:
     ) -> list[CandidateRecommendationRead]:
         """Rank worker candidates for a job assignment."""
         if occurrence_id:
-            occ = await self.session.get(
-                JobOccurrence,
-                occurrence_id,
-                options=[selectinload(JobOccurrence.job_item).selectinload(JobItem.worksite)],
+            occ_stmt = (
+                select(JobOccurrence)
+                .where(JobOccurrence.id == occurrence_id)
+                .options(selectinload(JobOccurrence.job_item).selectinload(JobItem.worksite))
             )
+            occ = (await self.session.execute(occ_stmt)).scalar_one_or_none()
             if not occ:
                 raise AppError(code="NOT_FOUND", message=f"Job occurrence {occurrence_id} not found.", status_code=404)
             item = occ.job_item
             t_date = target_date or occ.due_date or occ.window_start
             req_hours = occ.required_hours_per_staff
         elif job_item_id:
-            item = await self.session.get(
-                JobItem, job_item_id, options=[selectinload(JobItem.worksite)]
+            item_stmt = (
+                select(JobItem)
+                .where(JobItem.id == job_item_id)
+                .options(selectinload(JobItem.worksite))
             )
+            item = (await self.session.execute(item_stmt)).scalar_one_or_none()
             if not item:
                 raise AppError(code="NOT_FOUND", message=f"Job item {job_item_id} not found.", status_code=404)
             t_date = target_date or date.today()
@@ -1440,7 +1462,15 @@ class SchedulingService:
         """Batch assign multiple workers to a job item for a date or standing horizon."""
         results: list[ScheduledWorkRead] = []
 
-        item = await self.session.get(JobItem, payload.job_item_id)
+        item_stmt = (
+            select(JobItem)
+            .where(JobItem.id == payload.job_item_id)
+            .options(
+                selectinload(JobItem.worksite),
+                selectinload(JobItem.occurrences),
+            )
+        )
+        item = (await self.session.execute(item_stmt)).scalar_one_or_none()
         if not item:
             raise AppError(code="NOT_FOUND", message=f"Job item {payload.job_item_id} not found.", status_code=404)
 
@@ -1458,6 +1488,41 @@ class SchedulingService:
                     payload=standing_req,
                     current_user_id=current_user_id,
                 )
+                # Fetch the active ScheduledWork on payload.work_date to return in results
+                sw_stmt = (
+                    select(ScheduledWork)
+                    .where(
+                        ScheduledWork.employee_id == emp_id,
+                        ScheduledWork.job_item_id == payload.job_item_id,
+                        ScheduledWork.work_date == payload.work_date,
+                        ScheduledWork.status == "ACTIVE",
+                    )
+                    .options(
+                        selectinload(ScheduledWork.employee),
+                        selectinload(ScheduledWork.job_item).selectinload(JobItem.worksite),
+                    )
+                )
+                sw_row = (await self.session.execute(sw_stmt)).scalar_one_or_none()
+                if sw_row:
+                    results.append(
+                        ScheduledWorkRead(
+                            id=sw_row.id,
+                            employee_id=sw_row.employee_id,
+                            employee_name=sw_row.employee.name if sw_row.employee else None,
+                            work_date=sw_row.work_date,
+                            occurrence_id=sw_row.occurrence_id,
+                            job_item_id=sw_row.job_item_id,
+                            worksite_id=sw_row.worksite_id,
+                            job_number=sw_row.job_item.worksite.job_number if sw_row.job_item else None,
+                            sub_item_code=sw_row.job_item.sub_item_code if sw_row.job_item else None,
+                            assigned_hours=sw_row.assigned_hours,
+                            sequence=sw_row.sequence,
+                            status=sw_row.status,
+                            source=sw_row.source,
+                            version=sw_row.version,
+                            created_at=sw_row.created_at,
+                        )
+                    )
             else:
                 sw_req = ScheduledWorkCreate(
                     employee_id=emp_id,

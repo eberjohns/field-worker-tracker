@@ -582,3 +582,51 @@ async def test_300_workers_roster_performance(admin_client, sample_test_data):
     assert data["total_workers"] >= 300
     # Performance requirement: under 2.0 seconds
     assert elapsed_sec < 2.0, f"Roster for 300 workers took {elapsed_sec:.3f}s (exceeded 2.0s limit)"
+
+
+@db_required
+@pytest.mark.asyncio
+async def test_scheduled_work_batch_daily_and_standing(admin_client, sample_test_data):
+    """Test batch assignment of workers via POST /api/v1/scheduled-work/batch for daily and standing."""
+    w1_id = str(sample_test_data["w1_id"])
+    w2_id = str(sample_test_data["w2_id"])
+    item_id = str(sample_test_data["item_a_id"])
+
+    # 1. Batch assign daily scheduled work
+    resp = await admin_client.post(
+        "/api/v1/scheduled-work/batch",
+        json={
+            "employee_ids": [w1_id, w2_id],
+            "job_item_id": item_id,
+            "work_date": "2026-11-04",
+            "assigned_hours": 8.0,
+            "as_standing_assignment": False,
+            "acknowledge_warnings": True,
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    data = resp.json()
+    assert len(data) == 2
+    sw_ids = [d["id"] for d in data]
+
+    # 2. Cancel one assignment via DELETE /api/v1/scheduled-work/{id}
+    del_resp = await admin_client.delete(f"/api/v1/scheduled-work/{sw_ids[0]}")
+    assert del_resp.status_code == 204
+
+    # 3. Batch assign as standing team (materializes horizon without MissingGreenlet)
+    standing_resp = await admin_client.post(
+        "/api/v1/scheduled-work/batch",
+        json={
+            "employee_ids": [w1_id],
+            "job_item_id": item_id,
+            "work_date": "2026-11-09",
+            "assigned_hours": 8.0,
+            "as_standing_assignment": True,
+            "acknowledge_warnings": True,
+        },
+    )
+    assert standing_resp.status_code == 201, standing_resp.text
+    standing_data = standing_resp.json()
+    assert len(standing_data) >= 1
+    assert standing_data[0]["employee_id"] == w1_id
+
