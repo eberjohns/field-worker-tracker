@@ -146,10 +146,21 @@ export const CoverageView: React.FC<CoverageViewProps> = ({ coverage, onSlotClic
                           <div className="font-bold text-slate-900 text-xs">
                             Item {item.sub_item_code}: {item.staff_grade_description}
                           </div>
-                          <div className="flex items-center space-x-2 mt-1.5">
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                             <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-blue-50 border border-blue-200 text-blue-700 shadow-2xs">
                               Required: {item.planned_grade_code}
                             </span>
+                            {item.frequency_unit && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                {item.frequency_unit === "WEEK"
+                                  ? Number(item.occurrences_per_period || 6) >= 6
+                                    ? "Daily (6d/wk)"
+                                    : `${Number(item.occurrences_per_period || 1).toFixed(0)}x/week`
+                                  : item.frequency_unit === "MONTH"
+                                  ? `${Number(item.occurrences_per_period || 1).toFixed(0)}x/month`
+                                  : `${Number(item.occurrences_per_period || 1).toFixed(0)}x/${item.frequency_unit.toLowerCase()}`}
+                              </span>
+                            )}
                             <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600">
                               {item.deployment_type}
                             </span>

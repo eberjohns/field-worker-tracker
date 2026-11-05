@@ -65,6 +65,35 @@ def test_generate_assignment_dates():
     assert slots[6].is_working_day is False
 
 
+def test_generate_assignment_dates_skips_worker_weekly_off_day():
+    """Verify that a worker's weekly off day is not scheduled for work."""
+    start = date(2026, 11, 2)  # Monday
+    end = date(2026, 11, 8)    # Sunday
+
+    slots = list(
+        generate_assignment_dates(
+            start_date=start,
+            end_date=end,
+            weekday_pattern=["MON", "TUE", "WED", "THU", "FRI", "SAT"],
+            public_holidays=set(),
+            skip_public_holidays=True,
+            weekly_off_day="FRIDAY",
+        )
+    )
+
+    # Friday is Nov 6
+    fri_slot = slots[4]
+    assert fri_slot.work_date == date(2026, 11, 6)
+    assert fri_slot.weekday == "FRI"
+    assert fri_slot.is_weekly_off is True
+    assert fri_slot.is_working_day is False
+
+    # Thursday is working
+    thu_slot = slots[3]
+    assert thu_slot.is_weekly_off is False
+    assert thu_slot.is_working_day is True
+
+
 def test_evaluate_worker_day_marker():
     # 1. Active assignments -> None (cells show chips)
     ctx1 = WorkerDayContext(
@@ -360,6 +389,68 @@ def test_suggestions_ranking():
     assert ranked[0].exact_staff_type_match is True
     # c2 is second
     assert ranked[1].worker.employee_id == "c2"
+    assert ranked[1].exact_staff_type_match is False
+
+
+def test_suggestions_ranking_prioritizes_role_over_same_crew():
+    """Verify that an exact staff grade description match outranks same-crew non-matching roles."""
+    job = TargetJobItem(
+        job_item_id="item_gh",
+        worksite_id="site1",
+        planned_grade_code="G1C",
+        staff_grade_description="Gardener Helper",
+        deployment_type="PERMANENT",
+        required_hours=Decimal("8.0"),
+    )
+    target_date = date(2026, 11, 4)
+
+    # Worker In Same Crew but wrong role (Team Leader)
+    crew_tl = CandidateWorker(
+        employee_id="tl",
+        name="Team Leader in Crew",
+        tally_id="TL01",
+        is_active=True,
+        join_date=date(2025, 1, 1),
+        employment_end_date=None,
+        grade_code="G1C",
+        staff_grade_description="Team Leader",
+        weekly_off_day="SUNDAY",
+        standard_hours=Decimal("8.0"),
+        is_on_leave=False,
+        is_budget_only=False,
+        worked_at_site_recently=True,
+        shares_supervisor=True,  # same crew!
+        weekly_allocated_hours=Decimal("0.0"),
+        today_allocated_hours=Decimal("0.0"),
+    )
+
+    # Worker in Different Crew but EXACT ROLE match (Gardener Helper)
+    diff_crew_gh = CandidateWorker(
+        employee_id="gh",
+        name="Gardener Helper in Other Crew",
+        tally_id="GH01",
+        is_active=True,
+        join_date=date(2025, 1, 1),
+        employment_end_date=None,
+        grade_code="G1C",
+        staff_grade_description="Gardener Helper",  # exact match!
+        weekly_off_day="SUNDAY",
+        standard_hours=Decimal("8.0"),
+        is_on_leave=False,
+        is_budget_only=False,
+        worked_at_site_recently=False,
+        shares_supervisor=False,
+        weekly_allocated_hours=Decimal("0.0"),
+        today_allocated_hours=Decimal("0.0"),
+    )
+
+    ranked = rank_candidates_for_job([crew_tl, diff_crew_gh], job, target_date)
+    assert len(ranked) == 2
+    # Exact role match MUST be ranked #1
+    assert ranked[0].worker.employee_id == "gh"
+    assert ranked[0].exact_staff_type_match is True
+    # Same crew wrong role is ranked #2
+    assert ranked[1].worker.employee_id == "tl"
     assert ranked[1].exact_staff_type_match is False
 
 

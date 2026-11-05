@@ -278,6 +278,7 @@ class SchedulingService:
             weekday_pattern=standing.weekday_pattern,
             public_holidays=holidays,
             skip_public_holidays=True,
+            weekly_off_day=emp.weekly_off_day,
         )
 
         assigned_hours = standing.hours_per_day or item.hours_per_occurrence_per_staff
@@ -939,6 +940,7 @@ class SchedulingService:
         emp_to_supervisor: dict[UUID, tuple[UUID, str]] = {
             r[0]: (r[1], r[2]) for r in rep_rows
         }
+        supervisors_with_subordinates = {r[1] for r in rep_rows}
 
         candidate_ids = [emp.id for emp in employees]
         base_std_map = await self.get_employees_base_standard_hours(candidate_ids, t_date)
@@ -949,8 +951,20 @@ class SchedulingService:
             base_std = base_std_map.get(emp.id, Decimal("8.0"))
 
             sup_info = emp_to_supervisor.get(emp.id)
-            sup_id = sup_info[0] if sup_info else None
-            sup_name = sup_info[1] if sup_info else None
+            if sup_info:
+                sup_id = sup_info[0]
+                sup_name = sup_info[1]
+            elif (
+                emp.id in supervisors_with_subordinates
+                or emp.role == "SUPERVISOR"
+                or "supervisor" in (emp.staff_grade_description or "").lower()
+            ):
+                sup_id = emp.id
+                sup_name = f"{emp.name} (Crew Lead)"
+            else:
+                sup_id = None
+                sup_name = None
+
             is_same_site_group = bool(sup_id and sup_id in active_site_supervisors)
 
             candidates.append(
@@ -1139,6 +1153,18 @@ class SchedulingService:
         emp_ids = [e.id for e in employees]
         base_hours_by_emp = await self.get_employees_base_standard_hours(emp_ids, week_start)
 
+        # Map supervisor reporting lines for all employees
+        reporting_stmt = (
+            select(EmployeeReportingLine.employee_id, EmployeeReportingLine.manager_id, Employee.name)
+            .join(Employee, EmployeeReportingLine.manager_id == Employee.id)
+            .where(EmployeeReportingLine.relationship == "SUPERVISOR")
+        )
+        rep_rows = (await self.session.execute(reporting_stmt)).all()
+        emp_to_supervisor: dict[UUID, tuple[UUID, str]] = {
+            r[0]: (r[1], r[2]) for r in rep_rows
+        }
+        supervisors_with_subordinates = {r[1] for r in rep_rows}
+
         # Batch-fetch active time rules for all relevant countries
         unique_countries = {emp.country for emp in employees if emp.country}
         time_rules_by_country: dict[str, list[TimeRuleDefinition]] = {}
@@ -1252,6 +1278,21 @@ class SchedulingService:
             if problems_only and not (week_over or week_under):
                 continue
 
+            sup_info = emp_to_supervisor.get(emp.id)
+            if sup_info:
+                sup_id: UUID | None = sup_info[0]
+                sup_name: str | None = sup_info[1]
+            elif (
+                emp.id in supervisors_with_subordinates
+                or emp.role == "SUPERVISOR"
+                or "supervisor" in (emp.staff_grade_description or "").lower()
+            ):
+                sup_id = emp.id
+                sup_name = f"{emp.name} (Crew Lead)"
+            else:
+                sup_id = None
+                sup_name = "Direct / Independent Staff"
+
             worker_rows.append(
                 RosterWorkerRow(
                     employee_id=emp.id,
@@ -1266,6 +1307,8 @@ class SchedulingService:
                     week_standard_hours=week_std,
                     week_is_over=week_over,
                     week_is_under=week_under,
+                    supervisor_id=sup_id,
+                    supervisor_name=sup_name,
                     remarks=f"Transport: {emp.accommodation.name}" if emp.accommodation else "Standard Transport",
                 )
             )
@@ -1375,6 +1418,17 @@ class SchedulingService:
                 if not item.is_active:
                     continue
 
+                # Count assigned visits for this item across the entire week
+                total_week_assigned_slots = sum(
+                    len(sw_by_item_date.get((item.id, week_start + timedelta(days=d)), []))
+                    for d in range(7)
+                )
+
+                freq_unit = item.frequency_unit or "WEEK"
+                occ_per_period = float(item.occurrences_per_period or 6.0)
+                is_periodic_weekly = freq_unit == "WEEK" and occ_per_period < 6.0 and not item.weekday_pattern
+                weekly_target_met = total_week_assigned_slots >= int(occ_per_period) if is_periodic_weekly else False
+
                 days: list[CoverageDayCell] = []
                 for day_idx in range(7):
                     c_date = week_start + timedelta(days=day_idx)
@@ -1382,18 +1436,29 @@ class SchedulingService:
 
                     # Check if day is scheduled for this item
                     pattern = item.weekday_pattern or ["MON", "TUE", "WED", "THU", "FRI", "SAT"]
-                    is_working_day = (
-                        weekday_str in pattern
-                        and c_date not in holidays
+                    is_contract_active = (
+                        c_date not in holidays
                         and (not item.end_date or c_date <= item.end_date)
                         and c_date >= item.start_date
                     )
 
                     assigned = sw_by_item_date.get((item.id, c_date), [])
                     assigned_count = len(assigned)
-                    required_count = item.required_staff_count if is_working_day else 0
 
-                    is_uncovered = is_working_day and (assigned_count < required_count)
+                    if is_periodic_weekly:
+                        if assigned_count > 0:
+                            required_count = item.required_staff_count
+                            is_uncovered = assigned_count < required_count
+                        elif weekly_target_met or not is_contract_active or weekday_str == "SUNDAY":
+                            required_count = 0
+                            is_uncovered = False
+                        else:
+                            required_count = item.required_staff_count
+                            is_uncovered = True
+                    else:
+                        is_working_day = (weekday_str in pattern) and is_contract_active
+                        required_count = item.required_staff_count if is_working_day else 0
+                        is_uncovered = is_working_day and (assigned_count < required_count)
 
                     assigned_details = [
                         AssignedWorkerSummary(
@@ -1427,6 +1492,8 @@ class SchedulingService:
                         deployment_type=item.deployment_type,
                         required_staff_count=item.required_staff_count,
                         hours_per_occurrence=item.hours_per_occurrence_per_staff,
+                        frequency_unit=item.frequency_unit,
+                        occurrences_per_period=item.occurrences_per_period,
                         days=days,
                     )
                 )
@@ -1478,10 +1545,15 @@ class SchedulingService:
 
         for emp_id in payload.employee_ids:
             if payload.as_standing_assignment:
+                standing_pattern = item.weekday_pattern
+                if not standing_pattern and item.frequency_unit == "WEEK" and item.occurrences_per_period == 1:
+                    standing_pattern = [INT_TO_WEEKDAY[payload.work_date.weekday()]]
+
                 standing_req = StandingAssignmentCreate(
                     employee_id=emp_id,
                     job_item_id=payload.job_item_id,
                     start_date=payload.work_date,
+                    weekday_pattern=standing_pattern,
                     hours_per_day=assigned_hours,
                 )
                 await self.create_standing_assignment(

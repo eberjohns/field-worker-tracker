@@ -9,7 +9,7 @@ import {
 interface RosterViewProps {
   roster: RosterResponse;
   compactMode: boolean;
-  onCellClick: (worker: RosterWorkerRow, day: RosterDayCell) => void;
+  onCellClick?: (worker: RosterWorkerRow, day: RosterDayCell) => void;
   onWorkerSelect: (worker: RosterWorkerRow) => void;
   selectedWorkerId?: string | null;
   onExportExcel: () => void;
@@ -126,7 +126,7 @@ export const RosterView: React.FC<RosterViewProps> = ({
                       return (
                         <td
                           key={day.work_date}
-                          onClick={() => onCellClick(worker, day)}
+                          onClick={() => (onCellClick ? onCellClick(worker, day) : onWorkerSelect(worker))}
                           className="p-1.5 border-r border-slate-200 align-top cursor-pointer hover:bg-blue-50/40 transition relative group"
                         >
                           {hasChips ? (

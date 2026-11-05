@@ -1,7 +1,18 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "@tanstack/react-router";
 import { useAuth } from "../context/AuthContext";
-import { Search, Filter, Layers, CheckSquare, Square, RefreshCw, ChevronDown, ChevronRight } from "lucide-react";
+import {
+  Search,
+  Filter,
+  Layers,
+  CheckSquare,
+  Square,
+  RefreshCw,
+  ChevronDown,
+  ChevronRight,
+  Shield,
+  X,
+} from "lucide-react";
 
 interface Employee {
   id: string;
@@ -18,11 +29,22 @@ interface Employee {
 }
 
 interface SupervisorGroup {
-  managerId: string;
-  managerName: string;
-  managerTallyId: string;
-  managerRole: string;
+  supervisor: Employee;
+  superintendents: Employee[];
+  engineers: Employee[];
   members: Employee[];
+}
+
+interface LeaderWithStats {
+  employee: Employee;
+  crewsCount: number;
+  workersCount: number;
+}
+
+interface HierarchyNode {
+  employee: Employee;
+  relationship?: string | null;
+  subordinates?: HierarchyNode[];
 }
 
 export const Employees: React.FC = () => {
@@ -31,12 +53,21 @@ export const Employees: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("");
-  const [groupBySupervisor, setGroupBySupervisor] = useState(false);
+  const [groupBySupervisor, setGroupBySupervisor] = useState(true);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   // Hierarchy grouping state
   const [supervisorGroups, setSupervisorGroups] = useState<SupervisorGroup[]>([]);
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const [superintendentsList, setSuperintendentsList] = useState<LeaderWithStats[]>([]);
+  const [engineersList, setEngineersList] = useState<LeaderWithStats[]>([]);
+  const [directMembers, setDirectMembers] = useState<Employee[]>([]);
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({
+    unassigned: true, // Direct staff collapsed by default to keep page focused
+  });
+
+  // Focus & filter by leader
+  const [focusedLeaderId, setFocusedLeaderId] = useState<string | null>(null);
+  const [filterLeaderId, setFilterLeaderId] = useState<string | null>(null);
 
   // Bulk update dialog state
   const [bulkModalOpen, setBulkModalOpen] = useState(false);
@@ -48,6 +79,7 @@ export const Employees: React.FC = () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
+      params.set("limit", "1000");
       if (search) params.set("q", search);
       if (roleFilter) params.set("role", roleFilter);
 
@@ -73,48 +105,151 @@ export const Employees: React.FC = () => {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (res.ok) {
-        const tree = await res.json();
-        const groups: SupervisorGroup[] = [];
-        const directMembers: Employee[] = [];
+        const tree: HierarchyNode[] = await res.json();
 
-        const collectDescendants = (subordinates: any[]): Employee[] => {
-          const list: Employee[] = [];
-          for (const sub of subordinates) {
-            if (sub.employee && sub.employee.tally_id !== "ADMIN001") {
-              list.push(sub.employee);
-              if (sub.subordinates && sub.subordinates.length > 0) {
-                list.push(...collectDescendants(sub.subordinates));
-              }
+        const allEmps = new Map<string, Employee>();
+        const supsMap = new Map<
+          string,
+          {
+            emp: Employee;
+            supts: Map<string, Employee>;
+            engs: Map<string, Employee>;
+            members: Map<string, Employee>;
+          }
+        >();
+        const allSuptsMap = new Map<string, Employee>();
+        const allEngsMap = new Map<string, Employee>();
+        const assignedWorkerIds = new Set<string>();
+
+        const processNode = (node: HierarchyNode, parent?: Employee, rel?: string | null) => {
+          const emp = node.employee;
+          if (!emp || emp.tally_id === "ADMIN001" || emp.role === "ADMIN") return;
+          allEmps.set(emp.id, emp);
+
+          if (emp.role === "ENGINEER") {
+            allEngsMap.set(emp.id, emp);
+          } else if (emp.role === "SUPERINTENDENT") {
+            allSuptsMap.set(emp.id, emp);
+          } else if (emp.role === "SUPERVISOR") {
+            if (!supsMap.has(emp.id)) {
+              supsMap.set(emp.id, {
+                emp,
+                supts: new Map(),
+                engs: new Map(),
+                members: new Map(),
+              });
             }
           }
-          return list;
+
+          if (parent && rel) {
+            if (rel === "ENGINEER" && parent.role === "ENGINEER") {
+              if (emp.role === "SUPERVISOR") {
+                if (!supsMap.has(emp.id)) {
+                  supsMap.set(emp.id, {
+                    emp,
+                    supts: new Map(),
+                    engs: new Map(),
+                    members: new Map(),
+                  });
+                }
+                supsMap.get(emp.id)!.engs.set(parent.id, parent);
+              }
+            } else if (rel === "SUPERINTENDENT" && parent.role === "SUPERINTENDENT") {
+              if (emp.role === "SUPERVISOR") {
+                if (!supsMap.has(emp.id)) {
+                  supsMap.set(emp.id, {
+                    emp,
+                    supts: new Map(),
+                    engs: new Map(),
+                    members: new Map(),
+                  });
+                }
+                supsMap.get(emp.id)!.supts.set(parent.id, parent);
+              }
+            } else if (rel === "SUPERVISOR") {
+              const pId = parent.id;
+              if (!supsMap.has(pId)) {
+                supsMap.set(pId, {
+                  emp: parent,
+                  supts: new Map(),
+                  engs: new Map(),
+                  members: new Map(),
+                });
+              }
+              supsMap.get(pId)!.members.set(emp.id, emp);
+              assignedWorkerIds.add(emp.id);
+            }
+          }
+
+          if (node.subordinates && node.subordinates.length > 0) {
+            for (const child of node.subordinates) {
+              processNode(child, emp, child.relationship);
+            }
+          }
         };
 
         for (const root of tree) {
-          if (root.employee.tally_id === "ADMIN001") continue;
-          if (root.subordinates && root.subordinates.length > 0) {
-            groups.push({
-              managerId: root.employee.id,
-              managerName: root.employee.name,
-              managerTallyId: root.employee.tally_id,
-              managerRole: root.employee.role,
-              members: collectDescendants(root.subordinates),
-            });
-          } else {
-            directMembers.push(root.employee);
-          }
+          processNode(root);
         }
 
-        if (directMembers.length > 0) {
+        // Build groups array
+        const groups: SupervisorGroup[] = [];
+        for (const [_, supData] of supsMap) {
           groups.push({
-            managerId: "unassigned",
-            managerName: "Direct / Independent Staff",
-            managerTallyId: "—",
-            managerRole: "DIRECT",
-            members: directMembers,
+            supervisor: supData.emp,
+            superintendents: Array.from(supData.supts.values()),
+            engineers: Array.from(supData.engs.values()),
+            members: Array.from(supData.members.values()),
           });
         }
+
+        // Sort groups by supervisor name
+        groups.sort((a, b) => a.supervisor.name.localeCompare(b.supervisor.name));
         setSupervisorGroups(groups);
+
+        // Collect leadership with stats
+        const suptsWithStats: LeaderWithStats[] = Array.from(allSuptsMap.values()).map((supt) => {
+          let crews = 0;
+          let workers = 0;
+          for (const g of groups) {
+            if (g.superintendents.some((s) => s.id === supt.id)) {
+              crews++;
+              workers += g.members.length;
+            }
+          }
+          return { employee: supt, crewsCount: crews, workersCount: workers };
+        });
+        suptsWithStats.sort((a, b) => a.employee.name.localeCompare(b.employee.name));
+        setSuperintendentsList(suptsWithStats);
+
+        const engsWithStats: LeaderWithStats[] = Array.from(allEngsMap.values()).map((eng) => {
+          let crews = 0;
+          let workers = 0;
+          for (const g of groups) {
+            if (g.engineers.some((e) => e.id === eng.id)) {
+              crews++;
+              workers += g.members.length;
+            }
+          }
+          return { employee: eng, crewsCount: crews, workersCount: workers };
+        });
+        engsWithStats.sort((a, b) => a.employee.name.localeCompare(b.employee.name));
+        setEngineersList(engsWithStats);
+
+        // Direct / unassigned staff
+        const direct: Employee[] = [];
+        for (const [eId, emp] of allEmps) {
+          if (
+            !assignedWorkerIds.has(eId) &&
+            !supsMap.has(eId) &&
+            !allSuptsMap.has(eId) &&
+            !allEngsMap.has(eId)
+          ) {
+            direct.push(emp);
+          }
+        }
+        direct.sort((a, b) => a.name.localeCompare(b.name));
+        setDirectMembers(direct);
       }
     } catch (err) {
       console.error("Failed to load hierarchy:", err);
@@ -123,13 +258,8 @@ export const Employees: React.FC = () => {
 
   useEffect(() => {
     fetchEmployees();
+    fetchHierarchy();
   }, [search, roleFilter]);
-
-  useEffect(() => {
-    if (groupBySupervisor) {
-      fetchHierarchy();
-    }
-  }, [groupBySupervisor]);
 
   const toggleGroupCollapse = (managerId: string) => {
     setCollapsedGroups((prev) => ({
@@ -142,6 +272,18 @@ export const Employees: React.FC = () => {
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
     );
+  };
+
+  const scrollToLeader = (leaderId: string) => {
+    setFocusedLeaderId(leaderId);
+    const el = document.getElementById(`mgmt-${leaderId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    // Highlight for 3.5 seconds
+    setTimeout(() => {
+      setFocusedLeaderId((prev) => (prev === leaderId ? null : prev));
+    }, 3500);
   };
 
   const handleBulkUpdate = async (e: React.FormEvent) => {
@@ -166,6 +308,7 @@ export const Employees: React.FC = () => {
         setBulkModalOpen(false);
         setSelectedIds([]);
         fetchEmployees();
+        fetchHierarchy();
       }
     } catch (err) {
       console.error(err);
@@ -174,13 +317,34 @@ export const Employees: React.FC = () => {
     }
   };
 
+  // Filtered supervisor groups based on active leader filter
+  const visibleSupervisorGroups = supervisorGroups.filter((g) => {
+    if (!filterLeaderId) return true;
+    return (
+      g.superintendents.some((s) => s.id === filterLeaderId) ||
+      g.engineers.some((e) => e.id === filterLeaderId)
+    );
+  });
+
+  const activeLeader =
+    filterLeaderId &&
+    [...superintendentsList, ...engineersList].find((l) => l.employee.id === filterLeaderId);
+
+  // Overall metric counts
+  const totalEmployeesCount = employees.length;
+  const suptsCount = employees.filter((e) => e.role === "SUPERINTENDENT").length;
+  const engsCount = employees.filter((e) => e.role === "ENGINEER").length;
+  const supsCount = employees.filter((e) => e.role === "SUPERVISOR").length;
+  const workersCount = employees.filter((e) => e.role === "WORKER").length;
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      {/* Header & Controls */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-slate-900">Employees & People</h2>
           <p className="text-sm text-slate-500 mt-1">
-            Manage worker records, reporting scopes, and operational profiles
+            Supervisor crews, leadership oversight, and operational staff profiles
           </p>
         </div>
 
@@ -188,7 +352,7 @@ export const Employees: React.FC = () => {
           {selectedIds.length > 0 && (user?.role === "ADMIN" || user?.role === "ENGINEER") && (
             <button
               onClick={() => setBulkModalOpen(true)}
-              className="px-3.5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition"
+              className="px-3.5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition shadow-sm"
             >
               Bulk Update ({selectedIds.length})
             </button>
@@ -196,8 +360,10 @@ export const Employees: React.FC = () => {
 
           <button
             onClick={() => setGroupBySupervisor(!groupBySupervisor)}
-            className={`flex items-center gap-2 px-3 py-2 border rounded-lg text-sm font-medium transition ${
-              groupBySupervisor ? "bg-slate-200 border-slate-300" : "bg-white border-slate-200 hover:bg-slate-50"
+            className={`flex items-center gap-2 px-3 py-2 border rounded-lg text-sm font-medium transition shadow-xs ${
+              groupBySupervisor
+                ? "bg-indigo-50 border-indigo-200 text-indigo-700 font-semibold"
+                : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
             }`}
           >
             <Layers className="h-4 w-4" />
@@ -206,8 +372,207 @@ export const Employees: React.FC = () => {
         </div>
       </div>
 
+      {/* High-Level Organization Metrics */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+          <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+            Total Staff
+          </span>
+          <p className="text-2xl font-bold text-slate-900 mt-0.5">{totalEmployeesCount}</p>
+        </div>
+        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+          <span className="text-[11px] font-semibold text-purple-700 uppercase tracking-wider">
+            Superintendents
+          </span>
+          <p className="text-2xl font-bold text-purple-900 mt-0.5">{suptsCount}</p>
+        </div>
+        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+          <span className="text-[11px] font-semibold text-blue-700 uppercase tracking-wider">
+            Engineers
+          </span>
+          <p className="text-2xl font-bold text-blue-900 mt-0.5">{engsCount}</p>
+        </div>
+        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+          <span className="text-[11px] font-semibold text-amber-700 uppercase tracking-wider">
+            Supervisors
+          </span>
+          <p className="text-2xl font-bold text-amber-900 mt-0.5">{supsCount}</p>
+        </div>
+        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+          <span className="text-[11px] font-semibold text-emerald-700 uppercase tracking-wider">
+            Field Workers
+          </span>
+          <p className="text-2xl font-bold text-emerald-900 mt-0.5">{workersCount}</p>
+        </div>
+      </div>
+
+      {/* Leadership & Oversight Section (Superintendents & Engineers shown singly above) */}
+      {groupBySupervisor && (superintendentsList.length > 0 || engineersList.length > 0) && (
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Shield className="h-4 w-4 text-indigo-600" />
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                Leadership & Field Oversight (Superintendents & Engineers)
+              </h3>
+            </div>
+            <span className="text-xs text-slate-400">
+              Click a card to filter groups below · Click chips in supervisor rows to focus here
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {/* Superintendents */}
+            {superintendentsList.map(({ employee: supt, crewsCount, workersCount }) => {
+              const isFocused = focusedLeaderId === supt.id;
+              const isFiltering = filterLeaderId === supt.id;
+              return (
+                <div
+                  key={supt.id}
+                  id={`mgmt-${supt.id}`}
+                  onClick={() => setFilterLeaderId(isFiltering ? null : supt.id)}
+                  className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                    isFocused
+                      ? "ring-2 ring-indigo-500 bg-indigo-50/80 border-indigo-300 scale-[1.01]"
+                      : isFiltering
+                      ? "bg-purple-50/80 border-purple-400 ring-2 ring-purple-300"
+                      : "bg-slate-50/70 border-slate-200 hover:bg-slate-100/70"
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <Link
+                          to="/employees/$employeeId"
+                          params={{ employeeId: supt.id }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="font-bold text-sm text-slate-900 hover:text-indigo-600 hover:underline"
+                        >
+                          {supt.name}
+                        </Link>
+                        <span className="text-xs font-mono text-slate-500">({supt.tally_id})</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800 uppercase">
+                          Superintendent
+                        </span>
+                        {supt.grade_code && (
+                          <span className="text-[11px] font-mono px-1 py-0.5 bg-slate-200/80 rounded text-slate-700">
+                            {supt.grade_code}
+                          </span>
+                        )}
+                        {supt.staff_grade_description && (
+                          <span className="text-[11px] text-slate-500">
+                            • {supt.staff_grade_description}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-white border border-slate-200 text-slate-700 shadow-2xs">
+                        {crewsCount} crew{crewsCount === 1 ? "" : "s"} · {workersCount} wkr
+                        {workersCount === 1 ? "" : "s"}
+                      </span>
+                      {isFiltering && (
+                        <p className="text-[10px] font-bold text-purple-700 mt-1">
+                          ✓ Filtering below
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Engineers */}
+            {engineersList.map(({ employee: eng, crewsCount, workersCount }) => {
+              const isFocused = focusedLeaderId === eng.id;
+              const isFiltering = filterLeaderId === eng.id;
+              return (
+                <div
+                  key={eng.id}
+                  id={`mgmt-${eng.id}`}
+                  onClick={() => setFilterLeaderId(isFiltering ? null : eng.id)}
+                  className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                    isFocused
+                      ? "ring-2 ring-indigo-500 bg-indigo-50/80 border-indigo-300 scale-[1.01]"
+                      : isFiltering
+                      ? "bg-blue-50/80 border-blue-400 ring-2 ring-blue-300"
+                      : "bg-slate-50/70 border-slate-200 hover:bg-slate-100/70"
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <Link
+                          to="/employees/$employeeId"
+                          params={{ employeeId: eng.id }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="font-bold text-sm text-slate-900 hover:text-indigo-600 hover:underline"
+                        >
+                          {eng.name}
+                        </Link>
+                        <span className="text-xs font-mono text-slate-500">({eng.tally_id})</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 uppercase">
+                          Engineer
+                        </span>
+                        {eng.grade_code && (
+                          <span className="text-[11px] font-mono px-1 py-0.5 bg-slate-200/80 rounded text-slate-700">
+                            {eng.grade_code}
+                          </span>
+                        )}
+                        {eng.staff_grade_description && (
+                          <span className="text-[11px] text-slate-500">
+                            • {eng.staff_grade_description}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-white border border-slate-200 text-slate-700 shadow-2xs">
+                        {crewsCount} crew{crewsCount === 1 ? "" : "s"} · {workersCount} wkr
+                        {workersCount === 1 ? "" : "s"}
+                      </span>
+                      {isFiltering && (
+                        <p className="text-[10px] font-bold text-blue-700 mt-1">
+                          ✓ Filtering below
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Active Filter Banner */}
+      {filterLeaderId && activeLeader && (
+        <div className="flex items-center justify-between bg-indigo-50 border border-indigo-200 px-4 py-2.5 rounded-lg text-sm text-indigo-900">
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-indigo-600" />
+            <span>
+              Showing supervisor groups overseen by{" "}
+              <strong>
+                {activeLeader.employee.name} ({activeLeader.employee.role})
+              </strong>
+            </span>
+          </div>
+          <button
+            onClick={() => setFilterLeaderId(null)}
+            className="flex items-center gap-1 text-xs font-semibold text-indigo-700 hover:text-indigo-900 bg-white px-2.5 py-1 rounded border border-indigo-200 hover:bg-indigo-100 transition"
+          >
+            <X className="h-3.5 w-3.5" />
+            Clear Filter
+          </button>
+        </div>
+      )}
+
       {/* Filter Bar */}
-      <div className="flex items-center gap-4 bg-white p-4 rounded-xl border border-slate-200">
+      <div className="flex items-center gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
         <div className="relative flex-1">
           <Search className="h-4 w-4 absolute left-3 top-3 text-slate-400" />
           <input
@@ -236,8 +601,11 @@ export const Employees: React.FC = () => {
         </div>
 
         <button
-          onClick={fetchEmployees}
-          className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600"
+          onClick={() => {
+            fetchEmployees();
+            fetchHierarchy();
+          }}
+          className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 transition"
           title="Refresh"
         >
           <RefreshCw className="h-4 w-4" />
@@ -245,7 +613,7 @@ export const Employees: React.FC = () => {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
         {loading ? (
           <div className="p-12 text-center text-slate-500 text-sm">Loading employees...</div>
         ) : employees.length === 0 ? (
@@ -269,60 +637,236 @@ export const Employees: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {groupBySupervisor ? (
-                supervisorGroups.map((group) => {
-                  const isCollapsed = collapsedGroups[group.managerId];
-                  const filteredMembers = group.members.filter((m) => {
-                    if (search) {
-                      const q = search.toLowerCase();
-                      return (
-                        m.name.toLowerCase().includes(q) ||
-                        m.tally_id.toLowerCase().includes(q)
-                      );
-                    }
-                    if (roleFilter && m.role !== roleFilter) return false;
-                    return true;
-                  });
+                <>
+                  {/* Supervisor Groups */}
+                  {visibleSupervisorGroups.map((group) => {
+                    const isCollapsed = collapsedGroups[group.supervisor.id];
+                    const filteredMembers = group.members.filter((m) => {
+                      if (search) {
+                        const q = search.toLowerCase();
+                        return (
+                          m.name.toLowerCase().includes(q) || m.tally_id.toLowerCase().includes(q)
+                        );
+                      }
+                      if (roleFilter && m.role !== roleFilter) return false;
+                      return true;
+                    });
 
-                  return (
-                    <React.Fragment key={group.managerId}>
+                    return (
+                      <React.Fragment key={group.supervisor.id}>
+                        {/* Group Header: Grouped by Supervisor */}
+                        <tr
+                          onClick={() => toggleGroupCollapse(group.supervisor.id)}
+                          className="bg-slate-100/90 hover:bg-slate-200/80 cursor-pointer font-semibold text-xs text-slate-800 transition select-none"
+                        >
+                          <td colSpan={9} className="px-4 py-3">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              {/* Left: Supervisor Information */}
+                              <div className="flex items-center gap-2.5">
+                                {isCollapsed ? (
+                                  <ChevronRight className="h-4 w-4 text-slate-500 flex-shrink-0" />
+                                ) : (
+                                  <ChevronDown className="h-4 w-4 text-slate-500 flex-shrink-0" />
+                                )}
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <Link
+                                    to="/employees/$employeeId"
+                                    params={{ employeeId: group.supervisor.id }}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="font-bold text-slate-900 text-sm hover:text-indigo-600 hover:underline"
+                                  >
+                                    {group.supervisor.name}
+                                  </Link>
+                                  <span className="font-mono text-xs text-slate-500">
+                                    ({group.supervisor.tally_id})
+                                  </span>
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 uppercase">
+                                    Supervisor
+                                  </span>
+                                  {group.supervisor.grade_code && (
+                                    <span className="font-mono text-[11px] px-1.5 py-0.5 bg-slate-200 rounded text-slate-700">
+                                      {group.supervisor.grade_code}
+                                    </span>
+                                  )}
+                                  {group.supervisor.staff_grade_description && (
+                                    <span className="text-[11px] text-slate-600 italic">
+                                      • {group.supervisor.staff_grade_description}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Right: Site Superintendent, Engineer & Worker count */}
+                              <div
+                                className="flex items-center gap-2.5 flex-wrap"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {group.superintendents.length > 0 && (
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[10px] font-semibold uppercase text-slate-400">
+                                      Supt:
+                                    </span>
+                                    {group.superintendents.map((s) => (
+                                      <button
+                                        key={s.id}
+                                        type="button"
+                                        onClick={() => scrollToLeader(s.id)}
+                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 transition shadow-2xs"
+                                        title={`Click to focus on Superintendent ${s.name}`}
+                                      >
+                                        <span className="font-semibold">{s.name}</span>
+                                        <span className="text-[10px] opacity-75 font-mono">
+                                          ({s.tally_id})
+                                        </span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {group.engineers.length > 0 && (
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[10px] font-semibold uppercase text-slate-400">
+                                      Eng:
+                                    </span>
+                                    {group.engineers.map((eng) => (
+                                      <button
+                                        key={eng.id}
+                                        type="button"
+                                        onClick={() => scrollToLeader(eng.id)}
+                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition shadow-2xs"
+                                        title={`Click to focus on Engineer ${eng.name}`}
+                                      >
+                                        <span className="font-semibold">{eng.name}</span>
+                                        <span className="text-[10px] opacity-75 font-mono">
+                                          ({eng.tally_id})
+                                        </span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+
+                                <span className="px-2.5 py-1 rounded-md text-xs font-medium bg-white border border-slate-200 text-slate-700 shadow-2xs">
+                                  {filteredMembers.length} team member
+                                  {filteredMembers.length === 1 ? "" : "s"}
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+
+                        {/* Members inside the supervisor group */}
+                        {!isCollapsed &&
+                          (filteredMembers.length === 0 ? (
+                            <tr>
+                              <td colSpan={9} className="px-8 py-3 text-xs text-slate-400 italic">
+                                No matching team members in this supervisor group.
+                              </td>
+                            </tr>
+                          ) : (
+                            filteredMembers.map((m) => {
+                              const isSelected = selectedIds.includes(m.id);
+                              return (
+                                <tr key={m.id} className="hover:bg-slate-50 transition">
+                                  <td className="p-4">
+                                    <button
+                                      onClick={() => toggleSelect(m.id)}
+                                      className="text-slate-400 hover:text-indigo-600"
+                                    >
+                                      {isSelected ? (
+                                        <CheckSquare className="h-4 w-4 text-indigo-600" />
+                                      ) : (
+                                        <Square className="h-4 w-4" />
+                                      )}
+                                    </button>
+                                  </td>
+                                  <td className="p-4 font-mono font-medium text-slate-900">
+                                    <div className="flex items-center gap-1.5 pl-4">
+                                      <span className="text-slate-300 font-mono">└</span>
+                                      <Link
+                                        to="/employees/$employeeId"
+                                        params={{ employeeId: m.id }}
+                                        className="text-indigo-600 hover:underline"
+                                      >
+                                        {m.tally_id}
+                                      </Link>
+                                    </div>
+                                  </td>
+                                  <td className="p-4 font-medium text-slate-900">{m.name}</td>
+                                  <td className="p-4">
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
+                                      {m.role}
+                                    </span>
+                                  </td>
+                                  <td className="p-4">{m.staff_grade_description || "—"}</td>
+                                  <td className="p-4 font-mono text-xs">{m.grade_code || "—"}</td>
+                                  <td className="p-4">{m.weekly_off_day || "SUNDAY"}</td>
+                                  <td className="p-4">
+                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100">
+                                      {m.country}
+                                    </span>
+                                  </td>
+                                  <td className="p-4">
+                                    <span
+                                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                                        m.is_active
+                                          ? "bg-emerald-50 text-emerald-700"
+                                          : "bg-red-50 text-red-700"
+                                      }`}
+                                    >
+                                      {m.is_active ? "Active" : "Inactive"}
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          ))}
+                      </React.Fragment>
+                    );
+                  })}
+
+                  {/* Direct / Independent Staff (unassigned to a supervisor) */}
+                  {directMembers.length > 0 && !filterLeaderId && (
+                    <React.Fragment key="unassigned">
                       <tr
-                        onClick={() => toggleGroupCollapse(group.managerId)}
-                        className="bg-slate-100/90 hover:bg-slate-200/80 cursor-pointer font-semibold text-xs text-slate-800 transition select-none"
+                        onClick={() => toggleGroupCollapse("unassigned")}
+                        className="bg-slate-50 hover:bg-slate-100 cursor-pointer font-semibold text-xs text-slate-700 transition select-none"
                       >
                         <td colSpan={9} className="px-4 py-2.5">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              {isCollapsed ? (
-                                <ChevronRight className="h-4 w-4 text-slate-500" />
+                              {collapsedGroups["unassigned"] ? (
+                                <ChevronRight className="h-4 w-4 text-slate-400" />
                               ) : (
-                                <ChevronDown className="h-4 w-4 text-slate-500" />
+                                <ChevronDown className="h-4 w-4 text-slate-400" />
                               )}
-                              <span className="font-bold text-slate-900">
-                                {group.managerTallyId !== "—"
-                                  ? `${group.managerName} (${group.managerTallyId})`
-                                  : group.managerName}
+                              <span className="font-bold text-slate-800">
+                                Direct / Independent Staff
                               </span>
-                              {group.managerRole !== "DIRECT" && (
-                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700 uppercase">
-                                  {group.managerRole}
-                                </span>
-                              )}
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-200 text-slate-700 uppercase">
+                                Unassigned
+                              </span>
                             </div>
                             <span className="text-slate-500 font-normal">
-                              {filteredMembers.length} team member{filteredMembers.length === 1 ? "" : "s"}
+                              {directMembers.length} staff member
+                              {directMembers.length === 1 ? "" : "s"}
                             </span>
                           </div>
                         </td>
                       </tr>
-                      {!isCollapsed &&
-                        (filteredMembers.length === 0 ? (
-                          <tr>
-                            <td colSpan={9} className="px-8 py-3 text-xs text-slate-400 italic">
-                              No matching team members in this reporting group.
-                            </td>
-                          </tr>
-                        ) : (
-                          filteredMembers.map((m) => {
+                      {!collapsedGroups["unassigned"] &&
+                        directMembers
+                          .filter((m) => {
+                            if (search) {
+                              const q = search.toLowerCase();
+                              return (
+                                m.name.toLowerCase().includes(q) ||
+                                m.tally_id.toLowerCase().includes(q)
+                              );
+                            }
+                            if (roleFilter && m.role !== roleFilter) return false;
+                            return true;
+                          })
+                          .map((m) => {
                             const isSelected = selectedIds.includes(m.id);
                             return (
                               <tr key={m.id} className="hover:bg-slate-50 transition">
@@ -377,12 +921,12 @@ export const Employees: React.FC = () => {
                                 </td>
                               </tr>
                             );
-                          })
-                        ))}
+                          })}
                     </React.Fragment>
-                  );
-                })
+                  )}
+                </>
               ) : (
+                /* Flat Table */
                 employees.map((emp) => {
                   const isSelected = selectedIds.includes(emp.id);
                   return (
@@ -425,7 +969,9 @@ export const Employees: React.FC = () => {
                       <td className="p-4">
                         <span
                           className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                            emp.is_active ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"
+                            emp.is_active
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "bg-red-50 text-red-700"
                           }`}
                         >
                           {emp.is_active ? "Active" : "Inactive"}
@@ -471,7 +1017,9 @@ export const Employees: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Break Override (Minutes)</label>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Break Override (Minutes)
+                </label>
                 <input
                   type="number"
                   placeholder="e.g. 60"

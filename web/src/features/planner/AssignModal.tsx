@@ -304,10 +304,10 @@ export const AssignModal: React.FC<AssignModalProps> = ({
             <div className="flex items-center justify-between">
               <div>
                 <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Recommended Candidates (Grade: {activeJobItem?.planned_grade_code})
+                  Recommended Candidates ({activeJobItem?.staff_grade_description} • {activeJobItem?.planned_grade_code})
                 </h4>
                 <p className="text-[11px] text-slate-500">
-                  Workers from the same supervisor crew on this site are ranked first
+                  Ranked by exact role match, required grade code, and supervisor crew on site
                 </p>
               </div>
 
@@ -389,13 +389,19 @@ export const AssignModal: React.FC<AssignModalProps> = ({
 
                         {/* SGD and Supervisor Crew */}
                         <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-                          <span className="text-slate-600 font-medium">
+                          <span className="text-slate-700 font-semibold">
                             {worker.staff_grade_description}
                           </span>
 
+                          {worker.exact_staff_type_match && (
+                            <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                              ✓ Role Match
+                            </span>
+                          )}
+
                           {/* Supervisor / Group Tag */}
                           {worker.supervisor_name && (
-                            <span className="px-1.5 py-0.2 rounded text-[10px] font-medium bg-slate-100 text-slate-700">
+                            <span className="px-1.5 py-0.2 rounded text-[10px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
                               Crew: {worker.supervisor_name}
                             </span>
                           )}

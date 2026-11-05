@@ -12,9 +12,7 @@ import {
 import {
   RosterResponse,
   CoverageResponse,
-  StandingAssignmentRead,
   RosterWorkerRow,
-  RosterDayCell,
   CoverageItemRow,
   CoverageDayCell,
   WorkerAllocationResponse,
@@ -22,15 +20,37 @@ import {
 } from "../features/planner/types";
 import { RosterView } from "../features/planner/RosterView";
 import { CoverageView } from "../features/planner/CoverageView";
-import { YearPlanView } from "../features/planner/YearPlanView";
 import { WorkersSidePanel } from "../features/planner/WorkersSidePanel";
 import { AssignModal } from "../features/planner/AssignModal";
+
+function formatReadableWeek(weekStartStr: string): string {
+  try {
+    const parts = weekStartStr.split("-").map(Number);
+    const start = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+    const end = new Date(start);
+    end.setUTCDate(start.getUTCDate() + 6);
+
+    const monthName = start.toLocaleString("en-US", { month: "short", timeZone: "UTC" }).toUpperCase();
+    const year = start.getUTCFullYear();
+
+    const dayOfMonth = start.getUTCDate();
+    const weekNum = Math.ceil(dayOfMonth / 7);
+
+    const startDay = String(start.getUTCDate()).padStart(2, "0");
+    const endDay = String(end.getUTCDate()).padStart(2, "0");
+    const endMonth = end.toLocaleString("en-US", { month: "short", timeZone: "UTC" });
+
+    return `Week ${weekNum} - ${monthName} ${year} (${startDay} - ${endDay} ${endMonth})`;
+  } catch {
+    return `Week of ${weekStartStr}`;
+  }
+}
 
 export const Planner: React.FC = () => {
   const { token } = useAuth();
 
   // Navigation & Tabs
-  const [activeTab, setActiveTab] = useState<"ROSTER" | "COVERAGE" | "YEAR_PLAN">("COVERAGE");
+  const [activeTab, setActiveTab] = useState<"ROSTER" | "COVERAGE">("COVERAGE");
   const [weekStartDate, setWeekStartDate] = useState<string>(() => {
     const now = new Date();
     const day = now.getDay();
@@ -49,7 +69,6 @@ export const Planner: React.FC = () => {
   // Data State
   const [rosterData, setRosterData] = useState<RosterResponse | null>(null);
   const [coverageData, setCoverageData] = useState<CoverageResponse | null>(null);
-  const [standingAssignments, setStandingAssignments] = useState<StandingAssignmentRead[]>([]);
   const [availableJobItems, setAvailableJobItems] = useState<any[]>([]);
   const [candidates, setCandidates] = useState<CandidateRecommendation[]>([]);
   const [selectedWorkerAllocation, setSelectedWorkerAllocation] =
@@ -112,11 +131,6 @@ export const Planner: React.FC = () => {
         if (!res.ok) throw new Error("Failed to load coverage view.");
         const data: CoverageResponse = await res.json();
         setCoverageData(data);
-      } else if (activeTab === "YEAR_PLAN") {
-        const res = await fetch("/api/v1/standing-assignments", { headers: authHeaders });
-        if (!res.ok) throw new Error("Failed to load standing assignments.");
-        const data: StandingAssignmentRead[] = await res.json();
-        setStandingAssignments(data);
       }
     } catch (err: any) {
       setErrorMsg(err.message || "Failed to load scheduling data.");
@@ -244,17 +258,6 @@ export const Planner: React.FC = () => {
     }
   };
 
-  // Cell click in Roster view
-  const handleRosterCellClick = (worker: RosterWorkerRow, day: RosterDayCell) => {
-    setModalInitialWorkerId(worker.employee_id);
-    setModalInitialDate(day.work_date);
-    setModalInitialJobItemId(day.chips[0]?.job_item_id || null);
-    setSelectedWorkerId(worker.employee_id);
-    fetchWorkerAllocation(worker.employee_id);
-    fetchCandidates(day.chips[0]?.job_item_id, day.work_date);
-    setIsAssignModalOpen(true);
-  };
-
   // Worker select
   const handleWorkerSelect = (worker: RosterWorkerRow) => {
     setSelectedWorkerId(worker.employee_id);
@@ -277,28 +280,8 @@ export const Planner: React.FC = () => {
     setModalInitialJobItemId(item.job_item_id);
     setModalInitialDate(day.work_date);
     setModalInitialWorkerId(null);
+    fetchCandidates(item.job_item_id, day.work_date);
     setIsAssignModalOpen(true);
-  };
-
-  // End standing assignment
-  const handleEndStandingAssignment = async (id: string, version: number) => {
-    try {
-      const res = await fetch(`/api/v1/standing-assignments/${id}/end`, {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({
-          end_date: new Date().toISOString().split("T")[0],
-          version: version,
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || "Failed to end standing assignment.");
-      }
-      fetchData();
-    } catch (err: any) {
-      alert(err.message);
-    }
   };
 
   return (
@@ -339,16 +322,6 @@ export const Planner: React.FC = () => {
           >
             Weekly Worker Roster
           </button>
-          <button
-            onClick={() => setActiveTab("YEAR_PLAN")}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
-              activeTab === "YEAR_PLAN"
-                ? "bg-white text-blue-700 shadow-sm"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            Year Plan (Standing)
-          </button>
         </div>
 
         {/* Week navigation & Side panel toggle */}
@@ -361,8 +334,8 @@ export const Planner: React.FC = () => {
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <span className="px-2.5 text-xs font-bold text-slate-800 font-mono">
-              Week of {weekStartDate}
+            <span className="px-3 text-xs font-bold text-slate-800 font-sans">
+              {formatReadableWeek(weekStartDate)}
             </span>
             <button
               onClick={() => changeWeek(7)}
@@ -459,7 +432,6 @@ export const Planner: React.FC = () => {
             <RosterView
               roster={rosterData}
               compactMode={compactMode}
-              onCellClick={handleRosterCellClick}
               onWorkerSelect={handleWorkerSelect}
               selectedWorkerId={selectedWorkerId}
               onExportExcel={handleExportExcel}
@@ -470,28 +442,17 @@ export const Planner: React.FC = () => {
           {activeTab === "COVERAGE" && coverageData && (
             <CoverageView coverage={coverageData} onSlotClick={handleCoverageSlotClick} />
           )}
-
-          {activeTab === "YEAR_PLAN" && (
-            <YearPlanView
-              standingAssignments={standingAssignments}
-              onOpenAssignModal={() => {
-                setModalInitialWorkerId(null);
-                setModalInitialJobItemId(null);
-                setIsAssignModalOpen(true);
-              }}
-              onEndAssignment={handleEndStandingAssignment}
-            />
-          )}
         </div>
 
         {/* Worker Capacity Side Panel */}
         {isSidePanelOpen && (
           <WorkersSidePanel
+            workers={rosterData?.workers || []}
             candidates={candidates}
             selectedWorkerId={selectedWorkerId}
-            onSelectWorker={(worker) => {
-              setSelectedWorkerId(worker.employee_id);
-              fetchWorkerAllocation(worker.employee_id);
+            onSelectWorker={(workerId) => {
+              setSelectedWorkerId(workerId);
+              fetchWorkerAllocation(workerId);
             }}
             allocation={selectedWorkerAllocation}
             targetDate={weekStartDate}

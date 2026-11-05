@@ -165,6 +165,8 @@ class RosterWorkerRow(BaseModel):
     week_standard_hours: Decimal
     week_is_over: bool
     week_is_under: bool
+    supervisor_id: UUID | None = None
+    supervisor_name: str | None = None
     remarks: str | None = None
 
 
@@ -203,6 +205,8 @@ class CoverageItemRow(BaseModel):
     deployment_type: str
     required_staff_count: int
     hours_per_occurrence: Decimal
+    frequency_unit: str = "WEEK"
+    occurrences_per_period: Decimal = Decimal("6.0")
     days: list[CoverageDayCell]
 
 

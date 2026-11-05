@@ -101,8 +101,8 @@ def rank_candidates_for_job(
         grade_group_match = bool(worker_group and job_group and worker_group == job_group)
         exact_staff_type = bool(worker_sgd and job_sgd and worker_sgd == job_sgd)
 
-        # Eligible candidates must match the grade group
-        if not grade_group_match:
+        # Eligible candidates must match either the exact staff grade description or the grade group
+        if not (exact_staff_type or grade_group_match):
             continue
 
         reasons: list[str] = []
@@ -113,12 +113,12 @@ def rank_candidates_for_job(
         elif grade_group_match:
             reasons.append(f"Same grade group ({worker_group})")
 
-        if w.worked_at_site_recently:
-            reasons.append("Worked at this site in the last 14 days")
-
         if w.shares_supervisor:
             crew_label = f" ({w.supervisor_name})" if w.supervisor_name else ""
             reasons.append(f"Same group/crew{crew_label} active on this site")
+
+        if w.worked_at_site_recently:
+            reasons.append("Worked at this site in the last 14 days")
 
         # Capacity calculations
         free_weekly_hours = max(
@@ -131,11 +131,17 @@ def rank_candidates_for_job(
             warnings.append("Will exceed standard hours today (planned overtime)")
 
         # Composite score
-        # Same group / crew on site is prioritized first so workers can be managed together
+        # 1. Exact role match is top priority (+10000.0)
+        # 2. Grade code / group match is second priority (+2000.0)
+        # 3. Same supervisor crew active on site is third priority (+1000.0)
+        # 4. Recent site experience (+100.0)
+        # 5. Capacity availability
         score = 0.0
-        if w.shares_supervisor:
-            score += 2000.0
         if exact_staff_type:
+            score += 10000.0
+        if grade_group_match:
+            score += 2000.0
+        if w.shares_supervisor:
             score += 1000.0
         if w.worked_at_site_recently:
             score += 100.0

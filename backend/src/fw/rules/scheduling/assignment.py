@@ -19,6 +19,7 @@ class AssignmentDateSlot:
     weekday: str
     is_public_holiday: bool
     is_working_day: bool
+    is_weekly_off: bool = False
 
 
 def normalize_weekday_pattern(pattern: list[str] | None) -> set[str]:
@@ -34,31 +35,35 @@ def generate_assignment_dates(
     weekday_pattern: list[str] | None = None,
     public_holidays: set[date] | None = None,
     skip_public_holidays: bool = True,
+    weekly_off_day: str | None = None,
 ) -> Generator[AssignmentDateSlot, None, None]:
     """Generate calendar date slots for a standing assignment.
 
     Yields AssignmentDateSlot for each date in [start_date, end_date].
-    is_working_day is True if the day falls on the weekday pattern and is not
-    skipped by a public holiday.
+    is_working_day is True if the day falls on the weekday pattern, is not
+    skipped by a public holiday, and is not the worker's weekly off day.
     """
     if start_date > end_date:
         return
 
     pattern_set = normalize_weekday_pattern(weekday_pattern)
     holidays = public_holidays or set()
+    norm_off = weekly_off_day.strip().upper()[:3] if weekly_off_day else None
 
     current = start_date
     while current <= end_date:
         weekday_str = INT_TO_WEEKDAY[current.weekday()]
         is_holiday = current in holidays
+        is_off = bool(norm_off and weekday_str[:3] == norm_off)
         matches_pattern = weekday_str in pattern_set
-        is_working = matches_pattern and not (skip_public_holidays and is_holiday)
+        is_working = matches_pattern and not (skip_public_holidays and is_holiday) and not is_off
 
         yield AssignmentDateSlot(
             work_date=current,
             weekday=weekday_str,
             is_public_holiday=is_holiday,
             is_working_day=is_working,
+            is_weekly_off=is_off,
         )
         current += timedelta(days=1)
 

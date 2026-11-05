@@ -34,6 +34,8 @@ export interface RosterWorkerRow {
   week_standard_hours: number | string;
   week_is_over: boolean;
   week_is_under: boolean;
+  supervisor_id?: string | null;
+  supervisor_name?: string | null;
   remarks: string | null;
 }
 
@@ -69,6 +71,8 @@ export interface CoverageItemRow {
   deployment_type: string;
   required_staff_count: number;
   hours_per_occurrence: number;
+  frequency_unit?: string;
+  occurrences_per_period?: number | string;
   days: CoverageDayCell[];
 }
 
