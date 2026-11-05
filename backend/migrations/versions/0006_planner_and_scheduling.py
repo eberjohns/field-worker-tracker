@@ -192,3 +192,4 @@ def downgrade() -> None:
     op.drop_index("ix_standing_assignments_is_active", table_name="standing_assignments")
     op.drop_index("ix_standing_assignments_dates", table_name="standing_assignments")
     op.drop_table("standing_assignments")
+

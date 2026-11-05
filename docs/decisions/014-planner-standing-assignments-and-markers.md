@@ -44,3 +44,4 @@ Per client requirements and decisions DEC-36, DEC-42, and DEC-52:
 - Alembic migration `0006_planner_and_scheduling.py` introduces `standing_assignments` and `scheduled_work` tables with partial unique indexes.
 - FastAPI router `fw.api.scheduling` exposes `/roster`, `/schedule/coverage`, `/workers/{id}/allocation`, `/standing-assignments`, and `/scheduled-work` endpoints (including Excel streaming).
 - React dashboard at `/planner` provides Weekly Roster, Job Coverage, and Year Plan views with capacity side panel, candidate recommendations, and visit sequence reordering.
+

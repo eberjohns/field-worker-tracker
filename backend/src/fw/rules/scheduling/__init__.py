@@ -77,3 +77,4 @@ __all__ = [
     "rank_candidates_for_job",
     "validate_assignment",
 ]
+

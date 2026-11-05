@@ -140,3 +140,4 @@ class ScheduledWork(Base):
     job_item = relationship("JobItem", foreign_keys=[job_item_id])
     worksite = relationship("Worksite", foreign_keys=[worksite_id])
     occurrence = relationship("JobOccurrence", foreign_keys=[occurrence_id])
+

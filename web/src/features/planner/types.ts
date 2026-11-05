@@ -6,7 +6,7 @@ export interface RosterSiteChip {
   job_item_id: string;
   sub_item_code: string;
   deployment_type: string;
-  assigned_hours: number;
+  assigned_hours: number | string;
   sequence: number;
   has_boundary: boolean;
 }
@@ -16,7 +16,7 @@ export interface RosterDayCell {
   weekday: string;
   chips: RosterSiteChip[];
   marker: string | null; // SKIPPED, WEEKLY_OFF, ON_LEAVE, TO_BE_COVERED, FREE
-  day_total_hours: number;
+  day_total_hours: number | string;
   is_over_standard: boolean;
   is_under_standard: boolean;
 }
@@ -27,11 +27,11 @@ export interface RosterWorkerRow {
   tally_id: string;
   grade_code: string | null;
   staff_grade_description: string | null;
-  standard_hours: number;
-  effective_daily_standard_hours: number;
+  standard_hours: number | string;
+  effective_daily_standard_hours: number | string;
   days: RosterDayCell[];
-  week_allocated_hours: number;
-  week_standard_hours: number;
+  week_allocated_hours: number | string;
+  week_standard_hours: number | string;
   week_is_over: boolean;
   week_is_under: boolean;
   remarks: string | null;
@@ -96,21 +96,21 @@ export interface StandingAssignmentRead {
 export interface WorkerAllocationResponse {
   employee_id: string;
   employee_name: string;
-  base_standard_hours: number;
-  effective_daily_standard_hours: number;
-  today_allocated_hours: number;
-  today_standard_hours: number;
-  today_diff: number;
+  base_standard_hours: number | string;
+  effective_daily_standard_hours: number | string;
+  today_allocated_hours: number | string;
+  today_standard_hours: number | string;
+  today_diff: number | string;
   today_is_over: boolean;
   today_is_under: boolean;
-  week_allocated_hours: number;
-  week_standard_hours: number;
-  week_diff: number;
+  week_allocated_hours: number | string;
+  week_standard_hours: number | string;
+  week_diff: number | string;
   week_is_over: boolean;
   week_is_under: boolean;
-  month_allocated_hours: number;
-  month_standard_hours: number;
-  month_diff: number;
+  month_allocated_hours: number | string;
+  month_standard_hours: number | string;
+  month_diff: number | string;
   month_is_over: boolean;
   month_is_under: boolean;
 }
@@ -121,14 +121,14 @@ export interface CandidateRecommendation {
   tally_id: string;
   grade_code: string | null;
   staff_grade_description: string | null;
-  standard_hours: number;
+  standard_hours: number | string;
   exact_staff_type_match: boolean;
   ranking_score: number;
   reasons: string[];
   warnings: string[];
-  today_allocated_hours: number;
-  weekly_allocated_hours: number;
-  monthly_allocated_hours: number;
+  today_allocated_hours: number | string;
+  weekly_allocated_hours: number | string;
+  monthly_allocated_hours: number | string;
 }
 
 export interface ValidationIssue {
@@ -144,3 +144,4 @@ export interface ValidationReport {
   warnings: ValidationIssue[];
   infos: ValidationIssue[];
 }
+

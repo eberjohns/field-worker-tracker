@@ -164,21 +164,24 @@ export const Planner: React.FC = () => {
         }
       } else if (rosterData && rosterData.workers) {
         // Map from roster workers
-        const mapped: CandidateRecommendation[] = rosterData.workers.map((w) => ({
-          employee_id: w.employee_id,
-          name: w.name,
-          tally_id: w.tally_id,
-          grade_code: w.grade_code,
-          staff_grade_description: w.staff_grade_description,
-          standard_hours: w.standard_hours,
-          exact_staff_type_match: false,
-          ranking_score: 50.0,
-          reasons: [],
-          warnings: [],
-          today_allocated_hours: 0,
-          weekly_allocated_hours: w.week_allocated_hours,
-          monthly_allocated_hours: w.week_allocated_hours * 4,
-        }));
+        const mapped: CandidateRecommendation[] = rosterData.workers.map((w) => {
+          const weekHours = Number(w.week_allocated_hours || 0);
+          return {
+            employee_id: w.employee_id,
+            name: w.name,
+            tally_id: w.tally_id,
+            grade_code: w.grade_code,
+            staff_grade_description: w.staff_grade_description,
+            standard_hours: Number(w.standard_hours || 8),
+            exact_staff_type_match: false,
+            ranking_score: 50.0,
+            reasons: [],
+            warnings: [],
+            today_allocated_hours: 0,
+            weekly_allocated_hours: weekHours,
+            monthly_allocated_hours: weekHours * 4,
+          };
+        });
         setCandidates(mapped);
       }
     } catch (err) {

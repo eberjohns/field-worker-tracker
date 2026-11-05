@@ -243,3 +243,4 @@ class CandidateRecommendationRead(BaseModel):
     today_allocated_hours: Decimal
     weekly_allocated_hours: Decimal
     monthly_allocated_hours: Decimal
+

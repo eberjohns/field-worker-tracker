@@ -219,17 +219,19 @@ export const RosterView: React.FC<RosterViewProps> = ({
                             : "text-slate-800"
                         }`}
                       >
-                        {worker.week_allocated_hours.toFixed(1)} /{" "}
-                        {worker.week_standard_hours.toFixed(1)}
+                        {Number(worker.week_allocated_hours || 0).toFixed(1)} /{" "}
+                        {Number(worker.week_standard_hours || 0).toFixed(1)}
                       </div>
                       <div className="text-[10px] font-normal text-slate-400">
                         {worker.week_is_over
                           ? `+${(
-                              worker.week_allocated_hours - worker.week_standard_hours
+                              Number(worker.week_allocated_hours || 0) -
+                              Number(worker.week_standard_hours || 0)
                             ).toFixed(1)}h OT`
                           : worker.week_is_under
                           ? `${(
-                              worker.week_standard_hours - worker.week_allocated_hours
+                              Number(worker.week_standard_hours || 0) -
+                              Number(worker.week_allocated_hours || 0)
                             ).toFixed(1)}h free`
                           : "standard"}
                       </div>

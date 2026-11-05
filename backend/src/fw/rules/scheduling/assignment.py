@@ -61,3 +61,4 @@ def generate_assignment_dates(
             is_working_day=is_working,
         )
         current += timedelta(days=1)
+

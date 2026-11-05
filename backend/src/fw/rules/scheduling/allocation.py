@@ -89,3 +89,4 @@ def calculate_allocation_summary(
         month_is_over=month_diff > Decimal("0"),
         month_is_under=month_diff < Decimal("0"),
     )
+
