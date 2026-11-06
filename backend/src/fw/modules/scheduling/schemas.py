@@ -197,6 +197,7 @@ class CoverageDayCell(BaseModel):
     assigned_staff_count: int
     is_to_be_covered: bool
     is_excess: bool = False
+    is_quota_met: bool = False
     is_holiday: bool = False
     holiday_name: str | None = None
     assigned_workers: list[str]

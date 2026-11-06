@@ -60,18 +60,32 @@ export const CoverageView: React.FC<CoverageViewProps> = ({ coverage, onSlotClic
           />
         </div>
 
-        <div className="text-xs text-slate-500 flex items-center space-x-4">
+        {/* Visual Legend */}
+        <div className="flex flex-wrap items-center gap-3 text-xs bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600">
+          <span className="font-bold text-slate-800">Legend:</span>
           <div className="flex items-center space-x-1.5">
             <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-            <span>Staffed</span>
+            <span className="text-emerald-700 font-medium">Fully Staffed</span>
           </div>
           <div className="flex items-center space-x-1.5">
             <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
-            <span>Partial / To Cover</span>
+            <span className="text-amber-700 font-medium">Under-Staffed</span>
           </div>
           <div className="flex items-center space-x-1.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
-            <span>Unstaffed</span>
+            <span className="h-2.5 w-2.5 rounded-full bg-teal-500" />
+            <span className="text-teal-700 font-medium">Quota Met</span>
+          </div>
+          <div className="flex items-center space-x-1.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-purple-500" />
+            <span className="text-purple-700 font-medium">Excess Assigned</span>
+          </div>
+          <div className="flex items-center space-x-1.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-sky-500" />
+            <span className="text-sky-700 font-medium">Public Holiday</span>
+          </div>
+          <div className="flex items-center space-x-1.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-slate-300" />
+            <span className="text-slate-400 font-medium">No Requirement</span>
           </div>
         </div>
       </div>
@@ -191,7 +205,9 @@ export const CoverageView: React.FC<CoverageViewProps> = ({ coverage, onSlotClic
                             (!hasRequirement && assignedCount > 0);
                           const isFullyStaffed = hasRequirement && assignedCount === day.required_staff_count;
                           const isUnderStaffed = hasRequirement && assignedCount < day.required_staff_count;
-                          const excessCount = Math.max(1, assignedCount - day.required_staff_count);
+                          const excessCount = !hasRequirement
+                            ? assignedCount
+                            : Math.max(1, assignedCount - day.required_staff_count);
 
                           return (
                             <td
@@ -199,9 +215,11 @@ export const CoverageView: React.FC<CoverageViewProps> = ({ coverage, onSlotClic
                               onClick={() => onSlotClick(worksite.worksite_id, item, day)}
                               className={`p-2 align-top text-center cursor-pointer transition border-l border-slate-100 group ${
                                 isExcess
-                                  ? "bg-purple-50/50 hover:bg-purple-100/60 border-b-2 border-b-purple-500"
+                                  ? "bg-purple-50/60 hover:bg-purple-100/70 border-b-2 border-b-purple-500"
                                   : day.is_holiday && assignedCount === 0
-                                  ? "bg-amber-50/30 hover:bg-amber-50/50 border-b border-dashed border-amber-300"
+                                  ? "bg-sky-50/50 hover:bg-sky-100/60 border-b-2 border-sky-400 text-sky-800"
+                                  : day.is_quota_met && assignedCount === 0
+                                  ? "bg-teal-50/30 hover:bg-teal-50/50 border-b border-teal-300 text-teal-800"
                                   : !hasRequirement
                                   ? "bg-slate-50/40 text-slate-400"
                                   : isUnderStaffed
@@ -294,15 +312,22 @@ export const CoverageView: React.FC<CoverageViewProps> = ({ coverage, onSlotClic
                                 </div>
                               ) : day.is_holiday ? (
                                 <div className="py-2 px-1 text-center space-y-1">
-                                  <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200 shadow-2xs">
+                                  <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold bg-sky-100 text-sky-800 border border-sky-200 shadow-2xs">
                                     HOLIDAY
                                   </span>
                                   <p
-                                    className="text-[10px] font-semibold text-slate-700 truncate"
+                                    className="text-[10px] font-semibold text-sky-900 truncate"
                                     title={day.holiday_name || "Official Public Holiday"}
                                   >
                                     {day.holiday_name || "Public Holiday"}
                                   </p>
+                                </div>
+                              ) : day.is_quota_met ? (
+                                <div className="py-2.5 text-center space-y-0.5">
+                                  <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-teal-100/80 text-teal-800 border border-teal-200 shadow-2xs">
+                                    <CheckCircle2 className="h-3 w-3 text-teal-600" />
+                                    <span>Quota Met</span>
+                                  </div>
                                 </div>
                               ) : (
                                 <div className="py-3 text-[10px] text-slate-300 font-mono">-</div>

@@ -63,6 +63,7 @@ export interface CoverageDayCell {
   assigned_staff_count: number;
   is_to_be_covered: boolean;
   is_excess?: boolean;
+  is_quota_met?: boolean;
   is_holiday?: boolean;
   holiday_name?: string | null;
   assigned_workers: string[];

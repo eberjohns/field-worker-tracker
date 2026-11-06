@@ -72,10 +72,19 @@ export const AssignModal: React.FC<AssignModalProps> = ({
   const activeDate =
     targetDay?.work_date || initialDate || new Date().toISOString().split("T")[0];
 
-  const requiredCount = activeJobItem?.required_staff_count || 1;
+  const requiredCount =
+    targetDay !== undefined && targetDay !== null
+      ? targetDay.required_staff_count
+      : activeJobItem?.required_staff_count || 1;
   const currentStagedCount = stagedWorkers.length;
+  const isSlotUnrequired = requiredCount === 0;
   const neededCount = Math.max(0, requiredCount - currentStagedCount);
-  const excessCount = Math.max(0, currentStagedCount - requiredCount);
+  const excessCount = isSlotUnrequired ? currentStagedCount : Math.max(0, currentStagedCount - requiredCount);
+  const isPeriodicQuotaMet = Boolean(
+    targetDay?.is_quota_met ||
+    targetDay?.is_excess ||
+    (targetDay?.required_staff_count === 0 && !targetDay?.is_holiday && activeJobItem?.frequency_unit && activeJobItem.frequency_unit !== "DAY")
+  );
 
   const authHeaders = {
     "Content-Type": "application/json",
@@ -223,16 +232,28 @@ export const AssignModal: React.FC<AssignModalProps> = ({
         }
       } else {
         // MODE === "STANDING"
-        // End standing series for removed workers
+        // 1. Process removed workers
         for (const rem of removed) {
+          // If scheduled work exists on current date, delete it
+          if (rem.scheduled_work_id) {
+            await fetch(`/api/v1/scheduled-work/${rem.scheduled_work_id}`, {
+              method: "DELETE",
+              headers: authHeaders,
+            });
+          }
+
+          // If worker has standing assignment, end series as of previous day so current and future dates are cancelled
           if (rem.standing_assignment_id) {
+            const prevD = new Date(activeDate);
+            prevD.setDate(prevD.getDate() - 1);
+            const prevDateStr = prevD.toISOString().split("T")[0];
             const endRes = await fetch(
               `/api/v1/standing-assignments/${rem.standing_assignment_id}/end`,
               {
                 method: "POST",
                 headers: authHeaders,
                 body: JSON.stringify({
-                  end_date: activeDate,
+                  end_date: prevDateStr,
                   version: rem.standing_assignment_version || 1,
                 }),
               }
@@ -241,21 +262,20 @@ export const AssignModal: React.FC<AssignModalProps> = ({
               const err = await endRes.json().catch(() => ({}));
               throw new Error(err.detail || `Failed to end standing series for ${rem.name}`);
             }
-          } else if (rem.scheduled_work_id) {
-            await fetch(`/api/v1/scheduled-work/${rem.scheduled_work_id}`, {
-              method: "DELETE",
-              headers: authHeaders,
-            });
           }
         }
 
-        // Set all active staged workers as standing team forward for 13 months
-        if (stagedWorkers.length > 0) {
+        // 2. Newly added workers or existing single workers to convert to standing team forward
+        const toCreateStanding = stagedWorkers.filter(
+          (w) => !w.standing_assignment_id || added.some((a) => a.employee_id === w.employee_id)
+        );
+
+        if (toCreateStanding.length > 0) {
           const standingRes = await fetch("/api/v1/scheduled-work/batch", {
             method: "POST",
             headers: authHeaders,
             body: JSON.stringify({
-              employee_ids: stagedWorkers.map((w) => w.employee_id),
+              employee_ids: toCreateStanding.map((w) => w.employee_id),
               job_item_id: jId,
               work_date: activeDate,
               assigned_hours: activeJobItem?.hours_per_occurrence,
@@ -351,6 +371,8 @@ export const AssignModal: React.FC<AssignModalProps> = ({
                   ? "bg-purple-100 text-purple-800"
                   : neededCount > 0
                   ? "bg-amber-100 text-amber-800"
+                  : isSlotUnrequired
+                  ? "bg-teal-100 text-teal-800"
                   : "bg-emerald-100 text-emerald-800"
               }`}
             >
@@ -358,6 +380,8 @@ export const AssignModal: React.FC<AssignModalProps> = ({
                 ? `+${excessCount} Excess worker(s)`
                 : neededCount > 0
                 ? `${neededCount} worker(s) needed`
+                : isSlotUnrequired
+                ? "Quota Met / No Requirement"
                 : "Fully Staffed"}
             </span>
           </div>
@@ -369,6 +393,18 @@ export const AssignModal: React.FC<AssignModalProps> = ({
             <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-center space-x-2">
               <AlertTriangle className="h-4 w-4 shrink-0 text-red-600" />
               <span>{errorMsg}</span>
+            </div>
+          )}
+
+          {isPeriodicQuotaMet && (
+            <div className="p-3 bg-purple-50 border border-purple-200 text-purple-900 rounded-xl text-xs flex items-center space-x-2.5 shadow-2xs">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-purple-600" />
+              <div>
+                <span className="font-bold">Quota Notice: </span>
+                <span>
+                  The required visits for this {activeJobItem?.frequency_unit ? activeJobItem.frequency_unit.toLowerCase() : "period"} have already been satisfied on other date(s). Any staff assigned to this slot will be recorded as an <strong>Excess Visit</strong>.
+                </span>
+              </div>
             </div>
           )}
 

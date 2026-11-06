@@ -268,6 +268,19 @@ class SchedulingService:
         elif item.frequency_unit == "WEEK" and item.occurrences_per_period == 1:
             assigned_pattern = [INT_TO_WEEKDAY[payload.start_date.weekday()]]
 
+        # Deactivate or close any pre-existing active standing assignments for this employee and job_item
+        existing_standing_stmt = select(StandingAssignment).where(
+            StandingAssignment.employee_id == payload.employee_id,
+            StandingAssignment.job_item_id == payload.job_item_id,
+            StandingAssignment.is_active.is_(True),
+        )
+        existing_standing_rows = (await self.session.execute(existing_standing_stmt)).scalars().all()
+        for old_st in existing_standing_rows:
+            if old_st.start_date >= payload.start_date:
+                old_st.is_active = False
+            else:
+                old_st.end_date = payload.start_date - timedelta(days=1)
+
         standing = StandingAssignment(
             employee_id=payload.employee_id,
             job_item_id=payload.job_item_id,
@@ -478,25 +491,41 @@ class SchedulingService:
             raise AppError(code="CONFLICT", message="Standing assignment was modified by another user. Please reload.", status_code=409)
 
         if payload.end_date < standing.start_date:
-            raise AppError(code="VALIDATION_ERROR", message="End date cannot be earlier than start date.", status_code=422)
-
-        old_end = standing.end_date
-        standing.end_date = payload.end_date
-        standing.version += 1
-
-        # Cancel future uncompleted scheduled work created from this standing assignment
-        cancel_stmt = (
-            update(ScheduledWork)
-            .where(
-                ScheduledWork.employee_id == standing.employee_id,
-                ScheduledWork.job_item_id == standing.job_item_id,
-                ScheduledWork.source == "STANDING",
-                ScheduledWork.status == "ACTIVE",
-                ScheduledWork.work_date > payload.end_date,
+            # Ending before start_date deactivates the standing assignment completely
+            old_end = standing.end_date
+            standing.is_active = False
+            standing.end_date = standing.start_date
+            standing.version += 1
+            cancel_stmt = (
+                update(ScheduledWork)
+                .where(
+                    ScheduledWork.employee_id == standing.employee_id,
+                    ScheduledWork.job_item_id == standing.job_item_id,
+                    ScheduledWork.source == "STANDING",
+                    ScheduledWork.status == "ACTIVE",
+                    ScheduledWork.work_date >= standing.start_date,
+                )
+                .values(status="CANCELLED", updated_at=datetime.now(UTC))
             )
-            .values(status="CANCELLED", updated_at=datetime.now(UTC))
-        )
-        await self.session.execute(cancel_stmt)
+            await self.session.execute(cancel_stmt)
+        else:
+            old_end = standing.end_date
+            standing.end_date = payload.end_date
+            standing.version += 1
+
+            # Cancel uncompleted scheduled work created from this standing assignment after end_date
+            cancel_stmt = (
+                update(ScheduledWork)
+                .where(
+                    ScheduledWork.employee_id == standing.employee_id,
+                    ScheduledWork.job_item_id == standing.job_item_id,
+                    ScheduledWork.source == "STANDING",
+                    ScheduledWork.status == "ACTIVE",
+                    ScheduledWork.work_date > payload.end_date,
+                )
+                .values(status="CANCELLED", updated_at=datetime.now(UTC))
+            )
+            await self.session.execute(cancel_stmt)
 
         await AuditService.log_action(
             session=self.session,
@@ -1569,17 +1598,33 @@ class SchedulingService:
                 if not item.is_active:
                     continue
 
-                # Count assigned visits for this item across the entire week
-                total_week_assigned_slots = sum(
-                    len(sw_by_item_date.get((item.id, week_start + timedelta(days=d)), []))
-                    for d in range(7)
-                )
-
                 freq_unit = item.frequency_unit or "WEEK"
                 occ_per_period = float(item.occurrences_per_period or 6.0)
-                is_periodic_weekly = freq_unit == "WEEK" and occ_per_period < 6.0 and not item.weekday_pattern
-                weekly_target_met = total_week_assigned_slots >= int(occ_per_period) if is_periodic_weekly else False
+                is_periodic_weekly = freq_unit == "WEEK" and occ_per_period < 6.0
                 is_periodic_interval = freq_unit in ("MONTH", "QUARTER", "YEAR")
+
+                # Find assigned dates in this week
+                week_assigned_dates = sorted([
+                    week_start + timedelta(days=d)
+                    for d in range(7)
+                    if len(sw_by_item_date.get((item.id, week_start + timedelta(days=d)), [])) > 0
+                ])
+
+                # Determine week's target date for unstaffed periodic jobs
+                week_target_date = None
+                for occ in item.occurrences:
+                    if occ.window_start <= week_start <= occ.window_end:
+                        week_target_date = occ.due_date or occ.window_start
+                        break
+                if not week_target_date:
+                    if item.weekday_pattern:
+                        for d in range(7):
+                            cand_d = week_start + timedelta(days=d)
+                            if INT_TO_WEEKDAY[cand_d.weekday()] in item.weekday_pattern:
+                                week_target_date = cand_d
+                                break
+                    else:
+                        week_target_date = week_start  # Monday
 
                 days: list[CoverageDayCell] = []
                 for day_idx in range(7):
@@ -1599,25 +1644,33 @@ class SchedulingService:
 
                     assigned = sw_by_item_date.get((item.id, c_date), [])
                     assigned_count = len(assigned)
+                    is_quota_met = False
 
                     if is_holiday:
                         required_count = 0
                         is_uncovered = False
                         is_excess = assigned_count > 0
                     elif is_periodic_interval:
-                        month_assigned_dates = sw_by_item_month.get(
+                        month_assigned_dates = sorted(list(sw_by_item_month.get(
                             (item.id, c_date.year, c_date.month), set()
-                        )
+                        )))
+                        quota = int(occ_per_period)
                         if month_assigned_dates:
-                            # Month has active assignments
                             if c_date in month_assigned_dates:
-                                required_count = item.required_staff_count
-                                is_uncovered = assigned_count < required_count
-                                is_excess = assigned_count > required_count
+                                m_idx = month_assigned_dates.index(c_date)
+                                if m_idx < quota:
+                                    required_count = item.required_staff_count
+                                    is_uncovered = assigned_count < required_count
+                                    is_excess = assigned_count > required_count
+                                else:
+                                    required_count = 0
+                                    is_uncovered = False
+                                    is_excess = True
                             else:
                                 required_count = 0
                                 is_uncovered = False
                                 is_excess = assigned_count > 0
+                                is_quota_met = len(month_assigned_dates) >= quota
                         else:
                             # Month is not yet staffed
                             target_occ_date = None
@@ -1639,18 +1692,33 @@ class SchedulingService:
                                 is_uncovered = False
                                 is_excess = assigned_count > 0
                     elif is_periodic_weekly:
-                        if assigned_count > 0:
-                            required_count = item.required_staff_count
-                            is_uncovered = assigned_count < required_count
-                            is_excess = assigned_count > required_count
-                        elif weekly_target_met or not is_contract_active or weekday_str == "SUNDAY":
-                            required_count = 0
-                            is_uncovered = False
-                            is_excess = assigned_count > 0
+                        quota = int(occ_per_period)
+                        if week_assigned_dates:
+                            if c_date in week_assigned_dates:
+                                w_idx = week_assigned_dates.index(c_date)
+                                if w_idx < quota:
+                                    required_count = item.required_staff_count
+                                    is_uncovered = assigned_count < required_count
+                                    is_excess = assigned_count > required_count
+                                else:
+                                    required_count = 0
+                                    is_uncovered = False
+                                    is_excess = True
+                            else:
+                                required_count = 0
+                                is_uncovered = False
+                                is_excess = assigned_count > 0
+                                is_quota_met = len(week_assigned_dates) >= quota
                         else:
-                            required_count = item.required_staff_count
-                            is_uncovered = True
-                            is_excess = False
+                            # Unstaffed weekly periodic job -> show requirement on target day
+                            if c_date == week_target_date:
+                                required_count = item.required_staff_count
+                                is_uncovered = assigned_count < required_count
+                                is_excess = assigned_count > required_count
+                            else:
+                                required_count = 0
+                                is_uncovered = False
+                                is_excess = assigned_count > 0
                     else:
                         is_working_day = (weekday_str in pattern) and is_contract_active
                         required_count = item.required_staff_count if is_working_day else 0
@@ -1691,6 +1759,7 @@ class SchedulingService:
                             assigned_staff_count=assigned_count,
                             is_to_be_covered=is_uncovered,
                             is_excess=is_excess,
+                            is_quota_met=is_quota_met,
                             is_holiday=is_holiday,
                             holiday_name=holiday_name,
                             assigned_workers=[a.employee.name for a in assigned if a.employee],
