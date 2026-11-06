@@ -80,11 +80,7 @@ export const AssignModal: React.FC<AssignModalProps> = ({
   const isSlotUnrequired = requiredCount === 0;
   const neededCount = Math.max(0, requiredCount - currentStagedCount);
   const excessCount = isSlotUnrequired ? currentStagedCount : Math.max(0, currentStagedCount - requiredCount);
-  const isPeriodicQuotaMet = Boolean(
-    targetDay?.is_quota_met ||
-    targetDay?.is_excess ||
-    (targetDay?.required_staff_count === 0 && !targetDay?.is_holiday && activeJobItem?.frequency_unit && activeJobItem.frequency_unit !== "DAY")
-  );
+  const isPeriodicQuotaMet = Boolean(targetDay?.is_quota_met || targetDay?.is_excess);
 
   const authHeaders = {
     "Content-Type": "application/json",

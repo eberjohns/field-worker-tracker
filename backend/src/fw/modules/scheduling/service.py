@@ -341,11 +341,25 @@ class SchedulingService:
                 if occ.window_end >= payload.start_date and occ.window_start <= target_end
             ]
             valid_occs.sort(key=lambda o: o.window_start)
+            target_weekday = payload.start_date.weekday()
+            target_nth = (payload.start_date.day - 1) // 7
+
             for occ in valid_occs:
                 if occ.window_start <= payload.start_date <= occ.window_end:
                     target_date = payload.start_date
                 else:
-                    target_date = occ.due_date or occ.window_start
+                    # Match same relative weekday (e.g. 1st Wednesday of the month)
+                    days_in_win = (occ.window_end - occ.window_start).days + 1
+                    matching_days = [
+                        occ.window_start + timedelta(days=d)
+                        for d in range(days_in_win)
+                        if (occ.window_start + timedelta(days=d)).weekday() == target_weekday
+                    ]
+                    if matching_days:
+                        clamped_idx = min(target_nth, len(matching_days) - 1)
+                        target_date = matching_days[clamped_idx]
+                    else:
+                        target_date = occ.due_date or occ.window_start
 
                 # Adjust for worker weekly off or public holiday
                 while target_date <= occ.window_end:
@@ -1610,21 +1624,21 @@ class SchedulingService:
                     if len(sw_by_item_date.get((item.id, week_start + timedelta(days=d)), [])) > 0
                 ])
 
-                # Determine week's target date for unstaffed periodic jobs
+                # Determine week's target date for unstaffed periodic jobs (prioritize user configured weekday_pattern)
                 week_target_date = None
-                for occ in item.occurrences:
-                    if occ.window_start <= week_start <= occ.window_end:
-                        week_target_date = occ.due_date or occ.window_start
-                        break
+                if item.weekday_pattern:
+                    for d in range(7):
+                        cand_d = week_start + timedelta(days=d)
+                        if INT_TO_WEEKDAY[cand_d.weekday()] in item.weekday_pattern:
+                            week_target_date = cand_d
+                            break
                 if not week_target_date:
-                    if item.weekday_pattern:
-                        for d in range(7):
-                            cand_d = week_start + timedelta(days=d)
-                            if INT_TO_WEEKDAY[cand_d.weekday()] in item.weekday_pattern:
-                                week_target_date = cand_d
-                                break
-                    else:
-                        week_target_date = week_start  # Monday
+                    for occ in item.occurrences:
+                        if occ.window_start <= week_start <= occ.window_end:
+                            week_target_date = occ.due_date or occ.window_start
+                            break
+                if not week_target_date:
+                    week_target_date = week_start  # Monday
 
                 days: list[CoverageDayCell] = []
                 for day_idx in range(7):
@@ -1881,6 +1895,23 @@ class SchedulingService:
                             created_at=sw_row.created_at,
                         )
                     )
+                else:
+                    # If recurring expansion skipped payload.work_date (e.g. Sunday shift to cover Friday holiday),
+                    # create the direct ScheduledWork record on payload.work_date so the user's explicit action is fulfilled
+                    sw_req = ScheduledWorkCreate(
+                        employee_id=emp_id,
+                        job_item_id=payload.job_item_id,
+                        work_date=payload.work_date,
+                        occurrence_id=payload.occurrence_id,
+                        assigned_hours=assigned_hours,
+                        acknowledge_warnings=True,
+                    )
+                    created_sw = await self.create_scheduled_work(
+                        payload=sw_req,
+                        current_user_id=current_user_id,
+                        is_admin=is_admin,
+                    )
+                    results.append(created_sw)
             else:
                 sw_req = ScheduledWorkCreate(
                     employee_id=emp_id,

@@ -160,10 +160,8 @@ export const Planner: React.FC = () => {
         const items = data.items || data || [];
         const list = items.map((emp: any) => ({
           id: emp.id,
-          name:
-            `${emp.first_name || ""} ${emp.last_name || ""}`.trim() ||
-            emp.tally_id ||
-            "Supervisor",
+          name: emp.name || emp.tally_id || "Supervisor",
+          tally_id: emp.tally_id,
         }));
         setSupervisorsList(list);
       }
