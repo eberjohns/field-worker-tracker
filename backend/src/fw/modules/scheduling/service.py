@@ -219,6 +219,18 @@ class SchedulingService:
         dates = (await self.session.execute(stmt)).scalars().all()
         return set(dates)
 
+    async def get_public_holidays_map(
+        self, country: str, from_date: date, to_date: date
+    ) -> dict[date, str]:
+        """Fetch public holidays with names for country between from_date and to_date."""
+        stmt = select(PublicHoliday.holiday_date, PublicHoliday.name).where(
+            PublicHoliday.country == country,
+            PublicHoliday.holiday_date >= from_date,
+            PublicHoliday.holiday_date <= to_date,
+        )
+        rows = (await self.session.execute(stmt)).all()
+        return {r[0]: r[1] for r in rows}
+
     # -------------------------------------------------------------------------
     # Standing Assignments (The Year Plan)
     # -------------------------------------------------------------------------
@@ -1499,7 +1511,7 @@ class SchedulingService:
 
         worksites = (await self.session.execute(ws_stmt)).scalars().all()
 
-        # Query all active scheduled work for the week
+        # Query active scheduled work for the week
         sw_stmt = (
             select(ScheduledWork)
             .where(
@@ -1510,6 +1522,23 @@ class SchedulingService:
             .options(selectinload(ScheduledWork.employee))
         )
         scheduled_rows = (await self.session.execute(sw_stmt)).scalars().all()
+
+        # Query active scheduled work across month boundary for periodic interval tracking
+        month_query_start = week_start.replace(day=1)
+        next_month = (week_end.replace(day=28) + timedelta(days=5)).replace(day=1)
+        month_query_end = next_month - timedelta(days=1)
+        sw_month_stmt = (
+            select(ScheduledWork.job_item_id, ScheduledWork.work_date)
+            .where(
+                ScheduledWork.work_date >= month_query_start,
+                ScheduledWork.work_date <= month_query_end,
+                ScheduledWork.status == "ACTIVE",
+            )
+        )
+        month_sw_rows = (await self.session.execute(sw_month_stmt)).all()
+        sw_by_item_month: dict[tuple[UUID, int, int], set[date]] = defaultdict(set)
+        for r in month_sw_rows:
+            sw_by_item_month[(r[0], r[1].year, r[1].month)].add(r[1])
 
         # Query active standing assignments to link standing_assignment_id
         standing_stmt = select(
@@ -1532,7 +1561,8 @@ class SchedulingService:
         site_rows: list[CoverageWorksiteRow] = []
 
         for site in worksites:
-            holidays = await self.get_public_holidays(site.country, week_start, week_end)
+            holidays_map = await self.get_public_holidays_map(site.country, week_start, week_end)
+            holidays = set(holidays_map.keys())
             item_rows: list[CoverageItemRow] = []
 
             for item in site.items:
@@ -1549,11 +1579,15 @@ class SchedulingService:
                 occ_per_period = float(item.occurrences_per_period or 6.0)
                 is_periodic_weekly = freq_unit == "WEEK" and occ_per_period < 6.0 and not item.weekday_pattern
                 weekly_target_met = total_week_assigned_slots >= int(occ_per_period) if is_periodic_weekly else False
+                is_periodic_interval = freq_unit in ("MONTH", "QUARTER", "YEAR")
 
                 days: list[CoverageDayCell] = []
                 for day_idx in range(7):
                     c_date = week_start + timedelta(days=day_idx)
                     weekday_str = INT_TO_WEEKDAY[c_date.weekday()]
+
+                    holiday_name = holidays_map.get(c_date)
+                    is_holiday = holiday_name is not None
 
                     # Check if day is scheduled for this item
                     pattern = item.weekday_pattern or ["MON", "TUE", "WED", "THU", "FRI", "SAT"]
@@ -1566,20 +1600,66 @@ class SchedulingService:
                     assigned = sw_by_item_date.get((item.id, c_date), [])
                     assigned_count = len(assigned)
 
-                    if is_periodic_weekly:
+                    if is_holiday:
+                        required_count = 0
+                        is_uncovered = False
+                        is_excess = assigned_count > 0
+                    elif is_periodic_interval:
+                        month_assigned_dates = sw_by_item_month.get(
+                            (item.id, c_date.year, c_date.month), set()
+                        )
+                        if month_assigned_dates:
+                            # Month has active assignments
+                            if c_date in month_assigned_dates:
+                                required_count = item.required_staff_count
+                                is_uncovered = assigned_count < required_count
+                                is_excess = assigned_count > required_count
+                            else:
+                                required_count = 0
+                                is_uncovered = False
+                                is_excess = assigned_count > 0
+                        else:
+                            # Month is not yet staffed
+                            target_occ_date = None
+                            for occ in item.occurrences:
+                                if occ.window_start <= c_date <= occ.window_end:
+                                    target_occ_date = occ.due_date or occ.window_start
+                                    break
+                            if not target_occ_date:
+                                target_occ_date = c_date.replace(day=1)
+                            while target_occ_date in holidays:
+                                target_occ_date += timedelta(days=1)
+
+                            if c_date == target_occ_date:
+                                required_count = item.required_staff_count
+                                is_uncovered = assigned_count < required_count
+                                is_excess = assigned_count > required_count
+                            else:
+                                required_count = 0
+                                is_uncovered = False
+                                is_excess = assigned_count > 0
+                    elif is_periodic_weekly:
                         if assigned_count > 0:
                             required_count = item.required_staff_count
                             is_uncovered = assigned_count < required_count
+                            is_excess = assigned_count > required_count
                         elif weekly_target_met or not is_contract_active or weekday_str == "SUNDAY":
                             required_count = 0
                             is_uncovered = False
+                            is_excess = assigned_count > 0
                         else:
                             required_count = item.required_staff_count
                             is_uncovered = True
+                            is_excess = False
                     else:
                         is_working_day = (weekday_str in pattern) and is_contract_active
                         required_count = item.required_staff_count if is_working_day else 0
                         is_uncovered = is_working_day and (assigned_count < required_count)
+                        is_excess = (
+                            (assigned_count > required_count)
+                            if is_working_day
+                            else (assigned_count > 0)
+                        )
 
                     assigned_details = [
                         AssignedWorkerSummary(
@@ -1610,6 +1690,9 @@ class SchedulingService:
                             required_staff_count=required_count,
                             assigned_staff_count=assigned_count,
                             is_to_be_covered=is_uncovered,
+                            is_excess=is_excess,
+                            is_holiday=is_holiday,
+                            holiday_name=holiday_name,
                             assigned_workers=[a.employee.name for a in assigned if a.employee],
                             assigned_details=assigned_details,
                         )

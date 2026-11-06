@@ -505,6 +505,13 @@ async def test_job_coverage_view(admin_client, sample_test_data):
     assert mon_cell is not None
     assert mon_cell["required_staff_count"] == 3
 
+    # Check Tuesday (Nov 3): UAE Flag Day public holiday
+    tue_cell = next((d for d in item_a["days"] if d["work_date"] == "2026-11-03"), None)
+    assert tue_cell is not None
+    assert tue_cell["is_holiday"] is True
+    assert tue_cell["holiday_name"] == "UAE Flag Day"
+    assert tue_cell["required_staff_count"] == 0
+
 
 @db_required
 @pytest.mark.asyncio

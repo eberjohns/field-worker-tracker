@@ -196,6 +196,9 @@ class CoverageDayCell(BaseModel):
     required_staff_count: int
     assigned_staff_count: int
     is_to_be_covered: bool
+    is_excess: bool = False
+    is_holiday: bool = False
+    holiday_name: str | None = None
     assigned_workers: list[str]
     assigned_details: list[AssignedWorkerSummary] = Field(default_factory=list)
 

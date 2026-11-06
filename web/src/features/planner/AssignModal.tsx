@@ -12,6 +12,16 @@ import {
 } from "lucide-react";
 import { CoverageItemRow, CoverageDayCell, CandidateRecommendation } from "./types";
 
+interface StagedWorker {
+  employee_id: string;
+  name: string;
+  tally_id: string;
+  scheduled_work_id?: string;
+  standing_assignment_id?: string | null;
+  standing_assignment_version?: number | null;
+  source?: string;
+}
+
 interface AssignModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -45,12 +55,10 @@ export const AssignModal: React.FC<AssignModalProps> = ({
   selectedSupervisorName,
 }) => {
   const [candidates, setCandidates] = useState<CandidateRecommendation[]>([]);
-  const [selectedWorkerIds, setSelectedWorkerIds] = useState<string[]>([]);
-  const [assignedDetails, setAssignedDetails] = useState<any[]>([]);
-  const [isStandingTeam, setIsStandingTeam] = useState<boolean>(false);
+  const [initialAssigned, setInitialAssigned] = useState<StagedWorker[]>([]);
+  const [stagedWorkers, setStagedWorkers] = useState<StagedWorker[]>([]);
   const [loadingCandidates, setLoadingCandidates] = useState<boolean>(false);
-  const [submitting, setSubmitting] = useState<boolean>(false);
-  const [unassigningId, setUnassigningId] = useState<string | null>(null);
+  const [submittingMode, setSubmittingMode] = useState<"SINGLE" | "STANDING" | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [filterOnlySelectedCrew, setFilterOnlySelectedCrew] = useState<boolean>(
     Boolean(selectedSupervisorId)
@@ -65,8 +73,9 @@ export const AssignModal: React.FC<AssignModalProps> = ({
     targetDay?.work_date || initialDate || new Date().toISOString().split("T")[0];
 
   const requiredCount = activeJobItem?.required_staff_count || 1;
-  const currentAssignedCount = assignedDetails.length;
-  const neededCount = Math.max(0, requiredCount - currentAssignedCount);
+  const currentStagedCount = stagedWorkers.length;
+  const neededCount = Math.max(0, requiredCount - currentStagedCount);
+  const excessCount = Math.max(0, currentStagedCount - requiredCount);
 
   const authHeaders = {
     "Content-Type": "application/json",
@@ -85,8 +94,26 @@ export const AssignModal: React.FC<AssignModalProps> = ({
     if (!isOpen) return;
 
     setErrorMsg(null);
-    setSelectedWorkerIds(initialWorkerId ? [initialWorkerId] : []);
-    setAssignedDetails(targetDay?.assigned_details || []);
+    const existing: StagedWorker[] = (targetDay?.assigned_details || []).map((a: any) => ({
+      employee_id: a.employee_id,
+      name: a.name,
+      tally_id: a.tally_id,
+      scheduled_work_id: a.scheduled_work_id,
+      standing_assignment_id: a.standing_assignment_id,
+      standing_assignment_version: a.standing_assignment_version,
+      source: a.source,
+    }));
+
+    if (initialWorkerId && !existing.some((e) => e.employee_id === initialWorkerId)) {
+      existing.push({
+        employee_id: initialWorkerId,
+        name: "Selected Worker",
+        tally_id: "",
+      });
+    }
+
+    setInitialAssigned(existing);
+    setStagedWorkers(existing);
 
     const fetchRecommendations = async () => {
       const jId = activeJobItem?.job_item_id || activeJobItem?.id || initialJobItemId;
@@ -117,87 +144,130 @@ export const AssignModal: React.FC<AssignModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Toggle selection
-  const toggleSelectWorker = (empId: string) => {
-    if (selectedWorkerIds.includes(empId)) {
-      setSelectedWorkerIds(selectedWorkerIds.filter((id) => id !== empId));
-    } else {
-      setSelectedWorkerIds([...selectedWorkerIds, empId]);
-    }
+  // Staged workers local management (no automatic server calls)
+  const handleRemoveStagedWorker = (empId: string) => {
+    setStagedWorkers((prev) => prev.filter((w) => w.employee_id !== empId));
   };
 
-  // Unassign single date
-  const handleUnassignSingle = async (scheduledWorkId: string) => {
-    setUnassigningId(scheduledWorkId);
-    try {
-      const res = await fetch(`/api/v1/scheduled-work/${scheduledWorkId}`, {
-        method: "DELETE",
-        headers: authHeaders,
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || "Failed to unassign worker.");
+  const handleToggleCandidate = (worker: CandidateRecommendation) => {
+    setStagedWorkers((prev) => {
+      const exists = prev.some((w) => w.employee_id === worker.employee_id);
+      if (exists) {
+        return prev.filter((w) => w.employee_id !== worker.employee_id);
+      } else {
+        return [
+          ...prev,
+          {
+            employee_id: worker.employee_id,
+            name: worker.name,
+            tally_id: worker.tally_id,
+            source: "DIRECT",
+          },
+        ];
       }
-      setAssignedDetails((prev) => prev.filter((a) => a.scheduled_work_id !== scheduledWorkId));
-      onSuccess();
-    } catch (err: any) {
-      setErrorMsg(err.message);
-    } finally {
-      setUnassigningId(null);
-    }
+    });
   };
 
-  // Remove worker from standing series
-  const handleRemoveStandingSeries = async (standingId: string, version: number = 1) => {
-    setUnassigningId(standingId);
-    try {
-      const res = await fetch(`/api/v1/standing-assignments/${standingId}/end`, {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({
-          end_date: activeDate,
-          version: version,
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || "Failed to end standing assignment.");
-      }
-      setAssignedDetails((prev) => prev.filter((a) => a.standing_assignment_id !== standingId));
-      onSuccess();
-    } catch (err: any) {
-      setErrorMsg(err.message);
-    } finally {
-      setUnassigningId(null);
-    }
-  };
-
-  // Submit batch assignment
-  const handleAssignSubmit = async () => {
-    if (selectedWorkerIds.length === 0) return;
+  // Submit handling with explicit Save Current Date or Save Recursively
+  const handleSave = async (mode: "SINGLE" | "STANDING") => {
     const jId = activeJobItem?.job_item_id || activeJobItem?.id || initialJobItemId;
     if (!jId) return;
 
-    setSubmitting(true);
+    setSubmittingMode(mode);
     setErrorMsg(null);
 
     try {
-      const res = await fetch("/api/v1/scheduled-work/batch", {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({
-          employee_ids: selectedWorkerIds,
-          job_item_id: jId,
-          work_date: activeDate,
-          assigned_hours: activeJobItem?.hours_per_occurrence,
-          as_standing_assignment: isStandingTeam,
-          acknowledge_warnings: true,
-        }),
-      });
+      // 1. Removed workers
+      const removed = initialAssigned.filter(
+        (orig) => !stagedWorkers.some((s) => s.employee_id === orig.employee_id)
+      );
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || "Failed to assign workers.");
+      // 2. Added workers
+      const added = stagedWorkers.filter(
+        (s) => !initialAssigned.some((orig) => orig.employee_id === s.employee_id)
+      );
+
+      if (mode === "SINGLE") {
+        // Remove unselected workers for this date only
+        for (const rem of removed) {
+          if (rem.scheduled_work_id) {
+            const delRes = await fetch(`/api/v1/scheduled-work/${rem.scheduled_work_id}`, {
+              method: "DELETE",
+              headers: authHeaders,
+            });
+            if (!delRes.ok) {
+              const err = await delRes.json().catch(() => ({}));
+              throw new Error(err.detail || `Failed to remove worker ${rem.name}`);
+            }
+          }
+        }
+
+        // Add newly selected workers for this date only
+        if (added.length > 0) {
+          const addRes = await fetch("/api/v1/scheduled-work/batch", {
+            method: "POST",
+            headers: authHeaders,
+            body: JSON.stringify({
+              employee_ids: added.map((w) => w.employee_id),
+              job_item_id: jId,
+              work_date: activeDate,
+              assigned_hours: activeJobItem?.hours_per_occurrence,
+              as_standing_assignment: false,
+              acknowledge_warnings: true,
+            }),
+          });
+          if (!addRes.ok) {
+            const err = await addRes.json().catch(() => ({}));
+            throw new Error(err.detail || "Failed to assign workers for this date.");
+          }
+        }
+      } else {
+        // MODE === "STANDING"
+        // End standing series for removed workers
+        for (const rem of removed) {
+          if (rem.standing_assignment_id) {
+            const endRes = await fetch(
+              `/api/v1/standing-assignments/${rem.standing_assignment_id}/end`,
+              {
+                method: "POST",
+                headers: authHeaders,
+                body: JSON.stringify({
+                  end_date: activeDate,
+                  version: rem.standing_assignment_version || 1,
+                }),
+              }
+            );
+            if (!endRes.ok) {
+              const err = await endRes.json().catch(() => ({}));
+              throw new Error(err.detail || `Failed to end standing series for ${rem.name}`);
+            }
+          } else if (rem.scheduled_work_id) {
+            await fetch(`/api/v1/scheduled-work/${rem.scheduled_work_id}`, {
+              method: "DELETE",
+              headers: authHeaders,
+            });
+          }
+        }
+
+        // Set all active staged workers as standing team forward for 13 months
+        if (stagedWorkers.length > 0) {
+          const standingRes = await fetch("/api/v1/scheduled-work/batch", {
+            method: "POST",
+            headers: authHeaders,
+            body: JSON.stringify({
+              employee_ids: stagedWorkers.map((w) => w.employee_id),
+              job_item_id: jId,
+              work_date: activeDate,
+              assigned_hours: activeJobItem?.hours_per_occurrence,
+              as_standing_assignment: true,
+              acknowledge_warnings: true,
+            }),
+          });
+          if (!standingRes.ok) {
+            const err = await standingRes.json().catch(() => ({}));
+            throw new Error(err.detail || "Failed to set standing team.");
+          }
+        }
       }
 
       onSuccess();
@@ -205,7 +275,7 @@ export const AssignModal: React.FC<AssignModalProps> = ({
     } catch (err: any) {
       setErrorMsg(err.message || "An error occurred while saving assignments.");
     } finally {
-      setSubmitting(false);
+      setSubmittingMode(null);
     }
   };
 
@@ -221,9 +291,10 @@ export const AssignModal: React.FC<AssignModalProps> = ({
   const blockedCandidates = filteredCandidates.filter((c) => c.is_blocked);
 
   // Group affinities among selected
+  const stagedEmpIds = new Set(stagedWorkers.map((w) => w.employee_id));
   const selectedSupervisors = new Set(
     candidates
-      .filter((c) => selectedWorkerIds.includes(c.employee_id) && c.supervisor_id)
+      .filter((c) => stagedEmpIds.has(c.employee_id) && c.supervisor_id)
       .map((c) => c.supervisor_id)
   );
 
@@ -269,17 +340,25 @@ export const AssignModal: React.FC<AssignModalProps> = ({
         {/* Staffing Status Bar */}
         <div className="px-6 py-2.5 bg-slate-100 border-b border-slate-200 flex items-center justify-between text-xs shrink-0">
           <div className="flex items-center space-x-2">
-            <span className="font-semibold text-slate-600">Current Slot Staffing:</span>
+            <span className="font-semibold text-slate-600">Slot Staffing:</span>
             <span className="font-bold text-slate-900">
-              {currentAssignedCount} / {requiredCount} Workers
+              {currentStagedCount} / {requiredCount} Workers
             </span>
             <span className="text-slate-400">|</span>
             <span
               className={`px-2 py-0.5 rounded-full font-bold ${
-                neededCount > 0 ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"
+                excessCount > 0
+                  ? "bg-purple-100 text-purple-800"
+                  : neededCount > 0
+                  ? "bg-amber-100 text-amber-800"
+                  : "bg-emerald-100 text-emerald-800"
               }`}
             >
-              {neededCount > 0 ? `${neededCount} worker(s) needed` : "Fully Staffed"}
+              {excessCount > 0
+                ? `+${excessCount} Excess worker(s)`
+                : neededCount > 0
+                ? `${neededCount} worker(s) needed`
+                : "Fully Staffed"}
             </span>
           </div>
         </div>
@@ -293,29 +372,34 @@ export const AssignModal: React.FC<AssignModalProps> = ({
             </div>
           )}
 
-          {/* 1. Currently Assigned Workers Section */}
-          {assignedDetails.length > 0 && (
-            <div className="space-y-2.5 bg-slate-50 p-4 rounded-xl border border-slate-200">
-              <div className="flex items-center justify-between">
-                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                  <Users className="h-3.5 w-3.5 text-indigo-600" />
-                  <span>Currently Assigned on this Slot ({assignedDetails.length})</span>
-                </h4>
-                <span className="text-[11px] text-slate-500">
-                  {neededCount === 0 ? "Slot requirement fulfilled" : `${neededCount} more worker(s) needed`}
-                </span>
-              </div>
+          {/* 1. Staged Crew on this Slot */}
+          <div className="space-y-2.5 bg-slate-50 p-4 rounded-xl border border-slate-200">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                <Users className="h-3.5 w-3.5 text-indigo-600" />
+                <span>Assigned Crew on this Slot ({stagedWorkers.length})</span>
+              </h4>
+              <span className="text-[11px] text-slate-500">
+                {currentStagedCount === requiredCount
+                  ? "Slot requirement fulfilled"
+                  : currentStagedCount > requiredCount
+                  ? `+${excessCount} Excess worker(s)`
+                  : `${neededCount} more worker(s) needed`}
+              </span>
+            </div>
+
+            {stagedWorkers.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                {assignedDetails.map((a: any) => (
+                {stagedWorkers.map((w) => (
                   <div
-                    key={a.scheduled_work_id}
-                    className="p-3 rounded-lg border border-slate-200 bg-white flex items-center justify-between text-xs shadow-2xs gap-2"
+                    key={w.employee_id}
+                    className="p-2.5 rounded-lg border border-slate-200 bg-white flex items-center justify-between text-xs shadow-2xs gap-2"
                   >
                     <div>
-                      <div className="font-bold text-slate-900">{a.name}</div>
+                      <div className="font-bold text-slate-900">{w.name}</div>
                       <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="text-[11px] text-slate-500 font-mono">{a.tally_id}</span>
-                        {a.source === "STANDING" ? (
+                        <span className="text-[11px] text-slate-500 font-mono">{w.tally_id}</span>
+                        {w.standing_assignment_id ? (
                           <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-indigo-100 text-indigo-700">
                             Standing Series
                           </span>
@@ -326,40 +410,23 @@ export const AssignModal: React.FC<AssignModalProps> = ({
                         )}
                       </div>
                     </div>
-                    <div className="flex flex-col gap-1 items-end shrink-0">
-                      <button
-                        type="button"
-                        disabled={unassigningId === a.scheduled_work_id}
-                        onClick={() => handleUnassignSingle(a.scheduled_work_id)}
-                        className="px-2 py-1 rounded text-[10px] font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 transition flex items-center gap-1 disabled:opacity-50"
-                        title="Remove worker from this date only"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                        <span>Remove (Date Only)</span>
-                      </button>
-
-                      {a.standing_assignment_id && (
-                        <button
-                          type="button"
-                          disabled={unassigningId === a.standing_assignment_id}
-                          onClick={() =>
-                            handleRemoveStandingSeries(
-                              a.standing_assignment_id,
-                              a.standing_assignment_version || 1
-                            )
-                          }
-                          className="px-2 py-0.5 rounded text-[9px] font-medium text-slate-600 hover:text-red-700 hover:bg-slate-100 border border-slate-200 transition"
-                          title="End standing assignment and clear all future occurrences"
-                        >
-                          Remove from Standing Series
-                        </button>
-                      )}
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveStagedWorker(w.employee_id)}
+                      className="p-1 rounded-md text-slate-400 hover:text-red-700 hover:bg-red-50 transition"
+                      title="Remove worker from this slot"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
                   </div>
                 ))}
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="py-3 text-center text-xs text-slate-400 border border-dashed border-slate-200 rounded-lg">
+                No workers currently staged. Select candidates from the recommendation list below.
+              </div>
+            )}
+          </div>
 
           {/* 2. Candidate Selection Section */}
           <div className="space-y-3">
@@ -370,7 +437,7 @@ export const AssignModal: React.FC<AssignModalProps> = ({
                   {activeJobItem?.planned_grade_code})
                 </h4>
                 <p className="text-[11px] text-slate-500">
-                  Ranked by role match, required grade code, and supervisor crew on site
+                  Ranked by exact role match, grade group, and supervisor crew on site
                 </p>
               </div>
 
@@ -393,15 +460,21 @@ export const AssignModal: React.FC<AssignModalProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      const topIds = availableCandidates
-                        .slice(0, neededCount)
-                        .map((c) => c.employee_id);
-                      setSelectedWorkerIds(topIds);
+                      const unselectedAvailable = availableCandidates.filter(
+                        (c) => !stagedEmpIds.has(c.employee_id)
+                      );
+                      const topToAdd = unselectedAvailable.slice(0, neededCount).map((c) => ({
+                        employee_id: c.employee_id,
+                        name: c.name,
+                        tally_id: c.tally_id,
+                        source: "DIRECT",
+                      }));
+                      setStagedWorkers((prev) => [...prev, ...topToAdd]);
                     }}
                     className="px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 flex items-center space-x-1.5 transition shadow-2xs"
                   >
                     <Zap className="h-3.5 w-3.5 fill-amber-500 text-amber-600" />
-                    <span>Auto-Check Top {neededCount} Needed</span>
+                    <span>Auto-Fill Top {neededCount} Needed</span>
                   </button>
                 )}
               </div>
@@ -422,14 +495,14 @@ export const AssignModal: React.FC<AssignModalProps> = ({
                 {availableCandidates.length > 0 ? (
                   <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl max-h-72 overflow-y-auto">
                     {availableCandidates.map((worker) => {
-                      const isChecked = selectedWorkerIds.includes(worker.employee_id);
+                      const isChecked = stagedEmpIds.has(worker.employee_id);
                       const sharesCrewWithSelected =
                         worker.supervisor_id && selectedSupervisors.has(worker.supervisor_id);
 
                       return (
                         <div
                           key={worker.employee_id}
-                          onClick={() => toggleSelectWorker(worker.employee_id)}
+                          onClick={() => handleToggleCandidate(worker)}
                           className={`p-3 flex items-start space-x-3 cursor-pointer transition text-xs ${
                             isChecked
                               ? "bg-blue-50/80 border-l-4 border-l-blue-600"
@@ -579,73 +652,66 @@ export const AssignModal: React.FC<AssignModalProps> = ({
               </div>
             )}
           </div>
-
-          {/* 3. Standing Team & Sequence Options */}
-          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
-            <div className="flex items-start space-x-3">
-              <input
-                type="checkbox"
-                id="isStandingTeam"
-                checked={isStandingTeam}
-                onChange={(e) => setIsStandingTeam(e.target.checked)}
-                className="mt-1 rounded text-blue-600 focus:ring-blue-500 h-4 w-4"
-              />
-              <div>
-                <label
-                  htmlFor="isStandingTeam"
-                  className="font-bold text-slate-900 text-xs cursor-pointer flex items-center space-x-1.5"
-                >
-                  <Layers className="h-3.5 w-3.5 text-blue-600" />
-                  <span>Set as Standing Team (13-Month Recurring Schedule)</span>
-                </label>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  Materializes daily scheduled work automatically for the next 13 months,
-                  preserving worker weekly rest days and public holidays.
-                </p>
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Footer Actions */}
-        <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0">
+        <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 shrink-0">
           <div className="text-xs text-slate-500">
-            {selectedWorkerIds.length > 0 ? (
+            {stagedWorkers.length > 0 ? (
               <span className="font-semibold text-blue-700">
-                {selectedWorkerIds.length} worker(s) selected for assignment
+                {stagedWorkers.length} worker(s) staged for slot
               </span>
             ) : (
-              <span>Select workers from the list above to assign</span>
+              <span>No workers currently staged in this slot</span>
             )}
           </div>
 
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2.5">
             <button
               type="button"
               onClick={onClose}
-              disabled={submitting}
-              className="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl text-xs font-semibold hover:bg-slate-100 transition"
+              disabled={submittingMode !== null}
+              className="px-3.5 py-2 border border-slate-300 text-slate-700 rounded-xl text-xs font-semibold hover:bg-slate-100 transition"
             >
               Cancel
             </button>
 
             <button
               type="button"
-              onClick={handleAssignSubmit}
-              disabled={selectedWorkerIds.length === 0 || submitting}
-              className="px-5 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 transition shadow-xs"
+              onClick={() => handleSave("SINGLE")}
+              disabled={submittingMode !== null}
+              className="px-4 py-2 bg-white border border-blue-600 text-blue-700 rounded-xl text-xs font-bold hover:bg-blue-50 disabled:opacity-50 transition shadow-2xs flex items-center space-x-1.5"
+              title="Apply these assignments to this specific date only"
             >
-              {submitting ? (
+              {submittingMode === "SINGLE" ? (
                 <>
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  <span>Assigning...</span>
+                  <span>Saving Date...</span>
                 </>
               ) : (
                 <>
                   <CheckCircle2 className="h-3.5 w-3.5" />
-                  <span>
-                    Assign {selectedWorkerIds.length > 0 ? `(${selectedWorkerIds.length})` : ""}
-                  </span>
+                  <span>Save Current Date</span>
+                </>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleSave("STANDING")}
+              disabled={submittingMode !== null}
+              className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 disabled:opacity-50 transition shadow-xs flex items-center space-x-1.5"
+              title="Apply as standing team from this date forward (13-month rolling schedule)"
+            >
+              {submittingMode === "STANDING" ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <span>Saving Standing Team...</span>
+                </>
+              ) : (
+                <>
+                  <Layers className="h-3.5 w-3.5" />
+                  <span>Save Recursively (Standing)</span>
                 </>
               )}
             </button>

@@ -28,8 +28,10 @@ All notable changes. Format: Keep a Changelog. Mobile-contract changes are also 
     - `POST /scheduled-work`, `PATCH /scheduled-work/{id}`, `POST /scheduled-work/reorder`, `POST /scheduled-work/validate`: Scheduled work operations.
   - React Web Dashboard Planner (`web/src/routes/Planner.tsx` and `web/src/features/planner`):
     - Weekly Roster view with human-readable week selector (`Week 1 - NOV 2026 (02 - 08 Nov)`), compact/expanded chip modes, problems-only filter, and worker capacity inspection.
-    - Job Coverage view showing site-by-site staffing gaps, frequency-aware 1x/week and 1x/month badge indicators, excess staffing purple badges/chips (`+X Excess`), and TO_BE_COVERED slot assignment triggers.
-    - Assign Modal with single-slot unassign (`DELETE /scheduled-work/{id}`), standing series ending (`POST /standing-assignments/{id}/end`), candidate search, multi-tier ranking, automatic PERMANENT conflict blocking (disabling unavailable workers with explanatory badges), supervisor crew filter toggle, and "Set as Standing Team" materialization.
+    - Job Coverage view showing site-by-site staffing gaps, frequency-aware 1x/week and 1x/month badge indicators, excess staffing purple badges/chips (`+X Excess`), holiday identification badges (e.g. UAE National Day), and TO_BE_COVERED slot assignment triggers.
+    - Assign Modal with staged crew editing, clean `✕` remove chips, no automatic server calls, explicit "Save Current Date" vs "Save Recursively (Standing Team)" alongside "Cancel", candidate search, multi-tier ranking, automatic PERMANENT conflict blocking, and supervisor crew filter toggle.
+    - Global 401 Unauthorized response interceptor in `AuthContext` auto-clearing credentials and redirecting to `/login`.
+    - Authenticated download streaming for Master Data template and error workbooks in `Imports.tsx`.
     - Top navigation Crew / Supervisor filter dropdown filtering the Workers Capacity Side Panel and defaulting Assign Modal recommendations to that supervisor's crew.
     - Worker Capacity Side Panel displaying compact, space-efficient worker list grouped by supervisor crew with hours allocated vs standard hours, progress indicators, and capacity filters (All, Available, Overtime), populated immediately on initial mount.
     - Job Item modal clarity: re-labeled occurrence duration to "Work Shift Duration / Visit" and prevented default Mon-Sat selection for weekly-1x and periodic job items.

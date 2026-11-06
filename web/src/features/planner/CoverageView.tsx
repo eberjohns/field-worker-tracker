@@ -185,19 +185,25 @@ export const CoverageView: React.FC<CoverageViewProps> = ({ coverage, onSlotClic
                           const hasRequirement = day.required_staff_count > 0;
                           const assignedCount = day.assigned_staff_count;
                           const neededCount = Math.max(0, day.required_staff_count - assignedCount);
-                          const isExcess = hasRequirement && assignedCount > day.required_staff_count;
+                          const isExcess =
+                            day.is_excess ||
+                            (assignedCount > day.required_staff_count) ||
+                            (!hasRequirement && assignedCount > 0);
                           const isFullyStaffed = hasRequirement && assignedCount === day.required_staff_count;
                           const isUnderStaffed = hasRequirement && assignedCount < day.required_staff_count;
+                          const excessCount = Math.max(1, assignedCount - day.required_staff_count);
 
                           return (
                             <td
                               key={day.work_date}
                               onClick={() => onSlotClick(worksite.worksite_id, item, day)}
                               className={`p-2 align-top text-center cursor-pointer transition border-l border-slate-100 group ${
-                                !hasRequirement
+                                isExcess
+                                  ? "bg-purple-50/50 hover:bg-purple-100/60 border-b-2 border-b-purple-500"
+                                  : day.is_holiday && assignedCount === 0
+                                  ? "bg-amber-50/30 hover:bg-amber-50/50 border-b border-dashed border-amber-300"
+                                  : !hasRequirement
                                   ? "bg-slate-50/40 text-slate-400"
-                                  : isExcess
-                                  ? "bg-purple-50/40 hover:bg-purple-100/50 border-b-2 border-b-purple-500"
                                   : isUnderStaffed
                                   ? "bg-amber-50/40 hover:bg-amber-100/50 border-b-2 border-b-amber-400"
                                   : "bg-emerald-50/20 hover:bg-emerald-100/40 border-b-2 border-b-emerald-400"
@@ -223,7 +229,7 @@ export const CoverageView: React.FC<CoverageViewProps> = ({ coverage, onSlotClic
 
                                     {isExcess ? (
                                       <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-bold bg-purple-100 text-purple-800 border border-purple-200 shadow-2xs">
-                                        +{assignedCount - day.required_staff_count} Excess
+                                        +{excessCount} Excess
                                       </span>
                                     ) : isFullyStaffed ? (
                                       <span className="inline-flex items-center text-emerald-600">
@@ -241,7 +247,7 @@ export const CoverageView: React.FC<CoverageViewProps> = ({ coverage, onSlotClic
                                     <div className="space-y-0.5 text-left">
                                       {day.assigned_workers.map((wName, wIdx) => {
                                         const isWorkerExcess =
-                                          hasRequirement && wIdx >= day.required_staff_count;
+                                          !hasRequirement || wIdx >= day.required_staff_count;
                                         return (
                                           <div
                                             key={wIdx}
@@ -268,7 +274,9 @@ export const CoverageView: React.FC<CoverageViewProps> = ({ coverage, onSlotClic
                                   <div className="pt-1 opacity-0 group-hover:opacity-100 transition">
                                     <span
                                       className={`inline-flex items-center justify-center w-full py-0.5 rounded text-[10px] font-bold shadow-xs ${
-                                        isUnderStaffed
+                                        isExcess
+                                          ? "bg-purple-700 text-white"
+                                          : isUnderStaffed
                                           ? "bg-blue-600 text-white"
                                           : "bg-slate-800 text-white"
                                       }`}
@@ -283,6 +291,18 @@ export const CoverageView: React.FC<CoverageViewProps> = ({ coverage, onSlotClic
                                       )}
                                     </span>
                                   </div>
+                                </div>
+                              ) : day.is_holiday ? (
+                                <div className="py-2 px-1 text-center space-y-1">
+                                  <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200 shadow-2xs">
+                                    HOLIDAY
+                                  </span>
+                                  <p
+                                    className="text-[10px] font-semibold text-slate-700 truncate"
+                                    title={day.holiday_name || "Official Public Holiday"}
+                                  >
+                                    {day.holiday_name || "Public Holiday"}
+                                  </p>
                                 </div>
                               ) : (
                                 <div className="py-3 text-[10px] text-slate-300 font-mono">-</div>
