@@ -30,6 +30,8 @@ class CandidateWorker:
     is_scope_accessible: bool = True
     supervisor_id: str | None = None
     supervisor_name: str | None = None
+    is_blocked: bool = False
+    blocked_reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -57,6 +59,8 @@ class ScoredCandidate:
     warnings: list[str]
     supervisor_id: str | None = None
     supervisor_name: str | None = None
+    is_blocked: bool = False
+    blocked_reason: str | None = None
     shares_site_group: bool = False
 
 
@@ -127,30 +131,30 @@ def rank_candidates_for_job(
         reasons.append(f"{free_weekly_hours}h free capacity this week")
 
         # Warnings preview
-        if w.today_allocated_hours + job.required_hours > w.standard_hours:
+        if w.is_blocked and w.blocked_reason:
+            warnings.append(f"Blocked: {w.blocked_reason}")
+        elif w.today_allocated_hours + job.required_hours > w.standard_hours:
             warnings.append("Will exceed standard hours today (planned overtime)")
 
         # Composite score
-        # 1. Exact role match is top priority (+10000.0)
-        # 2. Grade code / group match is second priority (+2000.0)
-        # 3. Same supervisor crew active on site is third priority (+1000.0)
-        # 4. Recent site experience (+100.0)
-        # 5. Capacity availability
+        # If blocked, drop score below 0 so available unblocked workers rank first
         score = 0.0
-        if exact_staff_type:
+        if w.is_blocked:
+            score -= 10000.0
+        elif exact_staff_type:
             score += 10000.0
-        if grade_group_match:
+        if not w.is_blocked and grade_group_match:
             score += 2000.0
-        if w.shares_supervisor:
+        if not w.is_blocked and w.shares_supervisor:
             score += 1000.0
-        if w.worked_at_site_recently:
+        if not w.is_blocked and w.worked_at_site_recently:
             score += 100.0
         score += float(free_weekly_hours)
 
         scored_list.append(
             ScoredCandidate(
                 worker=w,
-                is_eligible=True,
+                is_eligible=not w.is_blocked,
                 exact_staff_type_match=exact_staff_type,
                 grade_group_match=grade_group_match,
                 ranking_score=score,
@@ -158,6 +162,8 @@ def rank_candidates_for_job(
                 warnings=warnings,
                 supervisor_id=w.supervisor_id,
                 supervisor_name=w.supervisor_name,
+                is_blocked=w.is_blocked,
+                blocked_reason=w.blocked_reason,
                 shares_site_group=w.shares_supervisor,
             )
         )

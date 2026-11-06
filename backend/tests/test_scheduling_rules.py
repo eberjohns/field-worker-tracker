@@ -454,6 +454,78 @@ def test_suggestions_ranking_prioritizes_role_over_same_crew():
     assert ranked[1].exact_staff_type_match is False
 
 
+def test_rank_candidates_with_blocked_worker():
+    """Verify that blocked workers (e.g. PERMANENT conflicts) receive penalty and is_blocked flag."""
+    target_date = date(2026, 11, 4)
+    job = TargetJobItem(
+        job_item_id="job_item_1",
+        worksite_id="site_1",
+        planned_grade_code="G1C",
+        staff_grade_description="Gardener Helper",
+        deployment_type="PERMANENT",
+        required_hours=Decimal("8.0"),
+    )
+
+    # Worker A is available and matches
+    w_avail = CandidateWorker(
+        employee_id="w_avail",
+        name="Available Worker",
+        tally_id="W001",
+        is_active=True,
+        join_date=date(2025, 1, 1),
+        employment_end_date=None,
+        grade_code="G1C",
+        staff_grade_description="Gardener Helper",
+        weekly_off_day="SUNDAY",
+        standard_hours=Decimal("8.0"),
+        is_on_leave=False,
+        is_budget_only=False,
+        worked_at_site_recently=False,
+        shares_supervisor=False,
+        weekly_allocated_hours=Decimal("0.0"),
+        today_allocated_hours=Decimal("0.0"),
+        is_blocked=False,
+        blocked_reason=None,
+    )
+
+    # Worker B matches SGD but is blocked by PERMANENT assignment
+    w_blocked = CandidateWorker(
+        employee_id="w_blocked",
+        name="Blocked Worker",
+        tally_id="W002",
+        is_active=True,
+        join_date=date(2025, 1, 1),
+        employment_end_date=None,
+        grade_code="G1C",
+        staff_grade_description="Gardener Helper",
+        weekly_off_day="SUNDAY",
+        standard_hours=Decimal("8.0"),
+        is_on_leave=False,
+        is_budget_only=False,
+        worked_at_site_recently=True,
+        shares_supervisor=True,
+        weekly_allocated_hours=Decimal("8.0"),
+        today_allocated_hours=Decimal("8.0"),
+        is_blocked=True,
+        blocked_reason="Already assigned to PERMANENT job 12A10604",
+    )
+
+    ranked = rank_candidates_for_job([w_blocked, w_avail], job, target_date)
+    assert len(ranked) == 2
+
+    # Unblocked worker must rank #1
+    assert ranked[0].worker.employee_id == "w_avail"
+    assert ranked[0].is_blocked is False
+    assert ranked[0].is_eligible is True
+
+    # Blocked worker must rank #2, flagged is_blocked and not eligible
+    assert ranked[1].worker.employee_id == "w_blocked"
+    assert ranked[1].is_blocked is True
+    assert ranked[1].blocked_reason == "Already assigned to PERMANENT job 12A10604"
+    assert ranked[1].is_eligible is False
+    assert any("Blocked:" in w for w in ranked[1].warnings)
+
+
 def test_allocation_with_ramadan_adjustment():
     # Base standard 8.0h, Ramadan adjustment -120 min (-2.0h) -> 6.0h daily
     eff = compute_effective_standard_hours(

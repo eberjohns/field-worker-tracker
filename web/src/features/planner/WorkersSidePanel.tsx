@@ -6,6 +6,7 @@ interface WorkersSidePanelProps {
   workers?: RosterWorkerRow[];
   candidates?: CandidateRecommendation[];
   selectedWorkerId?: string | null;
+  selectedSupervisorId?: string | null;
   onSelectWorker?: (workerId: string) => void;
   allocation?: WorkerAllocationResponse | null;
   targetJobTitle?: string;
@@ -16,6 +17,7 @@ interface WorkersSidePanelProps {
 export const WorkersSidePanel: React.FC<WorkersSidePanelProps> = ({
   workers = [],
   selectedWorkerId,
+  selectedSupervisorId,
   onSelectWorker,
   allocation,
   targetJobTitle,
@@ -33,9 +35,13 @@ export const WorkersSidePanel: React.FC<WorkersSidePanelProps> = ({
     }));
   };
 
-  // Filter workers based on search and capacity filter
+  // Filter workers based on search, crew filter, and capacity filter
   const filteredWorkers = useMemo(() => {
     return workers.filter((w) => {
+      if (selectedSupervisorId && w.supervisor_id !== selectedSupervisorId) {
+        return false;
+      }
+
       const q = searchTerm.toLowerCase().trim();
       const matchesSearch =
         !q ||

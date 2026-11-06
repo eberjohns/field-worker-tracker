@@ -185,6 +185,9 @@ class AssignedWorkerSummary(BaseModel):
     name: str
     tally_id: str
     scheduled_work_id: UUID
+    source: str = "DIRECT"
+    standing_assignment_id: UUID | None = None
+    standing_assignment_version: int | None = None
 
 
 class CoverageDayCell(BaseModel):
@@ -270,4 +273,6 @@ class CandidateRecommendationRead(BaseModel):
     supervisor_id: UUID | None = None
     supervisor_name: str | None = None
     shares_site_group: bool = False
+    is_blocked: bool = False
+    blocked_reason: str | None = None
 

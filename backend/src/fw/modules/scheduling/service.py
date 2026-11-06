@@ -1,5 +1,6 @@
 """SchedulingService orchestrating standing assignments, daily scheduled work, roster, and coverage."""
 
+from collections import defaultdict
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
@@ -249,12 +250,18 @@ class SchedulingService:
             raise AppError(code="NOT_FOUND", message=f"Active job item {payload.job_item_id} not found.", status_code=404)
 
         # 2. Persist StandingAssignment
+        assigned_pattern = payload.weekday_pattern or item.weekday_pattern
+        if item.frequency_unit in ("MONTH", "QUARTER", "YEAR"):
+            assigned_pattern = None
+        elif item.frequency_unit == "WEEK" and item.occurrences_per_period == 1:
+            assigned_pattern = [INT_TO_WEEKDAY[payload.start_date.weekday()]]
+
         standing = StandingAssignment(
             employee_id=payload.employee_id,
             job_item_id=payload.job_item_id,
             start_date=payload.start_date,
             end_date=payload.end_date,
-            weekday_pattern=payload.weekday_pattern or item.weekday_pattern,
+            weekday_pattern=assigned_pattern,
             hours_per_day=payload.hours_per_day or item.hours_per_occurrence_per_staff,
             created_by_user_id=current_user_id,
             is_active=True,
@@ -272,15 +279,6 @@ class SchedulingService:
 
         holidays = await self.get_public_holidays(item.worksite.country, payload.start_date, target_end)
 
-        slots = generate_assignment_dates(
-            start_date=payload.start_date,
-            end_date=target_end,
-            weekday_pattern=standing.weekday_pattern,
-            public_holidays=holidays,
-            skip_public_holidays=True,
-            weekly_off_day=emp.weekly_off_day,
-        )
-
         assigned_hours = standing.hours_per_day or item.hours_per_occurrence_per_staff
         created_count = 0
 
@@ -294,45 +292,124 @@ class SchedulingService:
         )
         existing_sw_dates = set((await self.session.execute(existing_sw_stmt)).scalars().all())
 
-        # Create scheduled work rows on working days
-        for slot in slots:
-            if not slot.is_working_day or slot.work_date in existing_sw_dates:
-                continue
+        is_periodic_interval = item.frequency_unit in ("MONTH", "QUARTER", "YEAR")
 
-            # Find or match occurrence for slot.work_date
-            matching_occ_id: UUID | None = None
-            for occ in item.occurrences:
-                if occ.window_start <= slot.work_date <= occ.window_end:
-                    matching_occ_id = occ.id
+        if is_periodic_interval:
+            # If occurrences haven't been generated yet, generate them now
+            if not item.occurrences:
+                from fw.modules.jobs.service import JobsService
+                await JobsService.generate_job_occurrences(
+                    session=self.session,
+                    job_item_id=item.id,
+                    from_date=payload.start_date,
+                    to_date=target_end,
+                    actor_user_id=current_user_id,
+                )
+                stmt_reload = select(JobOccurrence).where(JobOccurrence.job_item_id == item.id)
+                loaded_occs = list((await self.session.execute(stmt_reload)).scalars().all())
+            else:
+                loaded_occs = item.occurrences
+
+            # Materialize directly for periodic occurrences (1 visit per occurrence window, e.g. monthly)
+            valid_occs = [
+                occ for occ in loaded_occs
+                if occ.window_end >= payload.start_date and occ.window_start <= target_end
+            ]
+            valid_occs.sort(key=lambda o: o.window_start)
+            for occ in valid_occs:
+                if occ.window_start <= payload.start_date <= occ.window_end:
+                    target_date = payload.start_date
+                else:
+                    target_date = occ.due_date or occ.window_start
+
+                # Adjust for worker weekly off or public holiday
+                while target_date <= occ.window_end:
+                    weekday_code = INT_TO_WEEKDAY[target_date.weekday()]
+                    if emp.weekly_off_day and weekday_code == emp.weekly_off_day:
+                        target_date += timedelta(days=1)
+                        continue
+                    if target_date in holidays:
+                        target_date += timedelta(days=1)
+                        continue
                     break
 
-            # Next sequence for employee on that day
-            seq_stmt = (
-                select(func.coalesce(func.max(ScheduledWork.sequence), 0))
-                .where(
-                    ScheduledWork.employee_id == payload.employee_id,
-                    ScheduledWork.work_date == slot.work_date,
-                    ScheduledWork.status == "ACTIVE",
-                )
-            )
-            max_seq = (await self.session.execute(seq_stmt)).scalar() or 0
-            next_seq = int(max_seq) + 1
+                if target_date > occ.window_end or target_date in existing_sw_dates:
+                    continue
 
-            sw = ScheduledWork(
-                employee_id=payload.employee_id,
-                work_date=slot.work_date,
-                occurrence_id=matching_occ_id,
-                job_item_id=payload.job_item_id,
-                worksite_id=item.worksite_id,
-                assigned_hours=assigned_hours,
-                sequence=next_seq,
-                status="ACTIVE",
-                source="STANDING",
-                created_by_user_id=current_user_id,
-                version=1,
+                seq_stmt = (
+                    select(func.coalesce(func.max(ScheduledWork.sequence), 0))
+                    .where(
+                        ScheduledWork.employee_id == payload.employee_id,
+                        ScheduledWork.work_date == target_date,
+                        ScheduledWork.status == "ACTIVE",
+                    )
+                )
+                max_seq = (await self.session.execute(seq_stmt)).scalar() or 0
+                next_seq = int(max_seq) + 1
+
+                sw = ScheduledWork(
+                    employee_id=payload.employee_id,
+                    work_date=target_date,
+                    occurrence_id=occ.id,
+                    job_item_id=payload.job_item_id,
+                    worksite_id=item.worksite_id,
+                    assigned_hours=assigned_hours,
+                    sequence=next_seq,
+                    status="ACTIVE",
+                    source="STANDING",
+                    created_by_user_id=current_user_id,
+                    version=1,
+                )
+                self.session.add(sw)
+                existing_sw_dates.add(target_date)
+                created_count += 1
+        else:
+            # Weekly or daily pattern
+            slots = generate_assignment_dates(
+                start_date=payload.start_date,
+                end_date=target_end,
+                weekday_pattern=standing.weekday_pattern,
+                public_holidays=holidays,
+                skip_public_holidays=True,
+                weekly_off_day=emp.weekly_off_day,
             )
-            self.session.add(sw)
-            created_count += 1
+            for slot in slots:
+                if not slot.is_working_day or slot.work_date in existing_sw_dates:
+                    continue
+
+                # Find or match occurrence for slot.work_date
+                matching_occ_id: UUID | None = None
+                for occ in item.occurrences:
+                    if occ.window_start <= slot.work_date <= occ.window_end:
+                        matching_occ_id = occ.id
+                        break
+
+                seq_stmt = (
+                    select(func.coalesce(func.max(ScheduledWork.sequence), 0))
+                    .where(
+                        ScheduledWork.employee_id == payload.employee_id,
+                        ScheduledWork.work_date == slot.work_date,
+                        ScheduledWork.status == "ACTIVE",
+                    )
+                )
+                max_seq = (await self.session.execute(seq_stmt)).scalar() or 0
+                next_seq = int(max_seq) + 1
+
+                sw = ScheduledWork(
+                    employee_id=payload.employee_id,
+                    work_date=slot.work_date,
+                    occurrence_id=matching_occ_id,
+                    job_item_id=payload.job_item_id,
+                    worksite_id=item.worksite_id,
+                    assigned_hours=assigned_hours,
+                    sequence=next_seq,
+                    status="ACTIVE",
+                    source="STANDING",
+                    created_by_user_id=current_user_id,
+                    version=1,
+                )
+                self.session.add(sw)
+                created_count += 1
 
         await self.session.flush()
 
@@ -894,14 +971,19 @@ class SchedulingService:
         week_end = week_start + timedelta(days=6)
 
         # Query all scheduled work for these employees this week
-        sw_stmt = select(ScheduledWork).where(
-            ScheduledWork.work_date >= week_start,
-            ScheduledWork.work_date <= week_end,
-            ScheduledWork.status == "ACTIVE",
+        sw_stmt = (
+            select(ScheduledWork)
+            .options(selectinload(ScheduledWork.job_item))
+            .where(
+                ScheduledWork.work_date >= week_start,
+                ScheduledWork.work_date <= week_end,
+                ScheduledWork.status == "ACTIVE",
+            )
         )
         all_sw = (await self.session.execute(sw_stmt)).scalars().all()
         emp_weekly_hours: dict[UUID, Decimal] = {}
         emp_today_hours: dict[UUID, Decimal] = {}
+        emp_today_assignments: dict[UUID, list[ScheduledWork]] = defaultdict(list)
         for sw_row in all_sw:
             emp_weekly_hours[sw_row.employee_id] = (
                 emp_weekly_hours.get(sw_row.employee_id, Decimal("0")) + sw_row.assigned_hours
@@ -910,6 +992,7 @@ class SchedulingService:
                 emp_today_hours[sw_row.employee_id] = (
                     emp_today_hours.get(sw_row.employee_id, Decimal("0")) + sw_row.assigned_hours
                 )
+                emp_today_assignments[sw_row.employee_id].append(sw_row)
 
         # Check who worked at this site in the last 14 days or is scheduled on this site this week
         two_weeks_ago = t_date - timedelta(days=14)
@@ -967,6 +1050,28 @@ class SchedulingService:
 
             is_same_site_group = bool(sup_id and sup_id in active_site_supervisors)
 
+            today_sw_list = emp_today_assignments.get(emp.id, [])
+            has_permanent_today = any(
+                sw.job_item and sw.job_item.deployment_type.upper() == "PERMANENT"
+                for sw in today_sw_list
+            )
+            has_any_today = len(today_sw_list) > 0
+
+            is_blocked = False
+            blocked_reason: str | None = None
+
+            if item.deployment_type.upper() == "PERMANENT" and has_any_today:
+                other_item = today_sw_list[0].job_item
+                other_code = other_item.sub_item_code if other_item else "another job"
+                other_desc = f" ({other_item.staff_grade_description})" if other_item else ""
+                is_blocked = True
+                blocked_reason = f"Already assigned to {other_code}{other_desc} today (PERMANENT exclusivity)"
+            elif item.deployment_type.upper() == "REMOTE" and has_permanent_today:
+                perm_item = next((sw.job_item for sw in today_sw_list if sw.job_item and sw.job_item.deployment_type.upper() == "PERMANENT"), None)
+                perm_code = perm_item.sub_item_code if perm_item else "PERMANENT"
+                is_blocked = True
+                blocked_reason = f"Already assigned to PERMANENT job {perm_code} today"
+
             candidates.append(
                 CandidateWorker(
                     employee_id=str(emp.id),
@@ -987,6 +1092,8 @@ class SchedulingService:
                     today_allocated_hours=emp_today_hours.get(emp.id, Decimal("0.0")),
                     supervisor_id=str(sup_id) if sup_id else None,
                     supervisor_name=sup_name,
+                    is_blocked=is_blocked,
+                    blocked_reason=blocked_reason,
                 )
             )
 
@@ -1010,6 +1117,8 @@ class SchedulingService:
                 supervisor_id=UUID(sc.supervisor_id) if sc.supervisor_id else None,
                 supervisor_name=sc.supervisor_name,
                 shares_site_group=sc.shares_site_group,
+                is_blocked=sc.is_blocked,
+                blocked_reason=sc.blocked_reason,
             )
             for sc in ranked
         ]
@@ -1402,6 +1511,18 @@ class SchedulingService:
         )
         scheduled_rows = (await self.session.execute(sw_stmt)).scalars().all()
 
+        # Query active standing assignments to link standing_assignment_id
+        standing_stmt = select(
+            StandingAssignment.id,
+            StandingAssignment.employee_id,
+            StandingAssignment.job_item_id,
+            StandingAssignment.version,
+        ).where(StandingAssignment.is_active.is_(True))
+        standing_rows = (await self.session.execute(standing_stmt)).all()
+        standing_map: dict[tuple[UUID, UUID], tuple[UUID, int]] = {
+            (r[1], r[2]): (r[0], r[3]) for r in standing_rows
+        }
+
         # Map scheduled work by (job_item_id, work_date)
         sw_by_item_date: dict[tuple[UUID, date], list[ScheduledWork]] = {}
         for r in scheduled_rows:
@@ -1466,6 +1587,17 @@ class SchedulingService:
                             name=a.employee.name if a.employee else "Unknown",
                             tally_id=a.employee.tally_id if a.employee else "",
                             scheduled_work_id=a.id,
+                            source=a.source or "DIRECT",
+                            standing_assignment_id=(
+                                standing_map[(a.employee_id, a.job_item_id)][0]
+                                if a.source == "STANDING" and (a.employee_id, a.job_item_id) in standing_map
+                                else None
+                            ),
+                            standing_assignment_version=(
+                                standing_map[(a.employee_id, a.job_item_id)][1]
+                                if a.source == "STANDING" and (a.employee_id, a.job_item_id) in standing_map
+                                else None
+                            ),
                         )
                         for a in assigned
                         if a.employee
@@ -1546,7 +1678,9 @@ class SchedulingService:
         for emp_id in payload.employee_ids:
             if payload.as_standing_assignment:
                 standing_pattern = item.weekday_pattern
-                if not standing_pattern and item.frequency_unit == "WEEK" and item.occurrences_per_period == 1:
+                if item.frequency_unit in ("MONTH", "QUARTER", "YEAR"):
+                    standing_pattern = None
+                elif item.frequency_unit == "WEEK" and item.occurrences_per_period == 1:
                     standing_pattern = [INT_TO_WEEKDAY[payload.work_date.weekday()]]
 
                 standing_req = StandingAssignmentCreate(

@@ -630,3 +630,98 @@ async def test_scheduled_work_batch_daily_and_standing(admin_client, sample_test
     assert len(standing_data) >= 1
     assert standing_data[0]["employee_id"] == w1_id
 
+
+@db_required
+@pytest.mark.asyncio
+async def test_candidate_recommendations_with_permanent_conflict(admin_client, sample_test_data):
+    """Verify candidate recommendations flag workers who conflict with a PERMANENT assignment as blocked."""
+    w1_id = str(sample_test_data["w1_id"])
+    item_a_id = str(sample_test_data["item_a_id"])  # PERMANENT
+
+    # Assign w1 to PERMANENT item_a on 2026-11-04
+    resp = await admin_client.post(
+        "/api/v1/scheduled-work/batch",
+        json={
+            "employee_ids": [w1_id],
+            "job_item_id": item_a_id,
+            "work_date": "2026-11-04",
+            "assigned_hours": 9.0,
+            "as_standing_assignment": False,
+            "acknowledge_warnings": True,
+        },
+    )
+    assert resp.status_code == 201, resp.text
+
+    # Request candidate recommendations for item_a on 2026-11-04
+    rec_resp = await admin_client.get(
+        f"/api/v1/job-items/{item_a_id}/recommendations?date=2026-11-04",
+    )
+    assert rec_resp.status_code == 200, rec_resp.text
+    candidates = rec_resp.json()
+
+    # Find w1 in candidates
+    w1_rec = next((c for c in candidates if c["employee_id"] == w1_id), None)
+    assert w1_rec is not None, "w1 should be listed in recommendations"
+    assert w1_rec["is_blocked"] is True
+    assert w1_rec["blocked_reason"] is not None
+    assert "PERMANENT" in w1_rec["blocked_reason"]
+
+
+@db_required
+@pytest.mark.asyncio
+async def test_monthly_standing_assignment_materialization(admin_client, sample_test_data):
+    """Verify that monthly job items materialize exactly 1 visit per month, not daily Mon-Sat."""
+    w2_id = str(sample_test_data["w2_id"])
+    worksite_id = sample_test_data["worksite_id"]
+
+    # Create a monthly job item (e.g. Irrigation Tech, 1x/month, 8h)
+    async with async_session_factory() as session:
+        monthly_item = JobItem(
+            worksite_id=worksite_id,
+            sub_item_code=f"M_{uuid4().hex[:4]}",
+            staff_grade_description="Irrigation Technician",
+            planned_grade_code="G1C",
+            frequency_unit="MONTH",
+            occurrences_per_period=Decimal("1.0"),
+            period_interval=1,
+            weekday_pattern=None,
+            required_staff_count=1,
+            hours_per_occurrence_per_staff=Decimal("8.0"),
+            deployment_type="PERMANENT",
+            start_date=date(2026, 1, 1),
+            end_date=date(2026, 12, 31),
+            is_active=True,
+        )
+        session.add(monthly_item)
+        await session.commit()
+        monthly_item_id = str(monthly_item.id)
+
+    # Create standing assignment starting 2026-11-01 to 2026-12-31
+    resp = await admin_client.post(
+        "/api/v1/standing-assignments",
+        json={
+            "job_item_id": monthly_item_id,
+            "employee_id": w2_id,
+            "start_date": "2026-11-01",
+            "end_date": "2026-12-31",
+        },
+    )
+    assert resp.status_code == 201, resp.text
+
+    # Query materialized scheduled work for this job item
+    async with async_session_factory() as session:
+        sw_records = (
+            await session.execute(
+                select(ScheduledWork).where(
+                    ScheduledWork.job_item_id == monthly_item.id,
+                    ScheduledWork.employee_id == sample_test_data["w2_id"],
+                    ScheduledWork.status == "ACTIVE",
+                )
+            )
+        ).scalars().all()
+
+        # Over Nov 1 to Dec 31 (2 months), exactly 2 visits should be materialized (1 in Nov, 1 in Dec)
+        assert len(sw_records) == 2, f"Expected 2 monthly visits, got {len(sw_records)}"
+        months = {sw.work_date.month for sw in sw_records}
+        assert months == {11, 12}
+

@@ -51,6 +51,9 @@ export interface AssignedWorkerSummary {
   name: string;
   tally_id: string;
   scheduled_work_id: string;
+  source?: string;
+  standing_assignment_id?: string | null;
+  standing_assignment_version?: number | null;
 }
 
 export interface CoverageDayCell {
@@ -146,6 +149,8 @@ export interface CandidateRecommendation {
   supervisor_id?: string | null;
   supervisor_name?: string | null;
   shares_site_group?: boolean;
+  is_blocked?: boolean;
+  blocked_reason?: string | null;
 }
 
 export interface ValidationIssue {

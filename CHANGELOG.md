@@ -28,9 +28,11 @@ All notable changes. Format: Keep a Changelog. Mobile-contract changes are also 
     - `POST /scheduled-work`, `PATCH /scheduled-work/{id}`, `POST /scheduled-work/reorder`, `POST /scheduled-work/validate`: Scheduled work operations.
   - React Web Dashboard Planner (`web/src/routes/Planner.tsx` and `web/src/features/planner`):
     - Weekly Roster view with human-readable week selector (`Week 1 - NOV 2026 (02 - 08 Nov)`), compact/expanded chip modes, problems-only filter, and worker capacity inspection.
-    - Job Coverage view showing site-by-site staffing gaps, frequency-aware 1x/week and 1x/month badge indicators, and TO_BE_COVERED slot assignment triggers.
-    - Assign Modal with candidate search, multi-tier ranking (exact role match first, grade group, supervisor affinity), dry-run validation warnings, "Set as Standing Team" 13-month materialization with worker weekly-off day rest protection, and visit sequence reordering with drag & drop and up/down buttons.
-    - Worker Capacity Side Panel displaying compact, space-efficient worker list grouped by supervisor crew with hours allocated vs standard hours, progress indicators, and capacity filters (All, Available, Overtime).
+    - Job Coverage view showing site-by-site staffing gaps, frequency-aware 1x/week and 1x/month badge indicators, excess staffing purple badges/chips (`+X Excess`), and TO_BE_COVERED slot assignment triggers.
+    - Assign Modal with single-slot unassign (`DELETE /scheduled-work/{id}`), standing series ending (`POST /standing-assignments/{id}/end`), candidate search, multi-tier ranking, automatic PERMANENT conflict blocking (disabling unavailable workers with explanatory badges), supervisor crew filter toggle, and "Set as Standing Team" materialization.
+    - Top navigation Crew / Supervisor filter dropdown filtering the Workers Capacity Side Panel and defaulting Assign Modal recommendations to that supervisor's crew.
+    - Worker Capacity Side Panel displaying compact, space-efficient worker list grouped by supervisor crew with hours allocated vs standard hours, progress indicators, and capacity filters (All, Available, Overtime), populated immediately on initial mount.
+    - Job Item modal clarity: re-labeled occurrence duration to "Work Shift Duration / Visit" and prevented default Mon-Sat selection for weekly-1x and periodic job items.
     - Employees & People view: primary grouping by Supervisor crew, Superintendent and Engineer chips with click-to-focus smooth scrolling, leadership oversight executive cards with click-to-filter, and organizational headcount metrics.
     - Excel export button downloading `.xlsx` roster formatted to the client's specification.
   - ADR-014: Planner standing assignments, scheduled work, and roster markers.

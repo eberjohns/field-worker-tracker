@@ -185,7 +185,8 @@ export const CoverageView: React.FC<CoverageViewProps> = ({ coverage, onSlotClic
                           const hasRequirement = day.required_staff_count > 0;
                           const assignedCount = day.assigned_staff_count;
                           const neededCount = Math.max(0, day.required_staff_count - assignedCount);
-                          const isFullyStaffed = hasRequirement && assignedCount >= day.required_staff_count;
+                          const isExcess = hasRequirement && assignedCount > day.required_staff_count;
+                          const isFullyStaffed = hasRequirement && assignedCount === day.required_staff_count;
                           const isUnderStaffed = hasRequirement && assignedCount < day.required_staff_count;
 
                           return (
@@ -195,18 +196,22 @@ export const CoverageView: React.FC<CoverageViewProps> = ({ coverage, onSlotClic
                               className={`p-2 align-top text-center cursor-pointer transition border-l border-slate-100 group ${
                                 !hasRequirement
                                   ? "bg-slate-50/40 text-slate-400"
+                                  : isExcess
+                                  ? "bg-purple-50/40 hover:bg-purple-100/50 border-b-2 border-b-purple-500"
                                   : isUnderStaffed
                                   ? "bg-amber-50/40 hover:bg-amber-100/50 border-b-2 border-b-amber-400"
                                   : "bg-emerald-50/20 hover:bg-emerald-100/40 border-b-2 border-b-emerald-400"
                               }`}
                             >
-                              {hasRequirement ? (
+                              {hasRequirement || assignedCount > 0 ? (
                                 <div className="space-y-1.5">
                                   {/* Status Ratio Pill */}
                                   <div className="flex items-center justify-between">
                                     <span
                                       className={`text-[11px] font-bold ${
-                                        isFullyStaffed
+                                        isExcess
+                                          ? "text-purple-700 font-extrabold"
+                                          : isFullyStaffed
                                           ? "text-emerald-700"
                                           : assignedCount === 0
                                           ? "text-red-700 font-extrabold"
@@ -216,7 +221,11 @@ export const CoverageView: React.FC<CoverageViewProps> = ({ coverage, onSlotClic
                                       {assignedCount} / {day.required_staff_count}
                                     </span>
 
-                                    {isFullyStaffed ? (
+                                    {isExcess ? (
+                                      <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-bold bg-purple-100 text-purple-800 border border-purple-200 shadow-2xs">
+                                        +{assignedCount - day.required_staff_count} Excess
+                                      </span>
+                                    ) : isFullyStaffed ? (
                                       <span className="inline-flex items-center text-emerald-600">
                                         <CheckCircle2 className="h-3.5 w-3.5" />
                                       </span>
@@ -230,27 +239,50 @@ export const CoverageView: React.FC<CoverageViewProps> = ({ coverage, onSlotClic
                                   {/* Assigned Workers Chips */}
                                   {day.assigned_workers.length > 0 && (
                                     <div className="space-y-0.5 text-left">
-                                      {day.assigned_workers.map((wName, wIdx) => (
-                                        <div
-                                          key={wIdx}
-                                          className="text-[10px] font-medium bg-white/90 border border-slate-200 px-1.5 py-0.5 rounded text-slate-800 truncate shadow-2xs"
-                                          title={wName}
-                                        >
-                                          • {wName}
-                                        </div>
-                                      ))}
+                                      {day.assigned_workers.map((wName, wIdx) => {
+                                        const isWorkerExcess =
+                                          hasRequirement && wIdx >= day.required_staff_count;
+                                        return (
+                                          <div
+                                            key={wIdx}
+                                            className={`text-[10px] font-medium px-1.5 py-0.5 rounded truncate shadow-2xs ${
+                                              isWorkerExcess
+                                                ? "bg-purple-50 border border-purple-300 text-purple-900 font-semibold"
+                                                : "bg-white/90 border border-slate-200 text-slate-800"
+                                            }`}
+                                            title={isWorkerExcess ? `${wName} (Excess Staff)` : wName}
+                                          >
+                                            • {wName}{" "}
+                                            {isWorkerExcess && (
+                                              <span className="text-[9px] text-purple-600 font-bold">
+                                                (Excess)
+                                              </span>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
                                     </div>
                                   )}
 
-                                  {/* Quick assign prompt on hover */}
-                                  {isUnderStaffed && (
-                                    <div className="pt-1 opacity-0 group-hover:opacity-100 transition">
-                                      <span className="inline-flex items-center justify-center w-full py-0.5 rounded bg-blue-600 text-white text-[10px] font-bold shadow-xs">
-                                        <Plus className="h-3 w-3 mr-0.5" />
-                                        Assign
-                                      </span>
-                                    </div>
-                                  )}
+                                  {/* Quick assign / edit prompt on hover */}
+                                  <div className="pt-1 opacity-0 group-hover:opacity-100 transition">
+                                    <span
+                                      className={`inline-flex items-center justify-center w-full py-0.5 rounded text-[10px] font-bold shadow-xs ${
+                                        isUnderStaffed
+                                          ? "bg-blue-600 text-white"
+                                          : "bg-slate-800 text-white"
+                                      }`}
+                                    >
+                                      {isUnderStaffed ? (
+                                        <>
+                                          <Plus className="h-3 w-3 mr-0.5" />
+                                          Assign
+                                        </>
+                                      ) : (
+                                        "Edit / Unassign"
+                                      )}
+                                    </span>
+                                  </div>
                                 </div>
                               ) : (
                                 <div className="py-3 text-[10px] text-slate-300 font-mono">-</div>

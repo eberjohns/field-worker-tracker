@@ -65,6 +65,8 @@ export const Planner: React.FC = () => {
   const [staffTypeFilter, setStaffTypeFilter] = useState<string>("");
   const [gradeGroupFilter, setGradeGroupFilter] = useState<string>("");
   const [isSidePanelOpen, setIsSidePanelOpen] = useState<boolean>(true);
+  const [supervisorsList, setSupervisorsList] = useState<{ id: string; name: string }[]>([]);
+  const [selectedSupervisorId, setSelectedSupervisorId] = useState<string | null>(null);
 
   // Data State
   const [rosterData, setRosterData] = useState<RosterResponse | null>(null);
@@ -94,6 +96,9 @@ export const Planner: React.FC = () => {
   const [exportingExcel, setExportingExcel] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const selectedSupervisorName =
+    supervisorsList.find((s) => s.id === selectedSupervisorId)?.name || null;
+
   // Headers helper
   const authHeaders = {
     "Content-Type": "application/json",
@@ -112,30 +117,58 @@ export const Planner: React.FC = () => {
     setLoading(true);
     setErrorMsg(null);
     try {
-      if (activeTab === "ROSTER") {
-        const params = new URLSearchParams({
-          week_start: weekStartDate,
-          problems_only: problemsOnly ? "true" : "false",
-        });
-        if (staffTypeFilter) params.append("staff_type", staffTypeFilter);
-        if (gradeGroupFilter) params.append("grade_group", gradeGroupFilter);
+      const rosterParams = new URLSearchParams({
+        week_start: weekStartDate,
+        problems_only: problemsOnly ? "true" : "false",
+      });
+      if (staffTypeFilter) rosterParams.append("staff_type", staffTypeFilter);
+      if (gradeGroupFilter) rosterParams.append("grade_group", gradeGroupFilter);
 
-        const res = await fetch(`/api/v1/roster?${params.toString()}`, { headers: authHeaders });
-        if (!res.ok) throw new Error("Failed to load weekly roster.");
-        const data: RosterResponse = await res.json();
-        setRosterData(data);
-      } else if (activeTab === "COVERAGE") {
-        const res = await fetch(`/api/v1/schedule/coverage?week_start=${weekStartDate}`, {
-          headers: authHeaders,
-        });
-        if (!res.ok) throw new Error("Failed to load coverage view.");
-        const data: CoverageResponse = await res.json();
+      const [covRes, rosRes] = await Promise.all([
+        fetch(`/api/v1/schedule/coverage?week_start=${weekStartDate}`, { headers: authHeaders }),
+        fetch(`/api/v1/roster?${rosterParams.toString()}`, { headers: authHeaders }),
+      ]);
+
+      if (covRes.ok) {
+        const data: CoverageResponse = await covRes.json();
         setCoverageData(data);
+      } else if (activeTab === "COVERAGE") {
+        throw new Error("Failed to load coverage view.");
+      }
+
+      if (rosRes.ok) {
+        const data: RosterResponse = await rosRes.json();
+        setRosterData(data);
+      } else if (activeTab === "ROSTER") {
+        throw new Error("Failed to load weekly roster.");
       }
     } catch (err: any) {
       setErrorMsg(err.message || "Failed to load scheduling data.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Fetch supervisors for crew filter
+  const fetchSupervisors = async () => {
+    try {
+      const res = await fetch("/api/v1/employees?role=SUPERVISOR&limit=200", {
+        headers: authHeaders,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const items = data.items || data || [];
+        const list = items.map((emp: any) => ({
+          id: emp.id,
+          name:
+            `${emp.first_name || ""} ${emp.last_name || ""}`.trim() ||
+            emp.tally_id ||
+            "Supervisor",
+        }));
+        setSupervisorsList(list);
+      }
+    } catch (err) {
+      console.error("Failed to fetch supervisors:", err);
     }
   };
 
@@ -231,7 +264,23 @@ export const Planner: React.FC = () => {
   useEffect(() => {
     fetchData();
     fetchJobItems();
+    fetchSupervisors();
   }, [activeTab, weekStartDate, problemsOnly, staffTypeFilter, gradeGroupFilter]);
+
+  // Synchronize supervisors list with roster workers
+  useEffect(() => {
+    if (!rosterData?.workers) return;
+    setSupervisorsList((prev) => {
+      const map = new Map<string, string>();
+      prev.forEach((s) => map.set(s.id, s.name));
+      rosterData.workers.forEach((w) => {
+        if (w.supervisor_id && !map.has(w.supervisor_id)) {
+          map.set(w.supervisor_id, w.supervisor_name || "Supervisor");
+        }
+      });
+      return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+    });
+  }, [rosterData]);
 
   // Export Excel handler
   const handleExportExcel = async () => {
@@ -324,8 +373,34 @@ export const Planner: React.FC = () => {
           </button>
         </div>
 
-        {/* Week navigation & Side panel toggle */}
+        {/* Week navigation, Crew Filter & Side panel toggle */}
         <div className="flex items-center space-x-2">
+          {/* Crew / Supervisor Filter Dropdown */}
+          <div className="flex items-center space-x-1">
+            <select
+              value={selectedSupervisorId || ""}
+              onChange={(e) => setSelectedSupervisorId(e.target.value || null)}
+              className="px-2.5 py-1.5 text-xs font-medium border border-slate-200 rounded-lg bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer max-w-[200px] truncate"
+              title="Filter by Supervisor's Crew"
+            >
+              <option value="">All Crews ({supervisorsList.length})</option>
+              {supervisorsList.map((sup) => (
+                <option key={sup.id} value={sup.id}>
+                  Crew: {sup.name}
+                </option>
+              ))}
+            </select>
+            {selectedSupervisorId && (
+              <button
+                onClick={() => setSelectedSupervisorId(null)}
+                className="text-xs text-slate-400 hover:text-slate-700 px-1 py-1"
+                title="Clear crew filter"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
           <div className="flex items-center bg-slate-100 rounded-lg p-0.5 border border-slate-200">
             <button
               onClick={() => changeWeek(-7)}
@@ -450,6 +525,7 @@ export const Planner: React.FC = () => {
             workers={rosterData?.workers || []}
             candidates={candidates}
             selectedWorkerId={selectedWorkerId}
+            selectedSupervisorId={selectedSupervisorId}
             onSelectWorker={(workerId) => {
               setSelectedWorkerId(workerId);
               fetchWorkerAllocation(workerId);
@@ -478,6 +554,8 @@ export const Planner: React.FC = () => {
           initialDate={modalInitialDate}
           initialJobItemId={modalInitialJobItemId}
           availableJobItems={availableJobItems}
+          selectedSupervisorId={selectedSupervisorId}
+          selectedSupervisorName={selectedSupervisorName}
         />
       )}
     </div>
