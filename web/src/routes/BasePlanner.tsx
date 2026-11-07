@@ -73,10 +73,12 @@ export const BasePlanner: React.FC = () => {
   const [filterToSupervisorCrew, setFilterToSupervisorCrew] = useState<boolean>(true);
   const [loadingCandidates, setLoadingCandidates] = useState<boolean>(false);
   const [savingSlot, setSavingSlot] = useState<boolean>(false);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
   // Fetch Base Planner Worksites
-  const fetchBasePlannerData = async () => {
-    setLoading(true);
+  const fetchBasePlannerData = async (silent: boolean = false) => {
+    if (!silent) setLoading(true);
+    else setIsRefreshing(true);
     setError(null);
     try {
       const res = await fetch("/api/v1/base-planner/worksites", {
@@ -88,7 +90,8 @@ export const BasePlanner: React.FC = () => {
     } catch (err: any) {
       setError(err.message || "An error occurred");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
+      else setIsRefreshing(false);
     }
   };
 
@@ -193,11 +196,11 @@ export const BasePlanner: React.FC = () => {
       setSelectedQuarterWeek(1);
     }
 
-    // Fetch candidate recommendations
+    // Fetch candidate recommendations for this specific weekday
     setLoadingCandidates(true);
     try {
       const cRes = await fetch(
-        `/api/v1/job-items/${it.job_item_id}/recommendations`,
+        `/api/v1/job-items/${it.job_item_id}/recommendations?weekday=${dow}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       if (cRes.ok) {
@@ -214,6 +217,9 @@ export const BasePlanner: React.FC = () => {
   // Add candidate to current slot
   const handleAddCandidate = (cand: CandidateRecommendation) => {
     if (!activeSlot) return;
+    const requiredHeadcount = activeSlot.item.required_staff_count || 1;
+    if (slotEntries.length >= requiredHeadcount) return;
+    if (cand.is_blocked) return;
     const exists = slotEntries.some((e) => e.employee_id === cand.employee_id);
     if (exists) return;
 
@@ -280,9 +286,13 @@ export const BasePlanner: React.FC = () => {
 
       if (fillWorkingDays) {
         // Convenience Fill: Copy these workers to MON, TUE, WED, THU, FRI, SAT explicitly!
+        // Automatically skips any day that is the worker's weekly rest day!
         const workingDays = ["MON", "TUE", "WED", "THU", "FRI", "SAT"];
         for (const d of workingDays) {
           slotEntries.forEach((se, idx) => {
+            if (se.weekly_off_day && se.weekly_off_day.trim().toUpperCase() === d) {
+              return; // Skip worker on their weekly off day
+            }
             newEntries.push({
               employee_id: se.employee_id,
               weekday_mask: d,
@@ -347,8 +357,12 @@ export const BasePlanner: React.FC = () => {
         throw new Error(errJson.detail || "Failed to save template");
       }
 
-      await fetchBasePlannerData();
+      const scrollPos = window.scrollY;
+      await fetchBasePlannerData(true);
       setActiveSlot(null);
+      setTimeout(() => {
+        window.scrollTo({ top: scrollPos, behavior: "instant" });
+      }, 0);
     } catch (err: any) {
       alert(`Error saving slot: ${err.message}`);
     } finally {
@@ -444,6 +458,11 @@ export const BasePlanner: React.FC = () => {
               <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
                 Master Schedule
               </span>
+              {isRefreshing && (
+                <span className="text-xs text-indigo-600 flex items-center gap-1 font-medium bg-indigo-50/80 px-2 py-0.5 rounded border border-indigo-200 animate-pulse">
+                  <Loader2 className="h-3 w-3 animate-spin" /> Saving & updating...
+                </span>
+              )}
             </div>
             <p className="text-sm text-slate-500 mt-1">
               Configure permanent weekly staffing across contract validity dates. Click any weekday slot to assign workers.
@@ -594,7 +613,22 @@ export const BasePlanner: React.FC = () => {
                         const isQuarterly = it.frequency_unit === "QUARTER";
 
                         // Determine recommended target days (pure visual recommendation)
-                        const recommendedWeekdays = it.weekday_pattern || (isWeekly && targetOccurrences === 1 ? ["MON"] : []);
+                        let recommendedWeekdays = it.weekday_pattern;
+                        if (!recommendedWeekdays || recommendedWeekdays.length === 0) {
+                          if (isWeekly) {
+                            if (targetOccurrences >= 6) {
+                              recommendedWeekdays = ["MON", "TUE", "WED", "THU", "FRI", "SAT"];
+                            } else if (targetOccurrences === 5) {
+                              recommendedWeekdays = ["MON", "TUE", "WED", "THU", "FRI"];
+                            } else if (targetOccurrences === 1) {
+                              recommendedWeekdays = ["MON"];
+                            } else {
+                              recommendedWeekdays = [];
+                            }
+                          } else {
+                            recommendedWeekdays = [];
+                          }
+                        }
 
                         // Calculate assigned days count in template
                         const distinctAssignedSlots = new Set<string>();
@@ -865,9 +899,16 @@ export const BasePlanner: React.FC = () => {
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs text-slate-600 font-semibold">
                   <span>
-                    Currently Scheduled Workers ({slotEntries.length} / {activeSlot.item.required_staff_count} Required)
+                    Currently Scheduled Workers ({slotEntries.length} / {activeSlot.item.required_staff_count || 1} Required)
                   </span>
                 </div>
+
+                {slotEntries.length >= (activeSlot.item.required_staff_count || 1) && (
+                  <div className="p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium flex items-center justify-between">
+                    <span>✓ Slot Headcount Full ({slotEntries.length} of {activeSlot.item.required_staff_count || 1} staff assigned)</span>
+                    <span className="text-[10px] text-emerald-700">Remove a worker using ✕ to replace</span>
+                  </div>
+                )}
 
                 {slotEntries.length === 0 ? (
                   <p className="text-xs text-slate-400 italic py-2">
@@ -881,7 +922,9 @@ export const BasePlanner: React.FC = () => {
                       return (
                         <div
                           key={e.employee_id}
-                          className="flex items-center justify-between p-2.5 rounded-lg border border-slate-200 bg-white shadow-sm"
+                          className={`flex items-center justify-between p-2.5 rounded-lg border shadow-sm ${
+                            isOffDay ? "bg-amber-50/50 border-amber-300" : "bg-white border-slate-200"
+                          }`}
                         >
                           <div className="flex items-center gap-3">
                             <span className="text-xs font-mono font-bold text-slate-400">#{idx + 1}</span>
@@ -972,16 +1015,23 @@ export const BasePlanner: React.FC = () => {
                 ) : (
                   <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
                     {filteredCandidates.map((cand) => {
+                      const requiredHeadcount = activeSlot.item.required_staff_count || 1;
+                      const isSlotFull = slotEntries.length >= requiredHeadcount;
                       const isExactMatch = cand.exact_staff_type_match;
                       const isOffDay = (cand.weekly_off_day || "").toUpperCase() === activeSlot.weekday;
                       const isAlreadyAssigned = slotEntries.some((e) => e.employee_id === cand.employee_id);
                       const isBlockedByQuota = quotaStatusInModal.isQuotaReached && !quotaStatusInModal.isCurrentSlotAlreadyScheduled;
+                      const isBlockedByHeadcount = isSlotFull && !isAlreadyAssigned;
+                      const isCandidateBlocked = cand.is_blocked;
+                      const isDisabled = isAlreadyAssigned || isBlockedByQuota || isBlockedByHeadcount || isCandidateBlocked;
+
+                      const remainingHours = Math.max(0, Number(cand.standard_hours) - Number(cand.today_allocated_hours || 0));
 
                       return (
                         <div
                           key={cand.employee_id}
                           className={`p-2.5 rounded-lg border flex items-center justify-between gap-3 transition-colors ${
-                            isAlreadyAssigned || isBlockedByQuota
+                            isDisabled
                               ? "bg-slate-50 border-slate-200 opacity-60"
                               : "bg-white border-slate-200 hover:border-indigo-300"
                           }`}
@@ -1017,6 +1067,27 @@ export const BasePlanner: React.FC = () => {
                               )}
                             </div>
 
+                            {/* Capacity or Blocked badge */}
+                            {cand.is_blocked ? (
+                              <div className="text-[10px] text-rose-700 font-semibold flex items-center gap-1 mt-0.5">
+                                <span className="px-1.5 py-0.2 rounded bg-rose-50 border border-rose-200">
+                                  Blocked: {cand.blocked_reason}
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                {Number(cand.today_allocated_hours || 0) > 0 ? (
+                                  <span className="text-[9px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded">
+                                    Remote: {cand.today_allocated_hours}h / {cand.standard_hours}h ({remainingHours.toFixed(1)}h left)
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] text-slate-500 bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded">
+                                    Available ({cand.standard_hours}h standard)
+                                  </span>
+                                )}
+                              </div>
+                            )}
+
                             {isOffDay && (
                               <div className="text-[10px] text-amber-700 font-semibold flex items-center gap-1">
                                 <ShieldAlert className="h-3 w-3" />
@@ -1028,15 +1099,23 @@ export const BasePlanner: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => handleAddCandidate(cand)}
-                            disabled={isAlreadyAssigned || isBlockedByQuota}
+                            disabled={isDisabled}
                             className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors ${
-                              isAlreadyAssigned || isBlockedByQuota
+                              isDisabled
                                 ? "bg-slate-100 text-slate-400 cursor-not-allowed"
                                 : "bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 shadow-sm"
                             }`}
                           >
                             <Plus className="h-3.5 w-3.5" />
-                            {isAlreadyAssigned ? "Assigned" : isBlockedByQuota ? "Quota Reached" : "Add to Slot"}
+                            {isAlreadyAssigned
+                              ? "Assigned"
+                              : isCandidateBlocked
+                              ? "Blocked"
+                              : isBlockedByHeadcount
+                              ? `Slot Full (${slotEntries.length}/${requiredHeadcount})`
+                              : isBlockedByQuota
+                              ? "Quota Reached"
+                              : "Add to Slot"}
                           </button>
                         </div>
                       );

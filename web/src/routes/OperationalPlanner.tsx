@@ -95,10 +95,12 @@ export const OperationalPlanner: React.FC = () => {
   const [filterToSupervisorCrew, setFilterToSupervisorCrew] = useState<boolean>(true);
   const [loadingCandidates, setLoadingCandidates] = useState<boolean>(false);
   const [savingShift, setSavingShift] = useState<boolean>(false);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
   // Fetch Operational Data
-  const fetchOperationalData = async () => {
-    setLoading(true);
+  const fetchOperationalData = async (silent: boolean = false) => {
+    if (!silent) setLoading(true);
+    else setIsRefreshing(true);
     setError(null);
     try {
       if (activeLens === "COVERAGE") {
@@ -121,7 +123,8 @@ export const OperationalPlanner: React.FC = () => {
     } catch (err: any) {
       setError(err.message || "An error occurred");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
+      else setIsRefreshing(false);
     }
   };
 
@@ -237,8 +240,12 @@ export const OperationalPlanner: React.FC = () => {
         throw new Error(errJson.detail || "Failed to create shift");
       }
 
-      await fetchOperationalData();
+      const scrollPos = window.scrollY;
+      await fetchOperationalData(true);
       setSelectedCell(null);
+      setTimeout(() => {
+        window.scrollTo({ top: scrollPos, behavior: "instant" });
+      }, 0);
     } catch (err: any) {
       alert(`Error creating shift: ${err.message}`);
     } finally {
@@ -255,8 +262,12 @@ export const OperationalPlanner: React.FC = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error("Failed to delete shift");
-      await fetchOperationalData();
+      const scrollPos = window.scrollY;
+      await fetchOperationalData(true);
       setSelectedCell(null);
+      setTimeout(() => {
+        window.scrollTo({ top: scrollPos, behavior: "instant" });
+      }, 0);
     } catch (err: any) {
       alert(`Error cancelling shift: ${err.message}`);
     }
@@ -279,6 +290,17 @@ export const OperationalPlanner: React.FC = () => {
   const filteredCandidates = useMemo(() => {
     let pool = candidates;
 
+    // 1. Exclude the worker being replaced/covered
+    if (replacementTargetId) {
+      pool = pool.filter((c) => c.employee_id !== replacementTargetId);
+    }
+
+    // 2. Exclude workers already active/assigned in this cell
+    if (selectedCell) {
+      const assignedIds = new Set(selectedCell.cell.workers.map((w) => w.employee_id));
+      pool = pool.filter((c) => !assignedIds.has(c.employee_id));
+    }
+
     if (filterToSupervisorCrew && selectedSupervisorId) {
       pool = pool.filter((c) => c.supervisor_id === selectedSupervisorId);
     }
@@ -294,12 +316,16 @@ export const OperationalPlanner: React.FC = () => {
     }
 
     return [...pool].sort((a, b) => {
+      // Unblocked candidates always rank before blocked candidates
+      if (Boolean(a.is_blocked) !== Boolean(b.is_blocked)) {
+        return a.is_blocked ? 1 : -1;
+      }
       if (a.exact_staff_type_match !== b.exact_staff_type_match) {
         return a.exact_staff_type_match ? -1 : 1;
       }
       return (b.ranking_score || 0) - (a.ranking_score || 0);
     });
-  }, [candidates, candidateSearch, filterToSupervisorCrew, selectedSupervisorId]);
+  }, [candidates, candidateSearch, filterToSupervisorCrew, selectedSupervisorId, replacementTargetId, selectedCell]);
 
   const selectedCandidateObj = useMemo(() => {
     return candidates.find((c) => c.employee_id === selectedWorkerId);
@@ -319,6 +345,11 @@ export const OperationalPlanner: React.FC = () => {
               <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                 Live Operations
               </span>
+              {isRefreshing && (
+                <span className="text-xs text-indigo-600 flex items-center gap-1 font-medium bg-indigo-50/80 px-2 py-0.5 rounded border border-indigo-200 animate-pulse">
+                  <Loader2 className="h-3 w-3 animate-spin" /> Saving & updating...
+                </span>
+              )}
             </div>
             <p className="text-sm text-slate-500 mt-1">
               Active shifts, leave covers, and operational adjustments. Base blueprint shifts appear muted; operational overrides appear solid.
@@ -609,9 +640,18 @@ export const OperationalPlanner: React.FC = () => {
                                             <span className="truncate max-w-[90px]" title={w.employee_name}>
                                               {w.employee_name}
                                             </span>
-                                            {isSolid && (
-                                              <span className="text-[8px] bg-indigo-700 px-1 rounded uppercase">
+                                            {w.display_type === "OVERRIDE" && (
+                                              <span className="text-[8px] bg-indigo-700 text-white px-1 rounded uppercase font-bold">
                                                 Cover
+                                              </span>
+                                            )}
+                                            {w.display_type === "DIRECT" && (
+                                              <span
+                                                className={`text-[8px] px-1 rounded uppercase font-bold text-white ${
+                                                  isExcess ? "bg-purple-700" : "bg-emerald-700"
+                                                }`}
+                                              >
+                                                {isExcess ? "Excess" : "Direct"}
                                               </span>
                                             )}
                                           </div>
@@ -866,15 +906,21 @@ export const OperationalPlanner: React.FC = () => {
                     {filteredCandidates.map((cand) => {
                       const isSelected = selectedWorkerId === cand.employee_id;
                       const isOffDay = (cand.weekly_off_day || "").toUpperCase() === selectedCell.cell.weekday;
+                      const isBlocked = cand.is_blocked;
+                      const remainingHours = Math.max(0, Number(cand.standard_hours) - Number(cand.today_allocated_hours || 0));
 
                       return (
                         <div
                           key={cand.employee_id}
-                          onClick={() => setSelectedWorkerId(cand.employee_id)}
-                          className={`p-2 rounded-lg border cursor-pointer flex items-center justify-between text-xs transition-colors ${
-                            isSelected
-                              ? "bg-indigo-50 border-indigo-400 text-indigo-900 font-semibold"
-                              : "bg-white border-slate-200 hover:border-indigo-300 text-slate-800"
+                          onClick={() => {
+                            if (!isBlocked) setSelectedWorkerId(cand.employee_id);
+                          }}
+                          className={`p-2 rounded-lg border flex items-center justify-between text-xs transition-colors ${
+                            isBlocked
+                              ? "bg-slate-50 border-slate-200 opacity-60 cursor-not-allowed text-slate-400"
+                              : isSelected
+                              ? "bg-indigo-50 border-indigo-400 text-indigo-900 font-semibold cursor-pointer"
+                              : "bg-white border-slate-200 hover:border-indigo-300 text-slate-800 cursor-pointer"
                           }`}
                         >
                           <div>
@@ -894,17 +940,41 @@ export const OperationalPlanner: React.FC = () => {
                                 Off: {cand.weekly_off_day || "None"}
                               </span>
                             </div>
+
+                            {/* Capacity or Blocked reason */}
+                            {cand.is_blocked ? (
+                              <div className="text-[10px] text-rose-700 font-semibold flex items-center gap-1 mt-0.5">
+                                <span className="px-1.5 py-0.2 rounded bg-rose-50 border border-rose-200">
+                                  Blocked: {cand.blocked_reason}
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                {Number(cand.today_allocated_hours || 0) > 0 ? (
+                                  <span className="text-[9px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded">
+                                    Remote: {cand.today_allocated_hours}h / {cand.standard_hours}h ({remainingHours.toFixed(1)}h left)
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] text-slate-500 bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded">
+                                    Available ({cand.standard_hours}h standard)
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
 
                           <button
                             type="button"
+                            disabled={isBlocked}
                             className={`px-2.5 py-1 rounded text-[11px] font-semibold ${
-                              isSelected
+                              isBlocked
+                                ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                                : isSelected
                                 ? "bg-indigo-600 text-white"
                                 : "bg-slate-100 text-slate-700 hover:bg-slate-200"
                             }`}
                           >
-                            {isSelected ? "Selected" : "Select"}
+                            {isBlocked ? "Blocked" : isSelected ? "Selected" : "Select"}
                           </button>
                         </div>
                       );

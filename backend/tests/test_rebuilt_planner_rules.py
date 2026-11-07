@@ -280,3 +280,83 @@ def test_periodic_cadence_matching_monthly_and_quarterly():
     assert date(2026, 11, 23) not in resolved_dates
 
 
+def test_candidate_ranking_permanent_exclusivity_and_remote_capacity():
+    """Verify permanent exclusivity blocks candidates and remote capacity is clearly calculated."""
+    from decimal import Decimal
+    from fw.rules.scheduling.suggestions import (
+        CandidateWorker,
+        TargetJobItem,
+        rank_candidates_for_job,
+    )
+
+    t_date = date(2026, 11, 23)
+
+    # Job A: REMOTE inspection requiring 2h
+    remote_job = TargetJobItem(
+        job_item_id=str(uuid4()),
+        worksite_id=str(uuid4()),
+        planned_grade_code="G1",
+        staff_grade_description="Gardener",
+        deployment_type="REMOTE",
+        required_hours=Decimal("2.0"),
+    )
+
+    # Worker 1: Blocked because already assigned to a PERMANENT job today
+    w_perm = CandidateWorker(
+        employee_id=str(uuid4()),
+        name="Perm Worker",
+        tally_id="E001",
+        is_active=True,
+        join_date=date(2026, 1, 1),
+        employment_end_date=None,
+        grade_code="G1",
+        staff_grade_description="Gardener",
+        weekly_off_day="FRI",
+        standard_hours=Decimal("8.0"),
+        is_on_leave=False,
+        is_budget_only=False,
+        worked_at_site_recently=True,
+        shares_supervisor=True,
+        weekly_allocated_hours=Decimal("40.0"),
+        today_allocated_hours=Decimal("8.0"),
+        is_blocked=True,
+        blocked_reason="Already assigned to PERMANENT job today",
+    )
+
+    # Worker 2: Assigned 4h of remote work today -> 4h remaining (2h job fits easily)
+    w_remote = CandidateWorker(
+        employee_id=str(uuid4()),
+        name="Remote Worker",
+        tally_id="E002",
+        is_active=True,
+        join_date=date(2026, 1, 1),
+        employment_end_date=None,
+        grade_code="G1",
+        staff_grade_description="Gardener",
+        weekly_off_day="SUN",
+        standard_hours=Decimal("8.0"),
+        is_on_leave=False,
+        is_budget_only=False,
+        worked_at_site_recently=True,
+        shares_supervisor=True,
+        weekly_allocated_hours=Decimal("20.0"),
+        today_allocated_hours=Decimal("4.0"),
+        is_blocked=False,
+    )
+
+    ranked = rank_candidates_for_job([w_perm, w_remote], remote_job, t_date)
+
+    # w_remote should rank ahead of blocked worker w_perm
+    assert ranked[0].worker.employee_id == w_remote.employee_id
+    assert ranked[0].is_eligible is True
+    # w_remote should have the remaining hours in reasons
+    assert any("4.0h remaining today" in r for r in ranked[0].reasons)
+
+    # w_perm is blocked and ranks lower
+    assert ranked[1].worker.employee_id == w_perm.employee_id
+    assert ranked[1].is_eligible is False
+    assert ranked[1].is_blocked is True
+    assert "Blocked: Already assigned to PERMANENT job today" in ranked[1].warnings
+
+
+

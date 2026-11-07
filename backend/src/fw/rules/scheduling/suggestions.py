@@ -131,6 +131,12 @@ def rank_candidates_for_job(
         )
         reasons.append(f"{free_weekly_hours}h free capacity this week")
 
+        if not w.is_blocked and w.today_allocated_hours > Decimal("0"):
+            free_today = max(Decimal("0"), w.standard_hours - w.today_allocated_hours)
+            reasons.append(
+                f"{free_today}h remaining today ({w.today_allocated_hours}h/{w.standard_hours}h remote allocated)"
+            )
+
         # Warnings preview
         target_weekday = INT_TO_WEEKDAY[target_date.weekday()]
         if w.weekly_off_day and w.weekly_off_day.strip().upper()[:3] == target_weekday[:3]:

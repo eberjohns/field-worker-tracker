@@ -63,6 +63,7 @@ from fw.modules.scheduling.schemas import (
 from fw.modules.settings import CompanySettingValue, PublicHoliday, TimeRule
 from fw.rules.scheduling import (
     INT_TO_WEEKDAY,
+    WEEKDAY_TO_INT,
     BlueprintEntry,
     CandidateWorker,
     DayMarker,
@@ -1001,8 +1002,9 @@ class SchedulingService:
         occurrence_id: UUID | None = None,
         job_item_id: UUID | None = None,
         target_date: date | None = None,
+        weekday: str | None = None,
     ) -> list[CandidateRecommendationRead]:
-        """Rank worker candidates for a job assignment."""
+        """Rank worker candidates for a job assignment with permanent exclusivity and capacity."""
         if occurrence_id:
             occ_stmt = (
                 select(JobOccurrence)
@@ -1024,10 +1026,21 @@ class SchedulingService:
             item = (await self.session.execute(item_stmt)).scalar_one_or_none()
             if not item:
                 raise AppError(code="NOT_FOUND", message=f"Job item {job_item_id} not found.", status_code=404)
-            t_date = target_date or date.today()
             req_hours = item.hours_per_occurrence_per_staff
+            if target_date:
+                t_date = target_date
+            elif weekday:
+                w_upper = weekday.strip().upper()
+                today = date.today()
+                monday = today - timedelta(days=today.weekday())
+                w_idx = WEEKDAY_TO_INT.get(w_upper, 0)
+                t_date = monday + timedelta(days=w_idx)
+            else:
+                t_date = date.today()
         else:
             raise AppError(code="VALIDATION_ERROR", message="Either occurrence_id or job_item_id must be provided.", status_code=422)
+
+        target_dow = (weekday or INT_TO_WEEKDAY[t_date.weekday()]).strip().upper()
 
         job_target = TargetJobItem(
             job_item_id=str(item.id),
@@ -1076,6 +1089,31 @@ class SchedulingService:
                     emp_today_hours.get(sw_row.employee_id, Decimal("0")) + sw_row.assigned_hours
                 )
                 emp_today_assignments[sw_row.employee_id].append(sw_row)
+
+        # Query active base roster templates to evaluate recurring blueprint assignments on target_dow
+        bp_stmt = (
+            select(BaseRosterTemplate)
+            .where(BaseRosterTemplate.is_active.is_(True))
+            .options(
+                selectinload(BaseRosterTemplate.entries),
+                selectinload(BaseRosterTemplate.job_item).selectinload(JobItem.worksite),
+            )
+        )
+        active_templates = (await self.session.execute(bp_stmt)).scalars().all()
+
+        emp_blueprint_entries: dict[UUID, list[tuple[JobItem, BaseRosterEntry]]] = defaultdict(list)
+        for tmpl in active_templates:
+            if not tmpl.job_item or not tmpl.job_item.is_active:
+                continue
+            for entry in tmpl.entries:
+                mask = entry.weekday_mask.upper()
+                matches = False
+                if mask in ("ALL", target_dow):
+                    matches = True
+                elif f"_{target_dow}" in mask:  # e.g. W1_MON, M1_W1_MON
+                    matches = True
+                if matches:
+                    emp_blueprint_entries[entry.employee_id].append((tmpl.job_item, entry))
 
         # Check who worked at this site in the last 14 days or is scheduled on this site this week
         two_weeks_ago = t_date - timedelta(days=14)
@@ -1134,26 +1172,51 @@ class SchedulingService:
             is_same_site_group = bool(sup_id and sup_id in active_site_supervisors)
 
             today_sw_list = emp_today_assignments.get(emp.id, [])
-            has_permanent_today = any(
-                sw.job_item and sw.job_item.deployment_type.upper() == "PERMANENT"
-                for sw in today_sw_list
+            today_bp_list = emp_blueprint_entries.get(emp.id, [])
+
+            # Check permanent conflict from scheduled work or base blueprint
+            perm_sw_item = next(
+                (sw.job_item for sw in today_sw_list if sw.job_item and sw.job_item.deployment_type.upper() == "PERMANENT"),
+                None,
             )
-            has_any_today = len(today_sw_list) > 0
+            perm_bp_item = next(
+                (j_item for j_item, _ in today_bp_list if j_item and j_item.deployment_type.upper() == "PERMANENT"),
+                None,
+            )
+
+            # Sum today's allocated hours across scheduled work and blueprint entries
+            sw_today_hours = emp_today_hours.get(emp.id, Decimal("0.0"))
+            bp_today_hours = sum((Decimal(str(e.assigned_hours)) for _, e in today_bp_list), Decimal("0.0"))
+            effective_today_hours = max(sw_today_hours, bp_today_hours)
 
             is_blocked = False
             blocked_reason: str | None = None
 
-            if item.deployment_type.upper() == "PERMANENT" and has_any_today:
-                other_item = today_sw_list[0].job_item
-                other_code = other_item.sub_item_code if other_item else "another job"
-                other_desc = f" ({other_item.staff_grade_description})" if other_item else ""
-                is_blocked = True
-                blocked_reason = f"Already assigned to {other_code}{other_desc} today (PERMANENT exclusivity)"
-            elif item.deployment_type.upper() == "REMOTE" and has_permanent_today:
-                perm_item = next((sw.job_item for sw in today_sw_list if sw.job_item and sw.job_item.deployment_type.upper() == "PERMANENT"), None)
-                perm_code = perm_item.sub_item_code if perm_item else "PERMANENT"
-                is_blocked = True
-                blocked_reason = f"Already assigned to PERMANENT job {perm_code} today"
+            if item.deployment_type.upper() == "PERMANENT":
+                # Target is PERMANENT -> Requires 100% exclusive dedication
+                if perm_sw_item:
+                    other_code = perm_sw_item.sub_item_code or "another job"
+                    is_blocked = True
+                    blocked_reason = f"Already assigned to PERMANENT job {other_code} on {target_dow}"
+                elif perm_bp_item:
+                    other_ws = perm_bp_item.worksite.job_number if perm_bp_item.worksite else ""
+                    other_code = perm_bp_item.sub_item_code or "job"
+                    is_blocked = True
+                    blocked_reason = f"Already assigned to PERMANENT job ({other_ws} - Item {other_code}) on {target_dow}"
+                elif effective_today_hours > Decimal("0.0") or len(today_sw_list) > 0 or len(today_bp_list) > 0:
+                    is_blocked = True
+                    blocked_reason = f"Permanent jobs require full-day availability (already has {effective_today_hours}h remote allocated)"
+            else:
+                # Target is REMOTE
+                if perm_sw_item:
+                    other_code = perm_sw_item.sub_item_code or "job"
+                    is_blocked = True
+                    blocked_reason = f"Already assigned to PERMANENT job {other_code} on {target_dow}"
+                elif perm_bp_item:
+                    other_ws = perm_bp_item.worksite.job_number if perm_bp_item.worksite else ""
+                    other_code = perm_bp_item.sub_item_code or "job"
+                    is_blocked = True
+                    blocked_reason = f"Already assigned to PERMANENT job ({other_ws} - Item {other_code}) on {target_dow}"
 
             candidates.append(
                 CandidateWorker(
@@ -1172,7 +1235,7 @@ class SchedulingService:
                     worked_at_site_recently=emp.id in recent_emp_ids,
                     shares_supervisor=is_same_site_group,
                     weekly_allocated_hours=emp_weekly_hours.get(emp.id, Decimal("0.0")),
-                    today_allocated_hours=emp_today_hours.get(emp.id, Decimal("0.0")),
+                    today_allocated_hours=effective_today_hours,
                     supervisor_id=str(sup_id) if sup_id else None,
                     supervisor_name=sup_name,
                     is_blocked=is_blocked,

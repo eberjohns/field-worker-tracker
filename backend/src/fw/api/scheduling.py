@@ -119,24 +119,26 @@ async def get_worker_allocation(
 async def get_occurrence_recommendations(
     id: UUID,
     date: date | None = Query(None),
+    weekday: str | None = Query(None),
     current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
     session: AsyncSession = Depends(get_db),
 ) -> list[CandidateRecommendationRead]:
     """Ranked worker candidates for an occurrence by grade group, exact staff type first."""
     service = SchedulingService(session)
-    return await service.get_candidate_recommendations(occurrence_id=id, target_date=date)
+    return await service.get_candidate_recommendations(occurrence_id=id, target_date=date, weekday=weekday)
 
 
 @router.get("/job-items/{id}/recommendations", response_model=list[CandidateRecommendationRead])
 async def get_job_item_recommendations(
     id: UUID,
     date: date | None = Query(None),
+    weekday: str | None = Query(None),
     current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
     session: AsyncSession = Depends(get_db),
 ) -> list[CandidateRecommendationRead]:
     """Ranked worker candidates for a job item by grade group, exact staff type first."""
     service = SchedulingService(session)
-    return await service.get_candidate_recommendations(job_item_id=id, target_date=date)
+    return await service.get_candidate_recommendations(job_item_id=id, target_date=date, weekday=weekday)
 
 
 # -------------------------------------------------------------------------
