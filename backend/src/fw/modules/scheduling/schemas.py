@@ -158,6 +158,7 @@ class RosterWorkerRow(BaseModel):
     tally_id: str
     grade_code: str | None = None
     staff_grade_description: str | None = None
+    weekly_off_day: str | None = None
     standard_hours: Decimal
     effective_daily_standard_hours: Decimal
     days: list[RosterDayCell]  # 7 days Mon-Sun
@@ -266,6 +267,7 @@ class CandidateRecommendationRead(BaseModel):
     tally_id: str
     grade_code: str | None = None
     staff_grade_description: str | None = None
+    weekly_off_day: str | None = None
     standard_hours: Decimal
     exact_staff_type_match: bool
     ranking_score: float

@@ -82,6 +82,13 @@ export const AssignModal: React.FC<AssignModalProps> = ({
   const excessCount = isSlotUnrequired ? currentStagedCount : Math.max(0, currentStagedCount - requiredCount);
   const isPeriodicQuotaMet = Boolean(targetDay?.is_quota_met || targetDay?.is_excess);
 
+  const targetWeekday = targetDay?.weekday?.toUpperCase() || "";
+  const stagedWithOffDay = stagedWorkers.filter((w) => {
+    const cand = candidates.find((c) => c.employee_id === w.employee_id);
+    const off = (cand?.weekly_off_day || "").toUpperCase();
+    return off && off.startsWith(targetWeekday.slice(0, 3));
+  });
+
   const authHeaders = {
     "Content-Type": "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -405,12 +412,28 @@ export const AssignModal: React.FC<AssignModalProps> = ({
           )}
 
           {(targetDay?.weekday === "SUN" || targetDay?.is_holiday) && (
-            <div className="p-3 bg-blue-50 border border-blue-200 text-blue-900 rounded-xl text-xs flex items-center space-x-2.5 shadow-2xs">
-              <Zap className="h-4 w-4 shrink-0 text-blue-600" />
+            <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl text-xs flex items-center space-x-2.5 shadow-2xs">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
               <div>
-                <span className="font-bold">Compensatory Shift Tip: </span>
+                <span className="font-bold">Non-Scheduled Working Day: </span>
                 <span>
-                  Use <strong>Save Current Date</strong> for a one-off compensatory shift (e.g. working Sunday to make up for a Friday holiday). Use <strong>Save Recursively</strong> to set the standing team for this week and future weeks.
+                  {targetDay?.weekday === "SUN"
+                    ? "Sunday is outside the regular working schedule (Mon–Sat)."
+                    : `${targetDay?.holiday_name || "Public Holiday"} is a non-working day.`}
+                  {" "}Use <strong>Save Current Date</strong> for this single-day shift (e.g. compensatory cover). Note: <strong>Save Recursively</strong> will apply to this week only and will <em>not repeat</em> on future {targetDay?.weekday === "SUN" ? "Sundays" : "weeks"}.
+                </span>
+              </div>
+            </div>
+          )}
+
+          {stagedWithOffDay.length > 0 && targetDay?.weekday !== "SUN" && !targetDay?.is_holiday && (
+            <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl text-xs flex items-center space-x-2.5 shadow-2xs">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+              <div>
+                <span className="font-bold">Weekly Rest Day Notice: </span>
+                <span>
+                  {stagedWithOffDay.map((s) => s.name).join(", ")} {stagedWithOffDay.length === 1 ? "has" : "have"} {targetWeekday.toLowerCase()} as their designated weekly rest day.
+                  {" "}Use <strong>Save Current Date</strong> for a one-off cover shift. If saved recursively, standing schedules will skip this day in future weeks per labor rules.
                 </span>
               </div>
             </div>
@@ -450,6 +473,11 @@ export const AssignModal: React.FC<AssignModalProps> = ({
                         ) : (
                           <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-slate-100 text-slate-600">
                             Single Date
+                          </span>
+                        )}
+                        {Boolean(candidates.find((c) => c.employee_id === w.employee_id)?.weekly_off_day?.toUpperCase().startsWith(targetWeekday.slice(0, 3))) && (
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-100 text-amber-800">
+                            ⚠️ Rest Day ({candidates.find((c) => c.employee_id === w.employee_id)?.weekly_off_day})
                           </span>
                         )}
                       </div>
@@ -617,6 +645,21 @@ export const AssignModal: React.FC<AssignModalProps> = ({
                                 </span>
                               )}
 
+                              {worker.weekly_off_day && (
+                                <span
+                                  className={`px-1.5 py-0.2 rounded text-[10px] font-medium border ${
+                                    worker.weekly_off_day.toUpperCase().startsWith(targetWeekday.slice(0, 3))
+                                      ? "bg-amber-100 text-amber-800 border-amber-300 font-bold"
+                                      : "bg-slate-100 text-slate-600 border-slate-200"
+                                  }`}
+                                >
+                                  {worker.weekly_off_day.toUpperCase().startsWith(targetWeekday.slice(0, 3))
+                                    ? "⚠️ Rest Day Today: "
+                                    : "Rest: "}
+                                  {worker.weekly_off_day}
+                                </span>
+                              )}
+
                               <span className="text-slate-400">•</span>
                               <span className="text-slate-600">
                                 Assigned this week:{" "}
@@ -745,7 +788,11 @@ export const AssignModal: React.FC<AssignModalProps> = ({
               onClick={() => handleSave("STANDING")}
               disabled={submittingMode !== null}
               className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 disabled:opacity-50 transition shadow-xs flex items-center space-x-1.5"
-              title="Apply as standing team from this date forward (13-month rolling schedule)"
+              title={
+                targetDay?.weekday === "SUN" || stagedWithOffDay.length > 0
+                  ? "Save for this week only (recurring schedule skips rest days and Sundays in future weeks)"
+                  : "Apply as standing team from this date forward (13-month rolling schedule)"
+              }
             >
               {submittingMode === "STANDING" ? (
                 <>

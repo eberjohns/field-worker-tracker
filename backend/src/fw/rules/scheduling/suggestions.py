@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
+from fw.rules.scheduling.assignment import INT_TO_WEEKDAY
 from fw.rules.scheduling.validation import extract_grade_group
 
 
@@ -131,6 +132,10 @@ def rank_candidates_for_job(
         reasons.append(f"{free_weekly_hours}h free capacity this week")
 
         # Warnings preview
+        target_weekday = INT_TO_WEEKDAY[target_date.weekday()]
+        if w.weekly_off_day and w.weekly_off_day.strip().upper()[:3] == target_weekday[:3]:
+            warnings.append(f"Weekly off day ({target_weekday.capitalize()})")
+
         if w.is_blocked and w.blocked_reason:
             warnings.append(f"Blocked: {w.blocked_reason}")
         elif w.today_allocated_hours + job.required_hours > w.standard_hours:

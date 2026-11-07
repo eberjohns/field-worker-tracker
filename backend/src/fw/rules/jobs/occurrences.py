@@ -59,11 +59,14 @@ def _get_working_days_in_window(
 def _suggest_date(working_days: list[date], slot_index: int, total_slots: int) -> date | None:
     """Calculate suggested date for the i-th of k occurrences over n working days:
 
-    formula: working_day[floor((i + 0.5) * n / k)]
+    - When total_slots == 1: default to the first working day of the window (Monday).
+    - When total_slots > 1: formula working_day[floor((i + 0.5) * n / k)]
     """
     n = len(working_days)
     if n == 0 or total_slots <= 0:
         return None
+    if total_slots == 1:
+        return working_days[0]
     idx = int(math.floor((slot_index + 0.5) * n / total_slots))
     clamped_idx = max(0, min(idx, n - 1))
     return working_days[clamped_idx]

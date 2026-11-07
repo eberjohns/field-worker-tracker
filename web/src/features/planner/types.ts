@@ -27,6 +27,7 @@ export interface RosterWorkerRow {
   tally_id: string;
   grade_code: string | null;
   staff_grade_description: string | null;
+  weekly_off_day?: string | null;
   standard_hours: number | string;
   effective_daily_standard_hours: number | string;
   days: RosterDayCell[];
@@ -142,6 +143,7 @@ export interface CandidateRecommendation {
   tally_id: string;
   grade_code: string | null;
   staff_grade_description: string | null;
+  weekly_off_day?: string | null;
   standard_hours: number | string;
   exact_staff_type_match: boolean;
   ranking_score: number;

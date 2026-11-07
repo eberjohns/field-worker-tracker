@@ -1161,6 +1161,7 @@ class SchedulingService:
                 tally_id=sc.worker.tally_id,
                 grade_code=sc.worker.grade_code,
                 staff_grade_description=sc.worker.staff_grade_description,
+                weekly_off_day=sc.worker.weekly_off_day,
                 standard_hours=sc.worker.standard_hours,
                 exact_staff_type_match=sc.exact_staff_type_match,
                 ranking_score=sc.ranking_score,
@@ -1627,17 +1628,12 @@ class SchedulingService:
                             week_target_date = cand_d
                             break
                 if not week_target_date:
-                    for occ in item.occurrences:
-                        if occ.window_start <= week_start <= occ.window_end:
-                            week_target_date = occ.due_date or occ.window_start
-                            break
-                if not week_target_date:
-                    week_target_date = week_start  # Monday
+                    # For periodic weekly jobs without an explicit pattern, target is ALWAYS week_start (Monday)
+                    week_target_date = week_start
 
                 # Find assigned dates in this week, ordered by:
-                # 1. Matching week_target_date (target scheduled day has highest priority)
-                # 2. Earliest created_at timestamp (earlier assigned slots stay primary)
-                # 3. Calendar date as tie-breaker
+                # 1. Earliest created_at timestamp (earlier assigned slots retain requirement fulfillment)
+                # 2. Calendar date as tie-breaker
                 active_week_assigned_dates = [
                     week_start + timedelta(days=d)
                     for d in range(7)
@@ -1646,16 +1642,14 @@ class SchedulingService:
 
                 def date_priority_key(
                     d: date,
-                    target_d: date | None = week_target_date,
                     item_id: UUID = item.id,
-                ) -> tuple[int, datetime, date]:
-                    target_match = 0 if target_d and d == target_d else 1
+                ) -> tuple[datetime, date]:
                     sw_list = sw_by_item_date.get((item_id, d), [])
                     earliest_created = min(
                         (sw.created_at for sw in sw_list if sw.created_at),
                         default=datetime.max.replace(tzinfo=UTC),
                     )
-                    return (target_match, earliest_created, d)
+                    return (earliest_created, d)
 
                 week_assigned_dates = sorted(active_week_assigned_dates, key=date_priority_key)
 
