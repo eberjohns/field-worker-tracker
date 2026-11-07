@@ -32,6 +32,7 @@ class OperationalShiftInput:
     override_reason: str | None
     assigned_hours: float
     sequence: int = 1
+    status: str = "ACTIVE"  # "ACTIVE" | "CANCELLED"
 
 
 @dataclass(frozen=True)
@@ -41,8 +42,8 @@ class ResolvedOperationalCellWorker:
     employee_id: UUID
     assigned_hours: float
     sequence: int
-    display_type: str  # "BLUEPRINT" (muted) | "OVERRIDE" (solid) | "DIRECT" (solid) | "TO_BE_COVERED" (dashed)
-    opacity_class: str  # "muted" (40%) | "solid" (100%) | "warning" (amber dashed)
+    display_type: str  # "BLUEPRINT" (muted) | "OVERRIDE" (solid) | "DIRECT" (solid) | "TO_BE_COVERED" (dashed) | "REMOVED" (red)
+    opacity_class: str  # "muted" (40%) | "solid" (100%) | "warning" (amber dashed) | "removed" (red)
     original_employee_id: UUID | None = None
     shift_id: UUID | None = None
     reason: str | None = None
@@ -75,12 +76,15 @@ def resolve_operational_cell(
     off_days = worker_weekly_off_days or {}
     dow = ("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")[work_date.weekday()]
 
-    # Index operational shifts by original_employee_id if they are replacement overrides
+    # Index operational shifts
     replacements_by_orig_worker: dict[UUID, OperationalShiftInput] = {}
+    cancellations_by_worker: dict[UUID, OperationalShiftInput] = {}
     direct_shifts: list[OperationalShiftInput] = []
 
     for s in operational_shifts:
-        if s.original_employee_id is not None and s.source == "OVERRIDE":
+        if s.status == "CANCELLED":
+            cancellations_by_worker[s.employee_id] = s
+        elif s.original_employee_id is not None and s.source == "OVERRIDE":
             replacements_by_orig_worker[s.original_employee_id] = s
         elif s.source in ("DIRECT", "OVERRIDE", "EXCEPTION"):
             direct_shifts.append(s)
@@ -92,8 +96,26 @@ def resolve_operational_cell(
         w_id = base.employee_id
         is_on_leave = w_id in approved_leave_worker_ids
         replacement = replacements_by_orig_worker.get(w_id)
+        cancellation = cancellations_by_worker.get(w_id)
 
-        if replacement is not None:
+        if cancellation is not None:
+            # Replaced/cancelled base worker
+            resolved.append(
+                ResolvedOperationalCellWorker(
+                    employee_id=w_id,
+                    assigned_hours=base.assigned_hours,
+                    sequence=base.sequence,
+                    display_type="REMOVED",
+                    opacity_class="removed",
+                    original_employee_id=None,
+                    shift_id=cancellation.id,
+                    reason=cancellation.override_reason or "Base Shift Removed",
+                    is_public_holiday=is_public_holiday,
+                    is_rest_day=False,
+                    tags=["Removed", "Cancelled Base Shift"],
+                )
+            )
+        elif replacement is not None:
             # Replaced by an operational override!
             rep_off = is_same_weekday(off_days.get(replacement.employee_id), dow)
             tags = ["Cover Replacement"]

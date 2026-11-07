@@ -170,6 +170,7 @@ def test_operational_cell_precedence_and_overrides():
     base_worker1 = uuid4()  # Present base worker
     base_worker2 = uuid4()  # Base worker on leave, with cover
     base_worker3 = uuid4()  # Base worker on leave, NO cover -> TO_BE_COVERED
+    base_worker4 = uuid4()  # Base worker operationally removed -> REMOVED
     cover_worker = uuid4()   # Operational replacement
 
     from fw.rules.scheduling.blueprint import ResolvedTemplateSlot
@@ -179,6 +180,7 @@ def test_operational_cell_precedence_and_overrides():
         ResolvedTemplateSlot(work_date=d, day_of_week="WED", employee_id=base_worker1, assigned_hours=8.0, sequence=1, is_public_holiday=False, is_worker_weekly_off=False, status="VALID"),
         ResolvedTemplateSlot(work_date=d, day_of_week="WED", employee_id=base_worker2, assigned_hours=8.0, sequence=2, is_public_holiday=False, is_worker_weekly_off=False, status="VALID"),
         ResolvedTemplateSlot(work_date=d, day_of_week="WED", employee_id=base_worker3, assigned_hours=8.0, sequence=3, is_public_holiday=False, is_worker_weekly_off=False, status="VALID"),
+        ResolvedTemplateSlot(work_date=d, day_of_week="WED", employee_id=base_worker4, assigned_hours=8.0, sequence=4, is_public_holiday=False, is_worker_weekly_off=False, status="VALID"),
     ]
 
     approved_leaves = {base_worker2, base_worker3}
@@ -193,7 +195,18 @@ def test_operational_cell_precedence_and_overrides():
             override_reason="Sick Leave Cover",
             assigned_hours=8.0,
             sequence=2,
-        )
+        ),
+        OperationalShiftInput(
+            id=uuid4(),
+            work_date=d,
+            employee_id=base_worker4,
+            source="OVERRIDE",
+            original_employee_id=None,
+            override_reason="Client requested cancellation",
+            assigned_hours=8.0,
+            sequence=4,
+            status="CANCELLED",
+        ),
     ]
 
     cell_workers = resolve_operational_cell(
@@ -203,7 +216,7 @@ def test_operational_cell_precedence_and_overrides():
         operational_shifts=op_shifts,
     )
 
-    assert len(cell_workers) == 3
+    assert len(cell_workers) == 4
 
     # Worker 1: Normal base blueprint (muted)
     w1 = next(w for w in cell_workers if w.employee_id == base_worker1)
@@ -221,6 +234,12 @@ def test_operational_cell_precedence_and_overrides():
     w3 = next(w for w in cell_workers if w.employee_id == base_worker3)
     assert w3.display_type == "TO_BE_COVERED"
     assert w3.opacity_class == "warning"
+
+    # Worker 4: Operationally removed -> REMOVED (red)
+    w4 = next(w for w in cell_workers if w.employee_id == base_worker4)
+    assert w4.display_type == "REMOVED"
+    assert w4.opacity_class == "removed"
+    assert w4.reason == "Client requested cancellation"
 
 
 def test_sunday_resolution_never_dropped():

@@ -256,8 +256,8 @@ export interface OperationalCellWorker {
   employee_name: string;
   tally_id?: string | null;
   assigned_hours: number | string;
-  display_type: "BLUEPRINT" | "OVERRIDE" | "DIRECT" | "TO_BE_COVERED";
-  opacity_class: "muted" | "solid" | "warning";
+  display_type: "BLUEPRINT" | "OVERRIDE" | "DIRECT" | "TO_BE_COVERED" | "REMOVED";
+  opacity_class: "muted" | "solid" | "warning" | "removed";
   original_employee_id?: string | null;
   original_employee_name?: string | null;
   shift_id?: string | null;
@@ -333,6 +333,9 @@ export interface OperationalRosterWorkerRow {
   name: string;
   staff_grade_description?: string | null;
   weekly_off_day?: string | null;
+  supervisor_id?: string | null;
+  supervisor_name?: string | null;
+  assigned_job_numbers?: string[];
   total_week_hours: number | string;
   standard_week_hours: number | string;
   days: OperationalRosterDayCell[];
@@ -352,6 +355,7 @@ export interface OperationalShiftCreate {
   assigned_hours?: number | string | null;
   override_reason?: string | null;
   source?: "DIRECT" | "OVERRIDE";
+  status?: "ACTIVE" | "CANCELLED";
   acknowledge_warnings?: boolean;
 }
 

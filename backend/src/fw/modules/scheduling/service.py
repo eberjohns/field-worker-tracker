@@ -2389,7 +2389,7 @@ class SchedulingService:
             .where(
                 ScheduledWork.work_date >= wide_start,
                 ScheduledWork.work_date <= wide_end,
-                ScheduledWork.status == "ACTIVE",
+                ScheduledWork.status.in_(["ACTIVE", "CANCELLED"]),
             )
             .options(selectinload(ScheduledWork.employee))
         )
@@ -2509,7 +2509,7 @@ class SchedulingService:
                 period_blueprint_dates = {slot.work_date for slot in resolved_period_slots}
                 item_sw_in_period = [
                     s for s in sw_by_item_all.get(it.id, [])
-                    if p_start <= s.work_date <= p_end
+                    if p_start <= s.work_date <= p_end and s.status == "ACTIVE"
                 ]
                 sw_by_date_in_period: dict[date, list[ScheduledWork]] = defaultdict(list)
                 for s in item_sw_in_period:
@@ -2573,6 +2573,7 @@ class SchedulingService:
                             override_reason=s.override_reason,
                             assigned_hours=float(s.assigned_hours),
                             sequence=s.sequence,
+                            status=s.status,
                         )
                         for s in op_shifts_raw
                     ]
@@ -2676,8 +2677,25 @@ class SchedulingService:
         week_end = week_start + timedelta(days=6)
         week_dates = [week_start + timedelta(days=i) for i in range(7)]
 
-        emp_stmt = select(Employee).where(Employee.is_active.is_(True)).order_by(Employee.name)
+        emp_stmt = (
+            select(Employee)
+            .where(
+                Employee.is_active.is_(True),
+                Employee.role != "ADMIN",
+            )
+            .order_by(Employee.name)
+        )
         employees = (await self.session.execute(emp_stmt)).scalars().all()
+
+        # Load supervisors for grouping
+        sup_stmt = select(EmployeeReportingLine).where(EmployeeReportingLine.relationship == "SUPERVISOR")
+        sup_links = (await self.session.execute(sup_stmt)).scalars().all()
+        sup_by_emp: dict[UUID, UUID] = {link.employee_id: link.manager_id for link in sup_links}
+        mgr_ids = set(sup_by_emp.values())
+        mgr_map: dict[UUID, Employee] = {}
+        if mgr_ids:
+            mgr_stmt = select(Employee).where(Employee.id.in_(mgr_ids))
+            mgr_map = {m.id: m for m in (await self.session.execute(mgr_stmt)).scalars().all()}
 
         # Load holidays
         holidays_stmt = select(PublicHoliday).where(
@@ -2688,13 +2706,13 @@ class SchedulingService:
         holidays_by_date: dict[date, PublicHoliday] = {h.holiday_date: h for h in holiday_rows}
         holiday_dates = set(holidays_by_date.keys())
 
-        # Load single-day operational shifts
+        # Load single-day operational shifts (active and cancelled)
         sw_stmt = (
             select(ScheduledWork)
             .where(
                 ScheduledWork.work_date >= week_start,
                 ScheduledWork.work_date <= week_end,
-                ScheduledWork.status == "ACTIVE",
+                ScheduledWork.status.in_(["ACTIVE", "CANCELLED"]),
             )
             .options(
                 selectinload(ScheduledWork.worksite),
@@ -2729,6 +2747,7 @@ class SchedulingService:
             off_dow = (emp.weekly_off_day or "").upper()
             total_week_hours = Decimal("0.0")
             day_cells: list[OperationalRosterDayCell] = []
+            assigned_jobs_set: set[str] = set()
 
             for d in week_dates:
                 dow = INT_TO_WEEKDAY[d.weekday()]
@@ -2743,29 +2762,35 @@ class SchedulingService:
                 direct_sw = sw_by_emp_date.get((emp.id, d), [])
                 if direct_sw:
                     for s in direct_sw:
-                        day_hours += s.assigned_hours
+                        is_cancelled = s.status == "CANCELLED"
+                        if not is_cancelled:
+                            day_hours += s.assigned_hours
+                            if s.worksite:
+                                assigned_jobs_set.add(s.worksite.job_number)
                         cell_workers.append(
                             OperationalCellWorker(
                                 employee_id=emp.id,
                                 employee_name=emp.name,
                                 tally_id=emp.tally_id,
                                 assigned_hours=s.assigned_hours,
-                                display_type="DIRECT" if not s.original_employee_id else "OVERRIDE",
-                                opacity_class="solid",
+                                display_type="REMOVED" if is_cancelled else ("DIRECT" if not s.original_employee_id else "OVERRIDE"),
+                                opacity_class="removed" if is_cancelled else "solid",
                                 original_employee_id=s.original_employee_id,
                                 shift_id=s.id,
                                 reason=s.override_reason,
                                 is_public_holiday=is_holiday,
                                 is_rest_day=is_off,
-                                tags=["Direct Shift"] if not s.original_employee_id else ["Cover Shift"],
+                                tags=["Removed"] if is_cancelled else (["Direct Shift"] if not s.original_employee_id else ["Cover Shift"]),
                             )
                         )
                 else:
                     # Check base templates
                     emp_templates = templates_by_emp.get(emp.id, [])
-                    for _t, e in emp_templates:
+                    for t, e in emp_templates:
                         if e.weekday_mask in ("ALL", dow):
                             day_hours += e.assigned_hours
+                            if t.job_item and t.job_item.worksite:
+                                assigned_jobs_set.add(t.job_item.worksite.job_number)
                             cell_workers.append(
                                 OperationalCellWorker(
                                     employee_id=emp.id,
@@ -2797,6 +2822,9 @@ class SchedulingService:
                     )
                 )
 
+            sup_id = sup_by_emp.get(emp.id)
+            sup_name = mgr_map.get(sup_id).name if sup_id and sup_id in mgr_map else None
+
             worker_rows.append(
                 OperationalRosterWorkerRow(
                     employee_id=emp.id,
@@ -2804,6 +2832,9 @@ class SchedulingService:
                     name=emp.name,
                     staff_grade_description=emp.staff_grade_description,
                     weekly_off_day=emp.weekly_off_day,
+                    supervisor_id=sup_id,
+                    supervisor_name=sup_name,
+                    assigned_job_numbers=sorted(assigned_jobs_set),
                     total_week_hours=total_week_hours,
                     standard_week_hours=Decimal("48.0"),
                     days=day_cells,
@@ -2828,6 +2859,7 @@ class SchedulingService:
 
         from uuid import uuid4
         assigned_hours = payload.assigned_hours or item.hours_per_occurrence_per_staff
+        shift_status = payload.status.upper() if payload.status else "ACTIVE"
 
         shift = ScheduledWork(
             id=uuid4(),
@@ -2837,7 +2869,7 @@ class SchedulingService:
             work_date=payload.work_date,
             assigned_hours=assigned_hours,
             sequence=1,
-            status="ACTIVE",
+            status=shift_status,
             source=payload.source.upper(),
             original_employee_id=payload.original_employee_id,
             override_reason=payload.override_reason,

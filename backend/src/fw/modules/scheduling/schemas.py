@@ -371,6 +371,7 @@ class OperationalShiftCreate(BaseModel):
     assigned_hours: Decimal | None = None
     override_reason: str | None = None
     source: str = "DIRECT"  # "DIRECT" | "OVERRIDE"
+    status: str = "ACTIVE"  # "ACTIVE" | "CANCELLED"
     acknowledge_warnings: bool = False
 
 
@@ -379,8 +380,8 @@ class OperationalCellWorker(BaseModel):
     employee_name: str
     tally_id: str | None = None
     assigned_hours: Decimal
-    display_type: str  # "BLUEPRINT" | "OVERRIDE" | "DIRECT" | "TO_BE_COVERED"
-    opacity_class: str  # "muted" | "solid" | "warning"
+    display_type: str  # "BLUEPRINT" | "OVERRIDE" | "DIRECT" | "TO_BE_COVERED" | "REMOVED"
+    opacity_class: str  # "muted" | "solid" | "warning" | "removed"
     original_employee_id: UUID | None = None
     original_employee_name: str | None = None
     shift_id: UUID | None = None
@@ -456,6 +457,9 @@ class OperationalRosterWorkerRow(BaseModel):
     name: str
     staff_grade_description: str | None = None
     weekly_off_day: str | None = None
+    supervisor_id: UUID | None = None
+    supervisor_name: str | None = None
+    assigned_job_numbers: list[str] = Field(default_factory=list)
     total_week_hours: Decimal
     standard_week_hours: Decimal
     days: list[OperationalRosterDayCell]

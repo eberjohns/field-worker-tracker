@@ -14,6 +14,7 @@ import {
   UserCheck,
   Calendar,
   AlertTriangle,
+  Pin,
 } from "lucide-react";
 import {
   BasePlannerResponse,
@@ -44,6 +45,28 @@ export const BasePlanner: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [worksites, setWorksites] = useState<BasePlannerWorksiteRow[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>("");
+
+  // Worksite pinning
+  const [pinnedWorksites, setPinnedWorksites] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem("fwt_pinned_worksites");
+      return raw ? new Set(JSON.parse(raw)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  const togglePinWorksite = (id: string) => {
+    setPinnedWorksites((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      try {
+        localStorage.setItem("fwt_pinned_worksites", JSON.stringify(Array.from(next)));
+      } catch {}
+      return next;
+    });
+  };
 
   // Supervisor filter
   const [supervisorsList, setSupervisorsList] = useState<SupervisorOption[]>([]);
@@ -377,17 +400,25 @@ export const BasePlanner: React.FC = () => {
     }
   };
 
-  // Filter worksites by search query
+  // Filter and sort worksites by search query and pinning
   const filteredWorksites = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    if (!q) return worksites;
-    return worksites.filter(
-      (ws) =>
-        ws.job_number.toLowerCase().includes(q) ||
-        ws.job_name.toLowerCase().includes(q) ||
-        (ws.customer_type && ws.customer_type.toLowerCase().includes(q))
-    );
-  }, [worksites, searchQuery]);
+    let list = worksites;
+    if (q) {
+      list = list.filter(
+        (ws) =>
+          ws.job_number.toLowerCase().includes(q) ||
+          ws.job_name.toLowerCase().includes(q) ||
+          (ws.customer_type && ws.customer_type.toLowerCase().includes(q))
+      );
+    }
+    return [...list].sort((a, b) => {
+      const aPinned = pinnedWorksites.has(a.worksite_id);
+      const bPinned = pinnedWorksites.has(b.worksite_id);
+      if (aPinned !== bPinned) return aPinned ? -1 : 1;
+      return a.job_number.localeCompare(b.job_number);
+    });
+  }, [worksites, searchQuery, pinnedWorksites]);
 
   // Quota calculation helper for modal
   const quotaStatusInModal = useMemo(() => {
@@ -549,18 +580,33 @@ export const BasePlanner: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-6">
-            {filteredWorksites.map((ws) => (
-              <div
-                key={ws.worksite_id}
-                className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden"
-              >
-                {/* Worksite Banner Bar */}
-                <div className="px-6 py-3.5 bg-slate-50 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
-                  <div className="space-y-0.5">
-                    <div className="flex items-center gap-2.5">
-                      <span className="font-mono text-sm font-bold text-indigo-600">
-                        {ws.job_number}
-                      </span>
+            {filteredWorksites.map((ws) => {
+              const isPinned = pinnedWorksites.has(ws.worksite_id);
+
+              return (
+                <div
+                  key={ws.worksite_id}
+                  className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden"
+                >
+                  {/* Worksite Banner Bar */}
+                  <div className="px-6 py-3.5 bg-slate-50 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() => togglePinWorksite(ws.worksite_id)}
+                          className={`p-1 rounded-lg border transition-colors ${
+                            isPinned
+                              ? "bg-amber-50 border-amber-300 text-amber-600 hover:bg-amber-100"
+                              : "bg-white border-slate-200 text-slate-400 hover:text-slate-600 hover:bg-slate-50"
+                          }`}
+                          title={isPinned ? "Unpin worksite" : "Pin worksite to top"}
+                        >
+                          <Pin className={`h-3.5 w-3.5 ${isPinned ? "fill-amber-400 text-amber-500" : ""}`} />
+                        </button>
+                        <span className="font-mono text-sm font-bold text-indigo-600">
+                          {ws.job_number}
+                        </span>
                       <h2 className="text-sm font-bold text-slate-900">
                         {ws.job_name}
                       </h2>
@@ -762,8 +808,9 @@ export const BasePlanner: React.FC = () => {
                   </table>
                 </div>
               </div>
-            ))}
-          </div>
+            );
+          })}
+        </div>
         )}
       </main>
 
