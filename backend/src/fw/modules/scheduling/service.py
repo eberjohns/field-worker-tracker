@@ -1617,19 +1617,13 @@ class SchedulingService:
                 is_periodic_weekly = freq_unit == "WEEK" and occ_per_period < 6.0
                 is_periodic_interval = freq_unit in ("MONTH", "QUARTER", "YEAR")
 
-                # Find assigned dates in this week
-                week_assigned_dates = sorted([
-                    week_start + timedelta(days=d)
-                    for d in range(7)
-                    if len(sw_by_item_date.get((item.id, week_start + timedelta(days=d)), [])) > 0
-                ])
-
                 # Determine week's target date for unstaffed periodic jobs (prioritize user configured weekday_pattern)
                 week_target_date = None
-                if item.weekday_pattern:
+                norm_item_pattern = {str(wp).strip().upper()[:3] for wp in (item.weekday_pattern or []) if wp}
+                if norm_item_pattern:
                     for d in range(7):
                         cand_d = week_start + timedelta(days=d)
-                        if INT_TO_WEEKDAY[cand_d.weekday()] in item.weekday_pattern:
+                        if INT_TO_WEEKDAY[cand_d.weekday()][:3] in norm_item_pattern:
                             week_target_date = cand_d
                             break
                 if not week_target_date:
@@ -1640,6 +1634,37 @@ class SchedulingService:
                 if not week_target_date:
                     week_target_date = week_start  # Monday
 
+                # Find assigned dates in this week, ordered by:
+                # 1. Matching week_target_date (target scheduled day has highest priority)
+                # 2. Earliest created_at timestamp (earlier assigned slots stay primary)
+                # 3. Calendar date as tie-breaker
+                active_week_assigned_dates = [
+                    week_start + timedelta(days=d)
+                    for d in range(7)
+                    if len(sw_by_item_date.get((item.id, week_start + timedelta(days=d)), [])) > 0
+                ]
+
+                def date_priority_key(
+                    d: date,
+                    target_d: date | None = week_target_date,
+                    item_id: UUID = item.id,
+                ) -> tuple[int, datetime, date]:
+                    target_match = 0 if target_d and d == target_d else 1
+                    sw_list = sw_by_item_date.get((item_id, d), [])
+                    earliest_created = min(
+                        (sw.created_at for sw in sw_list if sw.created_at),
+                        default=datetime.max.replace(tzinfo=UTC),
+                    )
+                    return (target_match, earliest_created, d)
+
+                week_assigned_dates = sorted(active_week_assigned_dates, key=date_priority_key)
+
+                # Total shifts assigned for this item across the entire week
+                total_week_shifts = sum(
+                    len(sw_by_item_date.get((item.id, week_start + timedelta(days=d)), []))
+                    for d in range(7)
+                )
+
                 days: list[CoverageDayCell] = []
                 for day_idx in range(7):
                     c_date = week_start + timedelta(days=day_idx)
@@ -1648,8 +1673,6 @@ class SchedulingService:
                     holiday_name = holidays_map.get(c_date)
                     is_holiday = holiday_name is not None
 
-                    # Check if day is scheduled for this item
-                    pattern = item.weekday_pattern or ["MON", "TUE", "WED", "THU", "FRI", "SAT"]
                     is_contract_active = (
                         c_date not in holidays
                         and (not item.end_date or c_date <= item.end_date)
@@ -1734,14 +1757,37 @@ class SchedulingService:
                                 is_uncovered = False
                                 is_excess = assigned_count > 0
                     else:
-                        is_working_day = (weekday_str in pattern) and is_contract_active
-                        required_count = item.required_staff_count if is_working_day else 0
-                        is_uncovered = is_working_day and (assigned_count < required_count)
-                        is_excess = (
-                            (assigned_count > required_count)
-                            if is_working_day
-                            else (assigned_count > 0)
+                        norm_sched_pattern = (
+                            norm_item_pattern
+                            if norm_item_pattern
+                            else {"MON", "TUE", "WED", "THU", "FRI", "SAT"}
                         )
+                        is_scheduled_day = (weekday_str[:3] in norm_sched_pattern) and is_contract_active
+
+                        # Weekly quota in shifts: e.g. 6 days * 1 staff = 6
+                        weekly_quota = int(occ_per_period) * item.required_staff_count
+
+                        if is_scheduled_day:
+                            required_count = item.required_staff_count
+                            is_uncovered = assigned_count < required_count
+                            is_excess = assigned_count > required_count
+                        else:
+                            # Off-day / Sunday assignment
+                            if assigned_count > 0:
+                                # If total week shifts do not exceed weekly quota (e.g. Sunday shift covering Friday holiday),
+                                # this compensatory shift fulfills the weekly requirement and is NOT excess!
+                                if total_week_shifts <= weekly_quota:
+                                    required_count = min(assigned_count, item.required_staff_count)
+                                    is_uncovered = False
+                                    is_excess = assigned_count > item.required_staff_count
+                                else:
+                                    required_count = 0
+                                    is_uncovered = False
+                                    is_excess = True
+                            else:
+                                required_count = 0
+                                is_uncovered = False
+                                is_excess = False
 
                     assigned_details = [
                         AssignedWorkerSummary(
@@ -1844,15 +1890,19 @@ class SchedulingService:
         for emp_id in payload.employee_ids:
             if payload.as_standing_assignment:
                 standing_pattern = item.weekday_pattern
+                standing_start = payload.work_date
                 if item.frequency_unit in ("MONTH", "QUARTER", "YEAR"):
                     standing_pattern = None
                 elif item.frequency_unit == "WEEK" and item.occurrences_per_period == 1:
                     standing_pattern = [INT_TO_WEEKDAY[payload.work_date.weekday()]]
+                elif item.frequency_unit == "WEEK" or not item.frequency_unit:
+                    # Anchor recurring weekly standing team to week's Monday
+                    standing_start = payload.work_date - timedelta(days=payload.work_date.weekday())
 
                 standing_req = StandingAssignmentCreate(
                     employee_id=emp_id,
                     job_item_id=payload.job_item_id,
-                    start_date=payload.work_date,
+                    start_date=standing_start,
                     weekday_pattern=standing_pattern,
                     hours_per_day=assigned_hours,
                 )

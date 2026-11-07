@@ -404,6 +404,18 @@ export const AssignModal: React.FC<AssignModalProps> = ({
             </div>
           )}
 
+          {(targetDay?.weekday === "SUN" || targetDay?.is_holiday) && (
+            <div className="p-3 bg-blue-50 border border-blue-200 text-blue-900 rounded-xl text-xs flex items-center space-x-2.5 shadow-2xs">
+              <Zap className="h-4 w-4 shrink-0 text-blue-600" />
+              <div>
+                <span className="font-bold">Compensatory Shift Tip: </span>
+                <span>
+                  Use <strong>Save Current Date</strong> for a one-off compensatory shift (e.g. working Sunday to make up for a Friday holiday). Use <strong>Save Recursively</strong> to set the standing team for this week and future weeks.
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* 1. Staged Crew on this Slot */}
           <div className="space-y-2.5 bg-slate-50 p-4 rounded-xl border border-slate-200">
             <div className="flex items-center justify-between">

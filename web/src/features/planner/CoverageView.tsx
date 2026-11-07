@@ -91,72 +91,79 @@ export const CoverageView: React.FC<CoverageViewProps> = ({ coverage, onSlotClic
       </div>
 
       {/* Main Table Container with Sticky Persistent Header */}
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto relative bg-slate-50">
         {filteredWorksites.length === 0 ? (
-          <div className="p-12 text-center text-slate-400 text-xs bg-white rounded-xl border border-slate-200 shadow-2xs">
+          <div className="m-6 p-12 text-center text-slate-400 text-xs bg-white rounded-xl border border-slate-200 shadow-2xs">
             No job items found matching your filters.
           </div>
         ) : (
-          <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs bg-white">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead className="sticky top-0 z-20 bg-slate-100 border-b border-slate-300 text-slate-600 font-bold text-[10px] uppercase tracking-wider shadow-xs">
-                  <tr>
-                    <th className="p-3 w-80 min-w-[280px]">Job Item & Required Grade</th>
-                    <th className="p-3 w-24 text-center min-w-[90px]">Req Staff</th>
-                    <th className="p-3 w-20 text-center min-w-[80px]">Daily Hrs</th>
-                    {daysHeader.map((d) => (
-                      <th key={d} className="p-3 text-center min-w-[130px]">
-                        {d}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredWorksites.map((worksite) => (
-                    <React.Fragment key={worksite.worksite_id}>
-                      {/* Worksite Banner Row */}
-                      <tr className="bg-slate-50/90 border-y border-slate-200">
-                        <td colSpan={10} className="px-5 py-3">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div className="flex items-center space-x-3">
-                              <div className="h-7 w-7 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
-                                <Building2 className="h-4 w-4" />
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <span className="font-bold text-sm text-slate-900 font-mono tracking-tight">
-                                  {worksite.job_number}
-                                </span>
-                                <span className="text-xs font-semibold text-slate-800">{worksite.job_name}</span>
-                                {worksite.customer_type && (
-                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-200 text-slate-700">
-                                    {worksite.customer_type}
-                                  </span>
-                                )}
-                                <span
-                                  className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                    worksite.is_outdoor
-                                      ? "bg-amber-100 text-amber-800"
-                                      : "bg-blue-100 text-blue-800"
-                                  }`}
-                                >
-                                  {worksite.is_outdoor ? "Outdoor" : "Indoor"}
-                                </span>
-                              </div>
-                            </div>
-
-                            <div className="text-xs text-slate-500 font-medium">
-                              {worksite.items.length} job item requirement(s)
-                            </div>
+          <table className="w-full text-left text-xs border-separate border-spacing-0 bg-white">
+            <thead className="sticky top-0 z-20 shadow-xs">
+              <tr className="bg-slate-100 text-slate-700 font-bold text-[10px] uppercase tracking-wider">
+                <th className="sticky top-0 z-20 bg-slate-100 border-b border-slate-300 p-3.5 w-80 min-w-[280px]">
+                  Job Item & Required Grade
+                </th>
+                <th className="sticky top-0 z-20 bg-slate-100 border-b border-slate-300 p-3.5 w-24 text-center min-w-[90px]">
+                  Req Staff
+                </th>
+                <th className="sticky top-0 z-20 bg-slate-100 border-b border-slate-300 p-3.5 w-20 text-center min-w-[80px]">
+                  Daily Hrs
+                </th>
+                {daysHeader.map((d) => (
+                  <th
+                    key={d}
+                    className="sticky top-0 z-20 bg-slate-100 border-b border-slate-300 p-3.5 text-center min-w-[130px]"
+                  >
+                    {d}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filteredWorksites.map((worksite) => (
+                <React.Fragment key={worksite.worksite_id}>
+                  {/* Worksite Banner Row */}
+                  <tr className="bg-slate-100/80 border-y border-slate-200">
+                    <td colSpan={10} className="px-5 py-3 border-b border-slate-200">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center space-x-3">
+                          <div className="h-7 w-7 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                            <Building2 className="h-4 w-4" />
                           </div>
-                        </td>
-                      </tr>
+                          <div className="flex items-center space-x-2">
+                            <span className="font-bold text-sm text-slate-900 font-mono tracking-tight">
+                              {worksite.job_number}
+                            </span>
+                            <span className="text-xs font-semibold text-slate-800">{worksite.job_name}</span>
+                            {worksite.customer_type && (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-200 text-slate-700">
+                                {worksite.customer_type}
+                              </span>
+                            )}
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                worksite.is_outdoor
+                                  ? "bg-amber-100 text-amber-800"
+                                  : "bg-blue-100 text-blue-800"
+                              }`}
+                            >
+                              {worksite.is_outdoor ? "Outdoor" : "Indoor"}
+                            </span>
+                          </div>
+                        </div>
 
-                      {/* Worksite Job Item Rows */}
-                      {worksite.items.map((item) => (
-                        <tr key={item.job_item_id} className="hover:bg-slate-50/50 transition">
-                          {/* Job Item Info with Prominent Grade Code */}
-                          <td className="p-3 align-top">
+                        <div className="text-xs text-slate-500 font-medium">
+                          {worksite.items.length} job item requirement(s)
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+
+                  {/* Worksite Job Item Rows */}
+                  {worksite.items.map((item) => (
+                    <tr key={item.job_item_id} className="hover:bg-slate-50/50 transition">
+                      {/* Job Item Info with Prominent Grade Code */}
+                      <td className="p-3 align-top border-b border-slate-100">
                             <div className="font-bold text-slate-900 text-xs">
                               Item {item.sub_item_code}: {item.staff_grade_description}
                             </div>
@@ -341,8 +348,6 @@ export const CoverageView: React.FC<CoverageViewProps> = ({ coverage, onSlotClic
                   ))}
                 </tbody>
               </table>
-            </div>
-          </div>
         )}
       </div>
     </div>
