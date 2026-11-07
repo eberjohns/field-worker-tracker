@@ -44,6 +44,8 @@ interface WorksiteDetail {
   customer_type: string | null;
   is_outdoor: boolean;
   country: string;
+  start_date: string | null;
+  end_date: string | null;
   has_boundary: boolean;
   boundary_geojson: GeoJSON.Polygon | null;
   boundary_area_sqm: number | null;
@@ -118,6 +120,8 @@ export const WorksiteDetail: React.FC = () => {
   const [editCustomerType, setEditCustomerType] = useState("");
   const [editRenewalRef, setEditRenewalRef] = useState("");
   const [editBudget, setEditBudget] = useState("");
+  const [editStartDate, setEditStartDate] = useState("");
+  const [editEndDate, setEditEndDate] = useState("");
 
   const fetchData = async () => {
     if (!worksiteId) return;
@@ -137,6 +141,8 @@ export const WorksiteDetail: React.FC = () => {
       setEditCustomerType(data.customer_type || "");
       setEditRenewalRef(data.renewal_reference || "");
       setEditBudget(data.budget_amount != null ? String(data.budget_amount) : "");
+      setEditStartDate(data.start_date || "");
+      setEditEndDate(data.end_date || "");
 
       // Fetch occurrences
       const occRes = await fetch(`/api/v1/occurrences?worksite_id=${worksiteId}&limit=500`, { headers });
@@ -198,6 +204,8 @@ export const WorksiteDetail: React.FC = () => {
           job_name: editName.trim(),
           customer_type: editCustomerType.trim() || null,
           renewal_reference: editRenewalRef.trim() || null,
+          start_date: editStartDate.trim() || null,
+          end_date: editEndDate.trim() || null,
           budget_amount: editBudget ? parseFloat(editBudget) : null,
           version: worksite.version,
         }),
@@ -473,6 +481,26 @@ export const WorksiteDetail: React.FC = () => {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Contract Start Date</label>
+                    <input
+                      type="date"
+                      value={editStartDate}
+                      onChange={(e) => setEditStartDate(e.target.value)}
+                      className="w-full px-3 py-1.5 border border-slate-300 rounded focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Contract End Date</label>
+                    <input
+                      type="date"
+                      value={editEndDate}
+                      onChange={(e) => setEditEndDate(e.target.value)}
+                      className="w-full px-3 py-1.5 border border-slate-300 rounded focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
                     <label className="block font-semibold text-slate-700 mb-1">Customer Type</label>
                     <input
                       type="text"
@@ -495,7 +523,7 @@ export const WorksiteDetail: React.FC = () => {
                 </div>
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
-                    Manual Budget Amount (AED)
+                    Annual Operating Budget (AED / year)
                   </label>
                   <input
                     type="number"
@@ -524,6 +552,20 @@ export const WorksiteDetail: React.FC = () => {
             ) : (
               <div className="grid grid-cols-2 gap-4 text-xs">
                 <div>
+                  <span className="text-slate-400 block mb-0.5">Contract Validity Period</span>
+                  <span className="font-semibold text-slate-800">
+                    {worksite.start_date || "Start N/A"} – {worksite.end_date || "Ongoing"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block mb-0.5">Annual Operating Budget</span>
+                  <span className="font-semibold text-slate-800">
+                    {worksite.budget_amount != null
+                      ? `${Number(worksite.budget_amount).toLocaleString()} AED / year`
+                      : "Not Specified"}
+                  </span>
+                </div>
+                <div>
                   <span className="text-slate-400 block mb-0.5">Customer Group</span>
                   <span className="font-semibold text-slate-800">
                     {worksite.group_name || worksite.group_id}
@@ -548,11 +590,9 @@ export const WorksiteDetail: React.FC = () => {
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block mb-0.5">Budget Amount</span>
+                  <span className="text-slate-400 block mb-0.5">Deployment Type</span>
                   <span className="font-semibold text-slate-800">
-                    {worksite.budget_amount != null
-                      ? `${Number(worksite.budget_amount).toLocaleString()} AED`
-                      : "Not Specified"}
+                    {worksite.is_outdoor ? "Outdoor Maintenance" : "Indoor / Facilities"}
                   </span>
                 </div>
                 <div>

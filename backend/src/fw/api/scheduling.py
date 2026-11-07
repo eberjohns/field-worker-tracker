@@ -9,8 +9,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fw.core.db import get_db
 from fw.modules.identity import User, get_current_user, require_role
 from fw.modules.scheduling import (
+    BasePlannerResponse,
+    BaseRosterTemplateCreate,
+    BaseRosterTemplateRead,
     CandidateRecommendationRead,
     CoverageResponse,
+    OperationalCoverageResponse,
+    OperationalRosterResponse,
+    OperationalShiftCreate,
     RosterResponse,
     ScheduledWorkBatchCreate,
     ScheduledWorkCreate,
@@ -269,3 +275,93 @@ async def reorder_scheduled_work(
     """Reorder multiple daily visits for an employee on a work date."""
     service = SchedulingService(session)
     return await service.reorder_scheduled_work(payload=payload, current_user_id=current_user.id)
+
+
+# -------------------------------------------------------------------------
+# Base Planner (Blueprint Recurring Engine) Endpoints
+# -------------------------------------------------------------------------
+
+
+@router.get("/base-planner/worksites", response_model=BasePlannerResponse)
+async def get_base_planner_worksites(
+    group_id: UUID | None = Query(None),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> BasePlannerResponse:
+    """Fetch worksites and items with base roster templates for Base Planner."""
+    service = SchedulingService(session)
+    return await service.get_base_planner_worksites(group_id=group_id)
+
+
+@router.get("/base-planner/templates/{job_item_id}", response_model=BaseRosterTemplateRead | None)
+async def get_base_template(
+    job_item_id: UUID,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> BaseRosterTemplateRead | None:
+    """Fetch active Base Roster Template for a job item."""
+    service = SchedulingService(session)
+    return await service.get_base_template(job_item_id)
+
+
+@router.post("/base-planner/templates", response_model=BaseRosterTemplateRead, status_code=status.HTTP_201_CREATED)
+async def save_base_template(
+    payload: BaseRosterTemplateCreate,
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERVISOR")),
+    session: AsyncSession = Depends(get_db),
+) -> BaseRosterTemplateRead:
+    """Create or update active Base Roster Template for a job item."""
+    service = SchedulingService(session)
+    return await service.save_base_template(payload, current_user_id=current_user.id)
+
+
+# -------------------------------------------------------------------------
+# Operational Planner Endpoints
+# -------------------------------------------------------------------------
+
+
+@router.get("/operational-planner/coverage", response_model=OperationalCoverageResponse)
+async def get_operational_coverage(
+    week_start: date = Query(..., description="Start date of the week (Monday)"),
+    group_id: UUID | None = Query(None),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> OperationalCoverageResponse:
+    """Fetch weekly operational coverage matrix (job items x 7 days) with base blueprint & overrides."""
+    service = SchedulingService(session)
+    return await service.get_operational_coverage(week_start=week_start, group_id=group_id)
+
+
+@router.get("/operational-planner/roster", response_model=OperationalRosterResponse)
+async def get_operational_roster(
+    week_start: date = Query(..., description="Start date of the week (Monday)"),
+    group_id: UUID | None = Query(None),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> OperationalRosterResponse:
+    """Fetch weekly operational worker roster (workers x 7 days)."""
+    service = SchedulingService(session)
+    return await service.get_operational_roster(week_start=week_start, group_id=group_id)
+
+
+@router.post("/operational-planner/shifts", response_model=ScheduledWorkRead, status_code=status.HTTP_201_CREATED)
+async def create_operational_shift(
+    payload: OperationalShiftCreate,
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERVISOR")),
+    session: AsyncSession = Depends(get_db),
+) -> ScheduledWorkRead:
+    """Create a single-day operational shift or cover replacement."""
+    service = SchedulingService(session)
+    return await service.create_operational_shift(payload, current_user_id=current_user.id)
+
+
+@router.delete("/operational-planner/shifts/{shift_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_operational_shift(
+    shift_id: UUID,
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERVISOR")),
+    session: AsyncSession = Depends(get_db),
+) -> None:
+    """Cancel an operational shift."""
+    service = SchedulingService(session)
+    await service.delete_operational_shift(shift_id, current_user_id=current_user.id)
+

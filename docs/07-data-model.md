@@ -157,9 +157,15 @@ Unique (worksite_id, sub_item_code). Derived values (`days_per_occurrence`, expe
 Unique (job_item_id, window_start, slot_index). Index (due_date), (status).
 
 ### scheduled_work
-`employee_id`, `work_date`, `occurrence_id`, `job_item_id`, `worksite_id` (denormalized for fast queries), `assigned_hours` numeric(5,2), `sequence` smallint, `status`, `source`, `original_scheduled_work_id` nullable FK (self), `created_by_user_id`, `version`.
+`employee_id`, `work_date`, `occurrence_id`, `job_item_id`, `worksite_id` (denormalized for fast queries), `assigned_hours` numeric(5,2), `sequence` smallint, `status` (ACTIVE | CANCELLED | REASSIGNED | COMPLETED), `source` (TEMPLATE | STANDING | DIRECT | OVERRIDE | EXCEPTION | FOLLOW_UP), `original_scheduled_work_id` nullable FK (self), `original_employee_id` nullable FK employees, `override_reason` text nullable, `created_by_user_id`, `version`.
 Partial uniques where `status = 'ACTIVE'`: (employee_id, work_date, occurrence_id) and (employee_id, work_date, sequence) (the second is `DEFERRABLE INITIALLY DEFERRED` to allow reordering in one transaction).
 Indexes: (work_date), (worksite_id, work_date), (employee_id, work_date).
+
+### base_roster_templates (Base Planner)
+`id uuid PK`, `job_item_id uuid FK job_items`, `allocation_mode text` (UNIFORM | DAY_OF_WEEK), `start_date date`, `end_date date nullable`, `is_active bool default true`, `version int default 1`, `created_by_user_id uuid FK users nullable`, `created_at timestamptz`, `updated_at timestamptz`. Unique (`job_item_id`, `is_active`) partial unique where active.
+
+### base_roster_entries
+`id uuid PK`, `template_id uuid FK base_roster_templates`, `employee_id uuid FK employees`, `weekday_mask text` (ALL | MON | TUE | WED | THU | FRI | SAT | SUN), `assigned_hours numeric(5,2)`, `sequence smallint default 1`, `created_at timestamptz`, `updated_at timestamptz`. Unique (`template_id`, `employee_id`, `weekday_mask`). Indexes: (`template_id`), (`employee_id`).
 
 ### standing_assignments
 `employee_id`, `job_item_id`, `start_date`, `end_date` nullable, `weekday_pattern` text[] nullable (blank = the job item's pattern), `hours_per_day` numeric(5,2) nullable (blank = from the job item), `is_active`, `created_by_user_id`, `version`. Generates daily `scheduled_work` (origin STANDING) on the job's working days, skipping public holidays (marker), weekly off and approved leave (TO_BE_COVERED markers).

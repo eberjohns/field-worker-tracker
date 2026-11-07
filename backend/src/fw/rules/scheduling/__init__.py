@@ -15,6 +15,12 @@ from fw.rules.scheduling.assignment import (
     generate_assignment_dates,
     normalize_weekday_pattern,
 )
+from fw.rules.scheduling.blueprint import (
+    BlueprintEntry,
+    ResolvedTemplateSlot,
+    resolve_base_template_slots,
+    validate_base_template_entries,
+)
 from fw.rules.scheduling.excel import (
     ExcelRosterDayCell,
     ExcelRosterWorkerRow,
@@ -25,6 +31,19 @@ from fw.rules.scheduling.markers import (
     WorkerDayContext,
     evaluate_worker_day_marker,
     normalize_day_name,
+)
+from fw.rules.scheduling.operational import (
+    OperationalShiftInput,
+    ResolvedOperationalCellWorker,
+    resolve_operational_cell,
+)
+from fw.rules.scheduling.quotas import (
+    EvaluatedVisit,
+    PacingWindow,
+    PeriodQuotaResult,
+    VisitRecord,
+    calculate_pacing_windows,
+    evaluate_period_quota,
 )
 from fw.rules.scheduling.suggestions import (
     CandidateWorker,
@@ -50,31 +69,44 @@ __all__ = [
     "WEEKDAY_NAMES",
     "WEEKDAY_TO_INT",
     "AssignmentDateSlot",
+    "BlueprintEntry",
     "CandidateWorker",
     "DayMarker",
     "EffectiveStandardHours",
     "EmployeeValidationContext",
+    "EvaluatedVisit",
     "ExcelRosterDayCell",
     "ExcelRosterWorkerRow",
     "ExistingAssignmentContext",
     "IssueSeverity",
     "JobItemValidationContext",
+    "OperationalShiftInput",
+    "PacingWindow",
+    "PeriodQuotaResult",
+    "ResolvedOperationalCellWorker",
+    "ResolvedTemplateSlot",
     "ScoredCandidate",
     "TargetJobItem",
     "ValidationCode",
     "ValidationIssue",
     "ValidationReport",
+    "VisitRecord",
     "WorkerAllocationSummary",
     "WorkerDayContext",
     "build_roster_excel_bytes",
     "calculate_allocation_summary",
+    "calculate_pacing_windows",
     "compute_effective_standard_hours",
+    "evaluate_period_quota",
     "evaluate_worker_day_marker",
     "extract_grade_group",
     "generate_assignment_dates",
     "normalize_day_name",
     "normalize_weekday_pattern",
     "rank_candidates_for_job",
+    "resolve_base_template_slots",
+    "resolve_operational_cell",
     "validate_assignment",
+    "validate_base_template_entries",
 ]
 

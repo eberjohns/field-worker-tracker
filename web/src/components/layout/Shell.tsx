@@ -17,6 +17,7 @@ import {
   Banknote,
   Building2,
   Hexagon,
+  CalendarRange,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -36,7 +37,8 @@ const navItems: NavItem[] = [
   { label: "Worksites & Jobs", to: "/worksites", icon: Building2, roles: ["ADMIN", "ENGINEER", "SUPERINTENDENT", "SUPERVISOR"] },
   { label: "Boundary Queue", to: "/boundaries", icon: Hexagon, roles: ["ADMIN", "ENGINEER"] },
   { label: "Live Map", to: "/live", icon: MapPin },
-  { label: "Planner", to: "/planner", icon: CalendarDays },
+  { label: "Base Planner", to: "/base-planner", icon: CalendarRange, roles: ["ADMIN", "ENGINEER", "SUPERINTENDENT", "SUPERVISOR"] },
+  { label: "Operational Planner", to: "/operational-planner", icon: CalendarDays, roles: ["ADMIN", "ENGINEER", "SUPERINTENDENT", "SUPERVISOR"] },
   { label: "Attendance", to: "/attendance", icon: Clock },
   { label: "Payroll", to: "/payroll", icon: DollarSign, roles: ["ADMIN", "ENGINEER"] },
   { label: "Salary Structures", to: "/salary-structures", icon: Banknote, roles: ["ADMIN", "ENGINEER"] },

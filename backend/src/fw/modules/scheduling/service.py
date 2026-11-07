@@ -15,14 +15,34 @@ from fw.core.errors import AppError
 from fw.modules.audit import AuditService
 from fw.modules.jobs import JobItem, JobOccurrence, Worksite
 from fw.modules.org import Employee, EmployeeReportingLine
-from fw.modules.scheduling.models import ScheduledWork, StandingAssignment
+from fw.modules.scheduling.models import (
+    BaseRosterEntry,
+    BaseRosterTemplate,
+    ScheduledWork,
+    StandingAssignment,
+)
 from fw.modules.scheduling.schemas import (
     AssignedWorkerSummary,
+    BasePlannerItemRow,
+    BasePlannerResponse,
+    BasePlannerWorksiteRow,
+    BaseRosterEntryRead,
+    BaseRosterTemplateCreate,
+    BaseRosterTemplateRead,
     CandidateRecommendationRead,
     CoverageDayCell,
     CoverageItemRow,
     CoverageResponse,
     CoverageWorksiteRow,
+    OperationalCellWorker,
+    OperationalCoverageResponse,
+    OperationalDayCell,
+    OperationalJobItemRow,
+    OperationalRosterDayCell,
+    OperationalRosterResponse,
+    OperationalRosterWorkerRow,
+    OperationalShiftCreate,
+    OperationalWorksiteRow,
     RosterDayCell,
     RosterResponse,
     RosterSiteChip,
@@ -43,6 +63,7 @@ from fw.modules.scheduling.schemas import (
 from fw.modules.settings import CompanySettingValue, PublicHoliday, TimeRule
 from fw.rules.scheduling import (
     INT_TO_WEEKDAY,
+    BlueprintEntry,
     CandidateWorker,
     DayMarker,
     EffectiveStandardHours,
@@ -51,14 +72,21 @@ from fw.rules.scheduling import (
     ExcelRosterWorkerRow,
     ExistingAssignmentContext,
     JobItemValidationContext,
+    OperationalShiftInput,
+    ResolvedTemplateSlot,
     TargetJobItem,
+    VisitRecord,
     WorkerDayContext,
     build_roster_excel_bytes,
     calculate_allocation_summary,
+    calculate_pacing_windows,
     compute_effective_standard_hours,
+    evaluate_period_quota,
     evaluate_worker_day_marker,
     generate_assignment_dates,
     rank_candidates_for_job,
+    resolve_base_template_slots,
+    resolve_operational_cell,
     validate_assignment,
 )
 from fw.rules.time_rules import (
@@ -1995,3 +2023,751 @@ class SchedulingService:
             actor_user_id=current_user_id,
             diff={"status": "CANCELLED"},
         )
+
+    # -------------------------------------------------------------------------
+    # Base Planner (Blueprint Recurring Engine)
+    # -------------------------------------------------------------------------
+
+    async def get_base_planner_worksites(
+        self, group_id: UUID | None = None
+    ) -> BasePlannerResponse:
+        """Fetch worksites and job items with active base roster templates for the Base Planner."""
+        ws_stmt = (
+            select(Worksite)
+            .where(Worksite.is_active.is_(True))
+            .options(
+                selectinload(Worksite.items),
+            )
+            .order_by(Worksite.job_number)
+        )
+        if group_id:
+            ws_stmt = ws_stmt.where(Worksite.group_id == group_id)
+
+        worksites = (await self.session.execute(ws_stmt)).scalars().all()
+
+        # Collect all active job item IDs
+        job_item_ids = [
+            it.id for ws in worksites for it in ws.items if it.is_active
+        ]
+
+        # Query all active base roster templates for these items
+        templates_by_item: dict[UUID, BaseRosterTemplate] = {}
+        if job_item_ids:
+            tmpl_stmt = (
+                select(BaseRosterTemplate)
+                .where(
+                    BaseRosterTemplate.job_item_id.in_(job_item_ids),
+                    BaseRosterTemplate.is_active.is_(True),
+                )
+                .options(selectinload(BaseRosterTemplate.entries))
+            )
+            templates = (await self.session.execute(tmpl_stmt)).scalars().all()
+            for t in templates:
+                templates_by_item[t.job_item_id] = t
+
+        # Collect all employee IDs across templates to fetch names & tally IDs in bulk
+        emp_ids = {
+            entry.employee_id
+            for t in templates_by_item.values()
+            for entry in t.entries
+        }
+        emp_map: dict[UUID, Employee] = {}
+        if emp_ids:
+            emp_stmt = select(Employee).where(Employee.id.in_(emp_ids))
+            emp_map = {e.id: e for e in (await self.session.execute(emp_stmt)).scalars().all()}
+
+        ws_rows: list[BasePlannerWorksiteRow] = []
+        for ws in worksites:
+            active_items = [it for it in ws.items if it.is_active]
+            if not active_items:
+                continue
+
+            item_rows: list[BasePlannerItemRow] = []
+            for it in sorted(active_items, key=lambda x: x.sub_item_code):
+                tmpl = templates_by_item.get(it.id)
+                tmpl_read: BaseRosterTemplateRead | None = None
+                if tmpl:
+                    entry_reads = [
+                        BaseRosterEntryRead(
+                            id=e.id,
+                            template_id=e.template_id,
+                            employee_id=e.employee_id,
+                            employee_name=emp_map.get(e.employee_id).name if e.employee_id in emp_map else None,
+                            tally_id=emp_map.get(e.employee_id).tally_id if e.employee_id in emp_map else None,
+                            weekly_off_day=emp_map.get(e.employee_id).weekly_off_day if e.employee_id in emp_map else None,
+                            weekday_mask=e.weekday_mask,
+                            assigned_hours=e.assigned_hours,
+                            sequence=e.sequence,
+                        )
+                        for e in sorted(tmpl.entries, key=lambda x: (x.weekday_mask, x.sequence))
+                    ]
+                    tmpl_read = BaseRosterTemplateRead(
+                        id=tmpl.id,
+                        job_item_id=tmpl.job_item_id,
+                        allocation_mode=tmpl.allocation_mode,
+                        start_date=tmpl.start_date,
+                        end_date=tmpl.end_date,
+                        is_active=tmpl.is_active,
+                        version=tmpl.version,
+                        entries=entry_reads,
+                    )
+
+                item_rows.append(
+                    BasePlannerItemRow(
+                        job_item_id=it.id,
+                        sub_item_code=it.sub_item_code,
+                        staff_grade_description=it.staff_grade_description,
+                        planned_grade_code=it.planned_grade_code,
+                        deployment_type=it.deployment_type,
+                        required_staff_count=it.required_staff_count,
+                        hours_per_occurrence=it.hours_per_occurrence_per_staff,
+                        frequency_unit=it.frequency_unit,
+                        occurrences_per_period=it.occurrences_per_period,
+                        weekday_pattern=it.weekday_pattern,
+                        start_date=it.start_date,
+                        end_date=it.end_date,
+                        template=tmpl_read,
+                    )
+                )
+
+            ws_rows.append(
+                BasePlannerWorksiteRow(
+                    worksite_id=ws.id,
+                    job_number=ws.job_number,
+                    job_name=ws.job_name,
+                    customer_type=ws.customer_type,
+                    is_outdoor=ws.is_outdoor,
+                    start_date=ws.start_date,
+                    end_date=ws.end_date,
+                    budget_amount=ws.budget_amount,
+                    items=item_rows,
+                )
+            )
+
+        return BasePlannerResponse(worksites=ws_rows)
+
+    async def get_base_template(self, job_item_id: UUID) -> BaseRosterTemplateRead | None:
+        """Fetch the active Base Roster Template for a specific job item."""
+        stmt = (
+            select(BaseRosterTemplate)
+            .where(
+                BaseRosterTemplate.job_item_id == job_item_id,
+                BaseRosterTemplate.is_active.is_(True),
+            )
+            .options(selectinload(BaseRosterTemplate.entries))
+        )
+        tmpl = (await self.session.execute(stmt)).scalar_one_or_none()
+        if not tmpl:
+            return None
+
+        emp_ids = {e.employee_id for e in tmpl.entries}
+        emp_map: dict[UUID, Employee] = {}
+        if emp_ids:
+            emp_stmt = select(Employee).where(Employee.id.in_(emp_ids))
+            emp_map = {e.id: e for e in (await self.session.execute(emp_stmt)).scalars().all()}
+
+        entries_read = [
+            BaseRosterEntryRead(
+                id=e.id,
+                template_id=e.template_id,
+                employee_id=e.employee_id,
+                employee_name=emp_map.get(e.employee_id).name if e.employee_id in emp_map else None,
+                tally_id=emp_map.get(e.employee_id).tally_id if e.employee_id in emp_map else None,
+                weekly_off_day=emp_map.get(e.employee_id).weekly_off_day if e.employee_id in emp_map else None,
+                weekday_mask=e.weekday_mask,
+                assigned_hours=e.assigned_hours,
+                sequence=e.sequence,
+            )
+            for e in sorted(tmpl.entries, key=lambda x: (x.weekday_mask, x.sequence))
+        ]
+
+        return BaseRosterTemplateRead(
+            id=tmpl.id,
+            job_item_id=tmpl.job_item_id,
+            allocation_mode=tmpl.allocation_mode,
+            start_date=tmpl.start_date,
+            end_date=tmpl.end_date,
+            is_active=tmpl.is_active,
+            version=tmpl.version,
+            entries=entries_read,
+        )
+
+    async def save_base_template(
+        self,
+        payload: BaseRosterTemplateCreate,
+        current_user_id: UUID | None = None,
+    ) -> BaseRosterTemplateRead:
+        """Create or update the active Base Roster Template for a job item."""
+        item = await self.session.get(JobItem, payload.job_item_id)
+        if not item:
+            raise AppError(code="NOT_FOUND", message=f"Job item {payload.job_item_id} not found", status_code=404)
+
+        # Inactivate existing active templates
+        existing_stmt = select(BaseRosterTemplate).where(
+            BaseRosterTemplate.job_item_id == payload.job_item_id,
+            BaseRosterTemplate.is_active.is_(True),
+        )
+        existing_templates = (await self.session.execute(existing_stmt)).scalars().all()
+        for old_tmpl in existing_templates:
+            old_tmpl.is_active = False
+            old_tmpl.updated_at = datetime.now(UTC)
+
+        # Create new template
+        from uuid import uuid4
+        new_template = BaseRosterTemplate(
+            id=uuid4(),
+            job_item_id=payload.job_item_id,
+            allocation_mode=payload.allocation_mode.upper(),
+            start_date=payload.start_date,
+            end_date=payload.end_date,
+            is_active=True,
+            version=1,
+            created_by_user_id=current_user_id,
+        )
+        self.session.add(new_template)
+        await self.session.flush()
+
+        # Add entries
+        for entry in payload.entries:
+            new_entry = BaseRosterEntry(
+                id=uuid4(),
+                template_id=new_template.id,
+                employee_id=entry.employee_id,
+                weekday_mask=entry.weekday_mask.upper(),
+                assigned_hours=entry.assigned_hours,
+                sequence=entry.sequence,
+            )
+            self.session.add(new_entry)
+
+        await self.session.commit()
+
+        await AuditService.log_action(
+            session=self.session,
+            action="CREATE",
+            entity_type="BaseRosterTemplate",
+            entity_id=str(new_template.id),
+            actor_user_id=current_user_id,
+            diff={
+                "job_item_id": str(payload.job_item_id),
+                "allocation_mode": payload.allocation_mode,
+                "entries_count": len(payload.entries),
+            },
+        )
+
+        return await self.get_base_template(payload.job_item_id)  # type: ignore[return-value]
+
+    # -------------------------------------------------------------------------
+    # Operational Planner (Live Calendar, Overrides & Leaves)
+    # -------------------------------------------------------------------------
+
+    async def get_operational_coverage(
+        self, week_start: date, group_id: UUID | None = None
+    ) -> OperationalCoverageResponse:
+        """Fetch weekly operational coverage matrix with baseline blueprints and single-day overrides."""
+        week_end = week_start + timedelta(days=6)
+
+        # Worksites query
+        ws_stmt = (
+            select(Worksite)
+            .where(Worksite.is_active.is_(True))
+            .options(selectinload(Worksite.items))
+            .order_by(Worksite.job_number)
+        )
+        if group_id:
+            ws_stmt = ws_stmt.where(Worksite.group_id == group_id)
+
+        worksites = (await self.session.execute(ws_stmt)).scalars().all()
+
+        job_item_ids = [it.id for ws in worksites for it in ws.items if it.is_active]
+
+        # Load active Base Roster Templates
+        templates_by_item: dict[UUID, BaseRosterTemplate] = {}
+        if job_item_ids:
+            tmpl_stmt = (
+                select(BaseRosterTemplate)
+                .where(
+                    BaseRosterTemplate.job_item_id.in_(job_item_ids),
+                    BaseRosterTemplate.is_active.is_(True),
+                )
+                .options(selectinload(BaseRosterTemplate.entries))
+            )
+            templates = (await self.session.execute(tmpl_stmt)).scalars().all()
+            for t in templates:
+                templates_by_item[t.job_item_id] = t
+
+        # Load single-day operational shifts for this week
+        sw_stmt = (
+            select(ScheduledWork)
+            .where(
+                ScheduledWork.work_date >= week_start,
+                ScheduledWork.work_date <= week_end,
+                ScheduledWork.status == "ACTIVE",
+            )
+            .options(selectinload(ScheduledWork.employee))
+        )
+        sw_rows = (await self.session.execute(sw_stmt)).scalars().all()
+        sw_by_item_date: dict[tuple[UUID, date], list[ScheduledWork]] = defaultdict(list)
+        sw_by_item_week: dict[UUID, list[ScheduledWork]] = defaultdict(list)
+        for s in sw_rows:
+            sw_by_item_date[(s.job_item_id, s.work_date)].append(s)
+            sw_by_item_week[s.job_item_id].append(s)
+
+        # Load public holidays for the week
+        holidays_stmt = select(PublicHoliday).where(
+            PublicHoliday.holiday_date >= week_start,
+            PublicHoliday.holiday_date <= week_end,
+        )
+        holiday_rows = (await self.session.execute(holidays_stmt)).scalars().all()
+        holidays_by_date: dict[date, PublicHoliday] = {h.holiday_date: h for h in holiday_rows}
+        holiday_dates = set(holidays_by_date.keys())
+
+        # Collect all employee IDs across templates and scheduled works to load info
+        emp_ids: set[UUID] = set()
+        for t in templates_by_item.values():
+            for e in t.entries:
+                emp_ids.add(e.employee_id)
+        for s in sw_rows:
+            emp_ids.add(s.employee_id)
+            if s.original_employee_id:
+                emp_ids.add(s.original_employee_id)
+
+        emp_map: dict[UUID, Employee] = {}
+        if emp_ids:
+            emp_stmt = select(Employee).where(Employee.id.in_(emp_ids))
+            emp_map = {e.id: e for e in (await self.session.execute(emp_stmt)).scalars().all()}
+
+        worker_weekly_off_days = {
+            e.id: (e.weekly_off_day or "").upper() for e in emp_map.values()
+        }
+
+        # Construct week dates list
+        week_dates = [week_start + timedelta(days=i) for i in range(7)]
+
+        ws_rows: list[OperationalWorksiteRow] = []
+
+        for ws in worksites:
+            active_items = [it for it in ws.items if it.is_active]
+            if not active_items:
+                continue
+
+            item_rows: list[OperationalJobItemRow] = []
+            for it in sorted(active_items, key=lambda x: x.sub_item_code):
+                tmpl = templates_by_item.get(it.id)
+
+                # 1. Resolve blueprint slots for the whole week
+                blueprint_entries: list[BlueprintEntry] = []
+                if tmpl:
+                    blueprint_entries = [
+                        BlueprintEntry(
+                            employee_id=e.employee_id,
+                            weekday_mask=e.weekday_mask,
+                            assigned_hours=float(e.assigned_hours),
+                            sequence=e.sequence,
+                        )
+                        for e in tmpl.entries
+                    ]
+
+                # Determine job active working days
+                job_working_days: set[str] | None = None
+                if it.weekday_pattern:
+                    job_working_days = {w.upper() for w in it.weekday_pattern}
+                elif it.frequency_unit == "WEEK" and int(it.occurrences_per_period) == 6:
+                    job_working_days = {"MON", "TUE", "WED", "THU", "FRI", "SAT"}
+
+                resolved_template_slots = resolve_base_template_slots(
+                    allocation_mode=tmpl.allocation_mode if tmpl else "UNIFORM",
+                    entries=blueprint_entries,
+                    target_dates=week_dates,
+                    public_holidays=holiday_dates,
+                    worker_weekly_off_days=worker_weekly_off_days,
+                    job_working_days=job_working_days,
+                )
+                slots_by_date: dict[date, list[ResolvedTemplateSlot]] = defaultdict(list)
+                for slot in resolved_template_slots:
+                    slots_by_date[slot.work_date].append(slot)
+
+                # 2. Pacing windows and recommendation
+                target_occurrences = int(it.occurrences_per_period) if it.frequency_unit == "WEEK" else 1
+                pacing_windows = calculate_pacing_windows(
+                    period_start=week_start,
+                    period_end=week_end,
+                    occurrences=target_occurrences if target_occurrences > 0 else 1,
+                    scheduled_weekdays=it.weekday_pattern,
+                    public_holidays=holiday_dates,
+                )
+                recommended_dates = {w.recommended_date for w in pacing_windows}
+
+                # 3. Quota calculation for week
+                # Collect all assigned visits (blueprint distinct dates + operational shifts distinct dates)
+                all_visit_dates = set(slots_by_date.keys()).union(
+                    {s.work_date for s in sw_by_item_week.get(it.id, [])}
+                )
+                from uuid import uuid4
+                visit_records = [
+                    VisitRecord(
+                        id=uuid4(),
+                        work_date=vd,
+                        created_at=datetime(vd.year, vd.month, vd.day, tzinfo=UTC),
+                    )
+                    for vd in sorted(all_visit_dates)
+                ]
+                quota_result = evaluate_period_quota(
+                    target_count=target_occurrences,
+                    visits=visit_records,
+                    period_start=week_start,
+                    period_end=week_end,
+                    period_name="Week",
+                    windows=pacing_windows,
+                )
+                quota_status_by_date = {
+                    v.work_date: v for v in quota_result.evaluated_visits
+                }
+
+                # 4. Resolve daily cells
+                day_cells: list[OperationalDayCell] = []
+                for d in week_dates:
+                    dow = INT_TO_WEEKDAY[d.weekday()]
+                    is_holiday = d in holiday_dates
+                    holiday_obj = holidays_by_date.get(d)
+
+                    base_slots = slots_by_date.get(d, [])
+                    op_shifts_raw = sw_by_item_date.get((it.id, d), [])
+                    op_inputs = [
+                        OperationalShiftInput(
+                            id=s.id,
+                            work_date=s.work_date,
+                            employee_id=s.employee_id,
+                            source=s.source,
+                            original_employee_id=s.original_employee_id,
+                            override_reason=s.override_reason,
+                            assigned_hours=float(s.assigned_hours),
+                            sequence=s.sequence,
+                        )
+                        for s in op_shifts_raw
+                    ]
+
+                    # Mock approved leaves for now (until leaves module arrives)
+                    approved_leaves: set[UUID] = set()
+
+                    resolved_cell_workers = resolve_operational_cell(
+                        work_date=d,
+                        base_slots=base_slots,
+                        approved_leave_worker_ids=approved_leaves,
+                        operational_shifts=op_inputs,
+                        is_public_holiday=is_holiday,
+                        worker_weekly_off_days=worker_weekly_off_days,
+                    )
+
+                    cell_worker_schemas = [
+                        OperationalCellWorker(
+                            employee_id=w.employee_id,
+                            employee_name=emp_map.get(w.employee_id).name if w.employee_id in emp_map else "Unknown",
+                            tally_id=emp_map.get(w.employee_id).tally_id if w.employee_id in emp_map else None,
+                            assigned_hours=Decimal(str(w.assigned_hours)),
+                            display_type=w.display_type,
+                            opacity_class=w.opacity_class,
+                            original_employee_id=w.original_employee_id,
+                            original_employee_name=emp_map.get(w.original_employee_id).name if w.original_employee_id and w.original_employee_id in emp_map else None,
+                            shift_id=w.shift_id,
+                            reason=w.reason,
+                            is_public_holiday=w.is_public_holiday,
+                            is_rest_day=w.is_rest_day,
+                            tags=w.tags,
+                        )
+                        for w in resolved_cell_workers
+                    ]
+
+                    eval_v = quota_status_by_date.get(d)
+                    is_quota_met = eval_v.is_required if eval_v else False
+                    is_excess = eval_v.is_excess if eval_v else False
+                    is_to_be_covered = any(w.display_type == "TO_BE_COVERED" for w in cell_worker_schemas)
+
+                    req_staff = it.required_staff_count if (d in recommended_dates or is_quota_met) else 0
+
+                    day_cells.append(
+                        OperationalDayCell(
+                            work_date=d,
+                            weekday=dow,
+                            required_staff_count=req_staff,
+                            assigned_staff_count=len(cell_worker_schemas),
+                            is_public_holiday=is_holiday,
+                            holiday_name=holiday_obj.name if holiday_obj else None,
+                            is_recommended_target=d in recommended_dates,
+                            is_quota_met=is_quota_met,
+                            is_excess=is_excess,
+                            is_to_be_covered=is_to_be_covered,
+                            workers=cell_worker_schemas,
+                        )
+                    )
+
+                item_rows.append(
+                    OperationalJobItemRow(
+                        job_item_id=it.id,
+                        sub_item_code=it.sub_item_code,
+                        staff_grade_description=it.staff_grade_description,
+                        planned_grade_code=it.planned_grade_code,
+                        deployment_type=it.deployment_type,
+                        required_staff_count=it.required_staff_count,
+                        hours_per_occurrence=it.hours_per_occurrence_per_staff,
+                        frequency_unit=it.frequency_unit,
+                        occurrences_per_period=it.occurrences_per_period,
+                        quota_target=quota_result.target_count,
+                        quota_assigned=quota_result.assigned_count,
+                        quota_satisfied=quota_result.is_quota_satisfied,
+                        days=day_cells,
+                    )
+                )
+
+            ws_rows.append(
+                OperationalWorksiteRow(
+                    worksite_id=ws.id,
+                    job_number=ws.job_number,
+                    job_name=ws.job_name,
+                    customer_type=ws.customer_type,
+                    is_outdoor=ws.is_outdoor,
+                    start_date=ws.start_date,
+                    end_date=ws.end_date,
+                    budget_amount=ws.budget_amount,
+                    items=item_rows,
+                )
+            )
+
+        return OperationalCoverageResponse(
+            week_start=week_start,
+            week_end=week_end,
+            worksites=ws_rows,
+        )
+
+    async def get_operational_roster(
+        self, week_start: date, group_id: UUID | None = None
+    ) -> OperationalRosterResponse:
+        """Fetch weekly operational worker roster showing assignments across the week."""
+        week_end = week_start + timedelta(days=6)
+        week_dates = [week_start + timedelta(days=i) for i in range(7)]
+
+        emp_stmt = select(Employee).where(Employee.is_active.is_(True)).order_by(Employee.name)
+        employees = (await self.session.execute(emp_stmt)).scalars().all()
+
+        # Load holidays
+        holidays_stmt = select(PublicHoliday).where(
+            PublicHoliday.holiday_date >= week_start,
+            PublicHoliday.holiday_date <= week_end,
+        )
+        holiday_rows = (await self.session.execute(holidays_stmt)).scalars().all()
+        holidays_by_date: dict[date, PublicHoliday] = {h.holiday_date: h for h in holiday_rows}
+        holiday_dates = set(holidays_by_date.keys())
+
+        # Load single-day operational shifts
+        sw_stmt = (
+            select(ScheduledWork)
+            .where(
+                ScheduledWork.work_date >= week_start,
+                ScheduledWork.work_date <= week_end,
+                ScheduledWork.status == "ACTIVE",
+            )
+            .options(
+                selectinload(ScheduledWork.worksite),
+                selectinload(ScheduledWork.job_item),
+            )
+        )
+        sw_rows = (await self.session.execute(sw_stmt)).scalars().all()
+        sw_by_emp_date: dict[tuple[UUID, date], list[ScheduledWork]] = defaultdict(list)
+        for s in sw_rows:
+            sw_by_emp_date[(s.employee_id, s.work_date)].append(s)
+
+        # Load active Base Roster Templates
+        tmpl_stmt = (
+            select(BaseRosterTemplate)
+            .where(BaseRosterTemplate.is_active.is_(True))
+            .options(
+                selectinload(BaseRosterTemplate.entries),
+                selectinload(BaseRosterTemplate.job_item).selectinload(JobItem.worksite),
+            )
+        )
+        active_templates = (await self.session.execute(tmpl_stmt)).scalars().all()
+
+        # Index template entries by employee_id
+        templates_by_emp: dict[UUID, list[tuple[BaseRosterTemplate, BaseRosterEntry]]] = defaultdict(list)
+        for t in active_templates:
+            for e in t.entries:
+                templates_by_emp[e.employee_id].append((t, e))
+
+        worker_rows: list[OperationalRosterWorkerRow] = []
+
+        for emp in employees:
+            off_dow = (emp.weekly_off_day or "").upper()
+            total_week_hours = Decimal("0.0")
+            day_cells: list[OperationalRosterDayCell] = []
+
+            for d in week_dates:
+                dow = INT_TO_WEEKDAY[d.weekday()]
+                is_off = off_dow == dow
+                is_holiday = d in holiday_dates
+                holiday_obj = holidays_by_date.get(d)
+
+                cell_workers: list[OperationalCellWorker] = []
+                day_hours = Decimal("0.0")
+
+                # Check single day operational shifts first
+                direct_sw = sw_by_emp_date.get((emp.id, d), [])
+                if direct_sw:
+                    for s in direct_sw:
+                        day_hours += s.assigned_hours
+                        cell_workers.append(
+                            OperationalCellWorker(
+                                employee_id=emp.id,
+                                employee_name=emp.name,
+                                tally_id=emp.tally_id,
+                                assigned_hours=s.assigned_hours,
+                                display_type="DIRECT" if not s.original_employee_id else "OVERRIDE",
+                                opacity_class="solid",
+                                original_employee_id=s.original_employee_id,
+                                shift_id=s.id,
+                                reason=s.override_reason,
+                                is_public_holiday=is_holiday,
+                                is_rest_day=is_off,
+                                tags=["Direct Shift"] if not s.original_employee_id else ["Cover Shift"],
+                            )
+                        )
+                else:
+                    # Check base templates
+                    emp_templates = templates_by_emp.get(emp.id, [])
+                    for _t, e in emp_templates:
+                        if e.weekday_mask in ("ALL", dow):
+                            day_hours += e.assigned_hours
+                            cell_workers.append(
+                                OperationalCellWorker(
+                                    employee_id=emp.id,
+                                    employee_name=emp.name,
+                                    tally_id=emp.tally_id,
+                                    assigned_hours=e.assigned_hours,
+                                    display_type="BLUEPRINT",
+                                    opacity_class="muted",
+                                    shift_id=None,
+                                    is_public_holiday=is_holiday,
+                                    is_rest_day=is_off,
+                                    tags=["Base Blueprint"],
+                                )
+                            )
+
+                total_week_hours += day_hours
+
+                day_cells.append(
+                    OperationalRosterDayCell(
+                        work_date=d,
+                        weekday=dow,
+                        is_working_day=not is_off,
+                        is_weekly_off=is_off,
+                        is_public_holiday=is_holiday,
+                        holiday_name=holiday_obj.name if holiday_obj else None,
+                        leave_type=None,
+                        allocated_hours=day_hours,
+                        shifts=cell_workers,
+                    )
+                )
+
+            worker_rows.append(
+                OperationalRosterWorkerRow(
+                    employee_id=emp.id,
+                    tally_id=emp.tally_id,
+                    name=emp.name,
+                    staff_grade_description=emp.staff_grade_description,
+                    weekly_off_day=emp.weekly_off_day,
+                    total_week_hours=total_week_hours,
+                    standard_week_hours=Decimal("48.0"),
+                    days=day_cells,
+                )
+            )
+
+        return OperationalRosterResponse(
+            week_start=week_start,
+            week_end=week_end,
+            workers=worker_rows,
+        )
+
+    async def create_operational_shift(
+        self,
+        payload: OperationalShiftCreate,
+        current_user_id: UUID | None = None,
+    ) -> ScheduledWorkRead:
+        """Create a single-day operational shift or replacement cover."""
+        item = await self.session.get(JobItem, payload.job_item_id)
+        if not item:
+            raise AppError(code="NOT_FOUND", message=f"Job item {payload.job_item_id} not found", status_code=404)
+
+        from uuid import uuid4
+        assigned_hours = payload.assigned_hours or item.hours_per_occurrence_per_staff
+
+        shift = ScheduledWork(
+            id=uuid4(),
+            employee_id=payload.employee_id,
+            job_item_id=payload.job_item_id,
+            worksite_id=item.worksite_id,
+            work_date=payload.work_date,
+            assigned_hours=assigned_hours,
+            sequence=1,
+            status="ACTIVE",
+            source=payload.source.upper(),
+            original_employee_id=payload.original_employee_id,
+            override_reason=payload.override_reason,
+            created_by_user_id=current_user_id,
+            version=1,
+        )
+        self.session.add(shift)
+        await self.session.commit()
+
+        await AuditService.log_action(
+            session=self.session,
+            action="CREATE",
+            entity_type="ScheduledWork",
+            entity_id=str(shift.id),
+            actor_user_id=current_user_id,
+            diff={
+                "job_item_id": str(payload.job_item_id),
+                "employee_id": str(payload.employee_id),
+                "work_date": str(payload.work_date),
+                "source": payload.source,
+                "original_employee_id": str(payload.original_employee_id) if payload.original_employee_id else None,
+            },
+        )
+
+        emp = await self.session.get(Employee, payload.employee_id)
+        return ScheduledWorkRead(
+            id=shift.id,
+            employee_id=shift.employee_id,
+            employee_name=emp.name if emp else None,
+            work_date=shift.work_date,
+            occurrence_id=shift.occurrence_id,
+            job_item_id=shift.job_item_id,
+            worksite_id=shift.worksite_id,
+            assigned_hours=shift.assigned_hours,
+            sequence=shift.sequence,
+            status=shift.status,
+            source=shift.source,
+            version=shift.version,
+            created_at=shift.created_at,
+        )
+
+    async def delete_operational_shift(
+        self,
+        shift_id: UUID,
+        current_user_id: UUID | None = None,
+    ) -> None:
+        """Cancel an operational shift."""
+        shift = await self.session.get(ScheduledWork, shift_id)
+        if not shift:
+            return
+        shift.status = "CANCELLED"
+        shift.version += 1
+        shift.updated_at = datetime.now(UTC)
+        await self.session.commit()
+
+        await AuditService.log_action(
+            session=self.session,
+            action="CANCEL",
+            entity_type="ScheduledWork",
+            entity_id=str(shift_id),
+            actor_user_id=current_user_id,
+            diff={"status": "CANCELLED"},
+        )
+

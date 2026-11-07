@@ -3,6 +3,23 @@ All notable changes. Format: Keep a Changelog. Mobile-contract changes are also 
 
 ## [Unreleased]
 ### Added
+- PHASE-05 (Rebuilt Planner: Base Planner & Operational Planner):
+  - Clean architectural separation into two dedicated workspaces:
+    - **Base Planner (`/base-planner`)**: Blueprint recurring master schedule engine. Configures regular recurring staffing across contract dates without operational noise. Supports **Mode A (Uniform Daily Crew)** and **Mode B (Day-of-Week Crew Matrix)** to resolve Friday rest-day rotations.
+    - **Operational Planner (`/operational-planner`)**: Live daily operations calendar. Displays base blueprint shifts as low-opacity muted chips, surfaces approved leave gaps as `TO_BE_COVERED` alert slots, and supports single-day operational covers (`OVERRIDE`) and compensatory shifts (`DIRECT`).
+  - Database migration `0007_base_op_planner.py`:
+    - `base_roster_templates`: Stores recurring blueprint definition (`allocation_mode` in `UNIFORM`, `DAY_OF_WEEK`, `start_date`, `end_date`, `is_active`, `version`).
+    - `base_roster_entries`: Stores assigned workers per template with `weekday_mask` (`ALL` or `MON`..`SUN`), `assigned_hours`, and `sequence`.
+    - `scheduled_works`: Enhanced with `original_employee_id`, `override_reason`, and expanded source enum (`TEMPLATE`, `STANDING`, `DIRECT`, `OVERRIDE`, `EXCEPTION`, `FOLLOW_UP`).
+  - Pure domain rules in `backend/src/fw/rules/scheduling/`:
+    - `blueprint.py`: Resolves Base Roster Templates into daily slots, evaluates weekly rest-day warnings and public holiday overtime flags.
+    - `quotas.py`: Equal window pacing calculations for periodic visits (e.g. 2 visits/month) as visual guidance only. Deterministic, zero-swapping visit evaluation based on creation timestamp and date.
+    - `operational.py`: Resolves cell state hierarchy (`OPERATIONAL OVERRIDE > APPROVED LEAVE GAP (TO_BE_COVERED) > BASE BLUEPRINT`).
+  - Worksite contract overview:
+    - Added Contract Validity Period (`start_date` – `end_date` or `Ongoing`) and Annual Operating Budget (`budget_amount AED / year`) to `/worksites` and `/worksites/:id`.
+  - Frontend components and routes:
+    - `BasePlanner.tsx`: Worksite line items list, Mode A / Mode B switcher, rest-day rotation configuration, candidate recommendations by grade, and master template saving.
+    - `OperationalPlanner.tsx`: Coverage view (Job-centric) and Worker Roster view (Worker-centric), sticky freeze headers, visual distinction between blueprint (muted) and operational (solid) shifts, single-action shift/cover modal with holiday OT and rest-day warnings.
 - PHASE-05 (Planner: yearly plan and weekly roster):
   - Pure domain rules for scheduling (`fw.rules.scheduling`):
     - `assignment.py`: Date generator for standing assignments across repeating weekday patterns and holiday skips.

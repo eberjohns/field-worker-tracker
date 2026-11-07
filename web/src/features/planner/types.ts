@@ -173,3 +173,186 @@ export interface ValidationReport {
   infos: ValidationIssue[];
 }
 
+// -------------------------------------------------------------------------
+// Base Planner (Recurring Blueprint) Types
+// -------------------------------------------------------------------------
+
+export interface BaseRosterEntryRead {
+  id: string;
+  template_id: string;
+  employee_id: string;
+  employee_name?: string | null;
+  tally_id?: string | null;
+  weekly_off_day?: string | null;
+  weekday_mask: string; // "ALL" | "MON" .. "SUN"
+  assigned_hours: number | string;
+  sequence: number;
+}
+
+export interface BaseRosterEntryCreate {
+  employee_id: string;
+  weekday_mask: string;
+  assigned_hours: number | string;
+  sequence?: number;
+}
+
+export interface BaseRosterTemplateRead {
+  id: string;
+  job_item_id: string;
+  allocation_mode: "UNIFORM" | "DAY_OF_WEEK";
+  start_date: string;
+  end_date?: string | null;
+  is_active: boolean;
+  version: number;
+  entries: BaseRosterEntryRead[];
+}
+
+export interface BaseRosterTemplateCreate {
+  job_item_id: string;
+  allocation_mode: "UNIFORM" | "DAY_OF_WEEK";
+  start_date: string;
+  end_date?: string | null;
+  entries: BaseRosterEntryCreate[];
+}
+
+export interface BasePlannerItemRow {
+  job_item_id: string;
+  sub_item_code: string;
+  staff_grade_description: string;
+  planned_grade_code: string;
+  deployment_type: string;
+  required_staff_count: number;
+  hours_per_occurrence: number | string;
+  frequency_unit: string;
+  occurrences_per_period: number | string;
+  weekday_pattern?: string[] | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  template?: BaseRosterTemplateRead | null;
+}
+
+export interface BasePlannerWorksiteRow {
+  worksite_id: string;
+  job_number: string;
+  job_name: string;
+  customer_type?: string | null;
+  is_outdoor?: boolean;
+  start_date?: string | null;
+  end_date?: string | null;
+  budget_amount?: number | string | null;
+  items: BasePlannerItemRow[];
+}
+
+export interface BasePlannerResponse {
+  worksites: BasePlannerWorksiteRow[];
+}
+
+// -------------------------------------------------------------------------
+// Operational Planner Types
+// -------------------------------------------------------------------------
+
+export interface OperationalCellWorker {
+  employee_id: string;
+  employee_name: string;
+  tally_id?: string | null;
+  assigned_hours: number | string;
+  display_type: "BLUEPRINT" | "OVERRIDE" | "DIRECT" | "TO_BE_COVERED";
+  opacity_class: "muted" | "solid" | "warning";
+  original_employee_id?: string | null;
+  original_employee_name?: string | null;
+  shift_id?: string | null;
+  reason?: string | null;
+  is_public_holiday?: boolean;
+  is_rest_day?: boolean;
+  tags: string[];
+}
+
+export interface OperationalDayCell {
+  work_date: string;
+  weekday: string;
+  required_staff_count: number;
+  assigned_staff_count: number;
+  is_public_holiday: boolean;
+  holiday_name?: string | null;
+  is_recommended_target: boolean;
+  is_quota_met: boolean;
+  is_excess: boolean;
+  is_to_be_covered: boolean;
+  workers: OperationalCellWorker[];
+}
+
+export interface OperationalJobItemRow {
+  job_item_id: string;
+  sub_item_code: string;
+  staff_grade_description: string;
+  planned_grade_code: string;
+  deployment_type: string;
+  required_staff_count: number;
+  hours_per_occurrence: number | string;
+  frequency_unit: string;
+  occurrences_per_period: number | string;
+  quota_target: number;
+  quota_assigned: number;
+  quota_satisfied: boolean;
+  days: OperationalDayCell[];
+}
+
+export interface OperationalWorksiteRow {
+  worksite_id: string;
+  job_number: string;
+  job_name: string;
+  customer_type?: string | null;
+  is_outdoor?: boolean;
+  start_date?: string | null;
+  end_date?: string | null;
+  budget_amount?: number | string | null;
+  items: OperationalJobItemRow[];
+}
+
+export interface OperationalCoverageResponse {
+  week_start: string;
+  week_end: string;
+  worksites: OperationalWorksiteRow[];
+}
+
+export interface OperationalRosterDayCell {
+  work_date: string;
+  weekday: string;
+  is_working_day: boolean;
+  is_weekly_off: boolean;
+  is_public_holiday: boolean;
+  holiday_name?: string | null;
+  leave_type?: string | null;
+  allocated_hours: number | string;
+  shifts: OperationalCellWorker[];
+}
+
+export interface OperationalRosterWorkerRow {
+  employee_id: string;
+  tally_id: string;
+  name: string;
+  staff_grade_description?: string | null;
+  weekly_off_day?: string | null;
+  total_week_hours: number | string;
+  standard_week_hours: number | string;
+  days: OperationalRosterDayCell[];
+}
+
+export interface OperationalRosterResponse {
+  week_start: string;
+  week_end: string;
+  workers: OperationalRosterWorkerRow[];
+}
+
+export interface OperationalShiftCreate {
+  job_item_id: string;
+  work_date: string;
+  employee_id: string;
+  original_employee_id?: string | null;
+  assigned_hours?: number | string | null;
+  override_reason?: string | null;
+  source?: "DIRECT" | "OVERRIDE";
+  acknowledge_warnings?: boolean;
+}
+
+
