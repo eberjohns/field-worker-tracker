@@ -94,6 +94,16 @@ Roles: A = Admin, E = Engineer, S = Superintendent, V = Supervisor. "scope" = li
 | GET | /staffing-gaps?from=&to= | A E S V scope | gaps from leave and understaffing |
 | GET | /approvals?type=&status=PENDING | A E | **approvals inbox**: leave, reassignment requests, overtime/variation attendance rows, with counts for the badge |
 
+### Base Planner & Operational Planner
+| Method | Path | Roles | Purpose |
+|---|---|---|---|
+| GET | /base-planner/worksites | A E scope | Base blueprint master schedule: worksites with job items, contract quotas, and template assignments across Mon–Sun |
+| POST | /base-planner/templates | A E | Create or replace recurring blueprint roster template for a job item with explicit daily / periodic cadence masks |
+| GET | /operational-planner/coverage?week_start= | A E scope | Live operational coverage matrix: 7 calendar days, blueprint shifts (muted), leave gaps (TO_BE_COVERED), operational covers (solid), and removals (red) |
+| GET | /operational-planner/roster?week_start= | A E scope | Live worker roster: workers x days with assigned shifts, weekly totals vs standard hours, supervisor info, and job numbers |
+| POST | /operational-planner/shifts | A E | Assign operational shift (direct shift or leave cover) or stage base shift cancellation (status CANCELLED with override_reason) |
+| DELETE | /operational-planner/shifts/{id} | A E | Remove operational shift or restore cancelled base blueprint shift |
+
 ### Events, attendance, approvals
 | Method | Path | Roles | Purpose |
 |---|---|---|---|
