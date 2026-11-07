@@ -1473,9 +1473,16 @@ export const OperationalPlanner: React.FC = () => {
                                 {w.tally_id && (
                                   <span className="font-mono text-[10px] text-slate-400">({w.tally_id})</span>
                                 )}
-                                <span className="text-[9px] px-1.5 py-0.5 rounded uppercase font-bold bg-slate-200 text-slate-700">
-                                  Blueprint
-                                </span>
+                                {w.display_type === "TO_BE_COVERED" ? (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded uppercase font-bold bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1">
+                                    <AlertTriangle className="h-2.5 w-2.5 text-amber-600" />
+                                    To Be Covered
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded uppercase font-bold bg-slate-200 text-slate-700">
+                                    Blueprint
+                                  </span>
+                                )}
                               </div>
 
                               {!isPromptingRemoval && (
@@ -1485,11 +1492,17 @@ export const OperationalPlanner: React.FC = () => {
                                     onClick={() => setReplacementTargetId(w.employee_id)}
                                     className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors ${
                                       replacementTargetId === w.employee_id
-                                        ? "bg-indigo-600 text-white shadow-sm"
+                                        ? "bg-amber-600 text-white shadow-sm"
+                                        : w.display_type === "TO_BE_COVERED"
+                                        ? "bg-amber-100 text-amber-900 hover:bg-amber-200 border border-amber-300 font-bold"
                                         : "bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200"
                                     }`}
                                   >
-                                    {replacementTargetId === w.employee_id ? "Target Selected" : "Replace with Cover"}
+                                    {replacementTargetId === w.employee_id
+                                      ? "Target Selected"
+                                      : w.display_type === "TO_BE_COVERED"
+                                      ? "Select Cover"
+                                      : "Replace with Cover"}
                                   </button>
                                   <button
                                     type="button"

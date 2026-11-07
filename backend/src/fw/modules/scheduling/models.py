@@ -227,6 +227,12 @@ class ScheduledWork(Base):
         nullable=True,
     )
     override_reason: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    reassignment_request_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("reassignment_requests.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    is_late_approval: Mapped[bool] = mapped_column(default=False, nullable=False)
     version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     created_by_user_id: Mapped[UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
@@ -250,3 +256,165 @@ class ScheduledWork(Base):
     job_item = relationship("JobItem", foreign_keys=[job_item_id])
     worksite = relationship("Worksite", foreign_keys=[worksite_id])
     occurrence = relationship("JobOccurrence", foreign_keys=[occurrence_id])
+    reassignment_request = relationship(
+        "ReassignmentRequest",
+        foreign_keys=[reassignment_request_id],
+        back_populates="created_shifts",
+    )
+
+
+class LeaveRequest(Base):
+    """Leave request recorded by a supervisor and approved/rejected by an engineer or admin."""
+
+    __tablename__ = "leave_requests"
+    __table_args__ = (
+        CheckConstraint(
+            "leave_type IN ('ANNUAL', 'SICK', 'UNPAID', 'EMERGENCY', 'OTHER')",
+            name="ck_leave_requests_leave_type",
+        ),
+        CheckConstraint(
+            "status IN ('REQUESTED', 'APPROVED', 'REJECTED', 'CANCELLED')",
+            name="ck_leave_requests_status",
+        ),
+        CheckConstraint("to_date >= from_date", name="ck_leave_requests_date_order"),
+        Index("ix_leave_requests_emp_dates", "employee_id", "from_date", "to_date"),
+        Index("ix_leave_requests_status", "status"),
+        Index("ix_leave_requests_recorded_by", "recorded_by_user_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    employee_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("employees.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    leave_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    from_date: Mapped[date] = mapped_column(Date, nullable=False)
+    to_date: Mapped[date] = mapped_column(Date, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="REQUESTED", nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    recorded_by_user_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    approved_by_user_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    decision_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+        nullable=False,
+    )
+
+    # Relationships
+    employee = relationship("Employee", foreign_keys=[employee_id])
+    recorded_by = relationship("User", foreign_keys=[recorded_by_user_id])
+    approved_by = relationship("User", foreign_keys=[approved_by_user_id])
+
+
+class ReassignmentRequest(Base):
+    """Temporary operational reassignment request (REPLACE, MOVE, ADD, CANCEL)."""
+
+    __tablename__ = "reassignment_requests"
+    __table_args__ = (
+        CheckConstraint(
+            "reassignment_type IN ('REPLACE', 'MOVE', 'ADD', 'CANCEL')",
+            name="ck_reassignment_requests_type",
+        ),
+        CheckConstraint(
+            "status IN ('PENDING', 'APPROVED', 'REJECTED', 'CANCELLED', 'EXPIRED')",
+            name="ck_reassignment_requests_status",
+        ),
+        CheckConstraint("date_to >= date_from", name="ck_reassignment_requests_date_order"),
+        Index("ix_reassign_requests_dates", "date_from", "date_to"),
+        Index("ix_reassign_requests_status", "status"),
+        Index("ix_reassign_requests_orig_emp", "original_employee_id"),
+        Index("ix_reassign_requests_new_emp", "new_employee_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    reassignment_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    date_from: Mapped[date] = mapped_column(Date, nullable=False)
+    date_to: Mapped[date] = mapped_column(Date, nullable=False)
+    original_employee_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("employees.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    new_employee_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("employees.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    original_scheduled_work_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("scheduled_work.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    standing_assignment_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("standing_assignments.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    target_job_item_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("job_items.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    hours_per_day: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
+    reason_category: Mapped[str] = mapped_column(String(50), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="PENDING", nullable=False)
+    is_late_approval: Mapped[bool] = mapped_column(default=False, nullable=False)
+    is_orphaned: Mapped[bool] = mapped_column(default=False, nullable=False)
+    requested_by_user_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    decided_by_user_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    decision_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+        nullable=False,
+    )
+
+    # Relationships
+    original_employee = relationship("Employee", foreign_keys=[original_employee_id])
+    new_employee = relationship("Employee", foreign_keys=[new_employee_id])
+    target_job_item = relationship("JobItem", foreign_keys=[target_job_item_id])
+    requested_by = relationship("User", foreign_keys=[requested_by_user_id])
+    decided_by = relationship("User", foreign_keys=[decided_by_user_id])
+    created_shifts = relationship(
+        "ScheduledWork",
+        back_populates="reassignment_request",
+        foreign_keys="ScheduledWork.reassignment_request_id",
+    )
+

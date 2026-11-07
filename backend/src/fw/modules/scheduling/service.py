@@ -1,28 +1,42 @@
 """SchedulingService orchestrating standing assignments, daily scheduled work, roster, and coverage."""
 
 import calendar
+import io
 from collections import defaultdict
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
+import openpyxl
 import sqlalchemy as sa
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from fw.core.errors import AppError
+from fw.core.events import event_bus
 from fw.modules.audit import AuditService
+from fw.modules.identity import User
 from fw.modules.jobs import JobItem, JobOccurrence, Worksite
-from fw.modules.org import Employee, EmployeeReportingLine
+from fw.modules.org import Employee, EmployeeReportingLine, ScopeService
+from fw.modules.scheduling.events import (
+    LeaveApprovedEvent,
+    LeaveCancelledEvent,
+    ReassignmentApprovedEvent,
+)
 from fw.modules.scheduling.models import (
     BaseRosterEntry,
     BaseRosterTemplate,
+    LeaveRequest,
+    ReassignmentRequest,
     ScheduledWork,
     StandingAssignment,
 )
 from fw.modules.scheduling.schemas import (
+    ApprovalsCounts,
+    ApprovalsInboxResponse,
     AssignedWorkerSummary,
     BasePlannerItemRow,
     BasePlannerResponse,
@@ -35,6 +49,10 @@ from fw.modules.scheduling.schemas import (
     CoverageItemRow,
     CoverageResponse,
     CoverageWorksiteRow,
+    LeaveRequestCreate,
+    LeaveRequestResponse,
+    LeaveTakenTypeSummary,
+    LeaveTakenWorkerSummary,
     OperationalCellWorker,
     OperationalCoverageResponse,
     OperationalDayCell,
@@ -44,6 +62,11 @@ from fw.modules.scheduling.schemas import (
     OperationalRosterWorkerRow,
     OperationalShiftCreate,
     OperationalWorksiteRow,
+    ReassignmentPreviewDay,
+    ReassignmentPreviewRequest,
+    ReassignmentPreviewResponse,
+    ReassignmentRequestCreate,
+    ReassignmentResponse,
     RosterDayCell,
     RosterResponse,
     RosterSiteChip,
@@ -54,6 +77,8 @@ from fw.modules.scheduling.schemas import (
     ScheduledWorkReorderRequest,
     ScheduledWorkUpdate,
     ScheduledWorkValidateRequest,
+    StaffingGapSlot,
+    StaffingGapsResponse,
     StandingAssignmentCreate,
     StandingAssignmentEndRequest,
     StandingAssignmentRead,
@@ -74,6 +99,7 @@ from fw.rules.scheduling import (
     ExcelRosterWorkerRow,
     ExistingAssignmentContext,
     JobItemValidationContext,
+    LeaveRecord,
     OperationalShiftInput,
     ResolvedTemplateSlot,
     TargetJobItem,
@@ -81,15 +107,22 @@ from fw.rules.scheduling import (
     WorkerDayContext,
     build_roster_excel_bytes,
     calculate_allocation_summary,
+    calculate_leave_taken,
     calculate_pacing_windows,
+    check_late_approval,
+    check_overlapping_leaves,
     compute_effective_standard_hours,
     evaluate_period_quota,
     evaluate_worker_day_marker,
     generate_assignment_dates,
+    is_reassignment_expired,
+    preview_reassignment_hours,
     rank_candidates_for_job,
     resolve_base_template_slots,
     resolve_operational_cell,
     validate_assignment,
+    validate_leave_dates,
+    validate_reassignment_notice,
 )
 from fw.rules.time_rules import (
     TimeRuleAppliesTo,
@@ -2492,6 +2525,22 @@ class SchedulingService:
             for t in templates:
                 templates_by_item[t.job_item_id] = t
 
+        # Load approved leaves in the week
+        leave_stmt = select(LeaveRequest).where(
+            LeaveRequest.status == "APPROVED",
+            LeaveRequest.is_active.is_(True),
+            LeaveRequest.from_date <= week_end,
+            LeaveRequest.to_date >= week_start,
+        )
+        approved_leaves_rows = (await self.session.execute(leave_stmt)).scalars().all()
+        approved_leaves_by_date: dict[date, set[UUID]] = defaultdict(set)
+        for lr in approved_leaves_rows:
+            cur_l = max(lr.from_date, week_start)
+            end_l = min(lr.to_date, week_end)
+            while cur_l <= end_l:
+                approved_leaves_by_date[cur_l].add(lr.employee_id)
+                cur_l += timedelta(days=1)
+
         # Load single-day operational shifts across the wide period
         sw_stmt = (
             select(ScheduledWork)
@@ -2693,8 +2742,8 @@ class SchedulingService:
                         for s in op_shifts_raw
                     ]
 
-                    # Mock approved leaves for now (until leaves module arrives)
-                    approved_leaves: set[UUID] = set()
+                    # Approved leaves for this date
+                    approved_leaves = approved_leaves_by_date.get(d, set())
 
                     resolved_cell_workers = resolve_operational_cell(
                         work_date=d,
@@ -2812,6 +2861,7 @@ class SchedulingService:
             .order_by(Employee.name)
         )
         employees = (await self.session.execute(emp_stmt)).scalars().all()
+        emp_map = {e.id: e for e in employees}
 
         # Load supervisors for grouping
         sup_stmt = select(EmployeeReportingLine).where(
@@ -2871,6 +2921,22 @@ class SchedulingService:
             for e in t.entries:
                 templates_by_emp[e.employee_id].append((t, e))
 
+        # Load approved leaves in the week
+        leave_stmt = select(LeaveRequest).where(
+            LeaveRequest.status == "APPROVED",
+            LeaveRequest.is_active.is_(True),
+            LeaveRequest.from_date <= week_end,
+            LeaveRequest.to_date >= week_start,
+        )
+        approved_leaves_rows = (await self.session.execute(leave_stmt)).scalars().all()
+        leave_by_emp_date: dict[tuple[UUID, date], str] = {}
+        for lr in approved_leaves_rows:
+            cur_l = max(lr.from_date, week_start)
+            end_l = min(lr.to_date, week_end)
+            while cur_l <= end_l:
+                leave_by_emp_date[(lr.employee_id, cur_l)] = lr.leave_type
+                cur_l += timedelta(days=1)
+
         worker_rows: list[OperationalRosterWorkerRow] = []
 
         for emp in employees:
@@ -2884,6 +2950,7 @@ class SchedulingService:
                 is_off = off_dow == dow
                 is_holiday = d in holiday_dates
                 holiday_obj = holidays_by_date.get(d)
+                active_leave_type = leave_by_emp_date.get((emp.id, d))
 
                 cell_workers: list[OperationalCellWorker] = []
                 day_hours = Decimal("0.0")
@@ -2908,6 +2975,7 @@ class SchedulingService:
                                 else ("DIRECT" if not s.original_employee_id else "OVERRIDE"),
                                 opacity_class="removed" if is_cancelled else "solid",
                                 original_employee_id=s.original_employee_id,
+                                original_employee_name=emp_map[s.original_employee_id].name if s.original_employee_id and s.original_employee_id in emp_map else None,
                                 shift_id=s.id,
                                 reason=s.override_reason,
                                 is_public_holiday=is_holiday,
@@ -2921,8 +2989,8 @@ class SchedulingService:
                                 ),
                             )
                         )
-                else:
-                    # Check base templates
+                elif not active_leave_type:
+                    # Check base templates if worker is not on approved leave
                     emp_templates = templates_by_emp.get(emp.id, [])
                     for t, e in emp_templates:
                         if e.weekday_mask in ("ALL", dow):
@@ -2950,11 +3018,11 @@ class SchedulingService:
                     OperationalRosterDayCell(
                         work_date=d,
                         weekday=dow,
-                        is_working_day=not is_off,
+                        is_working_day=not is_off and not active_leave_type,
                         is_weekly_off=is_off,
                         is_public_holiday=is_holiday,
                         holiday_name=holiday_obj.name if holiday_obj else None,
-                        leave_type=None,
+                        leave_type=active_leave_type,
                         allocated_hours=day_hours,
                         shifts=cell_workers,
                     )
@@ -3079,3 +3147,1164 @@ class SchedulingService:
             actor_user_id=current_user_id,
             diff={"status": "CANCELLED"},
         )
+
+    # -------------------------------------------------------------------------
+    # Leave Management (Doc 04 Section 9, D2, BR-SC-05, DEC-46)
+    # -------------------------------------------------------------------------
+
+    async def create_leave_request(
+        self,
+        payload: LeaveRequestCreate,
+        current_user: User,
+    ) -> LeaveRequestResponse:
+        """Create a new leave request with 3-day notice and overlap checks."""
+        today = date.today()
+        is_admin = current_user.role == "ADMIN"
+
+        # Check scope
+        scoped_ids = await ScopeService.get_scoped_employee_ids(self.session, current_user)
+        if scoped_ids is not None and payload.employee_id not in scoped_ids:
+            raise AppError(
+                code="OUT_OF_SCOPE",
+                message="Cannot record leave for employee outside your scope",
+                status_code=403,
+            )
+
+        # 1. Date boundaries and notice validation
+        ok_dates, err_dates = validate_leave_dates(
+            from_date=payload.from_date,
+            to_date=payload.to_date,
+            today_work_date=today,
+            is_admin=is_admin,
+            min_notice_days=3,
+        )
+        if not ok_dates:
+            raise AppError(code="INVALID_DATES", message=err_dates or "Invalid leave dates", status_code=400)
+
+        # 2. Check overlap
+        stmt = select(LeaveRequest).where(
+            LeaveRequest.employee_id == payload.employee_id,
+            LeaveRequest.is_active.is_(True),
+            LeaveRequest.status.in_(["REQUESTED", "APPROVED"]),
+        )
+        existing_rows = (await self.session.execute(stmt)).scalars().all()
+        existing_records = [
+            LeaveRecord(
+                id=r.id,
+                employee_id=r.employee_id,
+                leave_type=r.leave_type,
+                from_date=r.from_date,
+                to_date=r.to_date,
+                status=r.status,
+            )
+            for r in existing_rows
+        ]
+        ok_overlap, err_overlap = check_overlapping_leaves(
+            employee_id=payload.employee_id,
+            from_date=payload.from_date,
+            to_date=payload.to_date,
+            existing_leaves=existing_records,
+        )
+        if not ok_overlap:
+            raise AppError(code="DUPLICATE_LEAVE", message=err_overlap or "Leave overlaps with existing leave", status_code=400)
+
+        leave = LeaveRequest(
+            employee_id=payload.employee_id,
+            leave_type=payload.leave_type.upper(),
+            from_date=payload.from_date,
+            to_date=payload.to_date,
+            reason=payload.reason,
+            status="REQUESTED",
+            recorded_by_user_id=current_user.id,
+        )
+        self.session.add(leave)
+        await self.session.commit()
+
+        await AuditService.log_action(
+            session=self.session,
+            action="CREATE",
+            entity_type="LeaveRequest",
+            entity_id=str(leave.id),
+            actor_user_id=current_user.id,
+            diff={
+                "employee_id": str(leave.employee_id),
+                "leave_type": leave.leave_type,
+                "from_date": str(leave.from_date),
+                "to_date": str(leave.to_date),
+                "status": leave.status,
+            },
+        )
+
+        return await self.get_leave_request(leave.id)
+
+    async def get_leave_request(self, leave_id: UUID) -> LeaveRequestResponse:
+        """Fetch leave request by ID with employee and user metadata."""
+        stmt = (
+            select(LeaveRequest)
+            .where(LeaveRequest.id == leave_id)
+            .options(
+                selectinload(LeaveRequest.employee),
+                selectinload(LeaveRequest.recorded_by),
+                selectinload(LeaveRequest.approved_by),
+            )
+        )
+        leave = (await self.session.execute(stmt)).scalar_one_or_none()
+        if not leave:
+            raise AppError(code="NOT_FOUND", message="Leave request not found", status_code=404)
+
+        return LeaveRequestResponse(
+            id=leave.id,
+            employee_id=leave.employee_id,
+            employee_name=leave.employee.name if leave.employee else None,
+            tally_id=leave.employee.tally_id if leave.employee else None,
+            leave_type=leave.leave_type,
+            from_date=leave.from_date,
+            to_date=leave.to_date,
+            status=leave.status,
+            reason=leave.reason,
+            recorded_by_user_id=leave.recorded_by_user_id,
+            recorded_by_name=leave.recorded_by.username if leave.recorded_by else None,
+            approved_by_user_id=leave.approved_by_user_id,
+            approved_by_name=leave.approved_by.username if leave.approved_by else None,
+            approved_at=leave.approved_at,
+            decision_note=leave.decision_note,
+            is_active=leave.is_active,
+            version=leave.version,
+            created_at=leave.created_at,
+            updated_at=leave.updated_at,
+        )
+
+    async def list_leave_requests(
+        self,
+        employee_id: UUID | None = None,
+        status: str | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
+        current_user: User | None = None,
+    ) -> list[LeaveRequestResponse]:
+        """List leave requests filterable by employee, status, date range, and reporting scope."""
+        stmt = (
+            select(LeaveRequest)
+            .where(LeaveRequest.is_active.is_(True))
+            .options(
+                selectinload(LeaveRequest.employee),
+                selectinload(LeaveRequest.recorded_by),
+                selectinload(LeaveRequest.approved_by),
+            )
+            .order_by(LeaveRequest.from_date.desc(), LeaveRequest.created_at.desc())
+        )
+
+        if current_user:
+            scoped_ids = await ScopeService.get_scoped_employee_ids(self.session, current_user)
+            if scoped_ids is not None:
+                stmt = stmt.where(LeaveRequest.employee_id.in_(scoped_ids))
+
+        if employee_id:
+            stmt = stmt.where(LeaveRequest.employee_id == employee_id)
+        if status:
+            stmt = stmt.where(LeaveRequest.status == status.upper())
+        if from_date:
+            stmt = stmt.where(LeaveRequest.to_date >= from_date)
+        if to_date:
+            stmt = stmt.where(LeaveRequest.from_date <= to_date)
+
+        rows = (await self.session.execute(stmt)).scalars().all()
+        return [
+            LeaveRequestResponse(
+                id=item.id,
+                employee_id=item.employee_id,
+                employee_name=item.employee.name if item.employee else None,
+                tally_id=item.employee.tally_id if item.employee else None,
+                leave_type=item.leave_type,
+                from_date=item.from_date,
+                to_date=item.to_date,
+                status=item.status,
+                reason=item.reason,
+                recorded_by_user_id=item.recorded_by_user_id,
+                recorded_by_name=item.recorded_by.username if item.recorded_by else None,
+                approved_by_user_id=item.approved_by_user_id,
+                approved_by_name=item.approved_by.username if item.approved_by else None,
+                approved_at=item.approved_at,
+                decision_note=item.decision_note,
+                is_active=item.is_active,
+                version=item.version,
+                created_at=item.created_at,
+                updated_at=item.updated_at,
+            )
+            for item in rows
+        ]
+
+    async def approve_leave_request(
+        self,
+        leave_id: UUID,
+        current_user: User,
+    ) -> LeaveRequestResponse:
+        """Approve a leave request, creating COVER_NEEDED alert and marking slots TO_BE_COVERED."""
+        if current_user.role not in ("ADMIN", "ENGINEER"):
+            raise AppError(code="FORBIDDEN", message="Only Engineers or Admin can approve leave", status_code=403)
+
+        leave = await self.session.get(LeaveRequest, leave_id)
+        if not leave:
+            raise AppError(code="NOT_FOUND", message="Leave request not found", status_code=404)
+        if leave.status != "REQUESTED":
+            raise AppError(code="INVALID_STATE", message=f"Cannot approve leave in {leave.status} status", status_code=400)
+
+        # Check reporting scope for Engineers
+        scoped_ids = await ScopeService.get_scoped_employee_ids(self.session, current_user)
+        if scoped_ids is not None and leave.employee_id not in scoped_ids:
+            raise AppError(code="OUT_OF_SCOPE", message="Employee outside your engineering scope", status_code=403)
+
+        leave.status = "APPROVED"
+        leave.approved_by_user_id = current_user.id
+        leave.approved_at = datetime.now(UTC)
+        leave.version += 1
+        leave.updated_at = datetime.now(UTC)
+        await self.session.commit()
+
+        # Emit COVER_NEEDED alert via event bus
+        emp = await self.session.get(Employee, leave.employee_id)
+        emp_name = emp.name if emp else "Worker"
+        await event_bus.publish(
+            LeaveApprovedEvent(
+                leave_id=leave.id,
+                employee_id=leave.employee_id,
+                date_from=leave.from_date,
+                date_to=leave.to_date,
+                worker_name=emp_name,
+                approved_by_user_id=current_user.id,
+            ),
+            session=self.session,
+        )
+        await self.session.commit()
+
+        await AuditService.log_action(
+            session=self.session,
+            action="APPROVE",
+            entity_type="LeaveRequest",
+            entity_id=str(leave.id),
+            actor_user_id=current_user.id,
+            diff={"status": "APPROVED", "approved_by": str(current_user.id)},
+        )
+
+        return await self.get_leave_request(leave.id)
+
+    async def reject_leave_request(
+        self,
+        leave_id: UUID,
+        reason: str | None,
+        current_user: User,
+    ) -> LeaveRequestResponse:
+        """Reject a leave request with mandatory rejection reason."""
+        if current_user.role not in ("ADMIN", "ENGINEER"):
+            raise AppError(code="FORBIDDEN", message="Only Engineers or Admin can reject leave", status_code=403)
+
+        if not reason or not reason.strip():
+            raise AppError(code="REASON_REQUIRED", message="A rejection reason is mandatory", status_code=400)
+
+        leave = await self.session.get(LeaveRequest, leave_id)
+        if not leave:
+            raise AppError(code="NOT_FOUND", message="Leave request not found", status_code=404)
+        if leave.status != "REQUESTED":
+            raise AppError(code="INVALID_STATE", message=f"Cannot reject leave in {leave.status} status", status_code=400)
+
+        scoped_ids = await ScopeService.get_scoped_employee_ids(self.session, current_user)
+        if scoped_ids is not None and leave.employee_id not in scoped_ids:
+            raise AppError(code="OUT_OF_SCOPE", message="Employee outside your engineering scope", status_code=403)
+
+        leave.status = "REJECTED"
+        leave.approved_by_user_id = current_user.id
+        leave.approved_at = datetime.now(UTC)
+        leave.decision_note = reason.strip()
+        leave.version += 1
+        leave.updated_at = datetime.now(UTC)
+        await self.session.commit()
+
+        await AuditService.log_action(
+            session=self.session,
+            action="REJECT",
+            entity_type="LeaveRequest",
+            entity_id=str(leave.id),
+            actor_user_id=current_user.id,
+            diff={"status": "REJECTED", "reason": reason.strip()},
+        )
+
+        return await self.get_leave_request(leave.id)
+
+    async def cancel_leave_request(
+        self,
+        leave_id: UUID,
+        current_user: User,
+    ) -> LeaveRequestResponse:
+        """Cancel an approved or requested leave, restoring slots and flagging any cover shifts."""
+        leave = await self.session.get(LeaveRequest, leave_id)
+        if not leave:
+            raise AppError(code="NOT_FOUND", message="Leave request not found", status_code=404)
+
+        # Only requester, scoped engineer, or admin can cancel
+        is_admin = current_user.role == "ADMIN"
+        is_requester = leave.recorded_by_user_id == current_user.id
+        scoped_ids = await ScopeService.get_scoped_employee_ids(self.session, current_user)
+        in_scope = scoped_ids is None or leave.employee_id in scoped_ids
+
+        if not (is_admin or is_requester or in_scope):
+            raise AppError(code="FORBIDDEN", message="Permission denied to cancel this leave", status_code=403)
+
+        leave.status = "CANCELLED"
+        leave.version += 1
+        leave.updated_at = datetime.now(UTC)
+        await self.session.commit()
+
+        # Resolve open alerts for this leave via event bus
+        await event_bus.publish(
+            LeaveCancelledEvent(
+                leave_id=leave.id,
+                cancelled_by_user_id=current_user.id,
+            ),
+            session=self.session,
+        )
+
+        # Check if any cover reassignment requests or shifts exist
+        stmt_covers = select(ReassignmentRequest).where(
+            ReassignmentRequest.original_employee_id == leave.employee_id,
+            ReassignmentRequest.date_from <= leave.to_date,
+            ReassignmentRequest.date_to >= leave.from_date,
+            ReassignmentRequest.status == "APPROVED",
+        )
+        covers = (await self.session.execute(stmt_covers)).scalars().all()
+        for c in covers:
+            c.is_orphaned = True
+            c.version += 1
+
+        # Also flag scheduled_work cover shifts as COVER_NOT_NEEDED in notes
+        stmt_sw = select(ScheduledWork).where(
+            ScheduledWork.original_employee_id == leave.employee_id,
+            ScheduledWork.work_date >= leave.from_date,
+            ScheduledWork.work_date <= leave.to_date,
+            ScheduledWork.status == "ACTIVE",
+            ScheduledWork.source == "OVERRIDE",
+        )
+        cover_shifts = (await self.session.execute(stmt_sw)).scalars().all()
+        for cs in cover_shifts:
+            cs.override_reason = (cs.override_reason or "") + " [COVER_NOT_NEEDED - LEAVE CANCELLED]"
+
+        await self.session.commit()
+
+        await AuditService.log_action(
+            session=self.session,
+            action="CANCEL",
+            entity_type="LeaveRequest",
+            entity_id=str(leave.id),
+            actor_user_id=current_user.id,
+            diff={"status": "CANCELLED"},
+        )
+
+        return await self.get_leave_request(leave.id)
+
+    async def get_leave_taken_summary(
+        self,
+        year: int,
+        employee_id: UUID | None = None,
+        current_user: User | None = None,
+    ) -> list[LeaveTakenWorkerSummary]:
+        """Compute leave taken per worker, type, and calendar year (working vs calendar days)."""
+        emp_stmt = select(Employee).where(Employee.is_active.is_(True))
+        if current_user:
+            scoped_ids = await ScopeService.get_scoped_employee_ids(self.session, current_user)
+            if scoped_ids is not None:
+                emp_stmt = emp_stmt.where(Employee.id.in_(scoped_ids))
+        if employee_id:
+            emp_stmt = emp_stmt.where(Employee.id == employee_id)
+
+        employees = (await self.session.execute(emp_stmt)).scalars().all()
+        if not employees:
+            return []
+
+        # Load approved leaves in year
+        year_start = date(year, 1, 1)
+        year_end = date(year, 12, 31)
+        leaves_stmt = select(LeaveRequest).where(
+            LeaveRequest.employee_id.in_([e.id for e in employees]),
+            LeaveRequest.status == "APPROVED",
+            LeaveRequest.is_active.is_(True),
+            LeaveRequest.from_date <= year_end,
+            LeaveRequest.to_date >= year_start,
+        )
+        approved_leaves = (await self.session.execute(leaves_stmt)).scalars().all()
+
+        # Load holidays in year
+        holidays_stmt = select(PublicHoliday).where(
+            PublicHoliday.holiday_date >= year_start,
+            PublicHoliday.holiday_date <= year_end,
+        )
+        holiday_rows = (await self.session.execute(holidays_stmt)).scalars().all()
+        holidays_set = {h.holiday_date for h in holiday_rows}
+
+        leaves_by_emp: dict[UUID, list[LeaveRecord]] = defaultdict(list)
+        for item in approved_leaves:
+            leaves_by_emp[item.employee_id].append(
+                LeaveRecord(
+                    id=item.id,
+                    employee_id=item.employee_id,
+                    leave_type=item.leave_type,
+                    from_date=item.from_date,
+                    to_date=item.to_date,
+                    status=item.status,
+                )
+            )
+
+        summaries: list[LeaveTakenWorkerSummary] = []
+        for emp in employees:
+            emp_leaves = leaves_by_emp.get(emp.id, [])
+            res = calculate_leave_taken(
+                approved_leaves=emp_leaves,
+                year=year,
+                weekly_off_day=emp.weekly_off_day,
+                public_holidays=holidays_set,
+            )
+            by_type_map: dict[str, LeaveTakenTypeSummary] = {
+                lt: LeaveTakenTypeSummary(
+                    working_days=counts["working_days"],
+                    calendar_days=counts["calendar_days"],
+                )
+                for lt, counts in res.items()
+            }
+            tot_w = sum(counts["working_days"] for counts in res.values())
+            tot_c = sum(counts["calendar_days"] for counts in res.values())
+
+            summaries.append(
+                LeaveTakenWorkerSummary(
+                    employee_id=emp.id,
+                    employee_name=emp.name,
+                    tally_id=emp.tally_id,
+                    year=year,
+                    by_type=by_type_map,
+                    total_working_days=tot_w,
+                    total_calendar_days=tot_c,
+                )
+            )
+
+        return summaries
+
+    def generate_leave_template_excel(self) -> bytes:
+        """Generate sample Leave import template Excel file."""
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        if ws is None:
+            ws = wb.create_sheet("Leaves")
+        ws.title = "Leaves"
+
+        headers = ["Tally ID", "Leave Type", "From Date", "To Date", "Reason"]
+        ws.append(headers)
+
+        # Sample rows
+        ws.append(["1004", "ANNUAL", "2026-11-20", "2026-11-27", "Annual Family Vacation"])
+        ws.append(["1005", "SICK", "2026-11-15", "2026-11-16", "Medical Rest"])
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        return buf.getvalue()
+
+    async def import_leaves_from_excel(
+        self,
+        file_bytes: bytes,
+        current_user: User,
+    ) -> dict[str, Any]:
+        """Standalone leave import for Admin."""
+        if current_user.role != "ADMIN":
+            raise AppError(code="FORBIDDEN", message="Only Admin can import leaves", status_code=403)
+
+        wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
+        sheet = wb.active
+        if sheet is None:
+            raise AppError(code="INVALID_FILE", message="Excel sheet is empty", status_code=400)
+        rows = list(sheet.iter_rows(values_only=True))
+        if not rows or len(rows) < 2:
+            raise AppError(code="INVALID_FILE", message="Excel sheet is empty", status_code=400)
+
+        created = 0
+        errors = []
+
+        for idx, row in enumerate(rows[1:], start=2):
+            if not row or not any(row):
+                continue
+            tally_id, leave_type, from_str, to_str, reason = row[:5]
+            if not tally_id or not leave_type or not from_str or not to_str:
+                errors.append(f"Row {idx}: Missing required fields")
+                continue
+
+            # Lookup employee
+            emp_stmt = select(Employee).where(Employee.tally_id == str(tally_id).strip())
+            emp = (await self.session.execute(emp_stmt)).scalar_one_or_none()
+            if not emp:
+                errors.append(f"Row {idx}: Employee with Tally ID '{tally_id}' not found")
+                continue
+
+            try:
+                from_d = datetime.strptime(str(from_str)[:10], "%Y-%m-%d").date() if not isinstance(from_str, date) else from_str
+                to_d = datetime.strptime(str(to_str)[:10], "%Y-%m-%d").date() if not isinstance(to_str, date) else to_str
+            except Exception:
+                errors.append(f"Row {idx}: Invalid date format (expected YYYY-MM-DD)")
+                continue
+
+            lt = str(leave_type).strip().upper()
+            if lt not in ("ANNUAL", "SICK", "UNPAID", "EMERGENCY", "OTHER"):
+                errors.append(f"Row {idx}: Invalid leave type '{leave_type}'")
+                continue
+
+            leave = LeaveRequest(
+                employee_id=emp.id,
+                leave_type=lt,
+                from_date=from_d,
+                to_date=to_d,
+                reason=str(reason or "Imported leave").strip(),
+                status="APPROVED",
+                recorded_by_user_id=current_user.id,
+                approved_by_user_id=current_user.id,
+                approved_at=datetime.now(UTC),
+            )
+            self.session.add(leave)
+            created += 1
+
+        if created > 0:
+            await self.session.commit()
+
+        return {"created": created, "errors": errors}
+
+    # -------------------------------------------------------------------------
+    # Reassignment Requests (Doc 04 Section 9, D2, BR-SC-04, DEC-43)
+    # -------------------------------------------------------------------------
+
+    async def create_reassignment_request(
+        self,
+        payload: ReassignmentRequestCreate,
+        current_user: User,
+    ) -> ReassignmentResponse:
+        """Create a temporary reassignment request with strict 3-day notice validation."""
+        today = date.today()
+
+        # Strict notice validation (checklist: a request under 3 days is refused for any role)
+        ok_notice, err_notice = validate_reassignment_notice(payload.date_from, today, min_notice_days=3)
+        if not ok_notice:
+            raise AppError(code="INSUFFICIENT_NOTICE", message=err_notice or "Notice period insufficient", status_code=400)
+
+        if payload.date_to < payload.date_from:
+            raise AppError(code="INVALID_DATES", message="End date cannot be before start date", status_code=400)
+
+        # Scope validation for non-admin
+        scoped_ids = await ScopeService.get_scoped_employee_ids(self.session, current_user)
+        if scoped_ids is not None:
+            if payload.original_employee_id and payload.original_employee_id not in scoped_ids:
+                raise AppError(code="OUT_OF_SCOPE", message="Original employee is outside your scope", status_code=403)
+            if payload.new_employee_id and payload.new_employee_id not in scoped_ids:
+                raise AppError(code="OUT_OF_SCOPE", message="New employee is outside your scope", status_code=403)
+
+        req = ReassignmentRequest(
+            reassignment_type=payload.reassignment_type.upper(),
+            date_from=payload.date_from,
+            date_to=payload.date_to,
+            original_employee_id=payload.original_employee_id,
+            new_employee_id=payload.new_employee_id,
+            original_scheduled_work_id=payload.original_scheduled_work_id,
+            standing_assignment_id=payload.standing_assignment_id,
+            target_job_item_id=payload.target_job_item_id,
+            hours_per_day=payload.hours_per_day,
+            reason_category=payload.reason_category,
+            reason=payload.reason,
+            status="PENDING",
+            requested_by_user_id=current_user.id,
+        )
+        self.session.add(req)
+        await self.session.commit()
+
+        await AuditService.log_action(
+            session=self.session,
+            action="CREATE",
+            entity_type="ReassignmentRequest",
+            entity_id=str(req.id),
+            actor_user_id=current_user.id,
+            diff={
+                "type": req.reassignment_type,
+                "date_from": str(req.date_from),
+                "date_to": str(req.date_to),
+                "original_emp": str(req.original_employee_id),
+                "new_emp": str(req.new_employee_id),
+            },
+        )
+
+        return await self.get_reassignment_request(req.id)
+
+    async def get_reassignment_request(self, request_id: UUID) -> ReassignmentResponse:
+        """Fetch reassignment request by ID with metadata."""
+        stmt = (
+            select(ReassignmentRequest)
+            .where(ReassignmentRequest.id == request_id)
+            .options(
+                selectinload(ReassignmentRequest.original_employee),
+                selectinload(ReassignmentRequest.new_employee),
+                selectinload(ReassignmentRequest.target_job_item).selectinload(JobItem.worksite),
+                selectinload(ReassignmentRequest.requested_by),
+                selectinload(ReassignmentRequest.decided_by),
+            )
+        )
+        req = (await self.session.execute(stmt)).scalar_one_or_none()
+        if not req:
+            raise AppError(code="NOT_FOUND", message="Reassignment request not found", status_code=404)
+
+        return ReassignmentResponse(
+            id=req.id,
+            reassignment_type=req.reassignment_type,
+            date_from=req.date_from,
+            date_to=req.date_to,
+            original_employee_id=req.original_employee_id,
+            original_employee_name=req.original_employee.name if req.original_employee else None,
+            new_employee_id=req.new_employee_id,
+            new_employee_name=req.new_employee.name if req.new_employee else None,
+            target_job_item_id=req.target_job_item_id,
+            target_job_number=req.target_job_item.worksite.job_number if req.target_job_item and req.target_job_item.worksite else None,
+            target_job_name=req.target_job_item.worksite.job_name if req.target_job_item and req.target_job_item.worksite else None,
+            hours_per_day=req.hours_per_day,
+            reason_category=req.reason_category,
+            reason=req.reason,
+            status=req.status,
+            is_late_approval=req.is_late_approval,
+            is_orphaned=req.is_orphaned,
+            requested_by_user_id=req.requested_by_user_id,
+            requested_by_name=req.requested_by.username if req.requested_by else None,
+            decided_by_user_id=req.decided_by_user_id,
+            decided_by_name=req.decided_by.username if req.decided_by else None,
+            decided_at=req.decided_at,
+            decision_note=req.decision_note,
+            version=req.version,
+            created_at=req.created_at,
+            updated_at=req.updated_at,
+        )
+
+    async def list_reassignment_requests(
+        self,
+        status: str | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        current_user: User | None = None,
+    ) -> list[ReassignmentResponse]:
+        """List reassignment requests scoped to user."""
+        today = date.today()
+        stmt = (
+            select(ReassignmentRequest)
+            .where(ReassignmentRequest.is_active.is_(True))
+            .options(
+                selectinload(ReassignmentRequest.original_employee),
+                selectinload(ReassignmentRequest.new_employee),
+                selectinload(ReassignmentRequest.target_job_item).selectinload(JobItem.worksite),
+                selectinload(ReassignmentRequest.requested_by),
+                selectinload(ReassignmentRequest.decided_by),
+            )
+            .order_by(ReassignmentRequest.date_from.desc(), ReassignmentRequest.created_at.desc())
+        )
+
+        if current_user:
+            scoped_ids = await ScopeService.get_scoped_employee_ids(self.session, current_user)
+            if scoped_ids is not None:
+                stmt = stmt.where(
+                    or_(
+                        ReassignmentRequest.original_employee_id.in_(scoped_ids),
+                        ReassignmentRequest.new_employee_id.in_(scoped_ids),
+                    )
+                )
+
+        if status:
+            stmt = stmt.where(ReassignmentRequest.status == status.upper())
+        if date_from:
+            stmt = stmt.where(ReassignmentRequest.date_to >= date_from)
+        if date_to:
+            stmt = stmt.where(ReassignmentRequest.date_from <= date_to)
+
+        rows = (await self.session.execute(stmt)).scalars().all()
+
+        # Check and transition any expired requests
+        for r in rows:
+            if is_reassignment_expired(r.date_from, today, r.status):
+                r.status = "EXPIRED"
+        await self.session.commit()
+
+        return [
+            ReassignmentResponse(
+                id=r.id,
+                reassignment_type=r.reassignment_type,
+                date_from=r.date_from,
+                date_to=r.date_to,
+                original_employee_id=r.original_employee_id,
+                original_employee_name=r.original_employee.name if r.original_employee else None,
+                new_employee_id=r.new_employee_id,
+                new_employee_name=r.new_employee.name if r.new_employee else None,
+                target_job_item_id=r.target_job_item_id,
+                target_job_number=r.target_job_item.worksite.job_number if r.target_job_item and r.target_job_item.worksite else None,
+                target_job_name=r.target_job_item.worksite.job_name if r.target_job_item and r.target_job_item.worksite else None,
+                hours_per_day=r.hours_per_day,
+                reason_category=r.reason_category,
+                reason=r.reason,
+                status=r.status,
+                is_late_approval=r.is_late_approval,
+                is_orphaned=r.is_orphaned,
+                requested_by_user_id=r.requested_by_user_id,
+                requested_by_name=r.requested_by.username if r.requested_by else None,
+                decided_by_user_id=r.decided_by_user_id,
+                decided_by_name=r.decided_by.username if r.decided_by else None,
+                decided_at=r.decided_at,
+                decision_note=r.decision_note,
+                version=r.version,
+                created_at=r.created_at,
+                updated_at=r.updated_at,
+            )
+            for r in rows
+        ]
+
+    async def preview_reassignment(
+        self,
+        payload: ReassignmentPreviewRequest,
+        current_user: User | None = None,
+    ) -> ReassignmentPreviewResponse:
+        """Preview worker hours impact and constraint warnings across proposed date range."""
+        emp_id = payload.new_employee_id or payload.original_employee_id
+        if not emp_id:
+            return ReassignmentPreviewResponse(previews=[], warnings=[], can_submit=True)
+
+        emp = await self.session.get(Employee, emp_id)
+        if not emp:
+            raise AppError(code="NOT_FOUND", message="Employee not found", status_code=404)
+
+        target_item = await self.session.get(JobItem, payload.target_job_item_id) if payload.target_job_item_id else None
+        target_hours = payload.hours_per_day or (target_item.hours_per_occurrence_per_staff if target_item else Decimal("8.0"))
+
+        all_warnings: list[str] = []
+        previews: list[ReassignmentPreviewDay] = []
+
+        cur = payload.date_from
+        while cur <= payload.date_to:
+            std_hours = await self.get_employee_base_standard_hours(emp.id, cur)
+
+            # Sum existing allocated hours for this date
+            sw_stmt = select(func.coalesce(func.sum(ScheduledWork.assigned_hours), Decimal("0.0"))).where(
+                ScheduledWork.employee_id == emp.id,
+                ScheduledWork.work_date == cur,
+                ScheduledWork.status == "ACTIVE",
+            )
+            cur_hours = (await self.session.execute(sw_stmt)).scalar() or Decimal("0.0")
+
+            delta = target_hours if payload.reassignment_type in ("ADD", "REPLACE", "MOVE") else -cur_hours
+
+            preview = preview_reassignment_hours(
+                employee_id=str(emp.id),
+                work_date=cur,
+                standard_hours=std_hours,
+                current_hours=cur_hours,
+                proposed_delta=delta,
+                worker_grade_group=emp.grade_code[:2] if emp.grade_code else None,
+                job_item_grade_group=target_item.planned_grade_code[:2] if target_item and target_item.planned_grade_code else None,
+            )
+
+            previews.append(
+                ReassignmentPreviewDay(
+                    work_date=cur,
+                    employee_id=emp.id,
+                    employee_name=emp.name,
+                    standard_hours=preview.standard_hours,
+                    current_hours=preview.current_assigned_hours,
+                    proposed_delta=preview.proposed_hours_delta,
+                    resulting_hours=preview.resulting_hours,
+                    free_hours=preview.free_hours,
+                    planned_overtime_hours=preview.planned_overtime_hours,
+                    warnings=preview.warnings,
+                )
+            )
+            for w in preview.warnings:
+                if w not in all_warnings:
+                    all_warnings.append(w)
+
+            cur += timedelta(days=1)
+
+        return ReassignmentPreviewResponse(previews=previews, warnings=all_warnings, can_submit=True)
+
+    async def approve_reassignment_request(
+        self,
+        request_id: UUID,
+        decision_note: str | None,
+        current_user: User,
+    ) -> ReassignmentResponse:
+        """Approve a reassignment request, creating operational exceptions in scheduled_work."""
+        if current_user.role not in ("ADMIN", "ENGINEER"):
+            raise AppError(code="FORBIDDEN", message="Only Engineers or Admin can approve reassignments", status_code=403)
+
+        req = await self.session.get(ReassignmentRequest, request_id)
+        if not req:
+            raise AppError(code="NOT_FOUND", message="Reassignment request not found", status_code=404)
+        if req.status != "PENDING":
+            raise AppError(code="INVALID_STATE", message=f"Cannot approve request in {req.status} status", status_code=400)
+
+        scoped_ids = await ScopeService.get_scoped_employee_ids(self.session, current_user)
+        if scoped_ids is not None:
+            if req.original_employee_id and req.original_employee_id not in scoped_ids:
+                raise AppError(code="OUT_OF_SCOPE", message="Employee outside your engineering scope", status_code=403)
+
+        today = date.today()
+        is_late = check_late_approval(req.date_from, today, min_notice_days=3)
+
+        req.status = "APPROVED"
+        req.decided_by_user_id = current_user.id
+        req.decided_at = datetime.now(UTC)
+        req.decision_note = decision_note
+        req.is_late_approval = is_late
+        req.version += 1
+        req.updated_at = datetime.now(UTC)
+
+        # Target job item & worksite
+        target_item = await self.session.get(JobItem, req.target_job_item_id) if req.target_job_item_id else None
+        worksite_id = target_item.worksite_id if target_item else None
+        assigned_h = req.hours_per_day or (target_item.hours_per_occurrence_per_staff if target_item else Decimal("8.0"))
+
+        # Materialize operational shifts across date range
+        cur = req.date_from
+        while cur <= req.date_to:
+            if req.reassignment_type == "REPLACE":
+                # Mark original worker's row REASSIGNED if already exists
+                stmt_orig = select(ScheduledWork).where(
+                    ScheduledWork.employee_id == req.original_employee_id,
+                    ScheduledWork.work_date == cur,
+                    ScheduledWork.status == "ACTIVE",
+                )
+                orig_sw = (await self.session.execute(stmt_orig)).scalar_one_or_none()
+                if orig_sw:
+                    orig_sw.status = "REASSIGNED"
+                    orig_sw.version += 1
+
+                # If worksite_id was not provided, inherit from orig_sw
+                actual_ws = worksite_id or (orig_sw.worksite_id if orig_sw else None)
+                actual_item = req.target_job_item_id or (orig_sw.job_item_id if orig_sw else None)
+
+                if actual_ws and actual_item and req.new_employee_id:
+                    seq_stmt = select(func.coalesce(func.max(ScheduledWork.sequence), 0)).where(
+                        ScheduledWork.employee_id == req.new_employee_id,
+                        ScheduledWork.work_date == cur,
+                        ScheduledWork.status == "ACTIVE",
+                    )
+                    next_seq = int((await self.session.execute(seq_stmt)).scalar() or 0) + 1
+                    new_sw = ScheduledWork(
+                        employee_id=req.new_employee_id,
+                        original_employee_id=req.original_employee_id,
+                        work_date=cur,
+                        job_item_id=actual_item,
+                        worksite_id=actual_ws,
+                        assigned_hours=assigned_h,
+                        sequence=next_seq,
+                        status="ACTIVE",
+                        source="OVERRIDE",
+                        override_reason=req.reason,
+                        reassignment_request_id=req.id,
+                        is_late_approval=is_late,
+                    )
+                    self.session.add(new_sw)
+
+            elif req.reassignment_type == "CANCEL":
+                if req.original_employee_id:
+                    stmt_orig = select(ScheduledWork).where(
+                        ScheduledWork.employee_id == req.original_employee_id,
+                        ScheduledWork.work_date == cur,
+                    )
+                    orig_sw = (await self.session.execute(stmt_orig)).scalar_one_or_none()
+                    if orig_sw:
+                        orig_sw.status = "CANCELLED"
+                        orig_sw.override_reason = req.reason
+                        orig_sw.reassignment_request_id = req.id
+                        orig_sw.version += 1
+                    elif worksite_id and req.target_job_item_id:
+                        seq_stmt = select(func.coalesce(func.max(ScheduledWork.sequence), 0)).where(
+                            ScheduledWork.employee_id == req.original_employee_id,
+                            ScheduledWork.work_date == cur,
+                        )
+                        next_seq = int((await self.session.execute(seq_stmt)).scalar() or 0) + 1
+                        cancelled_sw = ScheduledWork(
+                            employee_id=req.original_employee_id,
+                            work_date=cur,
+                            job_item_id=req.target_job_item_id,
+                            worksite_id=worksite_id,
+                            assigned_hours=assigned_h,
+                            sequence=next_seq,
+                            status="CANCELLED",
+                            source="OVERRIDE",
+                            override_reason=req.reason,
+                            reassignment_request_id=req.id,
+                        )
+                        self.session.add(cancelled_sw)
+
+            elif req.reassignment_type == "ADD":
+                if worksite_id and req.target_job_item_id and req.new_employee_id:
+                    seq_stmt = select(func.coalesce(func.max(ScheduledWork.sequence), 0)).where(
+                        ScheduledWork.employee_id == req.new_employee_id,
+                        ScheduledWork.work_date == cur,
+                        ScheduledWork.status == "ACTIVE",
+                    )
+                    next_seq = int((await self.session.execute(seq_stmt)).scalar() or 0) + 1
+                    add_sw = ScheduledWork(
+                        employee_id=req.new_employee_id,
+                        work_date=cur,
+                        job_item_id=req.target_job_item_id,
+                        worksite_id=worksite_id,
+                        assigned_hours=assigned_h,
+                        sequence=next_seq,
+                        status="ACTIVE",
+                        source="OVERRIDE",
+                        override_reason=req.reason,
+                        reassignment_request_id=req.id,
+                        is_late_approval=is_late,
+                    )
+                    self.session.add(add_sw)
+
+            elif req.reassignment_type == "MOVE":
+                if req.original_employee_id:
+                    stmt_orig = select(ScheduledWork).where(
+                        ScheduledWork.employee_id == req.original_employee_id,
+                        ScheduledWork.work_date == cur,
+                        ScheduledWork.status == "ACTIVE",
+                    )
+                    orig_sw = (await self.session.execute(stmt_orig)).scalar_one_or_none()
+                    if orig_sw:
+                        orig_sw.status = "REASSIGNED"
+                        orig_sw.version += 1
+
+                    if worksite_id and req.target_job_item_id:
+                        seq_stmt = select(func.coalesce(func.max(ScheduledWork.sequence), 0)).where(
+                            ScheduledWork.employee_id == req.original_employee_id,
+                            ScheduledWork.work_date == cur,
+                            ScheduledWork.status == "ACTIVE",
+                        )
+                        next_seq = int((await self.session.execute(seq_stmt)).scalar() or 0) + 1
+                        move_sw = ScheduledWork(
+                            employee_id=req.original_employee_id,
+                            work_date=cur,
+                            job_item_id=req.target_job_item_id,
+                            worksite_id=worksite_id,
+                            assigned_hours=assigned_h,
+                            sequence=next_seq,
+                            status="ACTIVE",
+                            source="OVERRIDE",
+                            override_reason=req.reason,
+                            reassignment_request_id=req.id,
+                            is_late_approval=is_late,
+                        )
+                        self.session.add(move_sw)
+
+            cur += timedelta(days=1)
+
+        # If this fulfilled an approved leave cover, resolve the alert via event bus
+        await event_bus.publish(
+            ReassignmentApprovedEvent(
+                reassignment_id=req.id,
+                leave_request_id=None,
+                original_employee_id=req.original_employee_id,
+                approved_by_user_id=current_user.id,
+            ),
+            session=self.session,
+        )
+
+        await self.session.commit()
+
+        await AuditService.log_action(
+            session=self.session,
+            action="APPROVE",
+            entity_type="ReassignmentRequest",
+            entity_id=str(req.id),
+            actor_user_id=current_user.id,
+            diff={"status": "APPROVED", "is_late_approval": is_late},
+        )
+
+        return await self.get_reassignment_request(req.id)
+
+    async def reject_reassignment_request(
+        self,
+        request_id: UUID,
+        reason: str | None,
+        current_user: User,
+    ) -> ReassignmentResponse:
+        """Reject a reassignment request with mandatory rejection reason."""
+        if current_user.role not in ("ADMIN", "ENGINEER"):
+            raise AppError(code="FORBIDDEN", message="Only Engineers or Admin can reject reassignments", status_code=403)
+
+        if not reason or not reason.strip():
+            raise AppError(code="REASON_REQUIRED", message="A rejection reason is mandatory", status_code=400)
+
+        req = await self.session.get(ReassignmentRequest, request_id)
+        if not req:
+            raise AppError(code="NOT_FOUND", message="Reassignment request not found", status_code=404)
+        if req.status != "PENDING":
+            raise AppError(code="INVALID_STATE", message=f"Cannot reject request in {req.status} status", status_code=400)
+
+        scoped_ids = await ScopeService.get_scoped_employee_ids(self.session, current_user)
+        if scoped_ids is not None:
+            if req.original_employee_id and req.original_employee_id not in scoped_ids:
+                raise AppError(code="OUT_OF_SCOPE", message="Employee outside your engineering scope", status_code=403)
+
+        req.status = "REJECTED"
+        req.decided_by_user_id = current_user.id
+        req.decided_at = datetime.now(UTC)
+        req.decision_note = reason.strip()
+        req.version += 1
+        req.updated_at = datetime.now(UTC)
+        await self.session.commit()
+
+        await AuditService.log_action(
+            session=self.session,
+            action="REJECT",
+            entity_type="ReassignmentRequest",
+            entity_id=str(req.id),
+            actor_user_id=current_user.id,
+            diff={"status": "REJECTED", "reason": reason.strip()},
+        )
+
+        return await self.get_reassignment_request(req.id)
+
+    async def cancel_reassignment_request(
+        self,
+        request_id: UUID,
+        current_user: User,
+    ) -> ReassignmentResponse:
+        """Cancel a pending reassignment request."""
+        req = await self.session.get(ReassignmentRequest, request_id)
+        if not req:
+            raise AppError(code="NOT_FOUND", message="Reassignment request not found", status_code=404)
+
+        is_admin = current_user.role == "ADMIN"
+        is_requester = req.requested_by_user_id == current_user.id
+        if not (is_admin or is_requester):
+            raise AppError(code="FORBIDDEN", message="Permission denied to cancel this request", status_code=403)
+
+        req.status = "CANCELLED"
+        req.version += 1
+        req.updated_at = datetime.now(UTC)
+        await self.session.commit()
+
+        await AuditService.log_action(
+            session=self.session,
+            action="CANCEL",
+            entity_type="ReassignmentRequest",
+            entity_id=str(req.id),
+            actor_user_id=current_user.id,
+            diff={"status": "CANCELLED"},
+        )
+
+        return await self.get_reassignment_request(req.id)
+
+    # -------------------------------------------------------------------------
+    # Approvals Inbox & Staffing Gaps (Doc 08, D2, DEC-43)
+    # -------------------------------------------------------------------------
+
+    async def get_approvals_inbox(
+        self,
+        current_user: User,
+    ) -> ApprovalsInboxResponse:
+        """Fetch pending items needing approval (leave requests, reassignments) in user scope."""
+        pending_leaves = await self.list_leave_requests(status="REQUESTED", current_user=current_user)
+        pending_reassigns = await self.list_reassignment_requests(status="PENDING", current_user=current_user)
+
+        counts = ApprovalsCounts(
+            leave=len(pending_leaves),
+            reassignments=len(pending_reassigns),
+            attendance=0,
+            total=len(pending_leaves) + len(pending_reassigns),
+        )
+
+        return ApprovalsInboxResponse(
+            counts=counts,
+            leave_requests=pending_leaves,
+            reassignment_requests=pending_reassigns,
+            attendance_rows=[],
+        )
+
+    async def get_staffing_gaps(
+        self,
+        from_date: date,
+        to_date: date,
+        current_user: User,
+    ) -> StaffingGapsResponse:
+        """List uncovered TO_BE_COVERED slots resulting from approved leave."""
+        today = date.today()
+        scoped_ids = await ScopeService.get_scoped_employee_ids(self.session, current_user)
+
+        # 1. Approved leaves intersecting range
+        stmt_leaves = (
+            select(LeaveRequest)
+            .where(
+                LeaveRequest.status == "APPROVED",
+                LeaveRequest.is_active.is_(True),
+                LeaveRequest.from_date <= to_date,
+                LeaveRequest.to_date >= from_date,
+            )
+            .options(selectinload(LeaveRequest.employee))
+        )
+        if scoped_ids is not None:
+            stmt_leaves = stmt_leaves.where(LeaveRequest.employee_id.in_(scoped_ids))
+
+        approved_leaves = (await self.session.execute(stmt_leaves)).scalars().all()
+
+        if not approved_leaves:
+            return StaffingGapsResponse(from_date=from_date, to_date=to_date, gaps=[])
+
+        # 2. Check base roster templates for these workers
+        stmt_tmpl = (
+            select(BaseRosterTemplate)
+            .where(BaseRosterTemplate.is_active.is_(True))
+            .options(
+                selectinload(BaseRosterTemplate.entries),
+                selectinload(BaseRosterTemplate.job_item).selectinload(JobItem.worksite),
+            )
+        )
+        templates = (await self.session.execute(stmt_tmpl)).scalars().all()
+
+        gaps: list[StaffingGapSlot] = []
+
+        for leave in approved_leaves:
+            emp = leave.employee
+            if not emp:
+                continue
+
+            cur = max(leave.from_date, from_date)
+            end = min(leave.to_date, to_date)
+
+            while cur <= end:
+                dow = INT_TO_WEEKDAY[cur.weekday()]
+
+                # Find any template entry matching this worker
+                for t in templates:
+                    if not t.job_item or not t.job_item.worksite:
+                        continue
+                    for e in t.entries:
+                        if e.employee_id == emp.id and e.weekday_mask in ("ALL", dow):
+                            # Check if already covered by an active operational shift
+                            sw_stmt = select(ScheduledWork).where(
+                                ScheduledWork.original_employee_id == emp.id,
+                                ScheduledWork.work_date == cur,
+                                ScheduledWork.job_item_id == t.job_item_id,
+                                ScheduledWork.status == "ACTIVE",
+                            )
+                            existing_cover = (await self.session.execute(sw_stmt)).scalar_one_or_none()
+                            if not existing_cover:
+                                days_to_go = (cur - today).days
+                                gaps.append(
+                                    StaffingGapSlot(
+                                        work_date=cur,
+                                        job_item_id=t.job_item_id,
+                                        worksite_id=t.job_item.worksite_id,
+                                        job_number=t.job_item.worksite.job_number,
+                                        job_name=t.job_item.worksite.job_name,
+                                        staff_grade_description=t.job_item.staff_grade_description,
+                                        required_hours=e.assigned_hours,
+                                        original_employee_id=emp.id,
+                                        original_employee_name=emp.name,
+                                        reason=f"Approved {leave.leave_type} Leave",
+                                        gap_type="LEAVE",
+                                        days_to_go=days_to_go,
+                                    )
+                                )
+                cur += timedelta(days=1)
+
+        gaps.sort(key=lambda g: g.work_date)
+        return StaffingGapsResponse(from_date=from_date, to_date=to_date, gaps=gaps)
+

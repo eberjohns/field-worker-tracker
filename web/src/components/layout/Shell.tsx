@@ -1,9 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard,
   MapPin,
   CalendarDays,
+  CalendarCheck,
+  CheckSquare,
   Clock,
   DollarSign,
   FileBarChart,
@@ -33,12 +35,14 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: "Dashboard", to: "/", icon: LayoutDashboard },
+  { label: "Approvals Inbox", to: "/approvals", icon: CheckSquare, roles: ["ADMIN", "ENGINEER"] },
   { label: "Employees", to: "/employees", icon: Users, roles: ["ADMIN", "ENGINEER", "SUPERINTENDENT", "SUPERVISOR"] },
   { label: "Worksites & Jobs", to: "/worksites", icon: Building2, roles: ["ADMIN", "ENGINEER", "SUPERINTENDENT", "SUPERVISOR"] },
   { label: "Boundary Queue", to: "/boundaries", icon: Hexagon, roles: ["ADMIN", "ENGINEER"] },
   { label: "Live Map", to: "/live", icon: MapPin },
   { label: "Base Planner", to: "/base-planner", icon: CalendarRange, roles: ["ADMIN", "ENGINEER", "SUPERINTENDENT", "SUPERVISOR"] },
   { label: "Operational Planner", to: "/operational-planner", icon: CalendarDays, roles: ["ADMIN", "ENGINEER", "SUPERINTENDENT", "SUPERVISOR"] },
+  { label: "Leave Management", to: "/leave", icon: CalendarCheck, roles: ["ADMIN", "ENGINEER", "SUPERINTENDENT", "SUPERVISOR"] },
   { label: "Attendance", to: "/attendance", icon: Clock },
   { label: "Payroll", to: "/payroll", icon: DollarSign, roles: ["ADMIN", "ENGINEER"] },
   { label: "Salary Structures", to: "/salary-structures", icon: Banknote, roles: ["ADMIN", "ENGINEER"] },
@@ -71,6 +75,27 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
       return next;
     });
   };
+
+  const [pendingApprovalsCount, setPendingApprovalsCount] = useState<number>(0);
+
+  useEffect(() => {
+    const token = localStorage.getItem("fwt_token");
+    if (!token || (user?.role !== "ADMIN" && user?.role !== "ENGINEER")) return;
+    const fetchCounts = async () => {
+      try {
+        const res = await fetch("/api/v1/approvals?status=PENDING", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setPendingApprovalsCount(data?.counts?.total || 0);
+        }
+      } catch {}
+    };
+    fetchCounts();
+    const timer = setInterval(fetchCounts, 30000);
+    return () => clearInterval(timer);
+  }, [user]);
 
   if (!isAuthenticated || user?.must_change_password) {
     return <Login />;
@@ -132,7 +157,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                 key={item.to}
                 to={item.to}
                 title={item.label}
-                className={`flex items-center rounded-lg transition-colors ${
+                className={`relative flex items-center rounded-lg transition-colors ${
                   isCollapsed ? "justify-center p-2.5" : "gap-3 px-3 py-2 text-sm font-medium"
                 } ${
                   isActive
@@ -146,6 +171,15 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                   }`}
                 />
                 {!isCollapsed && <span className="truncate">{item.label}</span>}
+                {item.to === "/approvals" && pendingApprovalsCount > 0 && (
+                  <span
+                    className={`${
+                      isCollapsed ? "absolute top-1 right-1 h-2.5 w-2.5 rounded-full" : "ml-auto px-1.5 py-0.5 rounded-full text-2xs"
+                    } bg-rose-500 text-white font-bold shadow-2xs`}
+                  >
+                    {!isCollapsed && pendingApprovalsCount}
+                  </span>
+                )}
               </Link>
             );
           })}

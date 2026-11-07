@@ -23,6 +23,8 @@ import { SalaryStructures } from "./routes/SalaryStructures";
 import { Worksites } from "./routes/Worksites";
 import { WorksiteDetail } from "./routes/WorksiteDetail";
 import { Boundaries } from "./routes/Boundaries";
+import { Approvals } from "./routes/Approvals";
+import { LeaveManagement } from "./routes/LeaveManagement";
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -146,6 +148,18 @@ const boundariesRoute = createRoute({
   component: Boundaries,
 });
 
+const approvalsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/approvals",
+  component: Approvals,
+});
+
+const leaveRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/leave",
+  component: LeaveManagement,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
@@ -154,6 +168,8 @@ const routeTree = rootRoute.addChildren([
   worksitesRoute,
   worksiteDetailRoute,
   boundariesRoute,
+  approvalsRoute,
+  leaveRoute,
   usersRoute,
   auditLogsRoute,
   liveRoute,

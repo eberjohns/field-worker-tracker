@@ -28,15 +28,15 @@ Leave and temporary reassignments work end to end with Engineer approval, cover-
 - Phone sync of the changes (Phase 07)
 
 ## Checklist (tick each before asking for review)
-- [ ] A request under 3 days is refused (any role)
-- [ ] Approval writes rows and keeps originals; rejection needs a reason
-- [ ] Leave approval creates uncovered slots and alerts
-- [ ] Overlapping leave refused; cancelling restores slots
-- [ ] Leave taken counts per worker/type/year correct
-- [ ] Engineer sees only their scope; Admin all
-- [ ] Late approval flagged LATE_APPROVAL
-- [ ] Docs updated in the same change (`.agents/rules/documentation.md`), ADR written for any design decision, CHANGELOG entry
-- [ ] Pull request opened with the template; nothing merged by the agent
+- [x] A request under 3 days is refused (any role)
+- [x] Approval writes rows and keeps originals; rejection needs a reason
+- [x] Leave approval creates uncovered slots and alerts
+- [x] Overlapping leave refused; cancelling restores slots
+- [x] Leave taken counts per worker/type/year correct
+- [x] Engineer sees only their scope; Admin all
+- [x] Late approval flagged LATE_APPROVAL
+- [x] Docs updated in the same change (`.agents/rules/documentation.md`), ADR written for any design decision, CHANGELOG entry
+- [x] Pull request opened with the template; nothing merged by the agent
 
 ## Demo script
 - Record leave, approve it, request a cover 3+ days ahead, approve it, see the badge on the roster.

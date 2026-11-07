@@ -13,6 +13,7 @@ from fw.api.salary import router as salary_router
 from fw.api.scheduling import router as scheduling_router
 from fw.api.settings import router as settings_router
 from fw.api.users import router as users_router
+from fw.modules.notifications import alert_router
 
 api_v1_router = APIRouter(prefix="/api/v1")
 api_v1_router.include_router(auth_router)
@@ -26,5 +27,6 @@ api_v1_router.include_router(imports_router)
 api_v1_router.include_router(salary_router)
 api_v1_router.include_router(jobs_router)
 api_v1_router.include_router(scheduling_router)
+api_v1_router.include_router(alert_router)
 
 __all__ = ["api_v1_router"]

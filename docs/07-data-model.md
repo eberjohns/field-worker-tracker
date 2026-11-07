@@ -157,7 +157,7 @@ Unique (worksite_id, sub_item_code). Derived values (`days_per_occurrence`, expe
 Unique (job_item_id, window_start, slot_index). Index (due_date), (status).
 
 ### scheduled_work
-`employee_id`, `work_date`, `occurrence_id`, `job_item_id`, `worksite_id` (denormalized for fast queries), `assigned_hours` numeric(5,2), `sequence` smallint, `status` (ACTIVE | CANCELLED | REASSIGNED | COMPLETED), `source` (TEMPLATE | STANDING | DIRECT | OVERRIDE | EXCEPTION | FOLLOW_UP), `original_scheduled_work_id` nullable FK (self), `original_employee_id` nullable FK employees, `override_reason` text nullable, `created_by_user_id`, `version`.
+`employee_id`, `work_date`, `occurrence_id`, `job_item_id`, `worksite_id` (denormalized for fast queries), `assigned_hours` numeric(5,2), `sequence` smallint, `status` (ACTIVE | CANCELLED | REASSIGNED | COMPLETED), `source` (TEMPLATE | STANDING | DIRECT | OVERRIDE | EXCEPTION | FOLLOW_UP), `original_scheduled_work_id` nullable FK (self), `original_employee_id` nullable FK employees, `override_reason` text nullable, `reassignment_request_id` nullable FK reassignment_requests, `is_late_approval` bool default false, `created_by_user_id`, `version`.
 Partial uniques where `status = 'ACTIVE'`: (employee_id, work_date, occurrence_id) and (employee_id, work_date, sequence) (the second is `DEFERRABLE INITIALLY DEFERRED` to allow reordering in one transaction).
 Indexes: (work_date), (worksite_id, work_date), (employee_id, work_date).
 
@@ -175,6 +175,9 @@ Indexes: (work_date), (worksite_id, work_date), (employee_id, work_date).
 
 ### leave_requests
 `employee_id`, `leave_type`, `from_date`, `to_date`, `status` (REQUESTED | APPROVED | REJECTED | CANCELLED), `reason`, `recorded_by_user_id` (supervisor), `approved_by_user_id`, `approved_at`. No balances: **leave taken** is a count (view) per worker, type and year from APPROVED rows. Leave never affects pay.
+
+### alerts
+`id uuid PK`, `alert_type text` (COVER_NEEDED | PENDING_BOUNDARY | DOC_EXPIRY), `title text`, `message text`, `ref_type text` (LEAVE_REQUEST | WORKSITE | EMPLOYEE_DOCUMENT), `ref_id uuid nullable`, `employee_id uuid nullable FK employees`, `target_user_id uuid nullable FK users`, `target_role text nullable`, `status text` (OPEN | RESOLVED | ARCHIVED), `resolved_at timestamptz nullable`, `resolved_by_user_id uuid nullable FK users`, `details jsonb default '{}'`, `version int default 1`, `created_at timestamptz`, `updated_at timestamptz`. Indexes: (`status`), (`target_role`), (`alert_type`), (`ref_type`, `ref_id`).
 
 ### public_holidays
 `id uuid PK`, `holiday_date date`, `name text`, `country text (AE/SA)`, `created_by_user_id FK users`, `created_at timestamptz`. Unique (`holiday_date`, `country`). Index (`country`, `holiday_date`).

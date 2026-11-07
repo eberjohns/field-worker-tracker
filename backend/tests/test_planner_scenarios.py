@@ -19,7 +19,7 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import delete, select
 
-from fw.core.db import async_session_factory
+from fw.core.db import async_session_factory, engine
 from fw.modules.jobs.models import JobItem, Worksite
 from fw.modules.scheduling.models import ScheduledWork
 from fw.modules.scheduling.schemas import ScheduledWorkCreate
@@ -32,6 +32,12 @@ def is_db_available() -> bool:
             return True
     except OSError:
         return False
+
+
+@pytest.fixture(autouse=True)
+async def cleanup_db():
+    yield
+    await engine.dispose()
 
 
 @pytest.mark.asyncio

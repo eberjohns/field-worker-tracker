@@ -2,6 +2,7 @@
 
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -469,3 +470,202 @@ class OperationalRosterResponse(BaseModel):
     week_start: date
     week_end: date
     workers: list[OperationalRosterWorkerRow]
+
+
+# -------------------------------------------------------------------------
+# Leave Schemas
+# -------------------------------------------------------------------------
+
+
+class LeaveRequestCreate(BaseModel):
+    """Payload to record a leave request."""
+
+    employee_id: UUID
+    leave_type: str = Field(..., description="ANNUAL | SICK | UNPAID | EMERGENCY | OTHER")
+    from_date: date
+    to_date: date
+    reason: str
+
+
+class LeaveRequestResponse(BaseModel):
+    """API representation of a leave request."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    employee_id: UUID
+    employee_name: str | None = None
+    tally_id: str | None = None
+    leave_type: str
+    from_date: date
+    to_date: date
+    status: str
+    reason: str
+    recorded_by_user_id: UUID
+    recorded_by_name: str | None = None
+    approved_by_user_id: UUID | None = None
+    approved_by_name: str | None = None
+    approved_at: datetime | None = None
+    decision_note: str | None = None
+    is_active: bool = True
+    version: int = 1
+    created_at: datetime
+    updated_at: datetime
+
+
+class LeaveDecisionRequest(BaseModel):
+    """Payload to approve or reject a leave request."""
+
+    reason: str | None = None
+
+
+class LeaveTakenTypeSummary(BaseModel):
+    working_days: int
+    calendar_days: int
+
+
+class LeaveTakenWorkerSummary(BaseModel):
+    employee_id: UUID
+    employee_name: str
+    tally_id: str
+    year: int
+    by_type: dict[str, LeaveTakenTypeSummary]
+    total_working_days: int
+    total_calendar_days: int
+
+
+# -------------------------------------------------------------------------
+# Reassignment Schemas
+# -------------------------------------------------------------------------
+
+
+class ReassignmentRequestCreate(BaseModel):
+    """Payload to request a temporary operational reassignment."""
+
+    reassignment_type: str = Field(..., description="REPLACE | MOVE | ADD | CANCEL")
+    date_from: date
+    date_to: date
+    original_employee_id: UUID | None = None
+    new_employee_id: UUID | None = None
+    original_scheduled_work_id: UUID | None = None
+    standing_assignment_id: UUID | None = None
+    target_job_item_id: UUID | None = None
+    hours_per_day: Decimal | None = None
+    reason_category: str = Field(..., description="LEAVE_COVER | CAPACITY | WEATHER | PRIORITY | OTHER")
+    reason: str
+
+
+class ReassignmentPreviewRequest(BaseModel):
+    """Dry run payload to preview worker capacity and warnings."""
+
+    reassignment_type: str
+    date_from: date
+    date_to: date
+    original_employee_id: UUID | None = None
+    new_employee_id: UUID | None = None
+    target_job_item_id: UUID | None = None
+    hours_per_day: Decimal | None = None
+
+
+class ReassignmentPreviewDay(BaseModel):
+    work_date: date
+    employee_id: UUID
+    employee_name: str
+    standard_hours: Decimal
+    current_hours: Decimal
+    proposed_delta: Decimal
+    resulting_hours: Decimal
+    free_hours: Decimal
+    planned_overtime_hours: Decimal
+    warnings: list[str]
+
+
+class ReassignmentPreviewResponse(BaseModel):
+    previews: list[ReassignmentPreviewDay]
+    warnings: list[str]
+    can_submit: bool
+
+
+class ReassignmentResponse(BaseModel):
+    """API representation of a reassignment request."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    reassignment_type: str
+    date_from: date
+    date_to: date
+    original_employee_id: UUID | None = None
+    original_employee_name: str | None = None
+    new_employee_id: UUID | None = None
+    new_employee_name: str | None = None
+    target_job_item_id: UUID | None = None
+    target_job_number: str | None = None
+    target_job_name: str | None = None
+    hours_per_day: Decimal | None = None
+    reason_category: str
+    reason: str
+    status: str
+    is_late_approval: bool = False
+    is_orphaned: bool = False
+    requested_by_user_id: UUID
+    requested_by_name: str | None = None
+    decided_by_user_id: UUID | None = None
+    decided_by_name: str | None = None
+    decided_at: datetime | None = None
+    decision_note: str | None = None
+    version: int = 1
+    created_at: datetime
+    updated_at: datetime
+
+
+class ReassignmentDecisionRequest(BaseModel):
+    """Payload to approve or reject a reassignment request."""
+
+    decision_note: str | None = None
+
+
+# -------------------------------------------------------------------------
+# Approvals Inbox Schemas
+# -------------------------------------------------------------------------
+
+
+class ApprovalsCounts(BaseModel):
+    leave: int = 0
+    reassignments: int = 0
+    attendance: int = 0
+    total: int = 0
+
+
+class ApprovalsInboxResponse(BaseModel):
+    counts: ApprovalsCounts
+    leave_requests: list[LeaveRequestResponse] = Field(default_factory=list)
+    reassignment_requests: list[ReassignmentResponse] = Field(default_factory=list)
+    attendance_rows: list[dict[str, Any]] = Field(default_factory=list)
+
+
+# -------------------------------------------------------------------------
+# Staffing Gaps (Cover Needed) Schemas
+# -------------------------------------------------------------------------
+
+
+class StaffingGapSlot(BaseModel):
+    work_date: date
+    job_item_id: UUID
+    worksite_id: UUID
+    job_number: str
+    job_name: str
+    staff_grade_description: str
+    required_hours: Decimal
+    original_employee_id: UUID
+    original_employee_name: str
+    reason: str
+    gap_type: str = "LEAVE"
+    days_to_go: int
+
+
+class StaffingGapsResponse(BaseModel):
+    from_date: date
+    to_date: date
+    gaps: list[StaffingGapSlot]
+
