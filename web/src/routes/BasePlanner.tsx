@@ -12,6 +12,8 @@ import {
   X,
   Sparkles,
   UserCheck,
+  Calendar,
+  AlertTriangle,
 } from "lucide-react";
 import {
   BasePlannerResponse,
@@ -47,7 +49,12 @@ export const BasePlanner: React.FC = () => {
     weekday: typeof WEEKDAYS[number];
   } | null>(null);
 
-  const [applyUniform, setApplyUniform] = useState<boolean>(false);
+  // Modal form state
+  const [fillWorkingDays, setFillWorkingDays] = useState<boolean>(false);
+  const [selectedWeeksOfMonth, setSelectedWeeksOfMonth] = useState<number[]>([1]);
+  const [selectedQuarterMonth, setSelectedQuarterMonth] = useState<number>(1);
+  const [selectedQuarterWeek, setSelectedQuarterWeek] = useState<number>(1);
+
   const [slotEntries, setSlotEntries] = useState<
     {
       employee_id: string;
@@ -55,7 +62,6 @@ export const BasePlanner: React.FC = () => {
       tally_id: string;
       weekly_off_day: string;
       staff_grade_description?: string;
-      weekday_mask: string;
       assigned_hours: number;
       sequence: number;
     }[]
@@ -121,27 +127,70 @@ export const BasePlanner: React.FC = () => {
     dow: typeof WEEKDAYS[number]
   ) => {
     setActiveSlot({ worksite: ws, item: it, weekday: dow });
-    setApplyUniform(it.template?.allocation_mode === "UNIFORM");
+    setFillWorkingDays(false);
     setCandidateSearch("");
     setFilterToSupervisorCrew(Boolean(selectedSupervisorId));
 
-    // Extract current workers for this weekday
+    // Extract current workers for this slot
     if (it.template && it.template.entries.length > 0) {
-      const isUniform = it.template.allocation_mode === "UNIFORM";
-      const currentMatching = it.template.entries
-        .filter((e) => (isUniform ? e.weekday_mask === "ALL" : e.weekday_mask === dow))
-        .map((e) => ({
-          employee_id: e.employee_id,
-          employee_name: e.employee_name || "Unknown Worker",
-          tally_id: e.tally_id || "",
-          weekly_off_day: e.weekly_off_day || "",
-          weekday_mask: e.weekday_mask,
-          assigned_hours: Number(e.assigned_hours),
-          sequence: e.sequence,
-        }));
-      setSlotEntries(currentMatching);
+      const isMonthly = it.frequency_unit === "MONTH";
+      const isQuarterly = it.frequency_unit === "QUARTER";
+
+      // Find entries that match this weekday
+      const currentMatching = it.template.entries.filter((e) => {
+        const mask = e.weekday_mask.toUpperCase();
+        if (mask === dow || mask === "ALL") return true;
+        if (isMonthly && mask.includes(`_${dow}`)) return true;
+        if (isQuarterly && mask.endsWith(`_${dow}`)) return true;
+        return false;
+      });
+
+      // Populate cadence states if monthly/quarterly
+      if (isMonthly && currentMatching.length > 0) {
+        const weeks = new Set<number>();
+        for (const e of currentMatching) {
+          const match = e.weekday_mask.match(/W(\d)_/);
+          if (match) weeks.add(Number(match[1]));
+        }
+        setSelectedWeeksOfMonth(weeks.size > 0 ? Array.from(weeks) : [1]);
+      } else {
+        setSelectedWeeksOfMonth([1]);
+      }
+
+      if (isQuarterly && currentMatching.length > 0) {
+        const first = currentMatching[0].weekday_mask;
+        const match = first.match(/M(\d)_W(\d)_/);
+        if (match) {
+          setSelectedQuarterMonth(Number(match[1]));
+          setSelectedQuarterWeek(Number(match[2]));
+        }
+      } else {
+        setSelectedQuarterMonth(1);
+        setSelectedQuarterWeek(1);
+      }
+
+      // Deduplicate workers by employee_id for this slot
+      const seen = new Set<string>();
+      const entriesList: typeof slotEntries = [];
+      for (const e of currentMatching) {
+        if (!seen.has(e.employee_id)) {
+          seen.add(e.employee_id);
+          entriesList.push({
+            employee_id: e.employee_id,
+            employee_name: e.employee_name || "Unknown Worker",
+            tally_id: e.tally_id || "",
+            weekly_off_day: e.weekly_off_day || "",
+            assigned_hours: Number(e.assigned_hours),
+            sequence: e.sequence,
+          });
+        }
+      }
+      setSlotEntries(entriesList);
     } else {
       setSlotEntries([]);
+      setSelectedWeeksOfMonth([1]);
+      setSelectedQuarterMonth(1);
+      setSelectedQuarterWeek(1);
     }
 
     // Fetch candidate recommendations
@@ -176,7 +225,6 @@ export const BasePlanner: React.FC = () => {
         tally_id: cand.tally_id,
         weekly_off_day: cand.weekly_off_day || "",
         staff_grade_description: cand.staff_grade_description || "",
-        weekday_mask: applyUniform ? "ALL" : activeSlot.weekday,
         assigned_hours: Number(activeSlot.item.hours_per_occurrence),
         sequence: prev.length + 1,
       },
@@ -188,7 +236,7 @@ export const BasePlanner: React.FC = () => {
     setSlotEntries((prev) => prev.filter((e) => e.employee_id !== empId));
   };
 
-  // Save template
+  // Save template with explicit day preservation
   const handleSaveSlot = async () => {
     if (!activeSlot) return;
     setSavingSlot(true);
@@ -196,49 +244,93 @@ export const BasePlanner: React.FC = () => {
       const it = activeSlot.item;
       const targetDow = activeSlot.weekday;
       const existingEntries = it.template?.entries || [];
+      const isMonthly = it.frequency_unit === "MONTH";
+      const isQuarterly = it.frequency_unit === "QUARTER";
 
-      let updatedEntries: {
+      // 1. Keep entries for all OTHER days/cadences completely intact
+      const otherEntries = existingEntries
+        .filter((e) => {
+          const mask = e.weekday_mask.toUpperCase();
+          if (fillWorkingDays) {
+            // If filling Mon-Sat, keep Sunday and any periodic masks that don't collide
+            return mask === "SUN";
+          }
+          if (isMonthly) {
+            return !mask.includes(`_${targetDow}`) && mask !== targetDow;
+          }
+          if (isQuarterly) {
+            return !mask.endsWith(`_${targetDow}`) && mask !== targetDow;
+          }
+          return mask !== targetDow && mask !== "ALL";
+        })
+        .map((e) => ({
+          employee_id: e.employee_id,
+          weekday_mask: e.weekday_mask,
+          assigned_hours: Number(e.assigned_hours),
+          sequence: e.sequence,
+        }));
+
+      // 2. Generate new entries for this slot
+      const newEntries: {
         employee_id: string;
         weekday_mask: string;
         assigned_hours: number;
         sequence: number;
       }[] = [];
 
-      if (applyUniform) {
-        // Uniform Mode: Slot workers apply to 'ALL'
-        updatedEntries = slotEntries.map((e, idx) => ({
-          employee_id: e.employee_id,
-          weekday_mask: "ALL",
-          assigned_hours: e.assigned_hours,
-          sequence: idx + 1,
-        }));
+      if (fillWorkingDays) {
+        // Convenience Fill: Copy these workers to MON, TUE, WED, THU, FRI, SAT explicitly!
+        const workingDays = ["MON", "TUE", "WED", "THU", "FRI", "SAT"];
+        for (const d of workingDays) {
+          slotEntries.forEach((se, idx) => {
+            newEntries.push({
+              employee_id: se.employee_id,
+              weekday_mask: d,
+              assigned_hours: se.assigned_hours,
+              sequence: idx + 1,
+            });
+          });
+        }
+      } else if (isMonthly) {
+        // Monthly Cadence: generate W{week}_{dow}
+        for (const w of selectedWeeksOfMonth) {
+          slotEntries.forEach((se, idx) => {
+            newEntries.push({
+              employee_id: se.employee_id,
+              weekday_mask: `W${w}_${targetDow}`,
+              assigned_hours: se.assigned_hours,
+              sequence: idx + 1,
+            });
+          });
+        }
+      } else if (isQuarterly) {
+        // Quarterly Cadence: generate M{month}_W{week}_{dow}
+        slotEntries.forEach((se, idx) => {
+          newEntries.push({
+            employee_id: se.employee_id,
+            weekday_mask: `M${selectedQuarterMonth}_W${selectedQuarterWeek}_${targetDow}`,
+            assigned_hours: se.assigned_hours,
+            sequence: idx + 1,
+          });
+        });
       } else {
-        // Day-of-Week Mode: Preserve other weekdays, replace targetDow
-        const otherDaysEntries = existingEntries
-          .filter((e) => e.weekday_mask !== targetDow && e.weekday_mask !== "ALL")
-          .map((e) => ({
-            employee_id: e.employee_id,
-            weekday_mask: e.weekday_mask,
-            assigned_hours: Number(e.assigned_hours),
-            sequence: e.sequence,
-          }));
-
-        const newDayEntries = slotEntries.map((e, idx) => ({
-          employee_id: e.employee_id,
-          weekday_mask: targetDow,
-          assigned_hours: e.assigned_hours,
-          sequence: idx + 1,
-        }));
-
-        updatedEntries = [...otherDaysEntries, ...newDayEntries];
+        // Standard Weekly: explicit weekday_mask
+        slotEntries.forEach((se, idx) => {
+          newEntries.push({
+            employee_id: se.employee_id,
+            weekday_mask: targetDow,
+            assigned_hours: se.assigned_hours,
+            sequence: idx + 1,
+          });
+        });
       }
 
       const payload: BaseRosterTemplateCreate = {
         job_item_id: it.job_item_id,
-        allocation_mode: applyUniform ? "UNIFORM" : "DAY_OF_WEEK",
+        allocation_mode: "DAY_OF_WEEK",
         start_date: activeSlot.worksite.start_date || new Date().toISOString().split("T")[0],
         end_date: activeSlot.worksite.end_date || null,
-        entries: updatedEntries,
+        entries: [...otherEntries, ...newEntries],
       };
 
       const res = await fetch("/api/v1/base-planner/templates", {
@@ -276,16 +368,47 @@ export const BasePlanner: React.FC = () => {
     );
   }, [worksites, searchQuery]);
 
+  // Quota calculation helper for modal
+  const quotaStatusInModal = useMemo(() => {
+    if (!activeSlot) return { isQuotaReached: false, maxOccurrences: 1, currentCount: 0 };
+    const it = activeSlot.item;
+    const maxOccurrences = Number(it.occurrences_per_period) || 1;
+
+    // Count currently assigned days/cadences (excluding activeSlot.weekday if already in it)
+    const existingEntries = it.template?.entries || [];
+    const distinctDays = new Set<string>();
+
+    for (const e of existingEntries) {
+      const mask = e.weekday_mask.toUpperCase();
+      if (WEEKDAYS.includes(mask as any)) {
+        distinctDays.add(mask);
+      } else if (mask.includes("_")) {
+        distinctDays.add(mask);
+      }
+    }
+
+    const isCurrentSlotAlreadyScheduled = distinctDays.has(activeSlot.weekday);
+    const countExcludingCurrent = isCurrentSlotAlreadyScheduled
+      ? distinctDays.size - 1
+      : distinctDays.size;
+
+    const isQuotaReached = countExcludingCurrent >= maxOccurrences;
+    return {
+      isQuotaReached,
+      maxOccurrences,
+      currentCount: distinctDays.size,
+      isCurrentSlotAlreadyScheduled,
+    };
+  }, [activeSlot]);
+
   // Filter candidates in modal by search and supervisor crew toggle
   const filteredCandidates = useMemo(() => {
     let pool = candidates;
 
-    // Filter by supervisor crew if toggle is checked and supervisor is selected
     if (filterToSupervisorCrew && selectedSupervisorId) {
       pool = pool.filter((c) => c.supervisor_id === selectedSupervisorId);
     }
 
-    // Filter by search query
     const q = candidateSearch.toLowerCase().trim();
     if (q) {
       pool = pool.filter(
@@ -368,7 +491,7 @@ export const BasePlanner: React.FC = () => {
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full ring-2 ring-cyan-500"></span>
-            <span>Recommended Target Day</span>
+            <span>Recommended Target Slot</span>
           </div>
           <div className="flex items-center gap-1.5">
             <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
@@ -456,42 +579,31 @@ export const BasePlanner: React.FC = () => {
                         {WEEKDAYS.map((dow) => (
                           <th
                             key={dow}
-                            className={`px-3 py-2 text-center border-l border-slate-200 min-w-[130px] font-bold ${
-                              dow === "FRI"
-                                ? "text-purple-700 bg-purple-50/30"
-                                : dow === "SUN"
-                                ? "text-slate-400 bg-slate-50"
-                                : "text-slate-700"
-                            }`}
+                            className="px-3 py-2 text-center border-l border-slate-200 min-w-[130px] font-bold text-slate-700"
                           >
                             {dow}
-                            {dow === "FRI" && (
-                              <span className="block text-[9px] font-normal text-purple-600">
-                                Rest-Day Shift
-                              </span>
-                            )}
                           </th>
                         ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {ws.items.map((it) => {
-                        const isUniform = it.template?.allocation_mode === "UNIFORM";
-                        const activeJobDays = it.weekday_pattern || ["MON", "TUE", "WED", "THU", "FRI", "SAT"];
                         const targetOccurrences = Number(it.occurrences_per_period) || 1;
+                        const isWeekly = it.frequency_unit === "WEEK";
+                        const isMonthly = it.frequency_unit === "MONTH";
+                        const isQuarterly = it.frequency_unit === "QUARTER";
+
+                        // Determine recommended target days (pure visual recommendation)
+                        const recommendedWeekdays = it.weekday_pattern || (isWeekly && targetOccurrences === 1 ? ["MON"] : []);
 
                         // Calculate assigned days count in template
-                        const distinctAssignedDays = new Set<string>();
+                        const distinctAssignedSlots = new Set<string>();
                         if (it.template) {
                           for (const e of it.template.entries) {
-                            if (e.weekday_mask === "ALL") {
-                              activeJobDays.forEach((d) => distinctAssignedDays.add(d));
-                            } else {
-                              distinctAssignedDays.add(e.weekday_mask);
-                            }
+                            distinctAssignedSlots.add(e.weekday_mask.toUpperCase());
                           }
                         }
-                        const isQuotaMet = distinctAssignedDays.size >= targetOccurrences;
+                        const isQuotaMet = distinctAssignedSlots.size >= targetOccurrences;
 
                         return (
                           <tr key={it.job_item_id} className="hover:bg-slate-50/50 transition-colors">
@@ -502,14 +614,16 @@ export const BasePlanner: React.FC = () => {
                                 <span>{it.staff_grade_description}</span>
                               </div>
                               <div className="text-[11px] text-slate-500 mt-0.5">
-                                {it.frequency_unit === "WEEK"
+                                {isWeekly
                                   ? `Weekly (${it.occurrences_per_period}x/wk)`
+                                  : isMonthly
+                                  ? `Monthly (${it.occurrences_per_period}x/mo)`
                                   : `${it.frequency_unit} (${it.occurrences_per_period}x)`}{" "}
                                 • {it.required_staff_count} staff • {it.hours_per_occurrence}h/visit
                               </div>
                               <div className="flex items-center gap-2 mt-1">
                                 <span className="text-[10px] text-slate-600 font-medium">
-                                  Assigned: {distinctAssignedDays.size} / {targetOccurrences} days
+                                  Planned: {distinctAssignedSlots.size} / {targetOccurrences} slots
                                 </span>
                                 {isQuotaMet && (
                                   <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
@@ -521,13 +635,16 @@ export const BasePlanner: React.FC = () => {
 
                             {/* 7 Weekday Slot Cells */}
                             {WEEKDAYS.map((dow) => {
-                              const isActiveDay = activeJobDays.includes(dow);
-                              const isRecommended = it.frequency_unit === "WEEK" && targetOccurrences === 1 && dow === "MON";
+                              const isRecommended = recommendedWeekdays.includes(dow);
 
-                              // Find workers scheduled for this weekday
-                              const matchingEntries = (it.template?.entries || []).filter((e) =>
-                                isUniform ? (e.weekday_mask === "ALL" && isActiveDay) : (e.weekday_mask === dow)
-                              );
+                              // Find workers scheduled for this weekday (weekly, or periodic cadence prefix)
+                              const matchingEntries = (it.template?.entries || []).filter((e) => {
+                                const mask = e.weekday_mask.toUpperCase();
+                                if (mask === dow || mask === "ALL") return true;
+                                if (isMonthly && mask.includes(`_${dow}`)) return true;
+                                if (isQuarterly && mask.endsWith(`_${dow}`)) return true;
+                                return false;
+                              });
 
                               return (
                                 <td
@@ -535,16 +652,15 @@ export const BasePlanner: React.FC = () => {
                                   onClick={() => handleCellClick(ws, it, dow)}
                                   className={`px-2 py-2 border-l border-slate-200 cursor-pointer transition-colors relative hover:bg-indigo-50/60 ${
                                     isRecommended ? "ring-1 ring-inset ring-cyan-400" : ""
-                                  } ${!isActiveDay ? "bg-slate-50/60" : ""}`}
+                                  }`}
                                 >
                                   <div className="space-y-1 min-h-[52px] flex flex-col justify-between">
                                     {/* Top status */}
                                     <div className="flex items-center justify-between text-[9px]">
-                                      {isRecommended && (
+                                      {isRecommended ? (
                                         <span className="text-cyan-700 font-bold">Target</span>
-                                      )}
-                                      {!isActiveDay && (
-                                        <span className="text-slate-400">Site Off</span>
+                                      ) : (
+                                        <span></span>
                                       )}
                                     </div>
 
@@ -553,6 +669,16 @@ export const BasePlanner: React.FC = () => {
                                       <div className="space-y-1">
                                         {matchingEntries.map((e) => {
                                           const isOffDay = (e.weekly_off_day || "").toUpperCase() === dow;
+                                          // Format label with cadence prefix if monthly/quarterly
+                                          let cadenceTag = "";
+                                          if (isMonthly) {
+                                            const m = e.weekday_mask.match(/W(\d)_/);
+                                            if (m) cadenceTag = `W${m[1]}: `;
+                                          } else if (isQuarterly) {
+                                            const m = e.weekday_mask.match(/M(\d)_W(\d)_/);
+                                            if (m) cadenceTag = `M${m[1]}W${m[2]}: `;
+                                          }
+
                                           return (
                                             <div
                                               key={e.id}
@@ -563,6 +689,7 @@ export const BasePlanner: React.FC = () => {
                                               }`}
                                             >
                                               <span className="truncate max-w-[85px]" title={e.employee_name || "Worker"}>
+                                                <strong className="text-indigo-700">{cadenceTag}</strong>
                                                 {e.employee_name || "Worker"}
                                               </span>
                                               {isOffDay && (
@@ -574,12 +701,10 @@ export const BasePlanner: React.FC = () => {
                                           );
                                         })}
                                       </div>
-                                    ) : isActiveDay ? (
+                                    ) : (
                                       <div className="text-[10px] text-slate-400 hover:text-indigo-600 text-center py-2">
                                         + Assign
                                       </div>
-                                    ) : (
-                                      <div className="text-[10px] text-slate-300 text-center py-2">—</div>
                                     )}
 
                                     <div className="text-[9px] text-slate-400 text-right">
@@ -632,23 +757,109 @@ export const BasePlanner: React.FC = () => {
 
             {/* Modal Body */}
             <div className="flex-1 overflow-y-auto p-6 space-y-5">
-              {/* Scope Toggle: Uniform vs Day-of-Week */}
-              <div className="p-3 rounded-lg bg-indigo-50/60 border border-indigo-100 flex items-center justify-between">
-                <div>
-                  <label className="text-xs font-bold text-indigo-900 flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={applyUniform}
-                      onChange={(e) => setApplyUniform(e.target.checked)}
-                      className="rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
-                    />
-                    Apply this team to all active working days (Uniform Mode)
-                  </label>
-                  <p className="text-[11px] text-slate-500 ml-6 mt-0.5">
-                    If checked, this crew is scheduled Mon–Sat. If unchecked, applies only to {activeSlot.weekday}.
-                  </p>
+              {/* Quota limit warning banner in Base Planner */}
+              {quotaStatusInModal.isQuotaReached && !quotaStatusInModal.isCurrentSlotAlreadyScheduled && (
+                <div className="p-3 rounded-lg bg-amber-50 border border-amber-300 text-xs text-amber-900 flex items-start gap-2.5">
+                  <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold">Contract Quota Reached:</p>
+                    <p className="mt-0.5 text-amber-800">
+                      This contract line item specifies {quotaStatusInModal.maxOccurrences} visit(s). All {quotaStatusInModal.maxOccurrences} slots are already scheduled in the base blueprint. To schedule {activeSlot.weekday}, please remove another assigned day first.
+                    </p>
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {/* Periodic Cadence Selection: Monthly or Quarterly (Option B) */}
+              {activeSlot.item.frequency_unit === "MONTH" && (
+                <div className="p-3.5 rounded-lg bg-indigo-50/50 border border-indigo-100 space-y-2">
+                  <label className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
+                    <Calendar className="h-3.5 w-3.5 text-indigo-600" />
+                    Target Weeks of the Month:
+                  </label>
+                  <p className="text-[11px] text-slate-500">
+                    Select which week(s) of the month this recurring visit should take place:
+                  </p>
+                  <div className="flex flex-wrap items-center gap-3 pt-1">
+                    {[1, 2, 3, 4].map((wk) => (
+                      <label key={wk} className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selectedWeeksOfMonth.includes(wk)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedWeeksOfMonth((prev) => [...prev, wk]);
+                            } else {
+                              if (selectedWeeksOfMonth.length > 1) {
+                                setSelectedWeeksOfMonth((prev) => prev.filter((w) => w !== wk));
+                              }
+                            }
+                          }}
+                          className="rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+                        />
+                        <span>Week {wk}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {activeSlot.item.frequency_unit === "QUARTER" && (
+                <div className="p-3.5 rounded-lg bg-indigo-50/50 border border-indigo-100 space-y-3">
+                  <label className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
+                    <Calendar className="h-3.5 w-3.5 text-indigo-600" />
+                    Target Cadence in Quarter:
+                  </label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <span className="block text-[11px] font-semibold text-slate-600 mb-1">Month of Quarter:</span>
+                      <select
+                        value={selectedQuarterMonth}
+                        onChange={(e) => setSelectedQuarterMonth(Number(e.target.value))}
+                        className="w-full text-xs py-1.5 px-2.5 rounded-lg border border-slate-200 bg-white"
+                      >
+                        <option value={1}>Month 1 (Jan / Apr / Jul / Oct)</option>
+                        <option value={2}>Month 2 (Feb / May / Aug / Nov)</option>
+                        <option value={3}>Month 3 (Mar / Jun / Sep / Dec)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <span className="block text-[11px] font-semibold text-slate-600 mb-1">Week of Month:</span>
+                      <select
+                        value={selectedQuarterWeek}
+                        onChange={(e) => setSelectedQuarterWeek(Number(e.target.value))}
+                        className="w-full text-xs py-1.5 px-2.5 rounded-lg border border-slate-200 bg-white"
+                      >
+                        <option value={1}>Week 1</option>
+                        <option value={2}>Week 2</option>
+                        <option value={3}>Week 3</option>
+                        <option value={4}>Week 4</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Convenience Fill Action for Weekly Jobs */}
+              {activeSlot.item.frequency_unit === "WEEK" && Number(activeSlot.item.occurrences_per_period) >= 5 && (
+                <div className="p-3 rounded-lg bg-indigo-50/40 border border-indigo-100 flex items-center justify-between">
+                  <div>
+                    <label className="text-xs font-bold text-indigo-900 flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={fillWorkingDays}
+                        onChange={(e) => setFillWorkingDays(e.target.checked)}
+                        className="rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+                      />
+                      Fill Active Working Days (Mon–Sat) with this crew
+                    </label>
+                    <p className="text-[11px] text-slate-500 ml-6 mt-0.5">
+                      Convenience shortcut: copies this crew across Mon–Sat while preserving Sunday completely.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Currently Assigned Workers in this Slot */}
               <div className="space-y-2">
@@ -764,12 +975,13 @@ export const BasePlanner: React.FC = () => {
                       const isExactMatch = cand.exact_staff_type_match;
                       const isOffDay = (cand.weekly_off_day || "").toUpperCase() === activeSlot.weekday;
                       const isAlreadyAssigned = slotEntries.some((e) => e.employee_id === cand.employee_id);
+                      const isBlockedByQuota = quotaStatusInModal.isQuotaReached && !quotaStatusInModal.isCurrentSlotAlreadyScheduled;
 
                       return (
                         <div
                           key={cand.employee_id}
                           className={`p-2.5 rounded-lg border flex items-center justify-between gap-3 transition-colors ${
-                            isAlreadyAssigned
+                            isAlreadyAssigned || isBlockedByQuota
                               ? "bg-slate-50 border-slate-200 opacity-60"
                               : "bg-white border-slate-200 hover:border-indigo-300"
                           }`}
@@ -816,15 +1028,15 @@ export const BasePlanner: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => handleAddCandidate(cand)}
-                            disabled={isAlreadyAssigned}
+                            disabled={isAlreadyAssigned || isBlockedByQuota}
                             className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors ${
-                              isAlreadyAssigned
+                              isAlreadyAssigned || isBlockedByQuota
                                 ? "bg-slate-100 text-slate-400 cursor-not-allowed"
                                 : "bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 shadow-sm"
                             }`}
                           >
                             <Plus className="h-3.5 w-3.5" />
-                            {isAlreadyAssigned ? "Assigned" : "Add to Slot"}
+                            {isAlreadyAssigned ? "Assigned" : isBlockedByQuota ? "Quota Reached" : "Add to Slot"}
                           </button>
                         </div>
                       );

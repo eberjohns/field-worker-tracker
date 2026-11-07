@@ -42,11 +42,11 @@ async def test_planner_coverage_and_excess_integrity():
             from fw.modules.org import Group, Zone
             grp = (await session.execute(select(Group).limit(1))).scalars().first()
             if not grp:
-                grp = Group(id=uuid4(), code="G1", name="Test Group", country="AE")
+                grp = Group(id=uuid4(), code="G1", name="Test Group")
                 session.add(grp)
             zn = (await session.execute(select(Zone).limit(1))).scalars().first()
             if not zn:
-                zn = Zone(id=uuid4(), code="Z1", name="Test Zone", group_id=grp.id)
+                zn = Zone(id=uuid4(), code="Z1", name="Test Zone")
                 session.add(zn)
             await session.flush()
             ws = Worksite(

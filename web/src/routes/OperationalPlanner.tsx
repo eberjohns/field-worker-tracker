@@ -430,10 +430,6 @@ export const OperationalPlanner: React.FC = () => {
             <span className="text-amber-700 font-semibold">TO_BE_COVERED (Leave Gap)</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full ring-2 ring-cyan-500"></span>
-            <span>Recommended Window Target</span>
-          </div>
-          <div className="flex items-center gap-1.5">
             <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
             <span className="text-emerald-700 font-medium">Quota Met</span>
           </div>
@@ -558,7 +554,6 @@ export const OperationalPlanner: React.FC = () => {
 
                           {/* 7 Daily Cells */}
                           {it.days.map((cell) => {
-                            const isRecommended = cell.is_recommended_target;
                             const isExcess = cell.is_excess;
                             const hasCoverIssue = cell.is_to_be_covered;
 
@@ -567,8 +562,8 @@ export const OperationalPlanner: React.FC = () => {
                                 key={cell.work_date}
                                 onClick={() => handleCellClick(ws, it, cell)}
                                 className={`px-2 py-2 border-l border-slate-200 cursor-pointer transition-colors relative hover:bg-indigo-50/60 ${
-                                  isRecommended ? "ring-1 ring-inset ring-cyan-400" : ""
-                                } ${cell.is_public_holiday ? "bg-sky-50/40" : ""}`}
+                                  cell.is_public_holiday ? "bg-sky-50/40" : ""
+                                }`}
                               >
                                 <div className="space-y-1 min-h-[52px] flex flex-col justify-between">
                                   {/* Badges top */}
@@ -577,9 +572,6 @@ export const OperationalPlanner: React.FC = () => {
                                       <span className="font-bold px-1.5 py-0.2 rounded bg-purple-100 text-purple-700">
                                         Excess
                                       </span>
-                                    )}
-                                    {isRecommended && !isExcess && (
-                                      <span className="font-bold text-cyan-700">Target</span>
                                     )}
                                     {cell.is_quota_met && (
                                       <CheckCircle2 className="h-3 w-3 text-emerald-600 ml-auto" />

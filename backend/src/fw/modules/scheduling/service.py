@@ -2202,6 +2202,21 @@ class SchedulingService:
         if not item:
             raise AppError(code="NOT_FOUND", message=f"Job item {payload.job_item_id} not found", status_code=404)
 
+        # Enforce quota in Base Planner: cannot plan excess in the recurring blueprint
+        if item.frequency_unit == "WEEK" and item.occurrences_per_period:
+            max_days = int(item.occurrences_per_period)
+            distinct_days = {
+                e.weekday_mask.upper()
+                for e in payload.entries
+                if e.weekday_mask.upper() in ("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")
+            }
+            if len(distinct_days) > max_days:
+                raise AppError(
+                    code="QUOTA_EXCEEDED",
+                    message=f"Base plan cannot exceed contract quota of {max_days} visits per week. Currently planned: {len(distinct_days)} days.",
+                    status_code=400,
+                )
+
         # Inactivate existing active templates
         existing_stmt = select(BaseRosterTemplate).where(
             BaseRosterTemplate.job_item_id == payload.job_item_id,
@@ -2367,20 +2382,13 @@ class SchedulingService:
                         for e in tmpl.entries
                     ]
 
-                # Determine job active working days
-                job_working_days: set[str] | None = None
-                if it.weekday_pattern:
-                    job_working_days = {w.upper() for w in it.weekday_pattern}
-                elif it.frequency_unit == "WEEK" and int(it.occurrences_per_period) == 6:
-                    job_working_days = {"MON", "TUE", "WED", "THU", "FRI", "SAT"}
-
                 resolved_template_slots = resolve_base_template_slots(
-                    allocation_mode=tmpl.allocation_mode if tmpl else "UNIFORM",
+                    allocation_mode=tmpl.allocation_mode if tmpl else "DAY_OF_WEEK",
                     entries=blueprint_entries,
                     target_dates=week_dates,
                     public_holidays=holiday_dates,
                     worker_weekly_off_days=worker_weekly_off_days,
-                    job_working_days=job_working_days,
+                    job_working_days=None,
                 )
                 slots_by_date: dict[date, list[ResolvedTemplateSlot]] = defaultdict(list)
                 for slot in resolved_template_slots:
@@ -2482,7 +2490,7 @@ class SchedulingService:
                     is_excess = eval_v.is_excess if eval_v else False
                     is_to_be_covered = any(w.display_type == "TO_BE_COVERED" for w in cell_worker_schemas)
 
-                    req_staff = it.required_staff_count if (d in recommended_dates or is_quota_met) else 0
+                    req_staff = it.required_staff_count if (len(cell_worker_schemas) > 0 or d in recommended_dates or is_quota_met) else 0
 
                     day_cells.append(
                         OperationalDayCell(

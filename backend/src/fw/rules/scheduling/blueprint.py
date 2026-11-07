@@ -1,10 +1,8 @@
 """Pure domain rules for Base Roster Templates (Blueprint recurring engine).
 
 The Base Planner configures standard recurring staffing patterns for contract job items.
-It operates in two modes:
-  - UNIFORM: The same assigned crew is scheduled across all active working days of the job.
-  - DAY_OF_WEEK: A day-specific crew matrix allowing independent staffing on each day of the week
-    (e.g. allocating replacement workers on Friday for crew members whose weekly off is Friday).
+Staff assignments are stored explicitly by weekday (e.g. 'MON'..'SUN') or periodic cadence
+(e.g. 'W1_MON', 'W3_MON' for monthly jobs, 'M1_W2_WED' for quarterly jobs).
 """
 
 from __future__ import annotations
@@ -23,7 +21,7 @@ class BlueprintEntry:
     """An assigned worker entry within a base roster template."""
 
     employee_id: UUID
-    weekday_mask: str  # "ALL" or "MON".."SUN"
+    weekday_mask: str  # "MON".."SUN" or "ALL", or periodic e.g. "W1_MON", "M1_W2_WED"
     assigned_hours: float
     sequence: int = 1
 
@@ -43,13 +41,75 @@ class ResolvedTemplateSlot:
     notes: list[str] = field(default_factory=list)
 
 
+def get_week_of_month(d: date) -> int:
+    """Determine the 1-based week index of the month (1..4)."""
+    dom = d.day
+    if dom <= 7:
+        return 1
+    elif dom <= 14:
+        return 2
+    elif dom <= 21:
+        return 3
+    else:
+        return 4
+
+
+def get_month_of_quarter(d: date) -> int:
+    """Determine the 1-based month index within the quarter (1..3)."""
+    month = d.month
+    return ((month - 1) % 3) + 1
+
+
+def is_entry_matching_date(mask: str, target_date: date) -> bool:
+    """Check if a template entry's mask applies to a specific calendar date."""
+    dow = INT_TO_WEEKDAY[target_date.weekday()]
+    upper_mask = mask.upper()
+
+    # 1. Simple weekday match or uniform ALL
+    if upper_mask == "ALL":
+        return True
+    if upper_mask == dow:
+        return True
+
+    # 2. Monthly cadence prefix (e.g. "W1_MON", "W3_WED")
+    if upper_mask.startswith("W"):
+        parts = upper_mask.split("_")
+        if len(parts) == 2:
+            try:
+                target_week_num = int(parts[0][1:])
+                target_dow = parts[1]
+                if target_dow == dow and get_week_of_month(target_date) == target_week_num:
+                    return True
+            except ValueError:
+                pass
+
+    # 3. Quarterly cadence prefix (e.g. "M1_W2_WED")
+    if upper_mask.startswith("M"):
+        parts = upper_mask.split("_")
+        if len(parts) == 3:
+            try:
+                target_m_num = int(parts[0][1:])
+                target_w_num = int(parts[1][1:])
+                target_dow = parts[2]
+                if (
+                    target_dow == dow
+                    and get_month_of_quarter(target_date) == target_m_num
+                    and get_week_of_month(target_date) == target_w_num
+                ):
+                    return True
+            except ValueError:
+                pass
+
+    return False
+
+
 def resolve_base_template_slots(
     allocation_mode: str,
     entries: list[BlueprintEntry],
     target_dates: list[date],
     public_holidays: set[date],
     worker_weekly_off_days: dict[UUID, str],  # employee_id -> "FRI", "SUN", etc.
-    job_working_days: set[str] | None = None,  # set of active weekdays, e.g. {"MON", "TUE", ...}
+    job_working_days: set[str] | None = None,  # retained for backward compatibility, not used as hard drop
 ) -> list[ResolvedTemplateSlot]:
     """Resolve a Base Roster Template into daily slots across a list of calendar dates.
 
@@ -59,31 +119,19 @@ def resolve_base_template_slots(
         target_dates: Calendar dates to evaluate (e.g. a 7-day week or 1-month range).
         public_holidays: Dates that are recognized company/state public holidays.
         worker_weekly_off_days: Mapping of employee_id to their weekly rest day ("MON".."SUN").
-        job_working_days: Active days of the job item. If None, all days are considered active.
+        job_working_days: Kept for API compatibility; no hard drop is performed.
 
     Returns:
         List of ResolvedTemplateSlot objects.
     """
-    mode = allocation_mode.upper()
     resolved: list[ResolvedTemplateSlot] = []
 
     for d in target_dates:
         dow = INT_TO_WEEKDAY[d.weekday()]
-
-        # If the job item only works on specific days, skip non-working days
-        if job_working_days is not None and dow not in job_working_days:
-            continue
-
         is_holiday = d in public_holidays
 
-        # Filter matching entries for this date
-        matching_entries: list[BlueprintEntry] = []
-        if mode == "UNIFORM":
-            # In UNIFORM mode, entries with mask == 'ALL' apply to all working days
-            matching_entries = [e for e in entries if e.weekday_mask in ("ALL", dow)]
-        else:
-            # In DAY_OF_WEEK mode, only entries explicitly configured for this weekday apply
-            matching_entries = [e for e in entries if e.weekday_mask == dow]
+        # Find all entries matching this date
+        matching_entries = [e for e in entries if is_entry_matching_date(e.weekday_mask, d)]
 
         for entry in matching_entries:
             off_day = worker_weekly_off_days.get(entry.employee_id, "").upper()
@@ -123,32 +171,8 @@ def validate_base_template_entries(
     required_staff_count: int,
     job_working_days: set[str],
 ) -> list[str]:
-    """Validate template entries against required staffing count and completeness.
-
-    Returns:
-        List of warning/issue messages (empty if completely compliant).
-    """
+    """Validate template entries against required staffing count and completeness."""
     issues: list[str] = []
-    mode = allocation_mode.upper()
-
     if not entries:
         issues.append("Base template has no assigned workers.")
-        return issues
-
-    if mode == "UNIFORM":
-        # Check that uniform crew count matches required staff count
-        uniform_entries = [e for e in entries if e.weekday_mask == "ALL"]
-        if len(uniform_entries) < required_staff_count:
-            issues.append(
-                f"Uniform crew has {len(uniform_entries)} workers; required is {required_staff_count}."
-            )
-    else:
-        # Check each active working day has enough workers assigned
-        for dow in sorted(job_working_days, key=lambda w: WEEKDAY_TO_INT.get(w, 0)):
-            day_entries = [e for e in entries if e.weekday_mask == dow]
-            if len(day_entries) < required_staff_count:
-                issues.append(
-                    f"{dow} has {len(day_entries)} workers assigned; required is {required_staff_count}."
-                )
-
     return issues

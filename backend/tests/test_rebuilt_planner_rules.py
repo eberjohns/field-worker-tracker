@@ -222,3 +222,61 @@ def test_operational_cell_precedence_and_overrides():
     assert w3.display_type == "TO_BE_COVERED"
     assert w3.opacity_class == "warning"
 
+
+def test_sunday_resolution_never_dropped():
+    """Verify an explicit Sunday slot in template resolves on Sunday without being dropped."""
+    emp = uuid4()
+    entries = [
+        BlueprintEntry(employee_id=emp, weekday_mask="SUN", assigned_hours=8.0),
+    ]
+    target_dates = [
+        date(2026, 11, 29),  # Sunday
+    ]
+    slots = resolve_base_template_slots(
+        allocation_mode="DAY_OF_WEEK",
+        entries=entries,
+        target_dates=target_dates,
+        public_holidays=set(),
+        worker_weekly_off_days={emp: "FRI"},
+    )
+    assert len(slots) == 1
+    assert slots[0].day_of_week == "SUN"
+    assert slots[0].employee_id == emp
+    assert slots[0].status == "VALID"
+
+
+def test_periodic_cadence_matching_monthly_and_quarterly():
+    """Verify W1_MON matches Week 1 Monday and W3_MON matches Week 3 Monday."""
+    emp_monthly = uuid4()
+    entries = [
+        BlueprintEntry(employee_id=emp_monthly, weekday_mask="W1_MON", assigned_hours=8.0),
+        BlueprintEntry(employee_id=emp_monthly, weekday_mask="W3_MON", assigned_hours=8.0),
+    ]
+
+    # November 2026:
+    # 2 Nov = Monday (day 2 -> Week 1)
+    # 9 Nov = Monday (day 9 -> Week 2)
+    # 16 Nov = Monday (day 16 -> Week 3)
+    # 23 Nov = Monday (day 23 -> Week 4)
+    target_dates = [
+        date(2026, 11, 2),   # W1 Mon
+        date(2026, 11, 9),   # W2 Mon
+        date(2026, 11, 16),  # W3 Mon
+        date(2026, 11, 23),  # W4 Mon
+    ]
+
+    slots = resolve_base_template_slots(
+        allocation_mode="DAY_OF_WEEK",
+        entries=entries,
+        target_dates=target_dates,
+        public_holidays=set(),
+        worker_weekly_off_days={},
+    )
+
+    resolved_dates = [s.work_date for s in slots]
+    assert date(2026, 11, 2) in resolved_dates
+    assert date(2026, 11, 16) in resolved_dates
+    assert date(2026, 11, 9) not in resolved_dates
+    assert date(2026, 11, 23) not in resolved_dates
+
+
