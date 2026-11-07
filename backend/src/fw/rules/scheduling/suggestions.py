@@ -1,0 +1,184 @@
+"""Pure business logic for candidate recommendations (DEC-52, Doc 04 Section 8)."""
+
+from dataclasses import dataclass
+from datetime import date
+from decimal import Decimal
+
+from fw.rules.scheduling.assignment import INT_TO_WEEKDAY
+from fw.rules.scheduling.validation import extract_grade_group
+
+
+@dataclass(frozen=True)
+class CandidateWorker:
+    """Worker candidate profile for ranking."""
+
+    employee_id: str
+    name: str
+    tally_id: str
+    is_active: bool
+    join_date: date | None
+    employment_end_date: date | None
+    grade_code: str | None
+    staff_grade_description: str | None
+    weekly_off_day: str | None
+    standard_hours: Decimal
+    is_on_leave: bool
+    is_budget_only: bool
+    worked_at_site_recently: bool  # within last 14 days
+    shares_supervisor: bool  # reports to the same supervisor / site group
+    weekly_allocated_hours: Decimal
+    today_allocated_hours: Decimal
+    is_scope_accessible: bool = True
+    supervisor_id: str | None = None
+    supervisor_name: str | None = None
+    is_blocked: bool = False
+    blocked_reason: str | None = None
+
+
+@dataclass(frozen=True)
+class TargetJobItem:
+    """Target job item being staffed."""
+
+    job_item_id: str
+    worksite_id: str
+    planned_grade_code: str
+    staff_grade_description: str
+    deployment_type: str
+    required_hours: Decimal
+
+
+@dataclass(frozen=True)
+class ScoredCandidate:
+    """Evaluated worker candidate with recommendation score and flags."""
+
+    worker: CandidateWorker
+    is_eligible: bool
+    exact_staff_type_match: bool
+    grade_group_match: bool
+    ranking_score: float  # higher is better
+    reasons: list[str]
+    warnings: list[str]
+    supervisor_id: str | None = None
+    supervisor_name: str | None = None
+    is_blocked: bool = False
+    blocked_reason: str | None = None
+    shares_site_group: bool = False
+
+
+def rank_candidates_for_job(
+    candidates: list[CandidateWorker],
+    job: TargetJobItem,
+    target_date: date,
+) -> list[ScoredCandidate]:
+    """Rank worker candidates for a job assignment on target_date.
+
+    Only eligible workers are returned in the recommendation list:
+    - Active and employed on target_date
+    - Accessible in user's scope
+    - Not on approved leave
+    - Not budget-only
+    - Grade group matches the job item planned grade group
+
+    Sorting order:
+    1. Exact staff type match first
+    2. Worked at this worksite in last 14 days
+    3. Shares same supervisor
+    4. Most free hours in the target week
+    """
+    job_group = extract_grade_group(job.planned_grade_code)
+    job_sgd = (job.staff_grade_description or "").strip().lower()
+
+    scored_list: list[ScoredCandidate] = []
+
+    for w in candidates:
+        # Base hard filters
+        if not w.is_scope_accessible or not w.is_active or w.is_on_leave or w.is_budget_only:
+            continue
+
+        if w.join_date and target_date < w.join_date:
+            continue
+        if w.employment_end_date and target_date > w.employment_end_date:
+            continue
+
+        worker_group = extract_grade_group(w.grade_code)
+        worker_sgd = (w.staff_grade_description or "").strip().lower()
+
+        grade_group_match = bool(worker_group and job_group and worker_group == job_group)
+        exact_staff_type = bool(worker_sgd and job_sgd and worker_sgd == job_sgd)
+
+        # Eligible candidates must match either the exact staff grade description or the grade group
+        if not (exact_staff_type or grade_group_match):
+            continue
+
+        reasons: list[str] = []
+        warnings: list[str] = []
+
+        if exact_staff_type:
+            reasons.append("Exact staff type match")
+        elif grade_group_match:
+            reasons.append(f"Same grade group ({worker_group})")
+
+        if w.shares_supervisor:
+            crew_label = f" ({w.supervisor_name})" if w.supervisor_name else ""
+            reasons.append(f"Same group/crew{crew_label} active on this site")
+
+        if w.worked_at_site_recently:
+            reasons.append("Worked at this site in the last 14 days")
+
+        # Capacity calculations
+        free_weekly_hours = max(
+            Decimal("0"), (w.standard_hours * Decimal("6")) - w.weekly_allocated_hours
+        )
+        reasons.append(f"{free_weekly_hours}h free capacity this week")
+
+        if not w.is_blocked and w.today_allocated_hours > Decimal("0"):
+            free_today = max(Decimal("0"), w.standard_hours - w.today_allocated_hours)
+            reasons.append(
+                f"{free_today}h remaining today ({w.today_allocated_hours}h/{w.standard_hours}h remote allocated)"
+            )
+
+        # Warnings preview
+        target_weekday = INT_TO_WEEKDAY[target_date.weekday()]
+        if w.weekly_off_day and w.weekly_off_day.strip().upper()[:3] == target_weekday[:3]:
+            warnings.append(f"Weekly off day ({target_weekday.capitalize()})")
+
+        if w.is_blocked and w.blocked_reason:
+            warnings.append(f"Blocked: {w.blocked_reason}")
+        elif w.today_allocated_hours + job.required_hours > w.standard_hours:
+            warnings.append("Will exceed standard hours today (planned overtime)")
+
+        # Composite score
+        # If blocked, drop score below 0 so available unblocked workers rank first
+        score = 0.0
+        if w.is_blocked:
+            score -= 10000.0
+        elif exact_staff_type:
+            score += 10000.0
+        if not w.is_blocked and grade_group_match:
+            score += 2000.0
+        if not w.is_blocked and w.shares_supervisor:
+            score += 1000.0
+        if not w.is_blocked and w.worked_at_site_recently:
+            score += 100.0
+        score += float(free_weekly_hours)
+
+        scored_list.append(
+            ScoredCandidate(
+                worker=w,
+                is_eligible=not w.is_blocked,
+                exact_staff_type_match=exact_staff_type,
+                grade_group_match=grade_group_match,
+                ranking_score=score,
+                reasons=reasons,
+                warnings=warnings,
+                supervisor_id=w.supervisor_id,
+                supervisor_name=w.supervisor_name,
+                is_blocked=w.is_blocked,
+                blocked_reason=w.blocked_reason,
+                shares_site_group=w.shares_supervisor,
+            )
+        )
+
+    # Sort descending by ranking_score
+    scored_list.sort(key=lambda sc: sc.ranking_score, reverse=True)
+    return scored_list

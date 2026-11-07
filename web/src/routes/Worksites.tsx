@@ -29,6 +29,8 @@ interface Worksite {
   customer_type: string | null;
   is_outdoor: boolean;
   country: string;
+  start_date: string | null;
+  end_date: string | null;
   has_boundary: boolean;
   rep_latitude: string | number | null;
   rep_longitude: string | number | null;
@@ -416,10 +418,18 @@ export const Worksites: React.FC = () => {
                         {ws.job_number}
                       </td>
                       <td className="py-3.5 px-4 font-medium text-slate-800">
-                        {ws.job_name}
-                        {ws.renewal_reference && (
-                          <span className="ml-2 text-xs text-slate-400">({ws.renewal_reference})</span>
-                        )}
+                        <div className="flex items-center gap-1.5">
+                          <span>{ws.job_name}</span>
+                          {ws.renewal_reference && (
+                            <span className="text-xs text-slate-400">({ws.renewal_reference})</span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-slate-500 flex items-center gap-2 mt-0.5 font-normal">
+                          <span>Period: {ws.start_date || "Start N/A"} – {ws.end_date || "Ongoing"}</span>
+                          {ws.budget_amount != null && (
+                            <span>• Budget: {Number(ws.budget_amount).toLocaleString()} AED/yr</span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3.5 px-4 text-xs text-slate-600">
                         <div>{ws.group_name || "-"}</div>

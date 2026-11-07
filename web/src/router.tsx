@@ -7,7 +7,8 @@ import {
 import { Shell } from "./components/layout/Shell";
 import { Dashboard } from "./routes/Dashboard";
 import { LiveMap } from "./routes/LiveMap";
-import { Planner } from "./routes/Planner";
+import { BasePlanner } from "./routes/BasePlanner";
+import { OperationalPlanner } from "./routes/OperationalPlanner";
 import { Attendance } from "./routes/Attendance";
 import { Payroll } from "./routes/Payroll";
 import { Reports } from "./routes/Reports";
@@ -76,7 +77,19 @@ const liveRoute = createRoute({
 const plannerRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/planner",
-  component: Planner,
+  component: OperationalPlanner,
+});
+
+const basePlannerRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/base-planner",
+  component: BasePlanner,
+});
+
+const operationalPlannerRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/operational-planner",
+  component: OperationalPlanner,
 });
 
 const attendanceRoute = createRoute({
@@ -145,6 +158,8 @@ const routeTree = rootRoute.addChildren([
   auditLogsRoute,
   liveRoute,
   plannerRoute,
+  basePlannerRoute,
+  operationalPlannerRoute,
   attendanceRoute,
   payrollRoute,
   reportsRoute,

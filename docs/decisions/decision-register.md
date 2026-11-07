@@ -36,13 +36,13 @@ All client questions are answered. **CONFIRMED** = the client decided; **PROPOSE
 | DEC-33 | Document types | Visa, Passport, Emirates ID, Labour Card, Driving Licence; validity dates only; Admin alerted | 07, 12 | CONFIRMED |
 | DEC-34 | Countries | One rule pack per country; each record carries a country | 03, 13 | CONFIRMED |
 | DEC-35 | Effective-dated configuration | Settings and time rules resolved as of the work date | 03, ADR-008, ADR-012 | CONFIRMED |
-| DEC-36 | Permanent vs Remote | PERMANENT: only that job that day; REMOTE: several while hours remain | 03, 04 | CONFIRMED |
+| DEC-36 | Permanent vs Remote | PERMANENT: only that job that day; REMOTE: several while hours remain | 03, 04, ADR-014 | CONFIRMED |
 | DEC-37 | Revision lookup (budget) | Latest revision containing the grade; partial revisions allowed; grade year suffix ignored | 06 | PROPOSED |
 | DEC-38 | Retention | 13 months live, encrypted yearly archive for a fixed period, then deletion; payroll/attendance 7 years. Client wants "forever" | 14, legal | HUMAN |
 | DEC-39 | Provisions | Actual: five provisions from company settings, one value for everyone, plus calculated gratuity and leave salary; budget: the revision file's own provisions | 06 | CONFIRMED |
 | DEC-40 | Out of scope | Checklists, manual shift confirmation, WPS | 01 | CONFIRMED |
 | DEC-41 | Time rules | Five-point planned schedule (accommodation start, first site, break, last site, accommodation end); company default, overridden for a team, drivers or one person, by season and outdoor/indoor; engineers manage within scope | 05, D3, ADR-012 | CONFIRMED |
-| DEC-42 | Planner | Yearly standing assignments, weekly roster as main view, allocated hours vs standard hours in a side panel, markers for skipped/off/leave/to-be-covered | 04, D1 | CONFIRMED |
+| DEC-42 | Planner | Yearly standing assignments, weekly roster as main view, allocated hours vs standard hours in a side panel, markers for skipped/off/leave/to-be-covered | 04, D1, ADR-014 | CONFIRMED |
 | DEC-43 | Approvals | Engineer approves leave, temporary reassignments (3 days notice) and attendance rows with variation, flags or overtime; clean rows are automatic | 04, 05, D2 | CONFIRMED |
 | DEC-44 | Transport | Drivers section: vehicles and daily runs (driver, ordered stops, passengers) synced to the driver and the workers | D5 | CONFIRMED |
 | DEC-45 | Month-end | Auto draft 5 days after month-end (setting); Admin re-runs and approves; later events ignored; abnormal cases outside the system | 06, D4 | CONFIRMED |
@@ -52,7 +52,7 @@ All client questions are answered. **CONFIRMED** = the client decided; **PROPOSE
 | DEC-49 | Who is measured how | Everyone by site visits; only drivers accommodation-to-accommodation; no-accommodation workers have n/a accommodation columns | 05 | CONFIRMED |
 | DEC-50 | Product name | Field Worker Tracker (FWT) | all | CONFIRMED |
 | DEC-51 | Import rules | Admin only; preview with new/updated (old->new)/unchanged/clashes; blank keeps, `_` clears; no deletion, deactivate used records; keys editable on screen, not by import | 11, D6, ADR-013 | CONFIRMED |
-| DEC-52 | Suggestions | Same grade group first-class eligible, exact staff type first | 04 | CONFIRMED |
+| DEC-52 | Suggestions | Same grade group first-class eligible, exact staff type first | 04, ADR-014 | CONFIRMED |
 | DEC-53 | Accounts | Username = worker ID; one default password for all (setting), forced change at first login, lock after `default_password_max_days`, Admin-only reset, workers bound to first device | 02, 09 | CONFIRMED |
 | DEC-54 | Saudi Arabia | Separate stack inside the Kingdom when Saudi goes live; UAE stack stays; ADR-009 | 13, ADR-009 | HUMAN |
 | DEC-55 | Hosting | Azure UAE North + UAE Central, managed PostgreSQL/PostGIS, quarterly restore drills; off-region copy only if counsel agrees | 14, ADR-009 | CONFIRMED (direction) |

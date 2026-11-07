@@ -21,12 +21,42 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Global fetch interceptor for 401 Unauthorized responses
+if (typeof window !== "undefined" && !(window as any).__fwt_fetch_interceptor_installed) {
+  (window as any).__fwt_fetch_interceptor_installed = true;
+  const originalFetch = window.fetch;
+  window.fetch = async (...args) => {
+    const response = await originalFetch(...args);
+    if (response.status === 401) {
+      const url = typeof args[0] === "string" ? args[0] : (args[0] as Request).url;
+      if (!url.includes("/auth/login")) {
+        localStorage.removeItem("fwt_token");
+        localStorage.removeItem("fwt_user");
+        window.dispatchEvent(new CustomEvent("fwt:unauthorized"));
+        if (window.location.pathname !== "/login") {
+          window.location.href = "/login";
+        }
+      }
+    }
+    return response;
+  };
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile | null>(() => {
     const saved = localStorage.getItem("fwt_user");
     return saved ? JSON.parse(saved) : null;
   });
   const [token, setToken] = useState<string | null>(() => localStorage.getItem("fwt_token"));
+
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      setToken(null);
+      setUser(null);
+    };
+    window.addEventListener("fwt:unauthorized", handleUnauthorized);
+    return () => window.removeEventListener("fwt:unauthorized", handleUnauthorized);
+  }, []);
 
   useEffect(() => {
     if (user) {

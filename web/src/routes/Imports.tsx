@@ -181,13 +181,51 @@ export const Imports: React.FC = () => {
     }
   };
 
-  const handleDownloadTemplate = () => {
-    window.open("/api/v1/imports/template", "_blank");
+  const handleDownloadTemplate = async () => {
+    try {
+      const res = await fetch("/api/v1/imports/template", {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || err.message || "Failed to download import template.");
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "FieldWorkerTracker_Import_Template.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert(err.message);
+    }
   };
 
-  const handleDownloadErrors = () => {
+  const handleDownloadErrors = async () => {
     if (!currentBatch) return;
-    window.open(`/api/v1/imports/${currentBatch.id}/errors.xlsx`, "_blank");
+    try {
+      const res = await fetch(`/api/v1/imports/${currentBatch.id}/errors.xlsx`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || err.message || "Failed to download error workbook.");
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `import_errors_${currentBatch.id.slice(0, 8)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert(err.message);
+    }
   };
 
   // Filter rows

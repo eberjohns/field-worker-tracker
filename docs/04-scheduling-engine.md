@@ -95,3 +95,12 @@ Scheduled Work, assignment, job-item, boundary, time-rule and day-plan changes w
 
 ## 11. Worked example
 Job `12A14301` item A "Gardener - Hand Watering": WEEK, 6, Mon-Sat, 3 staff, 9 h, PERMANENT. A standing assignment gives workers X, Y, Z the item for the contract year. Each Mon-Sat the system creates 3 rows of 9 h. On a public holiday the cell shows SKIPPED. If Y has leave on Wednesday, Y's slot shows TO_BE_COVERED; a supervisor requests a REPLACE (Y -> W) at least 3 days ahead; the Engineer approves; W's phone gets the day. W has an 8-hour standard day, so the planner shows W at 9/8 h (planned OT warning).
+
+## 12. Base Planner & Operational Planner (Dual-Workspace Architecture)
+See ADR-015 for design rationale:
+- **Base Planner (`/base-planner`)**: 7-weekday recurring blueprint master schedule. Explicit weekday rows (`MON`..`SUN`, `W1_MON`..`W4_SUN`, `M1_W1_MON`..`M3_W4_SUN`). Quotas enforced (no excess allowed in blueprint). Candidate recommendations with rest-day warnings and remote capacity tracking. Mon–Sat fill convenience action skips worker's weekly rest day.
+- **Operational Planner (`/operational-planner`)**: Live daily schedule. Renders base blueprint shifts as low-opacity muted chips (45%), leave gaps as `TO_BE_COVERED` (amber dashed), operational covers as solid indigo chips (`OVERRIDE`), compensatory shifts as solid emerald/purple chips (`DIRECT`), and base shift cancellations in bold red (`REMOVED`, `bg-rose-50 border-rose-300 text-rose-800 line-through`).
+- **Base Worker Removal**: Stored in `scheduled_work` with `status = "CANCELLED"`, `source = "OVERRIDE"`, and mandatory `override_reason`. Restoring deletes the cancellation record via `DELETE /api/v1/operational-planner/shifts/{id}`. Active quota decrements if all workers on a date are cancelled.
+- **Worker Roster Tab**: Sticky freeze header (`sticky top-0 z-10`), weekly total & daily hours heatmap shading, admin role exclusion (`role != 'ADMIN'`), worker search, site filter, and supervisor grouping toggle.
+- **Period Quota Aggregation**: Monthly items aggregate across the full calendar month; quarterly items aggregate across the full 3-month calendar quarter.
+

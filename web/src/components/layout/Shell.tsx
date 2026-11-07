@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard,
@@ -17,6 +17,9 @@ import {
   Banknote,
   Building2,
   Hexagon,
+  CalendarRange,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { Login } from "../../routes/Login";
@@ -34,7 +37,8 @@ const navItems: NavItem[] = [
   { label: "Worksites & Jobs", to: "/worksites", icon: Building2, roles: ["ADMIN", "ENGINEER", "SUPERINTENDENT", "SUPERVISOR"] },
   { label: "Boundary Queue", to: "/boundaries", icon: Hexagon, roles: ["ADMIN", "ENGINEER"] },
   { label: "Live Map", to: "/live", icon: MapPin },
-  { label: "Planner", to: "/planner", icon: CalendarDays },
+  { label: "Base Planner", to: "/base-planner", icon: CalendarRange, roles: ["ADMIN", "ENGINEER", "SUPERINTENDENT", "SUPERVISOR"] },
+  { label: "Operational Planner", to: "/operational-planner", icon: CalendarDays, roles: ["ADMIN", "ENGINEER", "SUPERINTENDENT", "SUPERVISOR"] },
   { label: "Attendance", to: "/attendance", icon: Clock },
   { label: "Payroll", to: "/payroll", icon: DollarSign, roles: ["ADMIN", "ENGINEER"] },
   { label: "Salary Structures", to: "/salary-structures", icon: Banknote, roles: ["ADMIN", "ENGINEER"] },
@@ -50,6 +54,24 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   const currentPath = routerState.location.pathname;
   const { user, isAuthenticated, logout } = useAuth();
 
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("fwt_sidebar_collapsed") === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleSidebar = () => {
+    setIsCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("fwt_sidebar_collapsed", String(next));
+      } catch {}
+      return next;
+    });
+  };
+
   if (!isAuthenticated || user?.must_change_password) {
     return <Login />;
   }
@@ -59,17 +81,49 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   );
 
   return (
-    <div className="flex h-screen w-full bg-slate-50">
+    <div className="flex h-screen w-full bg-slate-50 overflow-hidden">
       {/* Sidebar */}
-      <aside className="w-64 border-r border-slate-200 bg-white flex flex-col">
-        <div className="flex h-16 items-center px-6 border-b border-slate-200 gap-3">
-          <div className="h-8 w-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold">
-            FW
+      <aside
+        className={`${
+          isCollapsed ? "w-16" : "w-64"
+        } border-r border-slate-200 bg-white flex flex-col transition-all duration-200 shrink-0 select-none z-30`}
+      >
+        {/* Sidebar Header */}
+        <div
+          className={`flex h-16 items-center border-b border-slate-200 transition-all ${
+            isCollapsed ? "justify-center px-2" : "justify-between px-4"
+          }`}
+        >
+          <div className="flex items-center gap-2.5 overflow-hidden">
+            <div
+              onClick={toggleSidebar}
+              className="h-8 w-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-xs cursor-pointer hover:bg-indigo-700 transition"
+              title={isCollapsed ? "Expand Sidebar" : "Field Worker Tracker"}
+            >
+              FW
+            </div>
+            {!isCollapsed && (
+              <span className="font-bold text-slate-900 tracking-tight text-sm truncate">
+                Field Worker Tracker
+              </span>
+            )}
           </div>
-          <span className="font-semibold text-slate-900 tracking-tight">Field Worker Tracker</span>
+
+          <button
+            onClick={toggleSidebar}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition shrink-0"
+            title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+          >
+            {isCollapsed ? (
+              <PanelLeftOpen className="h-4 w-4" />
+            ) : (
+              <PanelLeftClose className="h-4 w-4" />
+            )}
+          </button>
         </div>
 
-        <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto">
+        {/* Navigation Items */}
+        <nav className={`flex-1 space-y-1 overflow-y-auto py-3 ${isCollapsed ? "px-2" : "px-3"}`}>
           {allowedNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentPath === item.to;
@@ -77,29 +131,44 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
               <Link
                 key={item.to}
                 to={item.to}
-                className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                title={item.label}
+                className={`flex items-center rounded-lg transition-colors ${
+                  isCollapsed ? "justify-center p-2.5" : "gap-3 px-3 py-2 text-sm font-medium"
+                } ${
                   isActive
-                    ? "bg-indigo-50 text-indigo-700"
+                    ? "bg-indigo-50 text-indigo-700 font-semibold"
                     : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                 }`}
               >
-                <Icon className={`h-4 w-4 ${isActive ? "text-indigo-600" : "text-slate-400"}`} />
-                {item.label}
+                <Icon
+                  className={`${isCollapsed ? "h-5 w-5" : "h-4 w-4"} shrink-0 ${
+                    isActive ? "text-indigo-600" : "text-slate-400"
+                  }`}
+                />
+                {!isCollapsed && <span className="truncate">{item.label}</span>}
               </Link>
             );
           })}
         </nav>
 
-        <div className="p-4 border-t border-slate-200">
-          <div className="flex items-center justify-between text-xs text-slate-500">
-            <span className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-emerald-500 inline-block"></span>
-              Phase 01 Active
-            </span>
-            <span className="px-2 py-0.5 rounded bg-slate-100 font-mono text-[10px] text-slate-600">
-              v0.1.0
-            </span>
-          </div>
+        {/* Sidebar Footer */}
+        <div className={`border-t border-slate-200 ${isCollapsed ? "p-3 flex justify-center" : "p-4"}`}>
+          {isCollapsed ? (
+            <span
+              className="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-2xs"
+              title="Phase 01 Active (v0.1.0)"
+            />
+          ) : (
+            <div className="flex items-center justify-between text-xs text-slate-500">
+              <span className="flex items-center gap-1.5 font-medium">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 inline-block"></span>
+                Phase 01 Active
+              </span>
+              <span className="px-2 py-0.5 rounded bg-slate-100 font-mono text-[10px] text-slate-600 font-semibold">
+                v0.1.0
+              </span>
+            </div>
+          )}
         </div>
       </aside>
 

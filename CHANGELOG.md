@@ -3,6 +3,70 @@ All notable changes. Format: Keep a Changelog. Mobile-contract changes are also 
 
 ## [Unreleased]
 ### Added
+- PHASE-05 (Rebuilt Planner: Base Planner & Operational Planner):
+  - Clean architectural separation into two dedicated workspaces:
+    - **Base Planner (`/base-planner`)**: Blueprint recurring master schedule engine. High-density 7-weekday matrix grid (`MON` to `SUN`) grouped by Worksite. Explicit day-by-day storage (`MON`..`SUN`) and in-modal cadence selection for monthly (`W1_MON`..`W4_SUN`) and quarterly (`M1_W1_MON`..`M3_W4_SUN`) line items without fragile mask overwrites. Contract quota enforcement prevents planning excess visits in the base blueprint. Fully enables all 7 days with candidate warnings for rest days.
+    - **Operational Planner (`/operational-planner`)**: Live daily operations calendar with 7-weekday calendar date grid. Displays base blueprint shifts as low-opacity muted chips (45%), surfaces approved leave gaps as `TO_BE_COVERED` alert slots (amber dashed border), and supports single-day operational covers (`OVERRIDE`) and compensatory shifts (`DIRECT`) rendered in solid opacity (100%). Visual target recommendations belong solely to Base Planner.
+  - Database migration `0007_base_op_planner.py`:
+    - `base_roster_templates`: Stores recurring blueprint definition (`allocation_mode` in `UNIFORM`, `DAY_OF_WEEK`, `start_date`, `end_date`, `is_active`, `version`).
+    - `base_roster_entries`: Stores assigned workers per template with explicit `weekday_mask` (`MON`..`SUN`, or periodic cadence `W1_MON`, `M1_W2_WED`), `assigned_hours`, and `sequence`.
+    - `scheduled_works`: Enhanced with `original_employee_id`, `override_reason`, and expanded source enum (`TEMPLATE`, `STANDING`, `DIRECT`, `OVERRIDE`, `EXCEPTION`, `FOLLOW_UP`).
+  - Pure domain rules in `backend/src/fw/rules/scheduling/`:
+    - `blueprint.py`: Resolves Base Roster Templates into daily slots across dates, evaluating periodic cadence matching (`W1_MON`..`W4_SUN`, `M1_W1_MON`..`M3_W4_SUN`), rest-day warnings, and public holiday overtime flags without artificial weekday dropping.
+    - `quotas.py`: Equal window pacing calculations for periodic visits (e.g. 2 visits/month) as visual guidance only. Deterministic, zero-swapping visit evaluation based on creation timestamp and date.
+    - `operational.py`: Resolves cell state hierarchy (`OPERATIONAL OVERRIDE > APPROVED LEAVE GAP (TO_BE_COVERED) > BASE BLUEPRINT`).
+  - Worksite contract overview:
+    - Added Contract Validity Period (`start_date` – `end_date` or `Ongoing`) and Annual Operating Budget (`budget_amount AED / year`) to `/worksites` and `/worksites/:id`.
+  - Frontend components and routes:
+    - `BasePlanner.tsx`: Worksite line items list in 7-weekday matrix, click-to-assign slot modal with in-modal multi-week cadence checkboxes, convenience Mon–Sat fill action (skipping worker's weekly rest days), in-modal Supervisor's Crew filter toggle, 3-tier candidate ranking with rest-day warnings and remote capacity tracking, slot headcount capping (`required_staff_count`), silent background refresh with scroll retention, and base template saving with quota enforcement.
+    - `OperationalPlanner.tsx`: Coverage view (Job-centric) and Worker Roster view (Worker-centric), sticky freeze headers, visual distinction between blueprint (muted) and operational (solid) shifts, shift labeling accurately distinguishing "Cover" (replacement) from "Additional" (within quota) and "Excess" (extra visits), candidate exclusion of covered worker and current slot workers, silent background refresh with scroll retention, staging workspace modal with multi-worker selection, staged removals with undo, editable hours/reason inputs, atomic save/cancel, shift reason visibility via note icon and tooltips, pure light-theme enterprise styling.
+    - Fixed monthly and quarterly period quota aggregation in `get_operational_coverage` to evaluate occurrences across the complete calendar month or quarter instead of isolating 7-day week views.
+    - Fixed weekly off day normalization across backend rules (`blueprint.py`, `operational.py`) and frontend planners (`BasePlanner.tsx`, `OperationalPlanner.tsx`) using `is_same_weekday` helper, correctly skipping rest days and displaying warnings when database stores full uppercase strings (e.g. `FRIDAY`).
+    - Base planned worker operational removal: Planners can operationally remove base recurring blueprint workers for a specific date with a mandatory reason. Renders in the operational grid in red (`bg-rose-50 border-dashed border-rose-300 text-rose-800`, line-through worker name, `REMOVED` badge, note tooltip), and provides `[Remove Base Shift]` and `[Restore Base Worker]` actions in the modal.
+    - Worker Roster tab enhancements: Persistent sticky freeze header (`sticky top-0 z-10 bg-slate-100 shadow-sm border-b`), hours heatmap shading on weekly totals (amber for under, emerald for met, purple for overtime `+X.Xh OT`) and daily cells (sky for partial shift, solid indigo for 8h met, purple for >8h overtime, neutral slate for weekly off, red line-through for removed), exclusion of system administrators (`Employee.role != 'ADMIN'`), real-time search by worker name, tally ID, grade, or assigned job number, filter by job / worksite dropdown, and supervisor crew grouping toggle.
+    - Entity pinning and week navigation scroll retention: Pin icon buttons for worksites in Coverage View and Base Planner, and for workers in Worker Roster View, persisted in `localStorage` and sorted to the top. Week navigation maintains vertical scroll position seamlessly without jumping to the top.
+- PHASE-05 (Planner: yearly plan and weekly roster):
+  - Pure domain rules for scheduling (`fw.rules.scheduling`):
+    - `assignment.py`: Date generator for standing assignments across repeating weekday patterns and holiday skips.
+    - `markers.py`: Day marker evaluator producing `SKIPPED` (public holiday), `WEEKLY_OFF`, `ON_LEAVE`, `TO_BE_COVERED`, and `FREE`.
+    - `validation.py`: Assignment validation engine checking `PERMANENT_EXCLUSIVE`, duplicate assignment, `OVER_STANDARD_HOURS`, `UNDER_STANDARD_HOURS`, `GRADE_GROUP_MISMATCH`, and `PAST_DATE` (Admin allowed, non-admin blocked).
+    - `suggestions.py`: Candidate recommendation and ranking engine implementing DEC-52 (same grade-group first-class eligibility, exact staff type match first with asterisk `*`, site familiarity in past 14 days, supervisor affinity, and available free capacity).
+    - `allocation.py`: Capacity calculation per day/week/month against standard hours from salary structure (default 8 h), including Ramadan -120 min reduction.
+    - `excel.py`: Pure openpyxl roster export matching the client's weekly schedule layout with worker rows, day cells, and hours summaries.
+  - Database migration `0006_planner_and_scheduling.py` introducing `standing_assignments` and `scheduled_work` tables with partial unique indexes, check constraints (`ck_scheduled_work_sequence_positive`), and optimistic locking.
+  - Scheduling module (`fw.modules.scheduling`):
+    - 13-month rolling horizon generation of daily scheduled work from standing assignments linked to occurrences.
+    - Assignment ending lifecycle (`POST /standing-assignments/{id}/end`) with future unstarted row cancellation and audit logging.
+    - Occurrence-linked scheduled work CRUD, dry-run validation, and two-step collision-free sequence reordering.
+    - Weekly roster aggregation with site chips, day markers, and row totals vs standard hours.
+    - Job coverage matrix with assigned vs required staffing and under-staffed slot tracking.
+    - Binary Excel streaming (`/roster?format=xlsx`).
+  - Web API endpoints mounted under `/api/v1`:
+    - `GET /roster`: Weekly roster JSON or streaming Excel export (`?format=xlsx`).
+    - `GET /schedule/coverage`: Job coverage matrix for a week.
+    - `GET /workers/{id}/allocation`: Worker allocated hours per day/week/month vs standard hours.
+    - `GET /occurrences/{id}/recommendations` & `GET /job-items/{id}/recommendations`: Ranked candidate suggestions.
+    - `GET /standing-assignments`, `POST /standing-assignments`, `POST /standing-assignments/{id}/end`: Year plan standing assignments.
+    - `POST /scheduled-work`, `PATCH /scheduled-work/{id}`, `POST /scheduled-work/reorder`, `POST /scheduled-work/validate`: Scheduled work operations.
+  - React Web Dashboard Planner (`web/src/routes/Planner.tsx` and `web/src/features/planner`):
+    - Weekly Roster view with human-readable week selector (`Week 1 - NOV 2026 (02 - 08 Nov)`), compact/expanded chip modes, problems-only filter, and worker capacity inspection.
+    - Job Coverage view with persistent sticky day header (`sticky top-0 z-20` on table headers), site-by-site staffing gaps, normalized weekday pattern resolution (fixing Monday vs Thursday target resolution), chronological assignment priority (preventing new slots from stealing requirement from fulfilled visits), weekly quota-based excess evaluation (allowing Sunday compensatory shifts without false excess badges), 6-state visual legend (Fully Staffed, Under-Staffed, Quota Met, Excess Assigned, Public Holiday, and No Requirement), soft-teal Quota Met indicators, sky-blue Public Holiday badges, and purple excess badges/chips (`+X Excess`).
+    - Fixed 1x/week periodic items without explicit pattern defaulting to Thursday by strictly resolving target day to Monday (`week_start`) and updating `_suggest_date` in `fw.rules.jobs.occurrences` for `total_slots == 1`.
+    - Fixed periodic assignment priority in `get_coverage_view` to sort assigned dates strictly by `earliest_created` timestamp, guaranteeing that earlier assigned slots retain requirement fulfillment and subsequent slots are recorded as excess without slot swapping.
+    - Added weekly rest day detection and warning notices in `AssignModal`, displaying candidate rest day badges (`⚠️ Rest Day Today`) and informing planners that standing schedules skip rest days and non-scheduled days (Sundays) on future weeks, recommending "Save Current Date" for one-off compensatory shifts.
+    - Added comprehensive live end-to-end regression test suite `backend/tests/test_planner_scenarios.py` verifying target day resolution, sequential slot assignment, and rest day warnings.
+    - Relative weekday alignment for monthly recurring standing assignments (e.g. preserving 1st Wednesday of the month across rolling 13-month horizon), planning week Monday anchoring, and guaranteed explicit date materialization for off-day/holiday compensatory shifts.
+    - Assign Modal with staged crew editing, clean `✕` remove chips, no automatic server calls, explicit "Save Current Date" vs "Save Recursively (Standing Team)" alongside "Cancel", candidate search, multi-tier ranking, automatic PERMANENT conflict blocking, supervisor crew filter toggle, accurate Quota Met warning notice, compensatory shift tips, and clean recursive standing series cancellation.
+    - Collapsible left navigation sidebar (`w-64` to `w-16`) with persisted toggle state, maximizing planner workspace view.
+    - Global 401 Unauthorized response interceptor in `AuthContext` auto-clearing credentials and redirecting to `/login`.
+    - Authenticated download streaming for Master Data template and error workbooks in `Imports.tsx`.
+    - Top navigation Crew / Supervisor filter dropdown displaying supervisor names, filtering the Workers Capacity Side Panel and defaulting Assign Modal recommendations to that supervisor's crew.
+    - Worker Capacity Side Panel displaying compact, space-efficient worker list grouped by supervisor crew with hours allocated vs standard hours, progress indicators, and capacity filters (All, Available, Overtime), populated immediately on initial mount.
+    - Job Item modal clarity: re-labeled occurrence duration to "Work Shift Duration / Visit" and prevented default Mon-Sat selection for weekly-1x and periodic job items.
+    - Employees & People view: primary grouping by Supervisor crew, Superintendent and Engineer chips with click-to-focus smooth scrolling, leadership oversight executive cards with click-to-filter, and organizational headcount metrics.
+    - Excel export button downloading `.xlsx` roster formatted to the client's specification.
+  - ADR-014: Planner standing assignments, scheduled work, and roster markers.
+  - Integration tests and 300-worker roster performance benchmark (< 2s) in `backend/tests/test_scheduling_api.py`.
 - PHASE-04 (Sites, boundaries and job items):
   - Map-stack compatibility gate (ADR-006): installed and verified `maplibre-gl@6.16.0`, `react-map-gl@8.1.3`, `terra-draw@1.39.0`, `terra-draw-maplibre-gl-adapter@1.5.0`, and modular Turf packages (`@turf/area`, `@turf/boolean-valid`, `@turf/kinks`, `@turf/centroid`). Interactive polygon drawing, vertex editing, area computation, and self-intersection checks verified.
   - Pure domain rules for jobs (`fw.rules.jobs`):

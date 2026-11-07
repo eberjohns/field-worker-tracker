@@ -83,7 +83,7 @@ Roles: A = Admin, E = Engineer, S = Superintendent, V = Supervisor. "scope" = li
 | GET/POST/PATCH | /standing-assignments | A E (write), scope (read) | year plan: worker <-> job item for a date range; `POST /standing-assignments/{id}/end` ends it from a date |
 | GET | /workers/{id}/allocation?from=&to= | scope | allocated hours per day/week/month against standard hours (feeds the side panel) |
 | GET | /schedule/employees/{id}?week_start= | scope | worker view: ordered daily assignments, weekly hours, leave taken |
-| GET | /occurrences/{id}/recommendations?date= | A E | ranked candidates with reasons and warnings |
+| GET | /occurrences/{id}/recommendations?date=, /job-items/{id}/recommendations?date= | A E | ranked candidates with reasons and warnings |
 | POST | /scheduled-work | A E | create assignment (warnings + ack) |
 | PATCH | /scheduled-work/{id} | A E | change hours/sequence/cancel |
 | POST | /scheduled-work/reorder | A E | `{ employee_id, work_date, ordered_ids }` |
@@ -93,6 +93,16 @@ Roles: A = Admin, E = Engineer, S = Superintendent, V = Supervisor. "scope" = li
 | GET/POST/PATCH | /leave-requests | A E (all), V (record a request), scope (read) | `POST /leave-requests/{id}/approve` and `/reject` (Engineer, Admin); `GET /leave-requests/summary?year=` = leave taken per worker and type |
 | GET | /staffing-gaps?from=&to= | A E S V scope | gaps from leave and understaffing |
 | GET | /approvals?type=&status=PENDING | A E | **approvals inbox**: leave, reassignment requests, overtime/variation attendance rows, with counts for the badge |
+
+### Base Planner & Operational Planner
+| Method | Path | Roles | Purpose |
+|---|---|---|---|
+| GET | /base-planner/worksites | A E scope | Base blueprint master schedule: worksites with job items, contract quotas, and template assignments across Mon–Sun |
+| POST | /base-planner/templates | A E | Create or replace recurring blueprint roster template for a job item with explicit daily / periodic cadence masks |
+| GET | /operational-planner/coverage?week_start= | A E scope | Live operational coverage matrix: 7 calendar days, blueprint shifts (muted), leave gaps (TO_BE_COVERED), operational covers (solid), and removals (red) |
+| GET | /operational-planner/roster?week_start= | A E scope | Live worker roster: workers x days with assigned shifts, weekly totals vs standard hours, supervisor info, and job numbers |
+| POST | /operational-planner/shifts | A E | Assign operational shift (direct shift or leave cover) or stage base shift cancellation (status CANCELLED with override_reason) |
+| DELETE | /operational-planner/shifts/{id} | A E | Remove operational shift or restore cancelled base blueprint shift |
 
 ### Events, attendance, approvals
 | Method | Path | Roles | Purpose |

@@ -103,10 +103,14 @@ export const JobItemModal: React.FC<JobItemModalProps> = ({
       setFrequencyUnit(initialData.frequency_unit);
       setOccurrencesPerPeriod(initialData.occurrences_per_period);
       setPeriodInterval(initialData.period_interval);
+      const defaultDays =
+        Number(initialData.occurrences_per_period) === 1
+          ? ["MON"]
+          : ["MON", "TUE", "WED", "THU", "FRI", "SAT"];
       setSelectedWeekdays(
         initialData.weekday_pattern && initialData.weekday_pattern.length > 0
           ? normalizeWeekdays(initialData.weekday_pattern)
-          : ["MON", "TUE", "WED", "THU", "FRI", "SAT"]
+          : defaultDays
       );
       setRequiredStaff(initialData.required_staff_count);
       setHoursPerOccurrence(initialData.hours_per_occurrence_per_staff);
@@ -459,9 +463,9 @@ export const JobItemModal: React.FC<JobItemModalProps> = ({
                 </span>
               </div>
               <div className="bg-white p-2.5 rounded border border-indigo-100 col-span-2 sm:col-span-1">
-                <span className="text-slate-500 block text-[10px]">Occurrence Duration</span>
+                <span className="text-slate-500 block text-[10px]">Work Shift Duration / Visit</span>
                 <span className="font-bold text-slate-900 text-sm">
-                  {daysPerOccurrence} day{daysPerOccurrence > 1 ? "s" : ""}
+                  {daysPerOccurrence} day{daysPerOccurrence > 1 ? "s" : ""} ({parsedHours.toFixed(1)}h)
                 </span>
               </div>
             </div>
