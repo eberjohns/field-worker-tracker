@@ -60,6 +60,15 @@ def get_month_of_quarter(d: date) -> int:
     return ((month - 1) % 3) + 1
 
 
+def is_same_weekday(off_day: str | None, dow: str | None) -> bool:
+    """Normalize and compare weekday names whether 3-letter (FRI) or full (FRIDAY)."""
+    if not off_day or not dow:
+        return False
+    o = off_day.strip().upper()
+    d = dow.strip().upper()
+    return o == d or o.startswith(d) or d.startswith(o)
+
+
 def is_entry_matching_date(mask: str, target_date: date) -> bool:
     """Check if a template entry's mask applies to a specific calendar date."""
     dow = INT_TO_WEEKDAY[target_date.weekday()]
@@ -68,7 +77,7 @@ def is_entry_matching_date(mask: str, target_date: date) -> bool:
     # 1. Simple weekday match or uniform ALL
     if upper_mask == "ALL":
         return True
-    if upper_mask == dow:
+    if is_same_weekday(upper_mask, dow):
         return True
 
     # 2. Monthly cadence prefix (e.g. "W1_MON", "W3_WED")
@@ -78,7 +87,7 @@ def is_entry_matching_date(mask: str, target_date: date) -> bool:
             try:
                 target_week_num = int(parts[0][1:])
                 target_dow = parts[1]
-                if target_dow == dow and get_week_of_month(target_date) == target_week_num:
+                if is_same_weekday(target_dow, dow) and get_week_of_month(target_date) == target_week_num:
                     return True
             except ValueError:
                 pass
@@ -92,7 +101,7 @@ def is_entry_matching_date(mask: str, target_date: date) -> bool:
                 target_w_num = int(parts[1][1:])
                 target_dow = parts[2]
                 if (
-                    target_dow == dow
+                    is_same_weekday(target_dow, dow)
                     and get_month_of_quarter(target_date) == target_m_num
                     and get_week_of_month(target_date) == target_w_num
                 ):
@@ -134,8 +143,8 @@ def resolve_base_template_slots(
         matching_entries = [e for e in entries if is_entry_matching_date(e.weekday_mask, d)]
 
         for entry in matching_entries:
-            off_day = worker_weekly_off_days.get(entry.employee_id, "").upper()
-            is_worker_off = off_day == dow
+            off_day = worker_weekly_off_days.get(entry.employee_id, "")
+            is_worker_off = is_same_weekday(off_day, dow)
 
             notes: list[str] = []
             status = "VALID"

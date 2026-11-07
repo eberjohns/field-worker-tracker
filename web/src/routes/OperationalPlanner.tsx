@@ -13,8 +13,10 @@ import {
   Loader2,
   Search,
   UserCheck,
-  ShieldAlert,
   Sparkles,
+  FileText,
+  Plus,
+  Undo2,
 } from "lucide-react";
 import {
   OperationalCoverageResponse,
@@ -48,10 +50,31 @@ function formatReadableWeek(weekStartStr: string): string {
   }
 }
 
+function isSameWeekday(offDay: string | null | undefined, weekdayCode: string): boolean {
+  if (!offDay || !weekdayCode) return false;
+  const off = offDay.trim().toUpperCase();
+  const code = weekdayCode.trim().toUpperCase();
+  return off === code || off.startsWith(code) || code.startsWith(off);
+}
+
 interface SupervisorOption {
   id: string;
   name: string;
   tally_id?: string;
+}
+
+interface StagedWorkerAddition {
+  tempId: string;
+  employee_id: string;
+  employee_name: string;
+  tally_id?: string | null;
+  staff_grade_description?: string;
+  assigned_hours: number;
+  override_reason: string;
+  original_employee_id?: string | null;
+  original_employee_name?: string | null;
+  source: "OVERRIDE" | "DIRECT";
+  is_rest_day?: boolean;
 }
 
 export const OperationalPlanner: React.FC = () => {
@@ -86,10 +109,11 @@ export const OperationalPlanner: React.FC = () => {
     cell: OperationalDayCell;
   } | null>(null);
 
-  const [selectedWorkerId, setSelectedWorkerId] = useState<string>("");
   const [replacementTargetId, setReplacementTargetId] = useState<string | null>(null);
   const [shiftHours, setShiftHours] = useState<string>("8.0");
   const [overrideReason, setOverrideReason] = useState<string>("");
+  const [stagedRemovals, setStagedRemovals] = useState<Set<string>>(new Set());
+  const [stagedAdditions, setStagedAdditions] = useState<StagedWorkerAddition[]>([]);
   const [candidates, setCandidates] = useState<CandidateRecommendation[]>([]);
   const [candidateSearch, setCandidateSearch] = useState<string>("");
   const [filterToSupervisorCrew, setFilterToSupervisorCrew] = useState<boolean>(true);
@@ -184,12 +208,13 @@ export const OperationalPlanner: React.FC = () => {
     cell: OperationalDayCell
   ) => {
     setSelectedCell({ worksite: ws, item: it, cell });
-    setSelectedWorkerId("");
     setReplacementTargetId(null);
     setShiftHours(String(it.hours_per_occurrence || "8.0"));
     setOverrideReason("");
     setCandidateSearch("");
     setFilterToSupervisorCrew(Boolean(selectedSupervisorId));
+    setStagedRemovals(new Set());
+    setStagedAdditions([]);
 
     // Load candidate recommendations for this item
     setLoadingCandidates(true);
@@ -209,67 +234,140 @@ export const OperationalPlanner: React.FC = () => {
     }
   };
 
-  // Create Operational Shift / Cover
-  const handleCreateShift = async () => {
-    if (!selectedCell || !selectedWorkerId) return;
+  // Stage an operational shift deletion
+  const handleStageRemoveShift = (shiftId: string) => {
+    setStagedRemovals((prev) => {
+      const next = new Set(prev);
+      next.add(shiftId);
+      return next;
+    });
+  };
+
+  // Undo a staged removal
+  const handleUndoRemoveShift = (shiftId: string) => {
+    setStagedRemovals((prev) => {
+      const next = new Set(prev);
+      next.delete(shiftId);
+      return next;
+    });
+  };
+
+  // Stage adding a worker
+  const handleAddCandidateToStaged = (cand: CandidateRecommendation) => {
+    const isReplacement = !!replacementTargetId;
+    const targetWorker = isReplacement
+      ? selectedCell?.cell.workers.find((w) => w.employee_id === replacementTargetId)
+      : null;
+
+    const defaultHours = Number(shiftHours) || Number(selectedCell?.item.hours_per_occurrence) || 8.0;
+    const defaultReason = overrideReason.trim()
+      ? overrideReason.trim()
+      : isReplacement
+      ? `Cover for ${targetWorker?.employee_name || "worker"}`
+      : "Additional shift";
+
+    const newAddition: StagedWorkerAddition = {
+      tempId: `${cand.employee_id}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      employee_id: cand.employee_id,
+      employee_name: cand.name,
+      tally_id: cand.tally_id,
+      staff_grade_description: cand.staff_grade_description || undefined,
+      assigned_hours: defaultHours,
+      override_reason: defaultReason,
+      original_employee_id: replacementTargetId || undefined,
+      original_employee_name: targetWorker?.employee_name || undefined,
+      source: isReplacement ? "OVERRIDE" : "DIRECT",
+      is_rest_day: isSameWeekday(cand.weekly_off_day, selectedCell?.cell.weekday || ""),
+    };
+
+    setStagedAdditions((prev) => [...prev, newAddition]);
+    if (isReplacement) {
+      setReplacementTargetId(null);
+    }
+  };
+
+  // Remove a staged addition
+  const handleRemoveStagedAddition = (tempId: string) => {
+    setStagedAdditions((prev) => prev.filter((a) => a.tempId !== tempId));
+  };
+
+  // Update hours for a staged addition
+  const handleUpdateStagedHours = (tempId: string, hours: number) => {
+    setStagedAdditions((prev) =>
+      prev.map((a) => (a.tempId === tempId ? { ...a, assigned_hours: hours } : a))
+    );
+  };
+
+  // Update reason for a staged addition
+  const handleUpdateStagedReason = (tempId: string, reason: string) => {
+    setStagedAdditions((prev) =>
+      prev.map((a) => (a.tempId === tempId ? { ...a, override_reason: reason } : a))
+    );
+  };
+
+  // Cancel and discard modal without API mutations
+  const handleCancelModal = () => {
+    setSelectedCell(null);
+    setStagedRemovals(new Set());
+    setStagedAdditions([]);
+    setReplacementTargetId(null);
+  };
+
+  // Atomically save all staged operations
+  const handleSaveOperationalRoster = async () => {
+    if (!selectedCell) return;
     setSavingShift(true);
     try {
-      const isReplacement = !!replacementTargetId;
-      const payload: OperationalShiftCreate = {
-        job_item_id: selectedCell.item.job_item_id,
-        work_date: selectedCell.cell.work_date,
-        employee_id: selectedWorkerId,
-        original_employee_id: replacementTargetId || undefined,
-        assigned_hours: Number(shiftHours),
-        override_reason: overrideReason || (isReplacement ? "Leave Cover" : "Single-day assignment"),
-        source: isReplacement ? "OVERRIDE" : "DIRECT",
-        acknowledge_warnings: true,
-      };
+      // 1. Process staged removals
+      for (const shiftId of stagedRemovals) {
+        const res = await fetch(`/api/v1/operational-planner/shifts/${shiftId}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) {
+          const errJson = await res.json().catch(() => ({}));
+          throw new Error(errJson.detail || "Failed to remove shift");
+        }
+      }
 
-      const res = await fetch("/api/v1/operational-planner/shifts", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
+      // 2. Process staged additions
+      for (const addition of stagedAdditions) {
+        const payload: OperationalShiftCreate = {
+          job_item_id: selectedCell.item.job_item_id,
+          work_date: selectedCell.cell.work_date,
+          employee_id: addition.employee_id,
+          original_employee_id: addition.original_employee_id || undefined,
+          assigned_hours: addition.assigned_hours,
+          override_reason: addition.override_reason || (addition.source === "OVERRIDE" ? "Leave Cover" : "Additional shift"),
+          source: addition.source,
+          acknowledge_warnings: true,
+        };
 
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.detail || "Failed to create shift");
+        const res = await fetch("/api/v1/operational-planner/shifts", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          const errJson = await res.json().catch(() => ({}));
+          throw new Error(errJson.detail || "Failed to assign operational shift");
+        }
       }
 
       const scrollPos = window.scrollY;
       await fetchOperationalData(true);
-      setSelectedCell(null);
+      handleCancelModal();
       setTimeout(() => {
         window.scrollTo({ top: scrollPos, behavior: "instant" });
       }, 0);
     } catch (err: any) {
-      alert(`Error creating shift: ${err.message}`);
+      alert(`Error saving operational roster: ${err.message}`);
     } finally {
       setSavingShift(false);
-    }
-  };
-
-  // Cancel Operational Shift
-  const handleDeleteShift = async (shiftId: string) => {
-    if (!confirm("Are you sure you want to cancel this operational shift?")) return;
-    try {
-      const res = await fetch(`/api/v1/operational-planner/shifts/${shiftId}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error("Failed to delete shift");
-      const scrollPos = window.scrollY;
-      await fetchOperationalData(true);
-      setSelectedCell(null);
-      setTimeout(() => {
-        window.scrollTo({ top: scrollPos, behavior: "instant" });
-      }, 0);
-    } catch (err: any) {
-      alert(`Error cancelling shift: ${err.message}`);
     }
   };
 
@@ -295,10 +393,15 @@ export const OperationalPlanner: React.FC = () => {
       pool = pool.filter((c) => c.employee_id !== replacementTargetId);
     }
 
-    // 2. Exclude workers already active/assigned in this cell
+    // 2. Exclude workers already active/assigned in this cell (unless staged for removal) or already staged for addition
     if (selectedCell) {
-      const assignedIds = new Set(selectedCell.cell.workers.map((w) => w.employee_id));
-      pool = pool.filter((c) => !assignedIds.has(c.employee_id));
+      const assignedIds = new Set(
+        selectedCell.cell.workers
+          .filter((w) => !w.shift_id || !stagedRemovals.has(w.shift_id))
+          .map((w) => w.employee_id)
+      );
+      const stagedIds = new Set(stagedAdditions.map((a) => a.employee_id));
+      pool = pool.filter((c) => !assignedIds.has(c.employee_id) && !stagedIds.has(c.employee_id));
     }
 
     if (filterToSupervisorCrew && selectedSupervisorId) {
@@ -325,11 +428,16 @@ export const OperationalPlanner: React.FC = () => {
       }
       return (b.ranking_score || 0) - (a.ranking_score || 0);
     });
-  }, [candidates, candidateSearch, filterToSupervisorCrew, selectedSupervisorId, replacementTargetId, selectedCell]);
-
-  const selectedCandidateObj = useMemo(() => {
-    return candidates.find((c) => c.employee_id === selectedWorkerId);
-  }, [candidates, selectedWorkerId]);
+  }, [
+    candidates,
+    candidateSearch,
+    filterToSupervisorCrew,
+    selectedSupervisorId,
+    replacementTargetId,
+    selectedCell,
+    stagedRemovals,
+    stagedAdditions,
+  ]);
 
   return (
     <div className="flex flex-col h-full bg-slate-50">
@@ -631,27 +739,37 @@ export const OperationalPlanner: React.FC = () => {
                                         return (
                                           <div
                                             key={idx}
-                                            className={`p-1 rounded text-[10px] font-medium flex items-center justify-between ${
+                                            className={`p-1 rounded text-[10px] font-medium flex items-center justify-between gap-1 ${
                                               isSolid
                                                 ? "bg-indigo-600 text-white shadow-sm font-semibold"
                                                 : "bg-indigo-50 text-indigo-900 border border-dashed border-indigo-300 opacity-60"
                                             }`}
+                                            title={w.reason ? `${w.employee_name} • Note: ${w.reason}` : w.employee_name}
                                           >
-                                            <span className="truncate max-w-[90px]" title={w.employee_name}>
-                                              {w.employee_name}
-                                            </span>
+                                            <div className="flex items-center gap-1 min-w-0">
+                                              {w.reason && (
+                                                <FileText
+                                                  className={`h-2.5 w-2.5 shrink-0 ${
+                                                    isSolid ? "text-white/80" : "text-indigo-400"
+                                                  }`}
+                                                />
+                                              )}
+                                              <span className="truncate max-w-[85px]">
+                                                {w.employee_name}
+                                              </span>
+                                            </div>
                                             {w.display_type === "OVERRIDE" && (
-                                              <span className="text-[8px] bg-indigo-700 text-white px-1 rounded uppercase font-bold">
+                                              <span className="text-[8px] bg-indigo-800 text-white px-1 rounded uppercase font-bold shrink-0">
                                                 Cover
                                               </span>
                                             )}
                                             {w.display_type === "DIRECT" && (
                                               <span
-                                                className={`text-[8px] px-1 rounded uppercase font-bold text-white ${
+                                                className={`text-[8px] px-1 rounded uppercase font-bold text-white shrink-0 ${
                                                   isExcess ? "bg-purple-700" : "bg-emerald-700"
                                                 }`}
                                               >
-                                                {isExcess ? "Excess" : "Direct"}
+                                                {isExcess ? "Excess" : "Additional"}
                                               </span>
                                             )}
                                           </div>
@@ -784,54 +902,215 @@ export const OperationalPlanner: React.FC = () => {
             </div>
 
             {/* Modal Body */}
-            <div className="p-6 space-y-4 flex-1 overflow-y-auto">
-              {/* Existing Assigned Workers in Slot */}
+            <div className="p-6 space-y-5 flex-1 overflow-y-auto">
+              {/* 1. Currently Scheduled Staff in Slot */}
               <div className="space-y-2">
-                <h4 className="text-xs font-bold uppercase text-slate-600">
-                  Currently Scheduled Staff ({selectedCell.cell.workers.length})
-                </h4>
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                    <Users className="h-4 w-4 text-slate-500" />
+                    Currently Scheduled Staff ({selectedCell.cell.workers.length})
+                  </h4>
+                  {stagedRemovals.size > 0 && (
+                    <span className="text-[10px] font-bold text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded">
+                      {stagedRemovals.size} pending removal
+                    </span>
+                  )}
+                </div>
 
                 {selectedCell.cell.workers.length === 0 ? (
-                  <p className="text-xs text-slate-400 italic">No workers currently scheduled for this slot.</p>
+                  <p className="text-xs text-slate-400 italic py-1">No workers currently scheduled for this slot.</p>
                 ) : (
-                  <div className="space-y-1.5">
-                    {selectedCell.cell.workers.map((w, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center justify-between p-2.5 rounded-lg border border-slate-200 bg-slate-50"
-                      >
-                        <div>
-                          <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
-                            <span>{w.employee_name}</span>
-                            <span className="text-[10px] px-1.5 py-0.2 rounded font-bold bg-slate-200 text-slate-700">
-                              {w.display_type}
-                            </span>
+                  <div className="space-y-2">
+                    {selectedCell.cell.workers.map((w, idx) => {
+                      const isMarkedForRemoval = w.shift_id ? stagedRemovals.has(w.shift_id) : false;
+
+                      return (
+                        <div
+                          key={idx}
+                          className={`p-3 rounded-lg border transition-all ${
+                            isMarkedForRemoval
+                              ? "bg-red-50/50 border-red-200 opacity-70"
+                              : "bg-slate-50 border-slate-200"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className={`text-xs font-bold ${isMarkedForRemoval ? "line-through text-slate-400" : "text-slate-900"}`}>
+                                {w.employee_name}
+                              </span>
+                              {w.tally_id && (
+                                <span className="font-mono text-[10px] text-slate-400">({w.tally_id})</span>
+                              )}
+                              <span
+                                className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-bold ${
+                                  w.display_type === "OVERRIDE"
+                                    ? "bg-indigo-100 text-indigo-800"
+                                    : w.display_type === "DIRECT"
+                                    ? "bg-emerald-100 text-emerald-800"
+                                    : "bg-slate-200 text-slate-700"
+                                }`}
+                              >
+                                {w.display_type === "OVERRIDE"
+                                  ? "Cover"
+                                  : w.display_type === "DIRECT"
+                                  ? "Additional"
+                                  : "Blueprint"}
+                              </span>
+                              {isMarkedForRemoval && (
+                                <span className="text-[9px] font-bold text-red-700 bg-red-100 px-1.5 py-0.2 rounded">
+                                  Pending Removal
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Action: Remove or Undo or Replace with Cover */}
+                            {w.shift_id ? (
+                              isMarkedForRemoval ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleUndoRemoveShift(w.shift_id!)}
+                                  className="px-2 py-1 rounded text-slate-700 hover:bg-slate-200 text-xs font-semibold flex items-center gap-1 border border-slate-300"
+                                >
+                                  <Undo2 className="h-3.5 w-3.5" /> Undo
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleStageRemoveShift(w.shift_id!)}
+                                  className="px-2 py-1 rounded text-red-700 hover:bg-red-50 text-xs font-semibold flex items-center gap-1 border border-red-200 bg-white"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" /> Remove Shift
+                                </button>
+                              )
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setReplacementTargetId(w.employee_id)}
+                                className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors ${
+                                  replacementTargetId === w.employee_id
+                                    ? "bg-indigo-600 text-white shadow-sm"
+                                    : "bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200"
+                                }`}
+                              >
+                                {replacementTargetId === w.employee_id ? "Target Selected" : "Replace with Cover"}
+                              </button>
+                            )}
                           </div>
-                          <div className="text-[11px] text-slate-500 mt-0.5">
-                            {w.assigned_hours} hrs • {w.reason || "Standard shift"}
+
+                          {/* Hours and Reason details */}
+                          <div className="text-[11px] text-slate-500 mt-1 flex flex-wrap items-center gap-3">
+                            <span>{w.assigned_hours} hrs</span>
+                            <span>•</span>
+                            <span className="flex items-center gap-1 italic text-slate-600">
+                              <FileText className="h-3 w-3 text-slate-400 shrink-0" />
+                              Reason: {w.reason || "Standard shift"}
+                            </span>
+                            {w.original_employee_name && (
+                              <>
+                                <span>•</span>
+                                <span className="text-indigo-600 font-medium">
+                                  Covering: {w.original_employee_name}
+                                </span>
+                              </>
+                            )}
                           </div>
                         </div>
-
-                        {w.shift_id ? (
-                          <button
-                            onClick={() => handleDeleteShift(w.shift_id!)}
-                            className="p-1.5 rounded text-red-600 hover:bg-red-50 text-xs font-semibold flex items-center gap-1"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" /> Remove Shift
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => setReplacementTargetId(w.employee_id)}
-                            className="px-2.5 py-1 rounded bg-indigo-50 text-indigo-700 text-xs font-semibold hover:bg-indigo-100 border border-indigo-200"
-                          >
-                            Replace with Cover
-                          </button>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
+
+              {/* 2. Staged Additions (Newly Added Operational Workers) */}
+              {stagedAdditions.length > 0 && (
+                <div className="space-y-2 pt-2 border-t border-slate-200">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-800 flex items-center gap-1.5">
+                      <Sparkles className="h-4 w-4 text-emerald-600" />
+                      Staged Additions ({stagedAdditions.length})
+                    </h4>
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
+                      Not saved yet
+                    </span>
+                  </div>
+
+                  <div className="space-y-2">
+                    {stagedAdditions.map((addition) => (
+                      <div
+                        key={addition.tempId}
+                        className="p-3 rounded-lg border border-emerald-200 bg-emerald-50/40 space-y-2"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-slate-900">{addition.employee_name}</span>
+                            {addition.tally_id && (
+                              <span className="font-mono text-[10px] text-slate-400">({addition.tally_id})</span>
+                            )}
+                            <span
+                              className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-bold ${
+                                addition.source === "OVERRIDE"
+                                  ? "bg-indigo-100 text-indigo-800"
+                                  : "bg-emerald-100 text-emerald-800"
+                              }`}
+                            >
+                              {addition.source === "OVERRIDE" ? "Cover" : "Additional"}
+                            </span>
+                            {addition.original_employee_name && (
+                              <span className="text-[10px] text-indigo-700">
+                                (Replacing: {addition.original_employee_name})
+                              </span>
+                            )}
+                            {addition.is_rest_day && (
+                              <span className="text-[9px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.2 rounded border border-amber-200">
+                                Rest Day Overtime
+                              </span>
+                            )}
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveStagedAddition(addition.tempId)}
+                            className="text-slate-400 hover:text-red-600 p-1 rounded hover:bg-slate-100"
+                            title="Remove addition"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+
+                        {/* Editable inputs for Hours and Reason/Note */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                          <div className="sm:col-span-1">
+                            <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">
+                              Assigned Hours
+                            </label>
+                            <input
+                              type="number"
+                              step="0.5"
+                              value={addition.assigned_hours}
+                              onChange={(e) =>
+                                handleUpdateStagedHours(addition.tempId, parseFloat(e.target.value) || 0)
+                              }
+                              className="w-full text-xs py-1 px-2 rounded border border-slate-300 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">
+                              Reason / Shift Note
+                            </label>
+                            <input
+                              type="text"
+                              value={addition.override_reason}
+                              onChange={(e) => handleUpdateStagedReason(addition.tempId, e.target.value)}
+                              placeholder="Reason / note..."
+                              className="w-full text-xs py-1 px-2 rounded border border-slate-300 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Public Holiday Warning Banner */}
               {selectedCell.cell.is_public_holiday && (
@@ -843,11 +1122,26 @@ export const OperationalPlanner: React.FC = () => {
                 </div>
               )}
 
-              {/* Form: Assign Shift / Cover */}
+              {/* 3. Assign Candidates & Crew */}
               <div className="pt-3 border-t border-slate-200 space-y-3">
-                <h4 className="text-xs font-bold uppercase text-slate-600">
-                  {replacementTargetId ? "Assign Replacement Cover Worker" : "Assign Single-Day Operational Shift"}
-                </h4>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                    <UserCheck className="h-4 w-4 text-indigo-600" />
+                    {replacementTargetId ? "Select Replacement Worker" : "Add Operational Worker"}
+                  </h4>
+
+                  {selectedSupervisorId && (
+                    <label className="text-xs font-medium text-indigo-700 flex items-center gap-1.5 cursor-pointer bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                      <input
+                        type="checkbox"
+                        checked={filterToSupervisorCrew}
+                        onChange={(e) => setFilterToSupervisorCrew(e.target.checked)}
+                        className="rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
+                      />
+                      <span>Filter to Selected Supervisor's Crew</span>
+                    </label>
+                  )}
+                </div>
 
                 {replacementTargetId && (
                   <div className="p-2.5 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-800 text-xs flex items-center justify-between">
@@ -866,26 +1160,6 @@ export const OperationalPlanner: React.FC = () => {
                   </div>
                 )}
 
-                {/* Candidate Selection Header with In-Modal Crew Filter */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
-                  <div className="flex items-center gap-1.5">
-                    <Sparkles className="h-4 w-4 text-indigo-600" />
-                    <span className="text-xs font-bold text-slate-700">Select Worker</span>
-                  </div>
-
-                  {selectedSupervisorId && (
-                    <label className="text-xs font-medium text-indigo-700 flex items-center gap-1.5 cursor-pointer bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
-                      <input
-                        type="checkbox"
-                        checked={filterToSupervisorCrew}
-                        onChange={(e) => setFilterToSupervisorCrew(e.target.checked)}
-                        className="rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
-                      />
-                      <span>Filter to Selected Supervisor's Crew</span>
-                    </label>
-                  )}
-                </div>
-
                 {/* Candidate Search */}
                 <div className="relative">
                   <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
@@ -900,32 +1174,30 @@ export const OperationalPlanner: React.FC = () => {
 
                 {/* Candidate List */}
                 {loadingCandidates ? (
-                  <div className="text-xs text-slate-400 py-3 text-center">Loading candidates...</div>
+                  <div className="text-xs text-slate-400 py-4 text-center">Loading candidates...</div>
+                ) : filteredCandidates.length === 0 ? (
+                  <div className="text-xs text-slate-400 py-4 text-center italic">
+                    No matching available candidates found for this slot.
+                  </div>
                 ) : (
-                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                  <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
                     {filteredCandidates.map((cand) => {
-                      const isSelected = selectedWorkerId === cand.employee_id;
-                      const isOffDay = (cand.weekly_off_day || "").toUpperCase() === selectedCell.cell.weekday;
+                      const isOffDay = isSameWeekday(cand.weekly_off_day, selectedCell.cell.weekday);
                       const isBlocked = cand.is_blocked;
                       const remainingHours = Math.max(0, Number(cand.standard_hours) - Number(cand.today_allocated_hours || 0));
 
                       return (
                         <div
                           key={cand.employee_id}
-                          onClick={() => {
-                            if (!isBlocked) setSelectedWorkerId(cand.employee_id);
-                          }}
-                          className={`p-2 rounded-lg border flex items-center justify-between text-xs transition-colors ${
+                          className={`p-2.5 rounded-lg border flex items-center justify-between text-xs transition-colors ${
                             isBlocked
-                              ? "bg-slate-50 border-slate-200 opacity-60 cursor-not-allowed text-slate-400"
-                              : isSelected
-                              ? "bg-indigo-50 border-indigo-400 text-indigo-900 font-semibold cursor-pointer"
-                              : "bg-white border-slate-200 hover:border-indigo-300 text-slate-800 cursor-pointer"
+                              ? "bg-slate-50 border-slate-200 opacity-60 text-slate-400"
+                              : "bg-white border-slate-200 hover:border-indigo-300 text-slate-800"
                           }`}
                         >
-                          <div>
+                          <div className="space-y-0.5">
                             <div className="flex items-center gap-2">
-                              <span>{cand.name}</span>
+                              <span className="font-semibold">{cand.name}</span>
                               <span className="font-mono text-[10px] text-slate-400">({cand.tally_id})</span>
                               {cand.exact_staff_type_match && (
                                 <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-1 rounded">
@@ -933,7 +1205,7 @@ export const OperationalPlanner: React.FC = () => {
                                 </span>
                               )}
                             </div>
-                            <div className="text-[10px] text-slate-500 flex items-center gap-2 mt-0.5">
+                            <div className="text-[10px] text-slate-500 flex items-center gap-2">
                               <span>{cand.staff_grade_description}</span>
                               <span>•</span>
                               <span className={isOffDay ? "text-amber-700 font-bold" : ""}>
@@ -966,82 +1238,55 @@ export const OperationalPlanner: React.FC = () => {
                           <button
                             type="button"
                             disabled={isBlocked}
-                            className={`px-2.5 py-1 rounded text-[11px] font-semibold ${
+                            onClick={() => handleAddCandidateToStaged(cand)}
+                            className={`px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1 transition-colors ${
                               isBlocked
                                 ? "bg-slate-100 text-slate-400 cursor-not-allowed"
-                                : isSelected
-                                ? "bg-indigo-600 text-white"
-                                : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                                : "bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white border border-indigo-200"
                             }`}
                           >
-                            {isBlocked ? "Blocked" : isSelected ? "Selected" : "Select"}
+                            <Plus className="h-3.5 w-3.5" />
+                            {replacementTargetId ? "Add Cover" : "Add Worker"}
                           </button>
                         </div>
                       );
                     })}
                   </div>
                 )}
-
-                {/* Rest day warning for selected worker */}
-                {selectedCandidateObj &&
-                  selectedCandidateObj.weekly_off_day?.toUpperCase() === selectedCell.cell.weekday && (
-                    <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-center gap-2">
-                      <ShieldAlert className="h-4 w-4 text-amber-600 shrink-0" />
-                      <span>
-                        <strong>Rest Day Overtime:</strong> {selectedCandidateObj.name} has their weekly off on {selectedCell.cell.weekday}. Statutory overtime will apply.
-                      </span>
-                    </div>
-                  )}
-
-                <div className="grid grid-cols-2 gap-3 pt-1">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">
-                      Assigned Hours
-                    </label>
-                    <input
-                      type="number"
-                      step="0.5"
-                      value={shiftHours}
-                      onChange={(e) => setShiftHours(e.target.value)}
-                      className="w-full text-xs py-2 px-3 rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">
-                      Reason / Note
-                    </label>
-                    <input
-                      type="text"
-                      placeholder={replacementTargetId ? "Sick leave cover" : "Extra shift"}
-                      value={overrideReason}
-                      onChange={(e) => setOverrideReason(e.target.value)}
-                      className="w-full text-xs py-2 px-3 rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
-                </div>
               </div>
             </div>
 
             {/* Modal Footer */}
-            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setSelectedCell(null)}
-                className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-200 transition-colors"
-              >
-                Cancel
-              </button>
+            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+              <div className="text-xs text-slate-500">
+                {stagedAdditions.length > 0 || stagedRemovals.size > 0 ? (
+                  <span className="font-semibold text-indigo-700">
+                    Staged: +{stagedAdditions.length} addition(s), -{stagedRemovals.size} removal(s)
+                  </span>
+                ) : (
+                  <span>No changes staged</span>
+                )}
+              </div>
 
-              <button
-                type="button"
-                onClick={handleCreateShift}
-                disabled={savingShift || !selectedWorkerId}
-                className="px-4 py-2 rounded-lg text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1.5 shadow-sm transition-colors"
-              >
-                {savingShift && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                {replacementTargetId ? "Confirm Replacement Cover" : "Assign Operational Shift"}
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleCancelModal}
+                  className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-200 transition-colors"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSaveOperationalRoster}
+                  disabled={savingShift || (stagedAdditions.length === 0 && stagedRemovals.size === 0)}
+                  className="px-4 py-2 rounded-lg text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1.5 shadow-sm transition-colors"
+                >
+                  {savingShift && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  Save Operational Roster
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -25,6 +25,13 @@ import {
 
 const WEEKDAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] as const;
 
+function isSameWeekday(offDay: string | null | undefined, weekdayCode: string): boolean {
+  if (!offDay || !weekdayCode) return false;
+  const off = offDay.trim().toUpperCase();
+  const code = weekdayCode.trim().toUpperCase();
+  return off === code || off.startsWith(code) || code.startsWith(off);
+}
+
 interface SupervisorOption {
   id: string;
   name: string;
@@ -290,7 +297,7 @@ export const BasePlanner: React.FC = () => {
         const workingDays = ["MON", "TUE", "WED", "THU", "FRI", "SAT"];
         for (const d of workingDays) {
           slotEntries.forEach((se, idx) => {
-            if (se.weekly_off_day && se.weekly_off_day.trim().toUpperCase() === d) {
+            if (isSameWeekday(se.weekly_off_day, d)) {
               return; // Skip worker on their weekly off day
             }
             newEntries.push({
@@ -702,7 +709,7 @@ export const BasePlanner: React.FC = () => {
                                     {matchingEntries.length > 0 ? (
                                       <div className="space-y-1">
                                         {matchingEntries.map((e) => {
-                                          const isOffDay = (e.weekly_off_day || "").toUpperCase() === dow;
+                                          const isOffDay = isSameWeekday(e.weekly_off_day, dow);
                                           // Format label with cadence prefix if monthly/quarterly
                                           let cadenceTag = "";
                                           if (isMonthly) {
@@ -917,7 +924,7 @@ export const BasePlanner: React.FC = () => {
                 ) : (
                   <div className="space-y-1.5">
                     {slotEntries.map((e, idx) => {
-                      const isOffDay = (e.weekly_off_day || "").toUpperCase() === activeSlot.weekday;
+                      const isOffDay = isSameWeekday(e.weekly_off_day, activeSlot.weekday);
 
                       return (
                         <div
@@ -1018,7 +1025,7 @@ export const BasePlanner: React.FC = () => {
                       const requiredHeadcount = activeSlot.item.required_staff_count || 1;
                       const isSlotFull = slotEntries.length >= requiredHeadcount;
                       const isExactMatch = cand.exact_staff_type_match;
-                      const isOffDay = (cand.weekly_off_day || "").toUpperCase() === activeSlot.weekday;
+                      const isOffDay = isSameWeekday(cand.weekly_off_day, activeSlot.weekday);
                       const isAlreadyAssigned = slotEntries.some((e) => e.employee_id === cand.employee_id);
                       const isBlockedByQuota = quotaStatusInModal.isQuotaReached && !quotaStatusInModal.isCurrentSlotAlreadyScheduled;
                       const isBlockedByHeadcount = isSlotFull && !isAlreadyAssigned;

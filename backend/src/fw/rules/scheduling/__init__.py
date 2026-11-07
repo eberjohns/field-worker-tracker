@@ -18,6 +18,7 @@ from fw.rules.scheduling.assignment import (
 from fw.rules.scheduling.blueprint import (
     BlueprintEntry,
     ResolvedTemplateSlot,
+    is_same_weekday,
     resolve_base_template_slots,
     validate_base_template_entries,
 )
@@ -101,6 +102,7 @@ __all__ = [
     "evaluate_worker_day_marker",
     "extract_grade_group",
     "generate_assignment_dates",
+    "is_same_weekday",
     "normalize_day_name",
     "normalize_weekday_pattern",
     "rank_candidates_for_job",

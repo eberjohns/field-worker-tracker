@@ -1,5 +1,6 @@
 """SchedulingService orchestrating standing assignments, daily scheduled work, roster, and coverage."""
 
+import calendar
 from collections import defaultdict
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
@@ -2343,6 +2344,15 @@ class SchedulingService:
     ) -> OperationalCoverageResponse:
         """Fetch weekly operational coverage matrix with baseline blueprints and single-day overrides."""
         week_end = week_start + timedelta(days=6)
+        mid_week = week_start + timedelta(days=3)
+
+        # Wide bounds to cover Month and Quarter for any monthly/quarterly job items
+        q_idx = (mid_week.month - 1) // 3
+        q_start_m = q_idx * 3 + 1
+        q_end_m = q_start_m + 2
+        wide_start = min(week_start, date(mid_week.year, q_start_m, 1))
+        _, q_last_day = calendar.monthrange(mid_week.year, q_end_m)
+        wide_end = max(week_end, date(mid_week.year, q_end_m, q_last_day))
 
         # Worksites query
         ws_stmt = (
@@ -2373,27 +2383,27 @@ class SchedulingService:
             for t in templates:
                 templates_by_item[t.job_item_id] = t
 
-        # Load single-day operational shifts for this week
+        # Load single-day operational shifts across the wide period
         sw_stmt = (
             select(ScheduledWork)
             .where(
-                ScheduledWork.work_date >= week_start,
-                ScheduledWork.work_date <= week_end,
+                ScheduledWork.work_date >= wide_start,
+                ScheduledWork.work_date <= wide_end,
                 ScheduledWork.status == "ACTIVE",
             )
             .options(selectinload(ScheduledWork.employee))
         )
         sw_rows = (await self.session.execute(sw_stmt)).scalars().all()
         sw_by_item_date: dict[tuple[UUID, date], list[ScheduledWork]] = defaultdict(list)
-        sw_by_item_week: dict[UUID, list[ScheduledWork]] = defaultdict(list)
+        sw_by_item_all: dict[UUID, list[ScheduledWork]] = defaultdict(list)
         for s in sw_rows:
             sw_by_item_date[(s.job_item_id, s.work_date)].append(s)
-            sw_by_item_week[s.job_item_id].append(s)
+            sw_by_item_all[s.job_item_id].append(s)
 
-        # Load public holidays for the week
+        # Load public holidays across the wide period
         holidays_stmt = select(PublicHoliday).where(
-            PublicHoliday.holiday_date >= week_start,
-            PublicHoliday.holiday_date <= week_end,
+            PublicHoliday.holiday_date >= wide_start,
+            PublicHoliday.holiday_date <= wide_end,
         )
         holiday_rows = (await self.session.execute(holidays_stmt)).scalars().all()
         holidays_by_date: dict[date, PublicHoliday] = {h.holiday_date: h for h in holiday_rows}
@@ -2432,7 +2442,6 @@ class SchedulingService:
             for it in sorted(active_items, key=lambda x: x.sub_item_code):
                 tmpl = templates_by_item.get(it.id)
 
-                # 1. Resolve blueprint slots for the whole week
                 blueprint_entries: list[BlueprintEntry] = []
                 if tmpl:
                     blueprint_entries = [
@@ -2445,49 +2454,100 @@ class SchedulingService:
                         for e in tmpl.entries
                     ]
 
-                resolved_template_slots = resolve_base_template_slots(
+                # Determine period bounds for this item's frequency
+                freq = (it.frequency_unit or "WEEK").upper()
+                if freq == "MONTH":
+                    p_start = date(mid_week.year, mid_week.month, 1)
+                    _, m_last_day = calendar.monthrange(mid_week.year, mid_week.month)
+                    p_end = date(mid_week.year, mid_week.month, m_last_day)
+                    p_name = "Month"
+                elif freq == "QUARTER":
+                    p_start = date(mid_week.year, q_start_m, 1)
+                    p_end = date(mid_week.year, q_end_m, q_last_day)
+                    p_name = "Quarter"
+                elif freq == "YEAR":
+                    p_start = date(mid_week.year, 1, 1)
+                    p_end = date(mid_week.year, 12, 31)
+                    p_name = "Year"
+                else:
+                    p_start = week_start
+                    p_end = week_end
+                    p_name = "Week"
+
+                target_occurrences = int(it.occurrences_per_period) if it.occurrences_per_period else 1
+
+                # 1. Resolve blueprint slots across the full evaluation period
+                period_dates = [p_start + timedelta(days=i) for i in range((p_end - p_start).days + 1)]
+                resolved_period_slots = resolve_base_template_slots(
                     allocation_mode=tmpl.allocation_mode if tmpl else "DAY_OF_WEEK",
                     entries=blueprint_entries,
-                    target_dates=week_dates,
+                    target_dates=period_dates,
                     public_holidays=holiday_dates,
                     worker_weekly_off_days=worker_weekly_off_days,
                     job_working_days=None,
                 )
-                slots_by_date: dict[date, list[ResolvedTemplateSlot]] = defaultdict(list)
-                for slot in resolved_template_slots:
-                    slots_by_date[slot.work_date].append(slot)
 
-                # 2. Pacing windows and recommendation
-                target_occurrences = int(it.occurrences_per_period) if it.frequency_unit == "WEEK" else 1
+                # Filter slots to the displayed 7-day week
+                slots_by_date: dict[date, list[ResolvedTemplateSlot]] = defaultdict(list)
+                for slot in resolved_period_slots:
+                    if week_start <= slot.work_date <= week_end:
+                        slots_by_date[slot.work_date].append(slot)
+
+                # 2. Pacing windows and recommendation across the period
                 pacing_windows = calculate_pacing_windows(
-                    period_start=week_start,
-                    period_end=week_end,
+                    period_start=p_start,
+                    period_end=p_end,
                     occurrences=target_occurrences if target_occurrences > 0 else 1,
                     scheduled_weekdays=it.weekday_pattern,
                     public_holidays=holiday_dates,
                 )
-                recommended_dates = {w.recommended_date for w in pacing_windows}
+                recommended_dates = {
+                    w.recommended_date for w in pacing_windows if week_start <= w.recommended_date <= week_end
+                }
 
-                # 3. Quota calculation for week
-                # Collect all assigned visits (blueprint distinct dates + operational shifts distinct dates)
-                all_visit_dates = set(slots_by_date.keys()).union(
-                    {s.work_date for s in sw_by_item_week.get(it.id, [])}
-                )
-                from uuid import uuid4
-                visit_records = [
-                    VisitRecord(
-                        id=uuid4(),
-                        work_date=vd,
-                        created_at=datetime(vd.year, vd.month, vd.day, tzinfo=UTC),
-                    )
-                    for vd in sorted(all_visit_dates)
+                # 3. Quota calculation across the period
+                period_blueprint_dates = {slot.work_date for slot in resolved_period_slots}
+                item_sw_in_period = [
+                    s for s in sw_by_item_all.get(it.id, [])
+                    if p_start <= s.work_date <= p_end
                 ]
+                sw_by_date_in_period: dict[date, list[ScheduledWork]] = defaultdict(list)
+                for s in item_sw_in_period:
+                    sw_by_date_in_period[s.work_date].append(s)
+
+                from uuid import uuid4
+                visit_records: list[VisitRecord] = []
+                # Blueprint visits have precedence (created at epoch)
+                for vd in sorted(period_blueprint_dates):
+                    visit_records.append(
+                        VisitRecord(
+                            id=uuid4(),
+                            work_date=vd,
+                            created_at=tmpl.created_at if tmpl and tmpl.created_at else datetime(2000, 1, 1, tzinfo=UTC),
+                        )
+                    )
+
+                # Operational shifts on dates not already covered by blueprint
+                for vd, sw_list in sw_by_date_in_period.items():
+                    if vd not in period_blueprint_dates:
+                        earliest_created = min(
+                            (s.created_at for s in sw_list if s.created_at),
+                            default=datetime(vd.year, vd.month, vd.day, tzinfo=UTC),
+                        )
+                        visit_records.append(
+                            VisitRecord(
+                                id=sw_list[0].id,
+                                work_date=vd,
+                                created_at=earliest_created,
+                            )
+                        )
+
                 quota_result = evaluate_period_quota(
                     target_count=target_occurrences,
                     visits=visit_records,
-                    period_start=week_start,
-                    period_end=week_end,
-                    period_name="Week",
+                    period_start=p_start,
+                    period_end=p_end,
+                    period_name=p_name,
                     windows=pacing_windows,
                 )
                 quota_status_by_date = {

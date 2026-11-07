@@ -359,4 +359,37 @@ def test_candidate_ranking_permanent_exclusivity_and_remote_capacity():
     assert "Blocked: Already assigned to PERMANENT job today" in ranked[1].warnings
 
 
+def test_full_weekday_name_normalization():
+    """Verify full uppercase weekday strings (e.g. 'FRIDAY') normalize against 3-letter codes."""
+    emp_id = uuid4()
+    # 2026-11-27 is a Friday
+    target_date = date(2026, 11, 27)
+
+    # Worker weekly off stored as full name "FRIDAY"
+    slots = resolve_base_template_slots(
+        allocation_mode="DAY_OF_WEEK",
+        entries=[BlueprintEntry(employee_id=emp_id, weekday_mask="FRI", assigned_hours=8.0)],
+        target_dates=[target_date],
+        public_holidays=set(),
+        worker_weekly_off_days={emp_id: "FRIDAY"},
+    )
+    assert len(slots) == 1
+    assert slots[0].is_worker_weekly_off is True
+    assert slots[0].status == "REST_DAY_WARNING"
+
+    # In operational cell resolution
+    resolved = resolve_operational_cell(
+        work_date=target_date,
+        base_slots=slots,
+        approved_leave_worker_ids=set(),
+        operational_shifts=[],
+        is_public_holiday=False,
+        worker_weekly_off_days={emp_id: "FRIDAY"},
+    )
+    assert len(resolved) == 1
+    assert resolved[0].is_rest_day is True
+    assert "Rest Day Overtime" in resolved[0].tags
+
+
+
 

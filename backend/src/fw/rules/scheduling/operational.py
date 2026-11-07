@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from uuid import UUID
 
-from fw.rules.scheduling.blueprint import ResolvedTemplateSlot
+from fw.rules.scheduling.blueprint import ResolvedTemplateSlot, is_same_weekday
 
 
 @dataclass(frozen=True)
@@ -95,7 +95,7 @@ def resolve_operational_cell(
 
         if replacement is not None:
             # Replaced by an operational override!
-            rep_off = off_days.get(replacement.employee_id, "").upper() == dow
+            rep_off = is_same_weekday(off_days.get(replacement.employee_id), dow)
             tags = ["Cover Replacement"]
             if is_public_holiday:
                 tags.append("Holiday Overtime")
@@ -136,7 +136,7 @@ def resolve_operational_cell(
             )
         else:
             # Normal base blueprint worker present
-            w_off = off_days.get(w_id, "").upper() == dow
+            w_off = is_same_weekday(off_days.get(w_id), dow)
             tags = ["Base Plan"]
             if is_public_holiday:
                 tags.append("Holiday Overtime")
@@ -165,7 +165,7 @@ def resolve_operational_cell(
         if direct.employee_id in [r.employee_id for r in resolved]:
             continue
 
-        dir_off = off_days.get(direct.employee_id, "").upper() == dow
+        dir_off = is_same_weekday(off_days.get(direct.employee_id), dow)
         tags = ["Operational Shift"]
         if is_public_holiday:
             tags.append("Holiday Overtime")
