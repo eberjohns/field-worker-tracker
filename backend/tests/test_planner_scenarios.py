@@ -12,6 +12,7 @@ import sys
 sys.path.insert(0, "backend/src")
 
 import asyncio
+import socket
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -25,8 +26,19 @@ from fw.modules.scheduling.schemas import ScheduledWorkCreate
 from fw.modules.scheduling.service import SchedulingService
 
 
+def is_db_available() -> bool:
+    try:
+        with socket.create_connection(("127.0.0.1", 5432), timeout=0.5):
+            return True
+    except OSError:
+        return False
+
+
 @pytest.mark.asyncio
 async def test_planner_coverage_and_excess_integrity():
+    if not is_db_available():
+        pytest.skip("Database integration test requires PostgreSQL on localhost:5432")
+
     print("=== STARTING PLANNER E2E VERIFICATION ===")
 
     async with async_session_factory() as session:
