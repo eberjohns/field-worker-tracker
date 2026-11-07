@@ -452,7 +452,9 @@ async def test_weekly_roster_and_excel_export(admin_client, sample_test_data):
     assert roster_data["total_workers"] >= 3
 
     # Check day markers for Worker 1 on Nov 3 (Tuesday, public holiday -> SKIPPED)
-    w1_row = next((w for w in roster_data["workers"] if w["employee_id"] == str(data["w1_id"])), None)
+    w1_row = next(
+        (w for w in roster_data["workers"] if w["employee_id"] == str(data["w1_id"])), None
+    )
     assert w1_row is not None
     tue_cell = next((d for d in w1_row["days"] if d["work_date"] == "2026-11-03"), None)
     assert tue_cell is not None
@@ -468,7 +470,10 @@ async def test_weekly_roster_and_excel_export(admin_client, sample_test_data):
         f"/api/v1/roster?week_start={week_start.isoformat()}&format=xlsx",
     )
     assert excel_resp.status_code == 200
-    assert excel_resp.headers["content-type"] == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    assert (
+        excel_resp.headers["content-type"]
+        == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
     assert len(excel_resp.content) > 0
 
     # Load and verify Excel sheet
@@ -495,9 +500,13 @@ async def test_job_coverage_view(admin_client, sample_test_data):
     cov_data = resp.json()
     assert "worksites" in cov_data
 
-    target_site = next((ws for ws in cov_data["worksites"] if ws["worksite_id"] == str(data["worksite_id"])), None)
+    target_site = next(
+        (ws for ws in cov_data["worksites"] if ws["worksite_id"] == str(data["worksite_id"])), None
+    )
     assert target_site is not None
-    item_a = next((i for i in target_site["items"] if i["job_item_id"] == str(data["item_a_id"])), None)
+    item_a = next(
+        (i for i in target_site["items"] if i["job_item_id"] == str(data["item_a_id"])), None
+    )
     assert item_a is not None
 
     # Check Monday (Nov 2): Item A requires 3 staff.
@@ -588,7 +597,9 @@ async def test_300_workers_roster_performance(admin_client, sample_test_data):
     data = resp.json()
     assert data["total_workers"] >= 300
     # Performance requirement: under 2.0 seconds
-    assert elapsed_sec < 2.0, f"Roster for 300 workers took {elapsed_sec:.3f}s (exceeded 2.0s limit)"
+    assert elapsed_sec < 2.0, (
+        f"Roster for 300 workers took {elapsed_sec:.3f}s (exceeded 2.0s limit)"
+    )
 
 
 @db_required
@@ -718,17 +729,20 @@ async def test_monthly_standing_assignment_materialization(admin_client, sample_
     # Query materialized scheduled work for this job item
     async with async_session_factory() as session:
         sw_records = (
-            await session.execute(
-                select(ScheduledWork).where(
-                    ScheduledWork.job_item_id == monthly_item.id,
-                    ScheduledWork.employee_id == sample_test_data["w2_id"],
-                    ScheduledWork.status == "ACTIVE",
+            (
+                await session.execute(
+                    select(ScheduledWork).where(
+                        ScheduledWork.job_item_id == monthly_item.id,
+                        ScheduledWork.employee_id == sample_test_data["w2_id"],
+                        ScheduledWork.status == "ACTIVE",
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         # Over Nov 1 to Dec 31 (2 months), exactly 2 visits should be materialized (1 in Nov, 1 in Dec)
         assert len(sw_records) == 2, f"Expected 2 monthly visits, got {len(sw_records)}"
         months = {sw.work_date.month for sw in sw_records}
         assert months == {11, 12}
-

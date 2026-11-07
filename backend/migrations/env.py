@@ -10,8 +10,10 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 import fw.modules.audit.models  # noqa: F401
 import fw.modules.identity.models  # noqa: F401
 import fw.modules.imports.models  # noqa: F401
+import fw.modules.jobs.models  # noqa: F401
 import fw.modules.org.models  # noqa: F401
 import fw.modules.payroll.models  # noqa: F401
+import fw.modules.scheduling.models  # noqa: F401
 import fw.modules.settings.models  # noqa: F401
 from fw.core.config import get_settings
 from fw.core.db import Base

@@ -8,22 +8,22 @@ Verifies against the live PostgreSQL database:
 """
 
 import sys
+
 sys.path.insert(0, "backend/src")
 
 import asyncio
 from datetime import date, timedelta
 from decimal import Decimal
-from uuid import UUID
+
+import pytest
+from sqlalchemy import delete, select
 
 from fw.core.db import async_session_factory
-from fw.modules.jobs.models import Worksite, JobItem
+from fw.modules.jobs.models import JobItem, Worksite
 from fw.modules.scheduling.models import ScheduledWork
 from fw.modules.scheduling.schemas import ScheduledWorkCreate
 from fw.modules.scheduling.service import SchedulingService
-from sqlalchemy import select, delete
 
-
-import pytest
 
 @pytest.mark.asyncio
 async def test_planner_coverage_and_excess_integrity():
@@ -36,10 +36,12 @@ async def test_planner_coverage_and_excess_integrity():
         # 1. Look up worksite 12A10604 and Supervisor item (1x/week)
         # -------------------------------------------------------------
         from uuid import uuid4
+
         ws_stmt = select(Worksite).where(Worksite.job_number == "12A10604")
         ws = (await session.execute(ws_stmt)).scalar_one_or_none()
         if not ws:
             from fw.modules.org import Group, Zone
+
             grp = (await session.execute(select(Group).limit(1))).scalars().first()
             if not grp:
                 grp = Group(id=uuid4(), code="G1", name="Test Group")
@@ -87,14 +89,16 @@ async def test_planner_coverage_and_excess_integrity():
             )
             session.add(sup_item)
             await session.flush()
-        print(f"Verified Supervisor Item: id={sup_item.id}, freq={sup_item.frequency_unit}, occ={sup_item.occurrences_per_period}, pattern={sup_item.weekday_pattern}")
+        print(
+            f"Verified Supervisor Item: id={sup_item.id}, freq={sup_item.frequency_unit}, occ={sup_item.occurrences_per_period}, pattern={sup_item.weekday_pattern}"
+        )
 
         # Choose a clean test week: 2026-11-23 (Monday) to 2026-11-29 (Sunday)
         test_week_monday = date(2026, 11, 23)
-        test_tuesday = test_week_monday + timedelta(days=1)   # 2026-11-24
+        test_tuesday = test_week_monday + timedelta(days=1)  # 2026-11-24
         test_thursday = test_week_monday + timedelta(days=3)  # 2026-11-26
-        test_friday = test_week_monday + timedelta(days=4)    # 2026-11-27
-        test_sunday = test_week_monday + timedelta(days=6)    # 2026-11-29
+        test_friday = test_week_monday + timedelta(days=4)  # 2026-11-27
+        test_sunday = test_week_monday + timedelta(days=6)  # 2026-11-29
 
         # Clean any existing ScheduledWork in this test week for this item
         del_stmt = delete(ScheduledWork).where(
@@ -112,38 +116,52 @@ async def test_planner_coverage_and_excess_integrity():
         target_ws_row = next((r for r in cov_view.worksites if r.job_number == "12A10604"), None)
         assert target_ws_row is not None, "Worksite 12A10604 not in coverage view"
 
-        target_item_row = next((it for it in target_ws_row.items if it.job_item_id == sup_item.id), None)
+        target_item_row = next(
+            (it for it in target_ws_row.items if it.job_item_id == sup_item.id), None
+        )
         assert target_item_row is not None, "Supervisor item not found in coverage view"
 
         day_cells = {d.weekday: d for d in target_item_row.days}
         mon_cell = day_cells["MON"]
         thu_cell = day_cells["THU"]
 
-        print(f"\nScenario 1 Check:")
-        print(f"  Monday Cell: required={mon_cell.required_staff_count}, to_be_covered={mon_cell.is_to_be_covered}, quota_met={mon_cell.is_quota_met}")
-        print(f"  Thursday Cell: required={thu_cell.required_staff_count}, to_be_covered={thu_cell.is_to_be_covered}, quota_met={thu_cell.is_quota_met}")
+        print("\nScenario 1 Check:")
+        print(
+            f"  Monday Cell: required={mon_cell.required_staff_count}, to_be_covered={mon_cell.is_to_be_covered}, quota_met={mon_cell.is_quota_met}"
+        )
+        print(
+            f"  Thursday Cell: required={thu_cell.required_staff_count}, to_be_covered={thu_cell.is_to_be_covered}, quota_met={thu_cell.is_quota_met}"
+        )
 
-        assert mon_cell.required_staff_count == 1, f"Expected Monday required=1, got {mon_cell.required_staff_count}"
+        assert mon_cell.required_staff_count == 1, (
+            f"Expected Monday required=1, got {mon_cell.required_staff_count}"
+        )
         assert mon_cell.is_to_be_covered is True, "Expected Monday to_be_covered=True"
-        assert thu_cell.required_staff_count == 0, f"Expected Thursday required=0, got {thu_cell.required_staff_count}"
+        assert thu_cell.required_staff_count == 0, (
+            f"Expected Thursday required=0, got {thu_cell.required_staff_count}"
+        )
         assert thu_cell.is_to_be_covered is False, "Expected Thursday to_be_covered=False"
-        print("  ✓ PASS: Default target day for 1x/week item correctly resolves to Monday (not Thursday)!")
+        print(
+            "  ✓ PASS: Default target day for 1x/week item correctly resolves to Monday (not Thursday)!"
+        )
 
         # -------------------------------------------------------------
         # Scenario 2: Assign Thursday First -> Verify Requirement Fulfilled
         # -------------------------------------------------------------
-        from fw.modules.org import Employee
         from fw.modules.identity.models import User
+        from fw.modules.org import Employee
 
         user_stmt = select(User).limit(1)
         test_user = (await session.execute(user_stmt)).scalars().first()
         if not test_user:
-            from fw.modules.identity import AuthService
+            from fw.modules.identity.service import hash_password
+
             test_user = User(
                 id=uuid4(),
+                employee_id=uuid4(),
                 username="ADMIN001",
                 role="ADMIN",
-                password_hash=AuthService.hash_password("admin123"),
+                credential_hash=hash_password("admin123"),
                 is_active=True,
             )
             session.add(test_user)
@@ -151,7 +169,9 @@ async def test_planner_coverage_and_excess_integrity():
         current_user_id = test_user.id
 
         # Pick any active employee
-        emp_stmt = select(Employee).where(Employee.is_active.is_(True), Employee.role != "ADMIN").limit(1)
+        emp_stmt = (
+            select(Employee).where(Employee.is_active.is_(True), Employee.role != "ADMIN").limit(1)
+        )
         test_emp = (await session.execute(emp_stmt)).scalars().first()
         if not test_emp:
             test_emp = Employee(
@@ -190,16 +210,26 @@ async def test_planner_coverage_and_excess_integrity():
         mon_cell = day_cells["MON"]
         tue_cell = day_cells["TUE"]
 
-        print(f"  Thursday Cell: assigned={thu_cell.assigned_staff_count}, excess={thu_cell.is_excess}, to_be_covered={thu_cell.is_to_be_covered}")
-        print(f"  Monday Cell: quota_met={mon_cell.is_quota_met}, assigned={mon_cell.assigned_staff_count}")
-        print(f"  Tuesday Cell: quota_met={tue_cell.is_quota_met}, assigned={tue_cell.assigned_staff_count}")
+        print(
+            f"  Thursday Cell: assigned={thu_cell.assigned_staff_count}, excess={thu_cell.is_excess}, to_be_covered={thu_cell.is_to_be_covered}"
+        )
+        print(
+            f"  Monday Cell: quota_met={mon_cell.is_quota_met}, assigned={mon_cell.assigned_staff_count}"
+        )
+        print(
+            f"  Tuesday Cell: quota_met={tue_cell.is_quota_met}, assigned={tue_cell.assigned_staff_count}"
+        )
 
         assert thu_cell.assigned_staff_count == 1, "Expected Thursday assigned=1"
-        assert thu_cell.is_excess is False, "Expected Thursday is_excess=False (requirement fulfilled)"
+        assert thu_cell.is_excess is False, (
+            "Expected Thursday is_excess=False (requirement fulfilled)"
+        )
         assert thu_cell.is_to_be_covered is False, "Expected Thursday is_to_be_covered=False"
         assert mon_cell.is_quota_met is True, "Expected Monday is_quota_met=True"
         assert tue_cell.is_quota_met is True, "Expected Tuesday is_quota_met=True"
-        print("  ✓ PASS: Thursday assignment fulfilled weekly requirement and other days marked quota met!")
+        print(
+            "  ✓ PASS: Thursday assignment fulfilled weekly requirement and other days marked quota met!"
+        )
 
         # -------------------------------------------------------------
         # Scenario 2 Step B: Assign Tuesday Second -> Verify Tuesday is EXCESS and Thursday REMAINS FULFILLED
@@ -227,22 +257,34 @@ async def test_planner_coverage_and_excess_integrity():
         thu_cell = day_cells["THU"]
         tue_cell = day_cells["TUE"]
 
-        print(f"  Thursday Cell: assigned={thu_cell.assigned_staff_count}, excess={thu_cell.is_excess}, to_be_covered={thu_cell.is_to_be_covered}")
-        print(f"  Tuesday Cell: assigned={tue_cell.assigned_staff_count}, excess={tue_cell.is_excess}, to_be_covered={tue_cell.is_to_be_covered}")
+        print(
+            f"  Thursday Cell: assigned={thu_cell.assigned_staff_count}, excess={thu_cell.is_excess}, to_be_covered={thu_cell.is_to_be_covered}"
+        )
+        print(
+            f"  Tuesday Cell: assigned={tue_cell.assigned_staff_count}, excess={tue_cell.is_excess}, to_be_covered={tue_cell.is_to_be_covered}"
+        )
 
         # CRITICAL ASSERTIONS:
         assert thu_cell.is_excess is False, "CRITICAL ERROR: Thursday was swapped to excess!"
-        assert tue_cell.is_excess is True, "CRITICAL ERROR: Tuesday should be marked EXCESS (assigned second)!"
-        print("  ✓ PASS: Earlier assignment (Thursday) RETAINED requirement, and second assignment (Tuesday) is cleanly marked EXCESS! Zero swapping!")
+        assert tue_cell.is_excess is True, (
+            "CRITICAL ERROR: Tuesday should be marked EXCESS (assigned second)!"
+        )
+        print(
+            "  ✓ PASS: Earlier assignment (Thursday) RETAINED requirement, and second assignment (Tuesday) is cleanly marked EXCESS! Zero swapping!"
+        )
 
         # -------------------------------------------------------------
         # Scenario 3: Weekly Off Day Warning in Candidate Recommendations
         # -------------------------------------------------------------
-        friday_emp_stmt = select(Employee).where(
-            Employee.is_active.is_(True),
-            Employee.weekly_off_day.ilike("FRIDAY%"),
-            Employee.role != "ADMIN",
-        ).limit(1)
+        friday_emp_stmt = (
+            select(Employee)
+            .where(
+                Employee.is_active.is_(True),
+                Employee.weekly_off_day.ilike("FRIDAY%"),
+                Employee.role != "ADMIN",
+            )
+            .limit(1)
+        )
         friday_emp = (await session.execute(friday_emp_stmt)).scalars().first()
         if friday_emp:
             recs = await sched_svc.get_candidate_recommendations(
@@ -251,12 +293,18 @@ async def test_planner_coverage_and_excess_integrity():
             )
             friday_rec = next((r for r in recs if r.employee_id == friday_emp.id), None)
             if friday_rec:
-                print(f"\nScenario 3 Check (Friday Rest Day Warning):")
-                print(f"  Candidate: {friday_rec.name}, weekly_off={friday_rec.weekly_off_day}, warnings={friday_rec.warnings}")
+                print("\nScenario 3 Check (Friday Rest Day Warning):")
+                print(
+                    f"  Candidate: {friday_rec.name}, weekly_off={friday_rec.weekly_off_day}, warnings={friday_rec.warnings}"
+                )
                 has_rest_warning = any("weekly off" in w.lower() for w in friday_rec.warnings)
                 assert has_rest_warning, "Expected 'Weekly off day' in candidate warnings"
-                assert friday_rec.weekly_off_day == friday_emp.weekly_off_day, "Expected matching weekly_off_day"
-                print("  ✓ PASS: Candidate recommendation includes weekly off day and rest day warning!")
+                assert friday_rec.weekly_off_day == friday_emp.weekly_off_day, (
+                    "Expected matching weekly_off_day"
+                )
+                print(
+                    "  ✓ PASS: Candidate recommendation includes weekly off day and rest day warning!"
+                )
 
         # -------------------------------------------------------------
         # Cleanup test week records
@@ -274,4 +322,4 @@ async def test_planner_coverage_and_excess_integrity():
 
 
 if __name__ == "__main__":
-    asyncio.run(run_e2e_verification())
+    asyncio.run(test_planner_coverage_and_excess_integrity())

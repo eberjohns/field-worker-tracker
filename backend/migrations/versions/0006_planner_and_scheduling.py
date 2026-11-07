@@ -7,7 +7,6 @@ Create Date: 2026-11-05 09:00:00.000000
 """
 
 from collections.abc import Sequence
-from datetime import UTC, datetime
 from uuid import uuid4
 
 import sqlalchemy as sa
@@ -154,9 +153,7 @@ def upgrade() -> None:
     op.create_index(
         "ix_scheduled_work_worksite_date", "scheduled_work", ["worksite_id", "work_date"]
     )
-    op.create_index(
-        "ix_scheduled_work_emp_date", "scheduled_work", ["employee_id", "work_date"]
-    )
+    op.create_index("ix_scheduled_work_emp_date", "scheduled_work", ["employee_id", "work_date"])
     op.create_index("ix_scheduled_work_job_item", "scheduled_work", ["job_item_id"])
     op.create_index("ix_scheduled_work_occurrence", "scheduled_work", ["occurrence_id"])
     op.create_index("ix_scheduled_work_status", "scheduled_work", ["status"])
@@ -192,4 +189,3 @@ def downgrade() -> None:
     op.drop_index("ix_standing_assignments_is_active", table_name="standing_assignments")
     op.drop_index("ix_standing_assignments_dates", table_name="standing_assignments")
     op.drop_table("standing_assignments")
-

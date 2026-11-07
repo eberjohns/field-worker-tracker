@@ -469,5 +469,3 @@ class OperationalRosterResponse(BaseModel):
     week_start: date
     week_end: date
     workers: list[OperationalRosterWorkerRow]
-
-

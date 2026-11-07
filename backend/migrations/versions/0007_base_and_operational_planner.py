@@ -125,6 +125,11 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.execute(
+        sa.text(
+            "DELETE FROM scheduled_work WHERE source NOT IN ('STANDING', 'DIRECT', 'EXCEPTION', 'FOLLOW_UP')"
+        )
+    )
     op.drop_constraint("ck_scheduled_work_source", "scheduled_work", type_="check")
     op.create_check_constraint(
         "ck_scheduled_work_source",

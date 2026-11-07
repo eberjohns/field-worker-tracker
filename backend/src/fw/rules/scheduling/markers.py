@@ -73,4 +73,3 @@ def evaluate_worker_day_marker(context: WorkerDayContext) -> DayMarker | None:
         return DayMarker.WEEKLY_OFF
 
     return DayMarker.FREE
-

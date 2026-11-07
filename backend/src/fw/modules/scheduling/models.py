@@ -15,6 +15,7 @@ from sqlalchemy import (
     SmallInteger,
     String,
     Text,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
@@ -81,9 +82,7 @@ class BaseRosterEntry(Base):
     """Specific worker assignment within a BaseRosterTemplate."""
 
     __tablename__ = "base_roster_entries"
-    __table_args__ = (
-        Index("ix_base_roster_entries_lookup", "template_id", "weekday_mask"),
-    )
+    __table_args__ = (Index("ix_base_roster_entries_lookup", "template_id", "weekday_mask"),)
 
     id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
     template_id: Mapped[UUID] = mapped_column(
@@ -173,6 +172,22 @@ class ScheduledWork(Base):
         Index("ix_scheduled_work_job_item", "job_item_id"),
         Index("ix_scheduled_work_occurrence", "occurrence_id"),
         Index("ix_scheduled_work_status", "status"),
+        Index(
+            "uq_scheduled_work_emp_date_occ_active",
+            "employee_id",
+            "work_date",
+            "occurrence_id",
+            unique=True,
+            postgresql_where=text("status = 'ACTIVE' AND occurrence_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_scheduled_work_emp_date_seq_active",
+            "employee_id",
+            "work_date",
+            "sequence",
+            unique=True,
+            postgresql_where=text("status = 'ACTIVE'"),
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
@@ -235,4 +250,3 @@ class ScheduledWork(Base):
     job_item = relationship("JobItem", foreign_keys=[job_item_id])
     worksite = relationship("Worksite", foreign_keys=[worksite_id])
     occurrence = relationship("JobOccurrence", foreign_keys=[occurrence_id])
-

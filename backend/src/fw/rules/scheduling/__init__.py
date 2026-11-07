@@ -111,4 +111,3 @@ __all__ = [
     "validate_assignment",
     "validate_base_template_entries",
 ]
-

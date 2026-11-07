@@ -87,7 +87,10 @@ def is_entry_matching_date(mask: str, target_date: date) -> bool:
             try:
                 target_week_num = int(parts[0][1:])
                 target_dow = parts[1]
-                if is_same_weekday(target_dow, dow) and get_week_of_month(target_date) == target_week_num:
+                if (
+                    is_same_weekday(target_dow, dow)
+                    and get_week_of_month(target_date) == target_week_num
+                ):
                     return True
             except ValueError:
                 pass
@@ -118,7 +121,8 @@ def resolve_base_template_slots(
     target_dates: list[date],
     public_holidays: set[date],
     worker_weekly_off_days: dict[UUID, str],  # employee_id -> "FRI", "SUN", etc.
-    job_working_days: set[str] | None = None,  # retained for backward compatibility, not used as hard drop
+    job_working_days: set[str]
+    | None = None,  # retained for backward compatibility, not used as hard drop
 ) -> list[ResolvedTemplateSlot]:
     """Resolve a Base Roster Template into daily slots across a list of calendar dates.
 

@@ -182,4 +182,3 @@ def rank_candidates_for_job(
     # Sort descending by ranking_score
     scored_list.sort(key=lambda sc: sc.ranking_score, reverse=True)
     return scored_list
-

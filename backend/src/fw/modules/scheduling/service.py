@@ -118,9 +118,7 @@ class SchedulingService:
     # Helper: Resolve Standard Hours & Time Rules
     # -------------------------------------------------------------------------
 
-    async def get_employee_base_standard_hours(
-        self, employee_id: UUID, work_date: date
-    ) -> Decimal:
+    async def get_employee_base_standard_hours(self, employee_id: UUID, work_date: date) -> Decimal:
         """Fetch employee standard hours from salary structure as of work_date (default 8.0)."""
         stmt = (
             select(employee_salary_table.c.standard_hours)
@@ -157,15 +155,11 @@ class SchedulingService:
             )
             .subquery()
         )
-        salary_stmt = select(
-            salary_subq.c.employee_id, salary_subq.c.standard_hours
-        ).where(salary_subq.c.rn == 1)
+        salary_stmt = select(salary_subq.c.employee_id, salary_subq.c.standard_hours).where(
+            salary_subq.c.rn == 1
+        )
         salary_rows = (await self.session.execute(salary_stmt)).all()
-        return {
-            row[0]: Decimal(str(row[1]))
-            for row in salary_rows
-            if row[1] is not None
-        }
+        return {row[0]: Decimal(str(row[1])) for row in salary_rows if row[1] is not None}
 
     async def get_effective_standard_hours(
         self, employee: Employee, work_date: date
@@ -237,9 +231,7 @@ class SchedulingService:
             return {str(x).strip().lower() for x in val}
         return set()
 
-    async def get_public_holidays(
-        self, country: str, from_date: date, to_date: date
-    ) -> set[date]:
+    async def get_public_holidays(self, country: str, from_date: date, to_date: date) -> set[date]:
         """Fetch public holidays for country between from_date and to_date."""
         stmt = select(PublicHoliday.holiday_date).where(
             PublicHoliday.country == country,
@@ -275,9 +267,17 @@ class SchedulingService:
         # 1. Fetch Employee and JobItem
         emp = await self.session.get(Employee, payload.employee_id)
         if not emp or not emp.is_active:
-            raise AppError(code="NOT_FOUND", message=f"Active employee {payload.employee_id} not found.", status_code=404)
+            raise AppError(
+                code="NOT_FOUND",
+                message=f"Active employee {payload.employee_id} not found.",
+                status_code=404,
+            )
         if emp.role == "ADMIN" or emp.tally_id == "ADMIN001":
-            raise AppError(code="VALIDATION_ERROR", message="System Administrator cannot be assigned to field work.", status_code=422)
+            raise AppError(
+                code="VALIDATION_ERROR",
+                message="System Administrator cannot be assigned to field work.",
+                status_code=422,
+            )
 
         stmt = (
             select(JobItem)
@@ -289,7 +289,11 @@ class SchedulingService:
         )
         item = (await self.session.execute(stmt)).scalar_one_or_none()
         if not item or not item.is_active:
-            raise AppError(code="NOT_FOUND", message=f"Active job item {payload.job_item_id} not found.", status_code=404)
+            raise AppError(
+                code="NOT_FOUND",
+                message=f"Active job item {payload.job_item_id} not found.",
+                status_code=404,
+            )
 
         # 2. Persist StandingAssignment
         assigned_pattern = payload.weekday_pattern or item.weekday_pattern
@@ -304,7 +308,9 @@ class SchedulingService:
             StandingAssignment.job_item_id == payload.job_item_id,
             StandingAssignment.is_active.is_(True),
         )
-        existing_standing_rows = (await self.session.execute(existing_standing_stmt)).scalars().all()
+        existing_standing_rows = (
+            (await self.session.execute(existing_standing_stmt)).scalars().all()
+        )
         for old_st in existing_standing_rows:
             if old_st.start_date >= payload.start_date:
                 old_st.is_active = False
@@ -332,7 +338,9 @@ class SchedulingService:
         if item.end_date:
             target_end = min(target_end, item.end_date)
 
-        holidays = await self.get_public_holidays(item.worksite.country, payload.start_date, target_end)
+        holidays = await self.get_public_holidays(
+            item.worksite.country, payload.start_date, target_end
+        )
 
         assigned_hours = standing.hours_per_day or item.hours_per_occurrence_per_staff
         created_count = 0
@@ -353,6 +361,7 @@ class SchedulingService:
             # If occurrences haven't been generated yet, generate them now
             if not item.occurrences:
                 from fw.modules.jobs.service import JobsService
+
                 await JobsService.generate_job_occurrences(
                     session=self.session,
                     job_item_id=item.id,
@@ -367,7 +376,8 @@ class SchedulingService:
 
             # Materialize directly for periodic occurrences (1 visit per occurrence window, e.g. monthly)
             valid_occs = [
-                occ for occ in loaded_occs
+                occ
+                for occ in loaded_occs
                 if occ.window_end >= payload.start_date and occ.window_start <= target_end
             ]
             valid_occs.sort(key=lambda o: o.window_start)
@@ -405,13 +415,10 @@ class SchedulingService:
                 if target_date > occ.window_end or target_date in existing_sw_dates:
                     continue
 
-                seq_stmt = (
-                    select(func.coalesce(func.max(ScheduledWork.sequence), 0))
-                    .where(
-                        ScheduledWork.employee_id == payload.employee_id,
-                        ScheduledWork.work_date == target_date,
-                        ScheduledWork.status == "ACTIVE",
-                    )
+                seq_stmt = select(func.coalesce(func.max(ScheduledWork.sequence), 0)).where(
+                    ScheduledWork.employee_id == payload.employee_id,
+                    ScheduledWork.work_date == target_date,
+                    ScheduledWork.status == "ACTIVE",
                 )
                 max_seq = (await self.session.execute(seq_stmt)).scalar() or 0
                 next_seq = int(max_seq) + 1
@@ -453,13 +460,10 @@ class SchedulingService:
                         matching_occ_id = occ.id
                         break
 
-                seq_stmt = (
-                    select(func.coalesce(func.max(ScheduledWork.sequence), 0))
-                    .where(
-                        ScheduledWork.employee_id == payload.employee_id,
-                        ScheduledWork.work_date == slot.work_date,
-                        ScheduledWork.status == "ACTIVE",
-                    )
+                seq_stmt = select(func.coalesce(func.max(ScheduledWork.sequence), 0)).where(
+                    ScheduledWork.employee_id == payload.employee_id,
+                    ScheduledWork.work_date == slot.work_date,
+                    ScheduledWork.status == "ACTIVE",
                 )
                 max_seq = (await self.session.execute(seq_stmt)).scalar() or 0
                 next_seq = int(max_seq) + 1
@@ -529,10 +533,18 @@ class SchedulingService:
             ],
         )
         if not standing or not standing.is_active:
-            raise AppError(code="NOT_FOUND", message=f"Standing assignment {assignment_id} not found.", status_code=404)
+            raise AppError(
+                code="NOT_FOUND",
+                message=f"Standing assignment {assignment_id} not found.",
+                status_code=404,
+            )
 
         if standing.version != payload.version:
-            raise AppError(code="CONFLICT", message="Standing assignment was modified by another user. Please reload.", status_code=409)
+            raise AppError(
+                code="CONFLICT",
+                message="Standing assignment was modified by another user. Please reload.",
+                status_code=409,
+            )
 
         if payload.end_date < standing.start_date:
             # Ending before start_date deactivates the standing assignment completely
@@ -651,9 +663,17 @@ class SchedulingService:
         """Run pure validation checks against proposed daily scheduled work."""
         emp = await self.session.get(Employee, payload.employee_id)
         if not emp:
-            raise AppError(code="NOT_FOUND", message=f"Employee {payload.employee_id} not found.", status_code=404)
+            raise AppError(
+                code="NOT_FOUND",
+                message=f"Employee {payload.employee_id} not found.",
+                status_code=404,
+            )
         if emp.role == "ADMIN" or emp.tally_id == "ADMIN001":
-            raise AppError(code="VALIDATION_ERROR", message="System Administrator cannot be assigned to field work.", status_code=422)
+            raise AppError(
+                code="VALIDATION_ERROR",
+                message="System Administrator cannot be assigned to field work.",
+                status_code=422,
+            )
 
         stmt = (
             select(JobItem)
@@ -662,14 +682,22 @@ class SchedulingService:
         )
         item = (await self.session.execute(stmt)).scalar_one_or_none()
         if not item:
-            raise AppError(code="NOT_FOUND", message=f"Job item {payload.job_item_id} not found.", status_code=404)
+            raise AppError(
+                code="NOT_FOUND",
+                message=f"Job item {payload.job_item_id} not found.",
+                status_code=404,
+            )
 
         # Existing active assignments on work_date
-        existing_stmt = select(ScheduledWork).where(
-            ScheduledWork.employee_id == payload.employee_id,
-            ScheduledWork.work_date == payload.work_date,
-            ScheduledWork.status == "ACTIVE",
-        ).options(selectinload(ScheduledWork.job_item))
+        existing_stmt = (
+            select(ScheduledWork)
+            .where(
+                ScheduledWork.employee_id == payload.employee_id,
+                ScheduledWork.work_date == payload.work_date,
+                ScheduledWork.status == "ACTIVE",
+            )
+            .options(selectinload(ScheduledWork.job_item))
+        )
         existing_rows = (await self.session.execute(existing_stmt)).scalars().all()
 
         existing_contexts = [
@@ -780,7 +808,11 @@ class SchedulingService:
 
         if not report.is_valid:
             error_msgs = "; ".join([e.message for e in report.errors])
-            raise AppError(code="VALIDATION_ERROR", message=f"Assignment validation failed: {error_msgs}", status_code=422)
+            raise AppError(
+                code="VALIDATION_ERROR",
+                message=f"Assignment validation failed: {error_msgs}",
+                status_code=422,
+            )
 
         if report.warnings and not payload.acknowledge_warnings:
             warning_msgs = "; ".join([w.message for w in report.warnings])
@@ -797,18 +829,19 @@ class SchedulingService:
         )
         item = (await self.session.execute(item_stmt)).scalar_one_or_none()
         if not item:
-            raise AppError(code="NOT_FOUND", message=f"Job item {payload.job_item_id} not found.", status_code=404)
+            raise AppError(
+                code="NOT_FOUND",
+                message=f"Job item {payload.job_item_id} not found.",
+                status_code=404,
+            )
 
         # Determine sequence if not provided
         target_seq = payload.sequence
         if target_seq is None:
-            seq_stmt = (
-                select(func.coalesce(func.max(ScheduledWork.sequence), 0))
-                .where(
-                    ScheduledWork.employee_id == payload.employee_id,
-                    ScheduledWork.work_date == payload.work_date,
-                    ScheduledWork.status == "ACTIVE",
-                )
+            seq_stmt = select(func.coalesce(func.max(ScheduledWork.sequence), 0)).where(
+                ScheduledWork.employee_id == payload.employee_id,
+                ScheduledWork.work_date == payload.work_date,
+                ScheduledWork.status == "ACTIVE",
             )
             max_seq = (await self.session.execute(seq_stmt)).scalar() or 0
             target_seq = int(max_seq) + 1
@@ -880,10 +913,18 @@ class SchedulingService:
             ],
         )
         if not sw:
-            raise AppError(code="NOT_FOUND", message=f"Scheduled work {scheduled_work_id} not found.", status_code=404)
+            raise AppError(
+                code="NOT_FOUND",
+                message=f"Scheduled work {scheduled_work_id} not found.",
+                status_code=404,
+            )
 
         if sw.version != payload.version:
-            raise AppError(code="CONFLICT", message="Record has been modified by another user. Please reload.", status_code=409)
+            raise AppError(
+                code="CONFLICT",
+                message="Record has been modified by another user. Please reload.",
+                status_code=409,
+            )
 
         if payload.status:
             sw.status = payload.status
@@ -951,7 +992,11 @@ class SchedulingService:
 
         for target_id in payload.ordered_ids:
             if target_id not in row_map:
-                raise AppError(code="NOT_FOUND", message=f"Scheduled work {target_id} not found on target date.", status_code=404)
+                raise AppError(
+                    code="NOT_FOUND",
+                    message=f"Scheduled work {target_id} not found on target date.",
+                    status_code=404,
+                )
 
         # Step 1: Temporarily offset sequences to avoid collision
         for idx, target_id in enumerate(payload.ordered_ids, start=1):
@@ -970,7 +1015,10 @@ class SchedulingService:
             entity_type="ScheduledWorkReorder",
             entity_id=str(payload.employee_id),
             actor_user_id=current_user_id,
-            diff={"work_date": payload.work_date.isoformat(), "order": [str(x) for x in payload.ordered_ids]},
+            diff={
+                "work_date": payload.work_date.isoformat(),
+                "order": [str(x) for x in payload.ordered_ids],
+            },
         )
 
         return [
@@ -1014,7 +1062,11 @@ class SchedulingService:
             )
             occ = (await self.session.execute(occ_stmt)).scalar_one_or_none()
             if not occ:
-                raise AppError(code="NOT_FOUND", message=f"Job occurrence {occurrence_id} not found.", status_code=404)
+                raise AppError(
+                    code="NOT_FOUND",
+                    message=f"Job occurrence {occurrence_id} not found.",
+                    status_code=404,
+                )
             item = occ.job_item
             t_date = target_date or occ.due_date or occ.window_start
             req_hours = occ.required_hours_per_staff
@@ -1026,7 +1078,9 @@ class SchedulingService:
             )
             item = (await self.session.execute(item_stmt)).scalar_one_or_none()
             if not item:
-                raise AppError(code="NOT_FOUND", message=f"Job item {job_item_id} not found.", status_code=404)
+                raise AppError(
+                    code="NOT_FOUND", message=f"Job item {job_item_id} not found.", status_code=404
+                )
             req_hours = item.hours_per_occurrence_per_staff
             if target_date:
                 t_date = target_date
@@ -1039,7 +1093,11 @@ class SchedulingService:
             else:
                 t_date = date.today()
         else:
-            raise AppError(code="VALIDATION_ERROR", message="Either occurrence_id or job_item_id must be provided.", status_code=422)
+            raise AppError(
+                code="VALIDATION_ERROR",
+                message="Either occurrence_id or job_item_id must be provided.",
+                status_code=422,
+            )
 
         target_dow = (weekday or INT_TO_WEEKDAY[t_date.weekday()]).strip().upper()
 
@@ -1118,33 +1176,43 @@ class SchedulingService:
 
         # Check who worked at this site in the last 14 days or is scheduled on this site this week
         two_weeks_ago = t_date - timedelta(days=14)
-        recent_site_stmt = select(ScheduledWork.employee_id).where(
-            ScheduledWork.worksite_id == item.worksite_id,
-            ScheduledWork.work_date >= two_weeks_ago,
-            ScheduledWork.work_date <= week_end,
-            ScheduledWork.status == "ACTIVE",
-        ).distinct()
+        recent_site_stmt = (
+            select(ScheduledWork.employee_id)
+            .where(
+                ScheduledWork.worksite_id == item.worksite_id,
+                ScheduledWork.work_date >= two_weeks_ago,
+                ScheduledWork.work_date <= week_end,
+                ScheduledWork.status == "ACTIVE",
+            )
+            .distinct()
+        )
         recent_emp_ids = set((await self.session.execute(recent_site_stmt)).scalars().all())
 
         # Find active supervisors on this site (crew currently assigned or recent on this worksite)
         active_site_supervisors: set[UUID] = set()
         if recent_emp_ids:
-            site_sup_stmt = select(EmployeeReportingLine.manager_id).where(
-                EmployeeReportingLine.employee_id.in_(recent_emp_ids),
-                EmployeeReportingLine.relationship == "SUPERVISOR",
-            ).distinct()
-            active_site_supervisors = set((await self.session.execute(site_sup_stmt)).scalars().all())
+            site_sup_stmt = (
+                select(EmployeeReportingLine.manager_id)
+                .where(
+                    EmployeeReportingLine.employee_id.in_(recent_emp_ids),
+                    EmployeeReportingLine.relationship == "SUPERVISOR",
+                )
+                .distinct()
+            )
+            active_site_supervisors = set(
+                (await self.session.execute(site_sup_stmt)).scalars().all()
+            )
 
         # Load supervisor information for all candidate employees
         reporting_stmt = (
-            select(EmployeeReportingLine.employee_id, EmployeeReportingLine.manager_id, Employee.name)
+            select(
+                EmployeeReportingLine.employee_id, EmployeeReportingLine.manager_id, Employee.name
+            )
             .join(Employee, EmployeeReportingLine.manager_id == Employee.id)
             .where(EmployeeReportingLine.relationship == "SUPERVISOR")
         )
         rep_rows = (await self.session.execute(reporting_stmt)).all()
-        emp_to_supervisor: dict[UUID, tuple[UUID, str]] = {
-            r[0]: (r[1], r[2]) for r in rep_rows
-        }
+        emp_to_supervisor: dict[UUID, tuple[UUID, str]] = {r[0]: (r[1], r[2]) for r in rep_rows}
         supervisors_with_subordinates = {r[1] for r in rep_rows}
 
         candidate_ids = [emp.id for emp in employees]
@@ -1177,17 +1245,27 @@ class SchedulingService:
 
             # Check permanent conflict from scheduled work or base blueprint
             perm_sw_item = next(
-                (sw.job_item for sw in today_sw_list if sw.job_item and sw.job_item.deployment_type.upper() == "PERMANENT"),
+                (
+                    sw.job_item
+                    for sw in today_sw_list
+                    if sw.job_item and sw.job_item.deployment_type.upper() == "PERMANENT"
+                ),
                 None,
             )
             perm_bp_item = next(
-                (j_item for j_item, _ in today_bp_list if j_item and j_item.deployment_type.upper() == "PERMANENT"),
+                (
+                    j_item
+                    for j_item, _ in today_bp_list
+                    if j_item and j_item.deployment_type.upper() == "PERMANENT"
+                ),
                 None,
             )
 
             # Sum today's allocated hours across scheduled work and blueprint entries
             sw_today_hours = emp_today_hours.get(emp.id, Decimal("0.0"))
-            bp_today_hours = sum((Decimal(str(e.assigned_hours)) for _, e in today_bp_list), Decimal("0.0"))
+            bp_today_hours = sum(
+                (Decimal(str(e.assigned_hours)) for _, e in today_bp_list), Decimal("0.0")
+            )
             effective_today_hours = max(sw_today_hours, bp_today_hours)
 
             is_blocked = False
@@ -1198,13 +1276,19 @@ class SchedulingService:
                 if perm_sw_item:
                     other_code = perm_sw_item.sub_item_code or "another job"
                     is_blocked = True
-                    blocked_reason = f"Already assigned to PERMANENT job {other_code} on {target_dow}"
+                    blocked_reason = (
+                        f"Already assigned to PERMANENT job {other_code} on {target_dow}"
+                    )
                 elif perm_bp_item:
                     other_ws = perm_bp_item.worksite.job_number if perm_bp_item.worksite else ""
                     other_code = perm_bp_item.sub_item_code or "job"
                     is_blocked = True
                     blocked_reason = f"Already assigned to PERMANENT job ({other_ws} - Item {other_code}) on {target_dow}"
-                elif effective_today_hours > Decimal("0.0") or len(today_sw_list) > 0 or len(today_bp_list) > 0:
+                elif (
+                    effective_today_hours > Decimal("0.0")
+                    or len(today_sw_list) > 0
+                    or len(today_bp_list) > 0
+                ):
                     is_blocked = True
                     blocked_reason = f"Permanent jobs require full-day availability (already has {effective_today_hours}h remote allocated)"
             else:
@@ -1212,7 +1296,9 @@ class SchedulingService:
                 if perm_sw_item:
                     other_code = perm_sw_item.sub_item_code or "job"
                     is_blocked = True
-                    blocked_reason = f"Already assigned to PERMANENT job {other_code} on {target_dow}"
+                    blocked_reason = (
+                        f"Already assigned to PERMANENT job {other_code} on {target_dow}"
+                    )
                 elif perm_bp_item:
                     other_ws = perm_bp_item.worksite.job_number if perm_bp_item.worksite else ""
                     other_code = perm_bp_item.sub_item_code or "job"
@@ -1281,7 +1367,9 @@ class SchedulingService:
         """Fetch worker capacity allocation for today, this week, and this month."""
         emp = await self.session.get(Employee, employee_id)
         if not emp:
-            raise AppError(code="NOT_FOUND", message=f"Employee {employee_id} not found.", status_code=404)
+            raise AppError(
+                code="NOT_FOUND", message=f"Employee {employee_id} not found.", status_code=404
+            )
 
         t_date = work_date or date.today()
         eff_hours = await self.get_effective_standard_hours(emp, t_date)
@@ -1290,7 +1378,11 @@ class SchedulingService:
         week_start = t_date - timedelta(days=t_date.weekday())
         week_end = week_start + timedelta(days=6)
         month_start = date(t_date.year, t_date.month, 1)
-        next_month = date(t_date.year + 1, 1, 1) if t_date.month == 12 else date(t_date.year, t_date.month + 1, 1)
+        next_month = (
+            date(t_date.year + 1, 1, 1)
+            if t_date.month == 12
+            else date(t_date.year, t_date.month + 1, 1)
+        )
         month_end = next_month - timedelta(days=1)
 
         # Aggregate hours
@@ -1412,14 +1504,14 @@ class SchedulingService:
 
         # Map supervisor reporting lines for all employees
         reporting_stmt = (
-            select(EmployeeReportingLine.employee_id, EmployeeReportingLine.manager_id, Employee.name)
+            select(
+                EmployeeReportingLine.employee_id, EmployeeReportingLine.manager_id, Employee.name
+            )
             .join(Employee, EmployeeReportingLine.manager_id == Employee.id)
             .where(EmployeeReportingLine.relationship == "SUPERVISOR")
         )
         rep_rows = (await self.session.execute(reporting_stmt)).all()
-        emp_to_supervisor: dict[UUID, tuple[UUID, str]] = {
-            r[0]: (r[1], r[2]) for r in rep_rows
-        }
+        emp_to_supervisor: dict[UUID, tuple[UUID, str]] = {r[0]: (r[1], r[2]) for r in rep_rows}
         supervisors_with_subordinates = {r[1] for r in rep_rows}
 
         # Batch-fetch active time rules for all relevant countries
@@ -1566,7 +1658,9 @@ class SchedulingService:
                     week_is_under=week_under,
                     supervisor_id=sup_id,
                     supervisor_name=sup_name,
-                    remarks=f"Transport: {emp.accommodation.name}" if emp.accommodation else "Standard Transport",
+                    remarks=f"Transport: {emp.accommodation.name}"
+                    if emp.accommodation
+                    else "Standard Transport",
                 )
             )
 
@@ -1587,7 +1681,10 @@ class SchedulingService:
             for d in w.days:
                 if d.chips:
                     chips_text = ", ".join(
-                        [f"{c.job_number} {c.sub_item_code} ({c.assigned_hours:.1f}h)" for c in d.chips]
+                        [
+                            f"{c.job_number} {c.sub_item_code} ({c.assigned_hours:.1f}h)"
+                            for c in d.chips
+                        ]
                     )
                     daily_cells.append(
                         ExcelRosterDayCell(
@@ -1663,13 +1760,10 @@ class SchedulingService:
         month_query_start = week_start.replace(day=1)
         next_month = (week_end.replace(day=28) + timedelta(days=5)).replace(day=1)
         month_query_end = next_month - timedelta(days=1)
-        sw_month_stmt = (
-            select(ScheduledWork.job_item_id, ScheduledWork.work_date)
-            .where(
-                ScheduledWork.work_date >= month_query_start,
-                ScheduledWork.work_date <= month_query_end,
-                ScheduledWork.status == "ACTIVE",
-            )
+        sw_month_stmt = select(ScheduledWork.job_item_id, ScheduledWork.work_date).where(
+            ScheduledWork.work_date >= month_query_start,
+            ScheduledWork.work_date <= month_query_end,
+            ScheduledWork.status == "ACTIVE",
         )
         month_sw_rows = (await self.session.execute(sw_month_stmt)).all()
         sw_by_item_month: dict[tuple[UUID, int, int], set[date]] = defaultdict(set)
@@ -1712,7 +1806,9 @@ class SchedulingService:
 
                 # Determine week's target date for unstaffed periodic jobs (prioritize user configured weekday_pattern)
                 week_target_date = None
-                norm_item_pattern = {str(wp).strip().upper()[:3] for wp in (item.weekday_pattern or []) if wp}
+                norm_item_pattern = {
+                    str(wp).strip().upper()[:3] for wp in (item.weekday_pattern or []) if wp
+                }
                 if norm_item_pattern:
                     for d in range(7):
                         cand_d = week_start + timedelta(days=d)
@@ -1774,9 +1870,9 @@ class SchedulingService:
                         is_uncovered = False
                         is_excess = assigned_count > 0
                     elif is_periodic_interval:
-                        month_assigned_dates = sorted(list(sw_by_item_month.get(
-                            (item.id, c_date.year, c_date.month), set()
-                        )))
+                        month_assigned_dates = sorted(
+                            list(sw_by_item_month.get((item.id, c_date.year, c_date.month), set()))
+                        )
                         quota = int(occ_per_period)
                         if month_assigned_dates:
                             if c_date in month_assigned_dates:
@@ -1848,7 +1944,9 @@ class SchedulingService:
                             if norm_item_pattern
                             else {"MON", "TUE", "WED", "THU", "FRI", "SAT"}
                         )
-                        is_scheduled_day = (weekday_str[:3] in norm_sched_pattern) and is_contract_active
+                        is_scheduled_day = (
+                            weekday_str[:3] in norm_sched_pattern
+                        ) and is_contract_active
 
                         # Weekly quota in shifts: e.g. 6 days * 1 staff = 6
                         weekly_quota = int(occ_per_period) * item.required_staff_count
@@ -1884,12 +1982,14 @@ class SchedulingService:
                             source=a.source or "DIRECT",
                             standing_assignment_id=(
                                 standing_map[(a.employee_id, a.job_item_id)][0]
-                                if a.source == "STANDING" and (a.employee_id, a.job_item_id) in standing_map
+                                if a.source == "STANDING"
+                                and (a.employee_id, a.job_item_id) in standing_map
                                 else None
                             ),
                             standing_assignment_version=(
                                 standing_map[(a.employee_id, a.job_item_id)][1]
-                                if a.source == "STANDING" and (a.employee_id, a.job_item_id) in standing_map
+                                if a.source == "STANDING"
+                                and (a.employee_id, a.job_item_id) in standing_map
                                 else None
                             ),
                         )
@@ -1969,7 +2069,11 @@ class SchedulingService:
         )
         item = (await self.session.execute(item_stmt)).scalar_one_or_none()
         if not item:
-            raise AppError(code="NOT_FOUND", message=f"Job item {payload.job_item_id} not found.", status_code=404)
+            raise AppError(
+                code="NOT_FOUND",
+                message=f"Job item {payload.job_item_id} not found.",
+                status_code=404,
+            )
 
         assigned_hours = payload.assigned_hours or item.hours_per_occurrence_per_staff
 
@@ -2021,8 +2125,12 @@ class SchedulingService:
                             occurrence_id=sw_row.occurrence_id,
                             job_item_id=sw_row.job_item_id,
                             worksite_id=sw_row.worksite_id,
-                            job_number=sw_row.job_item.worksite.job_number if sw_row.job_item else None,
-                            sub_item_code=sw_row.job_item.sub_item_code if sw_row.job_item else None,
+                            job_number=sw_row.job_item.worksite.job_number
+                            if sw_row.job_item
+                            else None,
+                            sub_item_code=sw_row.job_item.sub_item_code
+                            if sw_row.job_item
+                            else None,
                             assigned_hours=sw_row.assigned_hours,
                             sequence=sw_row.sequence,
                             status=sw_row.status,
@@ -2092,9 +2200,7 @@ class SchedulingService:
     # Base Planner (Blueprint Recurring Engine)
     # -------------------------------------------------------------------------
 
-    async def get_base_planner_worksites(
-        self, group_id: UUID | None = None
-    ) -> BasePlannerResponse:
+    async def get_base_planner_worksites(self, group_id: UUID | None = None) -> BasePlannerResponse:
         """Fetch worksites and job items with active base roster templates for the Base Planner."""
         ws_stmt = (
             select(Worksite)
@@ -2110,9 +2216,7 @@ class SchedulingService:
         worksites = (await self.session.execute(ws_stmt)).scalars().all()
 
         # Collect all active job item IDs
-        job_item_ids = [
-            it.id for ws in worksites for it in ws.items if it.is_active
-        ]
+        job_item_ids = [it.id for ws in worksites for it in ws.items if it.is_active]
 
         # Query all active base roster templates for these items
         templates_by_item: dict[UUID, BaseRosterTemplate] = {}
@@ -2130,11 +2234,7 @@ class SchedulingService:
                 templates_by_item[t.job_item_id] = t
 
         # Collect all employee IDs across templates to fetch names & tally IDs in bulk
-        emp_ids = {
-            entry.employee_id
-            for t in templates_by_item.values()
-            for entry in t.entries
-        }
+        emp_ids = {entry.employee_id for t in templates_by_item.values() for entry in t.entries}
         emp_map: dict[UUID, Employee] = {}
         if emp_ids:
             emp_stmt = select(Employee).where(Employee.id.in_(emp_ids))
@@ -2151,20 +2251,22 @@ class SchedulingService:
                 tmpl = templates_by_item.get(it.id)
                 tmpl_read: BaseRosterTemplateRead | None = None
                 if tmpl:
-                    entry_reads = [
-                        BaseRosterEntryRead(
-                            id=e.id,
-                            template_id=e.template_id,
-                            employee_id=e.employee_id,
-                            employee_name=emp_map.get(e.employee_id).name if e.employee_id in emp_map else None,
-                            tally_id=emp_map.get(e.employee_id).tally_id if e.employee_id in emp_map else None,
-                            weekly_off_day=emp_map.get(e.employee_id).weekly_off_day if e.employee_id in emp_map else None,
-                            weekday_mask=e.weekday_mask,
-                            assigned_hours=e.assigned_hours,
-                            sequence=e.sequence,
+                    entry_reads = []
+                    for e in sorted(tmpl.entries, key=lambda x: (x.weekday_mask, x.sequence)):
+                        e_emp = emp_map.get(e.employee_id)
+                        entry_reads.append(
+                            BaseRosterEntryRead(
+                                id=e.id,
+                                template_id=e.template_id,
+                                employee_id=e.employee_id,
+                                employee_name=e_emp.name if e_emp else None,
+                                tally_id=e_emp.tally_id if e_emp else None,
+                                weekly_off_day=e_emp.weekly_off_day if e_emp else None,
+                                weekday_mask=e.weekday_mask,
+                                assigned_hours=e.assigned_hours,
+                                sequence=e.sequence,
+                            )
                         )
-                        for e in sorted(tmpl.entries, key=lambda x: (x.weekday_mask, x.sequence))
-                    ]
                     tmpl_read = BaseRosterTemplateRead(
                         id=tmpl.id,
                         job_item_id=tmpl.job_item_id,
@@ -2230,20 +2332,22 @@ class SchedulingService:
             emp_stmt = select(Employee).where(Employee.id.in_(emp_ids))
             emp_map = {e.id: e for e in (await self.session.execute(emp_stmt)).scalars().all()}
 
-        entries_read = [
-            BaseRosterEntryRead(
-                id=e.id,
-                template_id=e.template_id,
-                employee_id=e.employee_id,
-                employee_name=emp_map.get(e.employee_id).name if e.employee_id in emp_map else None,
-                tally_id=emp_map.get(e.employee_id).tally_id if e.employee_id in emp_map else None,
-                weekly_off_day=emp_map.get(e.employee_id).weekly_off_day if e.employee_id in emp_map else None,
-                weekday_mask=e.weekday_mask,
-                assigned_hours=e.assigned_hours,
-                sequence=e.sequence,
+        entries_read = []
+        for e in sorted(tmpl.entries, key=lambda x: (x.weekday_mask, x.sequence)):
+            e_emp = emp_map.get(e.employee_id)
+            entries_read.append(
+                BaseRosterEntryRead(
+                    id=e.id,
+                    template_id=e.template_id,
+                    employee_id=e.employee_id,
+                    employee_name=e_emp.name if e_emp else None,
+                    tally_id=e_emp.tally_id if e_emp else None,
+                    weekly_off_day=e_emp.weekly_off_day if e_emp else None,
+                    weekday_mask=e.weekday_mask,
+                    assigned_hours=e.assigned_hours,
+                    sequence=e.sequence,
+                )
             )
-            for e in sorted(tmpl.entries, key=lambda x: (x.weekday_mask, x.sequence))
-        ]
 
         return BaseRosterTemplateRead(
             id=tmpl.id,
@@ -2264,7 +2368,11 @@ class SchedulingService:
         """Create or update the active Base Roster Template for a job item."""
         item = await self.session.get(JobItem, payload.job_item_id)
         if not item:
-            raise AppError(code="NOT_FOUND", message=f"Job item {payload.job_item_id} not found", status_code=404)
+            raise AppError(
+                code="NOT_FOUND",
+                message=f"Job item {payload.job_item_id} not found",
+                status_code=404,
+            )
 
         # Enforce quota in Base Planner: cannot plan excess in the recurring blueprint
         if item.frequency_unit == "WEEK" and item.occurrences_per_period:
@@ -2293,6 +2401,7 @@ class SchedulingService:
 
         # Create new template
         from uuid import uuid4
+
         new_template = BaseRosterTemplate(
             id=uuid4(),
             job_item_id=payload.job_item_id,
@@ -2424,9 +2533,7 @@ class SchedulingService:
             emp_stmt = select(Employee).where(Employee.id.in_(emp_ids))
             emp_map = {e.id: e for e in (await self.session.execute(emp_stmt)).scalars().all()}
 
-        worker_weekly_off_days = {
-            e.id: (e.weekly_off_day or "").upper() for e in emp_map.values()
-        }
+        worker_weekly_off_days = {e.id: (e.weekly_off_day or "").upper() for e in emp_map.values()}
 
         # Construct week dates list
         week_dates = [week_start + timedelta(days=i) for i in range(7)]
@@ -2474,10 +2581,14 @@ class SchedulingService:
                     p_end = week_end
                     p_name = "Week"
 
-                target_occurrences = int(it.occurrences_per_period) if it.occurrences_per_period else 1
+                target_occurrences = (
+                    int(it.occurrences_per_period) if it.occurrences_per_period else 1
+                )
 
                 # 1. Resolve blueprint slots across the full evaluation period
-                period_dates = [p_start + timedelta(days=i) for i in range((p_end - p_start).days + 1)]
+                period_dates = [
+                    p_start + timedelta(days=i) for i in range((p_end - p_start).days + 1)
+                ]
                 resolved_period_slots = resolve_base_template_slots(
                     allocation_mode=tmpl.allocation_mode if tmpl else "DAY_OF_WEEK",
                     entries=blueprint_entries,
@@ -2502,13 +2613,16 @@ class SchedulingService:
                     public_holidays=holiday_dates,
                 )
                 recommended_dates = {
-                    w.recommended_date for w in pacing_windows if week_start <= w.recommended_date <= week_end
+                    w.recommended_date
+                    for w in pacing_windows
+                    if week_start <= w.recommended_date <= week_end
                 }
 
                 # 3. Quota calculation across the period
                 period_blueprint_dates = {slot.work_date for slot in resolved_period_slots}
                 item_sw_in_period = [
-                    s for s in sw_by_item_all.get(it.id, [])
+                    s
+                    for s in sw_by_item_all.get(it.id, [])
                     if p_start <= s.work_date <= p_end and s.status == "ACTIVE"
                 ]
                 sw_by_date_in_period: dict[date, list[ScheduledWork]] = defaultdict(list)
@@ -2516,6 +2630,7 @@ class SchedulingService:
                     sw_by_date_in_period[s.work_date].append(s)
 
                 from uuid import uuid4
+
                 visit_records: list[VisitRecord] = []
                 # Blueprint visits have precedence (created at epoch)
                 for vd in sorted(period_blueprint_dates):
@@ -2523,7 +2638,9 @@ class SchedulingService:
                         VisitRecord(
                             id=uuid4(),
                             work_date=vd,
-                            created_at=tmpl.created_at if tmpl and tmpl.created_at else datetime(2000, 1, 1, tzinfo=UTC),
+                            created_at=tmpl.created_at
+                            if tmpl and tmpl.created_at
+                            else datetime(2000, 1, 1, tzinfo=UTC),
                         )
                     )
 
@@ -2550,9 +2667,7 @@ class SchedulingService:
                     period_name=p_name,
                     windows=pacing_windows,
                 )
-                quota_status_by_date = {
-                    v.work_date: v for v in quota_result.evaluated_visits
-                }
+                quota_status_by_date = {v.work_date: v for v in quota_result.evaluated_visits}
 
                 # 4. Resolve daily cells
                 day_cells: list[OperationalDayCell] = []
@@ -2590,31 +2705,42 @@ class SchedulingService:
                         worker_weekly_off_days=worker_weekly_off_days,
                     )
 
-                    cell_worker_schemas = [
-                        OperationalCellWorker(
-                            employee_id=w.employee_id,
-                            employee_name=emp_map.get(w.employee_id).name if w.employee_id in emp_map else "Unknown",
-                            tally_id=emp_map.get(w.employee_id).tally_id if w.employee_id in emp_map else None,
-                            assigned_hours=Decimal(str(w.assigned_hours)),
-                            display_type=w.display_type,
-                            opacity_class=w.opacity_class,
-                            original_employee_id=w.original_employee_id,
-                            original_employee_name=emp_map.get(w.original_employee_id).name if w.original_employee_id and w.original_employee_id in emp_map else None,
-                            shift_id=w.shift_id,
-                            reason=w.reason,
-                            is_public_holiday=w.is_public_holiday,
-                            is_rest_day=w.is_rest_day,
-                            tags=w.tags,
+                    cell_worker_schemas = []
+                    for w in resolved_cell_workers:
+                        w_emp = emp_map.get(w.employee_id)
+                        orig_emp = (
+                            emp_map.get(w.original_employee_id) if w.original_employee_id else None
                         )
-                        for w in resolved_cell_workers
-                    ]
+                        cell_worker_schemas.append(
+                            OperationalCellWorker(
+                                employee_id=w.employee_id,
+                                employee_name=w_emp.name if w_emp else "Unknown",
+                                tally_id=w_emp.tally_id if w_emp else None,
+                                assigned_hours=Decimal(str(w.assigned_hours)),
+                                display_type=w.display_type,
+                                opacity_class=w.opacity_class,
+                                original_employee_id=w.original_employee_id,
+                                original_employee_name=orig_emp.name if orig_emp else None,
+                                shift_id=w.shift_id,
+                                reason=w.reason,
+                                is_public_holiday=w.is_public_holiday,
+                                is_rest_day=w.is_rest_day,
+                                tags=w.tags,
+                            )
+                        )
 
                     eval_v = quota_status_by_date.get(d)
                     is_quota_met = eval_v.is_required if eval_v else False
                     is_excess = eval_v.is_excess if eval_v else False
-                    is_to_be_covered = any(w.display_type == "TO_BE_COVERED" for w in cell_worker_schemas)
+                    is_to_be_covered = any(
+                        w.display_type == "TO_BE_COVERED" for w in cell_worker_schemas
+                    )
 
-                    req_staff = it.required_staff_count if (len(cell_worker_schemas) > 0 or d in recommended_dates or is_quota_met) else 0
+                    req_staff = (
+                        it.required_staff_count
+                        if (len(cell_worker_schemas) > 0 or d in recommended_dates or is_quota_met)
+                        else 0
+                    )
 
                     day_cells.append(
                         OperationalDayCell(
@@ -2688,7 +2814,9 @@ class SchedulingService:
         employees = (await self.session.execute(emp_stmt)).scalars().all()
 
         # Load supervisors for grouping
-        sup_stmt = select(EmployeeReportingLine).where(EmployeeReportingLine.relationship == "SUPERVISOR")
+        sup_stmt = select(EmployeeReportingLine).where(
+            EmployeeReportingLine.relationship == "SUPERVISOR"
+        )
         sup_links = (await self.session.execute(sup_stmt)).scalars().all()
         sup_by_emp: dict[UUID, UUID] = {link.employee_id: link.manager_id for link in sup_links}
         mgr_ids = set(sup_by_emp.values())
@@ -2736,7 +2864,9 @@ class SchedulingService:
         active_templates = (await self.session.execute(tmpl_stmt)).scalars().all()
 
         # Index template entries by employee_id
-        templates_by_emp: dict[UUID, list[tuple[BaseRosterTemplate, BaseRosterEntry]]] = defaultdict(list)
+        templates_by_emp: dict[UUID, list[tuple[BaseRosterTemplate, BaseRosterEntry]]] = (
+            defaultdict(list)
+        )
         for t in active_templates:
             for e in t.entries:
                 templates_by_emp[e.employee_id].append((t, e))
@@ -2773,14 +2903,22 @@ class SchedulingService:
                                 employee_name=emp.name,
                                 tally_id=emp.tally_id,
                                 assigned_hours=s.assigned_hours,
-                                display_type="REMOVED" if is_cancelled else ("DIRECT" if not s.original_employee_id else "OVERRIDE"),
+                                display_type="REMOVED"
+                                if is_cancelled
+                                else ("DIRECT" if not s.original_employee_id else "OVERRIDE"),
                                 opacity_class="removed" if is_cancelled else "solid",
                                 original_employee_id=s.original_employee_id,
                                 shift_id=s.id,
                                 reason=s.override_reason,
                                 is_public_holiday=is_holiday,
                                 is_rest_day=is_off,
-                                tags=["Removed"] if is_cancelled else (["Direct Shift"] if not s.original_employee_id else ["Cover Shift"]),
+                                tags=["Removed"]
+                                if is_cancelled
+                                else (
+                                    ["Direct Shift"]
+                                    if not s.original_employee_id
+                                    else ["Cover Shift"]
+                                ),
                             )
                         )
                 else:
@@ -2823,7 +2961,8 @@ class SchedulingService:
                 )
 
             sup_id = sup_by_emp.get(emp.id)
-            sup_name = mgr_map.get(sup_id).name if sup_id and sup_id in mgr_map else None
+            mgr = mgr_map.get(sup_id) if sup_id else None
+            sup_name = mgr.name if mgr else None
 
             worker_rows.append(
                 OperationalRosterWorkerRow(
@@ -2855,9 +2994,14 @@ class SchedulingService:
         """Create a single-day operational shift or replacement cover."""
         item = await self.session.get(JobItem, payload.job_item_id)
         if not item:
-            raise AppError(code="NOT_FOUND", message=f"Job item {payload.job_item_id} not found", status_code=404)
+            raise AppError(
+                code="NOT_FOUND",
+                message=f"Job item {payload.job_item_id} not found",
+                status_code=404,
+            )
 
         from uuid import uuid4
+
         assigned_hours = payload.assigned_hours or item.hours_per_occurrence_per_staff
         shift_status = payload.status.upper() if payload.status else "ACTIVE"
 
@@ -2890,7 +3034,9 @@ class SchedulingService:
                 "employee_id": str(payload.employee_id),
                 "work_date": str(payload.work_date),
                 "source": payload.source,
-                "original_employee_id": str(payload.original_employee_id) if payload.original_employee_id else None,
+                "original_employee_id": str(payload.original_employee_id)
+                if payload.original_employee_id
+                else None,
             },
         )
 
@@ -2933,4 +3079,3 @@ class SchedulingService:
             actor_user_id=current_user_id,
             diff={"status": "CANCELLED"},
         )
-

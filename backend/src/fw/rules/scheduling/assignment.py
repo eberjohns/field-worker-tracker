@@ -66,4 +66,3 @@ def generate_assignment_dates(
             is_weekly_off=is_off,
         )
         current += timedelta(days=1)
-

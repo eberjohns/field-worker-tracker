@@ -1,12 +1,11 @@
 """Unit tests for Rebuilt Planner pure business rules (Blueprint, Quotas, Operational)."""
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from uuid import uuid4
 
 from fw.rules.scheduling.blueprint import (
     BlueprintEntry,
     resolve_base_template_slots,
-    validate_base_template_entries,
 )
 from fw.rules.scheduling.operational import (
     OperationalShiftInput,
@@ -133,9 +132,21 @@ def test_pacing_windows_and_stable_quota_zero_swapping():
     v3_id = uuid4()
 
     visits = [
-        VisitRecord(id=v1_id, work_date=date(2026, 11, 4), created_at=datetime(2026, 11, 1, 10, 0, tzinfo=timezone.utc)),
-        VisitRecord(id=v2_id, work_date=date(2026, 11, 18), created_at=datetime(2026, 11, 1, 10, 5, tzinfo=timezone.utc)),
-        VisitRecord(id=v3_id, work_date=date(2026, 11, 11), created_at=datetime(2026, 11, 1, 11, 0, tzinfo=timezone.utc)),
+        VisitRecord(
+            id=v1_id,
+            work_date=date(2026, 11, 4),
+            created_at=datetime(2026, 11, 1, 10, 0, tzinfo=UTC),
+        ),
+        VisitRecord(
+            id=v2_id,
+            work_date=date(2026, 11, 18),
+            created_at=datetime(2026, 11, 1, 10, 5, tzinfo=UTC),
+        ),
+        VisitRecord(
+            id=v3_id,
+            work_date=date(2026, 11, 11),
+            created_at=datetime(2026, 11, 1, 11, 0, tzinfo=UTC),
+        ),
     ]
 
     res = evaluate_period_quota(
@@ -171,16 +182,52 @@ def test_operational_cell_precedence_and_overrides():
     base_worker2 = uuid4()  # Base worker on leave, with cover
     base_worker3 = uuid4()  # Base worker on leave, NO cover -> TO_BE_COVERED
     base_worker4 = uuid4()  # Base worker operationally removed -> REMOVED
-    cover_worker = uuid4()   # Operational replacement
+    cover_worker = uuid4()  # Operational replacement
 
     from fw.rules.scheduling.blueprint import ResolvedTemplateSlot
 
     d = date(2026, 11, 25)
     base_slots = [
-        ResolvedTemplateSlot(work_date=d, day_of_week="WED", employee_id=base_worker1, assigned_hours=8.0, sequence=1, is_public_holiday=False, is_worker_weekly_off=False, status="VALID"),
-        ResolvedTemplateSlot(work_date=d, day_of_week="WED", employee_id=base_worker2, assigned_hours=8.0, sequence=2, is_public_holiday=False, is_worker_weekly_off=False, status="VALID"),
-        ResolvedTemplateSlot(work_date=d, day_of_week="WED", employee_id=base_worker3, assigned_hours=8.0, sequence=3, is_public_holiday=False, is_worker_weekly_off=False, status="VALID"),
-        ResolvedTemplateSlot(work_date=d, day_of_week="WED", employee_id=base_worker4, assigned_hours=8.0, sequence=4, is_public_holiday=False, is_worker_weekly_off=False, status="VALID"),
+        ResolvedTemplateSlot(
+            work_date=d,
+            day_of_week="WED",
+            employee_id=base_worker1,
+            assigned_hours=8.0,
+            sequence=1,
+            is_public_holiday=False,
+            is_worker_weekly_off=False,
+            status="VALID",
+        ),
+        ResolvedTemplateSlot(
+            work_date=d,
+            day_of_week="WED",
+            employee_id=base_worker2,
+            assigned_hours=8.0,
+            sequence=2,
+            is_public_holiday=False,
+            is_worker_weekly_off=False,
+            status="VALID",
+        ),
+        ResolvedTemplateSlot(
+            work_date=d,
+            day_of_week="WED",
+            employee_id=base_worker3,
+            assigned_hours=8.0,
+            sequence=3,
+            is_public_holiday=False,
+            is_worker_weekly_off=False,
+            status="VALID",
+        ),
+        ResolvedTemplateSlot(
+            work_date=d,
+            day_of_week="WED",
+            employee_id=base_worker4,
+            assigned_hours=8.0,
+            sequence=4,
+            is_public_holiday=False,
+            is_worker_weekly_off=False,
+            status="VALID",
+        ),
     ]
 
     approved_leaves = {base_worker2, base_worker3}
@@ -278,8 +325,8 @@ def test_periodic_cadence_matching_monthly_and_quarterly():
     # 16 Nov = Monday (day 16 -> Week 3)
     # 23 Nov = Monday (day 23 -> Week 4)
     target_dates = [
-        date(2026, 11, 2),   # W1 Mon
-        date(2026, 11, 9),   # W2 Mon
+        date(2026, 11, 2),  # W1 Mon
+        date(2026, 11, 9),  # W2 Mon
         date(2026, 11, 16),  # W3 Mon
         date(2026, 11, 23),  # W4 Mon
     ]
@@ -302,6 +349,7 @@ def test_periodic_cadence_matching_monthly_and_quarterly():
 def test_candidate_ranking_permanent_exclusivity_and_remote_capacity():
     """Verify permanent exclusivity blocks candidates and remote capacity is clearly calculated."""
     from decimal import Decimal
+
     from fw.rules.scheduling.suggestions import (
         CandidateWorker,
         TargetJobItem,
@@ -408,7 +456,3 @@ def test_full_weekday_name_normalization():
     assert len(resolved) == 1
     assert resolved[0].is_rest_day is True
     assert "Rest Day Overtime" in resolved[0].tags
-
-
-
-

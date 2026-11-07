@@ -68,7 +68,7 @@ def test_generate_assignment_dates():
 def test_generate_assignment_dates_skips_worker_weekly_off_day():
     """Verify that a worker's weekly off day is not scheduled for work."""
     start = date(2026, 11, 2)  # Monday
-    end = date(2026, 11, 8)    # Sunday
+    end = date(2026, 11, 8)  # Sunday
 
     slots = list(
         generate_assignment_dates(

@@ -295,7 +295,9 @@ def validate_assignment(
         )
 
     # 14. Standard hours checks (over = warning, under = info)
-    total_day_hours = sum((a.assigned_hours for a in active_existing), Decimal("0")) + assigned_hours
+    total_day_hours = (
+        sum((a.assigned_hours for a in active_existing), Decimal("0")) + assigned_hours
+    )
     if total_day_hours > employee.standard_hours:
         diff = total_day_hours - employee.standard_hours
         add_issue(

@@ -101,9 +101,9 @@ def build_roster_excel_bytes(
         ws.cell(row=current_row, column=2, value=worker.tally_id).alignment = center_align
         ws.cell(row=current_row, column=3, value=worker.grade_code or "").alignment = center_align
         ws.cell(row=current_row, column=4, value=worker.staff_grade_description or "")
-        ws.cell(row=current_row, column=5, value=float(worker.standard_hours)).alignment = (
-            center_align
-        )
+        ws.cell(
+            row=current_row, column=5, value=float(worker.standard_hours)
+        ).alignment = center_align
 
         # 7 Day columns (Mon=6 .. Sun=12)
         for day_idx in range(7):

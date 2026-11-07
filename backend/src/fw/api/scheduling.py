@@ -101,7 +101,9 @@ async def get_schedule_coverage(
 @router.get("/workers/{id}/allocation", response_model=WorkerAllocationResponse)
 async def get_worker_allocation(
     id: UUID,
-    work_date: date | None = Query(None, description="Target date for allocation (defaults to today)"),
+    work_date: date | None = Query(
+        None, description="Target date for allocation (defaults to today)"
+    ),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> WorkerAllocationResponse:
@@ -125,7 +127,9 @@ async def get_occurrence_recommendations(
 ) -> list[CandidateRecommendationRead]:
     """Ranked worker candidates for an occurrence by grade group, exact staff type first."""
     service = SchedulingService(session)
-    return await service.get_candidate_recommendations(occurrence_id=id, target_date=date, weekday=weekday)
+    return await service.get_candidate_recommendations(
+        occurrence_id=id, target_date=date, weekday=weekday
+    )
 
 
 @router.get("/job-items/{id}/recommendations", response_model=list[CandidateRecommendationRead])
@@ -138,7 +142,9 @@ async def get_job_item_recommendations(
 ) -> list[CandidateRecommendationRead]:
     """Ranked worker candidates for a job item by grade group, exact staff type first."""
     service = SchedulingService(session)
-    return await service.get_candidate_recommendations(job_item_id=id, target_date=date, weekday=weekday)
+    return await service.get_candidate_recommendations(
+        job_item_id=id, target_date=date, weekday=weekday
+    )
 
 
 # -------------------------------------------------------------------------
@@ -306,7 +312,11 @@ async def get_base_template(
     return await service.get_base_template(job_item_id)
 
 
-@router.post("/base-planner/templates", response_model=BaseRosterTemplateRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/base-planner/templates",
+    response_model=BaseRosterTemplateRead,
+    status_code=status.HTTP_201_CREATED,
+)
 async def save_base_template(
     payload: BaseRosterTemplateCreate,
     current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERVISOR")),
@@ -346,7 +356,11 @@ async def get_operational_roster(
     return await service.get_operational_roster(week_start=week_start, group_id=group_id)
 
 
-@router.post("/operational-planner/shifts", response_model=ScheduledWorkRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/operational-planner/shifts",
+    response_model=ScheduledWorkRead,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_operational_shift(
     payload: OperationalShiftCreate,
     current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERVISOR")),
@@ -366,4 +380,3 @@ async def delete_operational_shift(
     """Cancel an operational shift."""
     service = SchedulingService(session)
     await service.delete_operational_shift(shift_id, current_user_id=current_user.id)
-

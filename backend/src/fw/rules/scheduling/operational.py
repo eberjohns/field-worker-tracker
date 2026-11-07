@@ -43,7 +43,9 @@ class ResolvedOperationalCellWorker:
     assigned_hours: float
     sequence: int
     display_type: str  # "BLUEPRINT" (muted) | "OVERRIDE" (solid) | "DIRECT" (solid) | "TO_BE_COVERED" (dashed) | "REMOVED" (red)
-    opacity_class: str  # "muted" (40%) | "solid" (100%) | "warning" (amber dashed) | "removed" (red)
+    opacity_class: (
+        str  # "muted" (40%) | "solid" (100%) | "warning" (amber dashed) | "removed" (red)
+    )
     original_employee_id: UUID | None = None
     shift_id: UUID | None = None
     reason: str | None = None
