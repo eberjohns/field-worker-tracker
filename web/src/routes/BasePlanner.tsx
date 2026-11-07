@@ -4,14 +4,14 @@ import {
   CalendarRange,
   Search,
   Building2,
-  AlertTriangle,
-  Settings2,
+  CheckCircle2,
   ShieldAlert,
   Loader2,
   Plus,
   Trash2,
   X,
   Sparkles,
+  UserCheck,
 } from "lucide-react";
 import {
   BasePlannerResponse,
@@ -23,6 +23,12 @@ import {
 
 const WEEKDAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] as const;
 
+interface SupervisorOption {
+  id: string;
+  name: string;
+  tally_id?: string;
+}
+
 export const BasePlanner: React.FC = () => {
   const { token } = useAuth();
   const [loading, setLoading] = useState<boolean>(true);
@@ -30,26 +36,37 @@ export const BasePlanner: React.FC = () => {
   const [worksites, setWorksites] = useState<BasePlannerWorksiteRow[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>("");
 
-  // Modal state
-  const [activeItem, setActiveItem] = useState<{
+  // Supervisor filter
+  const [supervisorsList, setSupervisorsList] = useState<SupervisorOption[]>([]);
+  const [selectedSupervisorId, setSelectedSupervisorId] = useState<string>("");
+
+  // Slot Assignment Modal state
+  const [activeSlot, setActiveSlot] = useState<{
     worksite: BasePlannerWorksiteRow;
     item: BasePlannerItemRow;
+    weekday: typeof WEEKDAYS[number];
   } | null>(null);
-  const [modalMode, setModalMode] = useState<"UNIFORM" | "DAY_OF_WEEK">("UNIFORM");
-  const [templateEntries, setTemplateEntries] = useState<
+
+  const [applyUniform, setApplyUniform] = useState<boolean>(false);
+  const [slotEntries, setSlotEntries] = useState<
     {
       employee_id: string;
       employee_name: string;
       tally_id: string;
       weekly_off_day: string;
+      staff_grade_description?: string;
       weekday_mask: string;
       assigned_hours: number;
       sequence: number;
     }[]
   >([]);
+
+  // Modal candidate recommendations
   const [candidates, setCandidates] = useState<CandidateRecommendation[]>([]);
+  const [candidateSearch, setCandidateSearch] = useState<string>("");
+  const [filterToSupervisorCrew, setFilterToSupervisorCrew] = useState<boolean>(true);
   const [loadingCandidates, setLoadingCandidates] = useState<boolean>(false);
-  const [savingTemplate, setSavingTemplate] = useState<boolean>(false);
+  const [savingSlot, setSavingSlot] = useState<boolean>(false);
 
   // Fetch Base Planner Worksites
   const fetchBasePlannerData = async () => {
@@ -69,20 +86,51 @@ export const BasePlanner: React.FC = () => {
     }
   };
 
+  // Fetch Supervisors for crew filter
+  const fetchSupervisors = async () => {
+    try {
+      const res = await fetch("/api/v1/employees?role=SUPERVISOR&limit=200", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const items = data.items || data || [];
+        const list: SupervisorOption[] = items.map((emp: any) => ({
+          id: emp.id,
+          name: emp.name || emp.tally_id || "Supervisor",
+          tally_id: emp.tally_id,
+        }));
+        setSupervisorsList(list);
+      }
+    } catch (e) {
+      console.error("Failed to fetch supervisors:", e);
+    }
+  };
+
   useEffect(() => {
     if (token) {
       fetchBasePlannerData();
+      fetchSupervisors();
     }
   }, [token]);
 
-  // Open modal and initialize form state
-  const handleOpenConfigModal = async (ws: BasePlannerWorksiteRow, it: BasePlannerItemRow) => {
-    setActiveItem({ worksite: ws, item: it });
-    setModalMode(it.template?.allocation_mode || "UNIFORM");
+  // Click on a cell opens the assignment modal
+  const handleCellClick = async (
+    ws: BasePlannerWorksiteRow,
+    it: BasePlannerItemRow,
+    dow: typeof WEEKDAYS[number]
+  ) => {
+    setActiveSlot({ worksite: ws, item: it, weekday: dow });
+    setApplyUniform(it.template?.allocation_mode === "UNIFORM");
+    setCandidateSearch("");
+    setFilterToSupervisorCrew(Boolean(selectedSupervisorId));
 
+    // Extract current workers for this weekday
     if (it.template && it.template.entries.length > 0) {
-      setTemplateEntries(
-        it.template.entries.map((e) => ({
+      const isUniform = it.template.allocation_mode === "UNIFORM";
+      const currentMatching = it.template.entries
+        .filter((e) => (isUniform ? e.weekday_mask === "ALL" : e.weekday_mask === dow))
+        .map((e) => ({
           employee_id: e.employee_id,
           employee_name: e.employee_name || "Unknown Worker",
           tally_id: e.tally_id || "",
@@ -90,46 +138,107 @@ export const BasePlanner: React.FC = () => {
           weekday_mask: e.weekday_mask,
           assigned_hours: Number(e.assigned_hours),
           sequence: e.sequence,
-        }))
-      );
+        }));
+      setSlotEntries(currentMatching);
     } else {
-      setTemplateEntries([]);
+      setSlotEntries([]);
     }
 
-    // Fetch candidate suggestions
+    // Fetch candidate recommendations
     setLoadingCandidates(true);
     try {
       const cRes = await fetch(
-        `/api/v1/scheduling/suggestions/candidates?job_item_id=${it.job_item_id}`,
+        `/api/v1/job-items/${it.job_item_id}/recommendations`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       if (cRes.ok) {
         const cData = await cRes.json();
-        setCandidates(cData.candidates || []);
+        setCandidates(cData || []);
       }
     } catch (e) {
-      console.error("Failed to load candidates", e);
+      console.error("Failed to load candidates:", e);
     } finally {
       setLoadingCandidates(false);
     }
   };
 
+  // Add candidate to current slot
+  const handleAddCandidate = (cand: CandidateRecommendation) => {
+    if (!activeSlot) return;
+    const exists = slotEntries.some((e) => e.employee_id === cand.employee_id);
+    if (exists) return;
+
+    setSlotEntries((prev) => [
+      ...prev,
+      {
+        employee_id: cand.employee_id,
+        employee_name: cand.name,
+        tally_id: cand.tally_id,
+        weekly_off_day: cand.weekly_off_day || "",
+        staff_grade_description: cand.staff_grade_description || "",
+        weekday_mask: applyUniform ? "ALL" : activeSlot.weekday,
+        assigned_hours: Number(activeSlot.item.hours_per_occurrence),
+        sequence: prev.length + 1,
+      },
+    ]);
+  };
+
+  // Remove worker from slot
+  const handleRemoveEntry = (empId: string) => {
+    setSlotEntries((prev) => prev.filter((e) => e.employee_id !== empId));
+  };
+
   // Save template
-  const handleSaveTemplate = async () => {
-    if (!activeItem) return;
-    setSavingTemplate(true);
+  const handleSaveSlot = async () => {
+    if (!activeSlot) return;
+    setSavingSlot(true);
     try {
-      const payload: BaseRosterTemplateCreate = {
-        job_item_id: activeItem.item.job_item_id,
-        allocation_mode: modalMode,
-        start_date: activeItem.worksite.start_date || new Date().toISOString().split("T")[0],
-        end_date: activeItem.worksite.end_date || null,
-        entries: templateEntries.map((e, idx) => ({
+      const it = activeSlot.item;
+      const targetDow = activeSlot.weekday;
+      const existingEntries = it.template?.entries || [];
+
+      let updatedEntries: {
+        employee_id: string;
+        weekday_mask: string;
+        assigned_hours: number;
+        sequence: number;
+      }[] = [];
+
+      if (applyUniform) {
+        // Uniform Mode: Slot workers apply to 'ALL'
+        updatedEntries = slotEntries.map((e, idx) => ({
           employee_id: e.employee_id,
-          weekday_mask: modalMode === "UNIFORM" ? "ALL" : e.weekday_mask,
+          weekday_mask: "ALL",
           assigned_hours: e.assigned_hours,
           sequence: idx + 1,
-        })),
+        }));
+      } else {
+        // Day-of-Week Mode: Preserve other weekdays, replace targetDow
+        const otherDaysEntries = existingEntries
+          .filter((e) => e.weekday_mask !== targetDow && e.weekday_mask !== "ALL")
+          .map((e) => ({
+            employee_id: e.employee_id,
+            weekday_mask: e.weekday_mask,
+            assigned_hours: Number(e.assigned_hours),
+            sequence: e.sequence,
+          }));
+
+        const newDayEntries = slotEntries.map((e, idx) => ({
+          employee_id: e.employee_id,
+          weekday_mask: targetDow,
+          assigned_hours: e.assigned_hours,
+          sequence: idx + 1,
+        }));
+
+        updatedEntries = [...otherDaysEntries, ...newDayEntries];
+      }
+
+      const payload: BaseRosterTemplateCreate = {
+        job_item_id: it.job_item_id,
+        allocation_mode: applyUniform ? "UNIFORM" : "DAY_OF_WEEK",
+        start_date: activeSlot.worksite.start_date || new Date().toISOString().split("T")[0],
+        end_date: activeSlot.worksite.end_date || null,
+        entries: updatedEntries,
       };
 
       const res = await fetch("/api/v1/base-planner/templates", {
@@ -147,41 +256,15 @@ export const BasePlanner: React.FC = () => {
       }
 
       await fetchBasePlannerData();
-      setActiveItem(null);
+      setActiveSlot(null);
     } catch (err: any) {
-      alert(`Error saving template: ${err.message}`);
+      alert(`Error saving slot: ${err.message}`);
     } finally {
-      setSavingTemplate(false);
+      setSavingSlot(false);
     }
   };
 
-  // Add worker to template
-  const handleAddWorker = (cand: CandidateRecommendation, targetDow: string = "ALL") => {
-    if (!activeItem) return;
-    const exists = templateEntries.some(
-      (e) => e.employee_id === cand.employee_id && (modalMode === "UNIFORM" || e.weekday_mask === targetDow)
-    );
-    if (exists) return;
-
-    setTemplateEntries((prev) => [
-      ...prev,
-      {
-        employee_id: cand.employee_id,
-        employee_name: cand.name,
-        tally_id: cand.tally_id,
-        weekly_off_day: cand.weekly_off_day || "",
-        weekday_mask: modalMode === "UNIFORM" ? "ALL" : targetDow,
-        assigned_hours: Number(activeItem.item.hours_per_occurrence),
-        sequence: prev.length + 1,
-      },
-    ]);
-  };
-
-  const handleRemoveEntry = (index: number) => {
-    setTemplateEntries((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  // Filter worksites
+  // Filter worksites by search query
   const filteredWorksites = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     if (!q) return worksites;
@@ -193,56 +276,113 @@ export const BasePlanner: React.FC = () => {
     );
   }, [worksites, searchQuery]);
 
-  // Compute rest day issues in modal
-  const restDayWarningsInModal = useMemo(() => {
-    if (!activeItem || modalMode !== "UNIFORM") return [];
-    const jobWorkingDays = activeItem.item.weekday_pattern || ["MON", "TUE", "WED", "THU", "FRI", "SAT"];
-    const issues: { name: string; offDay: string }[] = [];
-    for (const e of templateEntries) {
-      if (e.weekly_off_day && jobWorkingDays.includes(e.weekly_off_day.toUpperCase())) {
-        issues.push({ name: e.employee_name, offDay: e.weekly_off_day.toUpperCase() });
-      }
+  // Filter candidates in modal by search and supervisor crew toggle
+  const filteredCandidates = useMemo(() => {
+    let pool = candidates;
+
+    // Filter by supervisor crew if toggle is checked and supervisor is selected
+    if (filterToSupervisorCrew && selectedSupervisorId) {
+      pool = pool.filter((c) => c.supervisor_id === selectedSupervisorId);
     }
-    return issues;
-  }, [activeItem, modalMode, templateEntries]);
+
+    // Filter by search query
+    const q = candidateSearch.toLowerCase().trim();
+    if (q) {
+      pool = pool.filter(
+        (c) =>
+          c.name.toLowerCase().includes(q) ||
+          c.tally_id.toLowerCase().includes(q) ||
+          (c.staff_grade_description && c.staff_grade_description.toLowerCase().includes(q))
+      );
+    }
+
+    // Sort strictly by 3-tier priority (DEC-52):
+    // 1. Same staff grade description (exact_staff_type_match)
+    // 2. Ranking score
+    return [...pool].sort((a, b) => {
+      if (a.exact_staff_type_match !== b.exact_staff_type_match) {
+        return a.exact_staff_type_match ? -1 : 1;
+      }
+      return (b.ranking_score || 0) - (a.ranking_score || 0);
+    });
+  }, [candidates, candidateSearch, filterToSupervisorCrew, selectedSupervisorId]);
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950">
-      {/* Header */}
-      <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 py-4">
+    <div className="flex flex-col h-full bg-slate-50">
+      {/* Top Controls Bar - Light Enterprise Styling */}
+      <header className="bg-white border-b border-slate-200 px-6 py-4 sticky top-0 z-20">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <CalendarRange className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
-              <h1 className="text-xl font-bold text-slate-900 dark:text-white">
-                Base Planner (Recurring Blueprint Engine)
+              <CalendarRange className="h-6 w-6 text-indigo-600" />
+              <h1 className="text-xl font-bold text-slate-900">
+                Base Planner (Recurring Master Blueprint)
               </h1>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                Master Year Schedule
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                Master Schedule
               </span>
             </div>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              Configure permanent staffing templates across contract validity dates. Handles weekly off rotations and Mode A vs Mode B matrices.
+            <p className="text-sm text-slate-500 mt-1">
+              Configure permanent weekly staffing across contract validity dates. Click any weekday slot to assign workers.
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="relative w-72">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Supervisor Crew Filter Dropdown */}
+            <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-1.5 shadow-sm">
+              <UserCheck className="h-4 w-4 text-slate-400" />
+              <span className="text-xs font-semibold text-slate-700">Supervisor Crew:</span>
+              <select
+                value={selectedSupervisorId}
+                onChange={(e) => setSelectedSupervisorId(e.target.value)}
+                className="text-xs bg-transparent border-0 font-medium text-slate-800 focus:outline-none cursor-pointer"
+              >
+                <option value="">All Crews (Company-Wide)</option>
+                {supervisorsList.map((sup) => (
+                  <option key={sup.id} value={sup.id}>
+                    {sup.name} ({sup.tally_id || "Crew"})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Worksite Search */}
+            <div className="relative w-64">
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search job number or site name..."
+                placeholder="Search job number or site..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full pl-9 pr-4 py-2 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
               />
             </div>
           </div>
         </div>
+
+        {/* Legend */}
+        <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100">
+          <div className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded bg-indigo-50 border border-indigo-300"></span>
+            <span className="font-medium text-slate-700">Base Blueprint Shift</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full ring-2 ring-cyan-500"></span>
+            <span>Recommended Target Day</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+            <span className="text-emerald-700 font-medium">Quota Met</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <ShieldAlert className="h-3.5 w-3.5 text-amber-500" />
+            <span className="text-amber-700 font-medium">Rest Day Warning</span>
+          </div>
+        </div>
       </header>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-y-auto p-6 space-y-6">
+      {/* Main Grid Content */}
+      <main className="flex-1 overflow-auto p-6 space-y-6">
         {loading ? (
           <div className="flex flex-col items-center justify-center h-64 text-slate-400">
             <Loader2 className="h-8 w-8 animate-spin mb-2" />
@@ -253,9 +393,9 @@ export const BasePlanner: React.FC = () => {
             {error}
           </div>
         ) : filteredWorksites.length === 0 ? (
-          <div className="text-center py-16 text-slate-400">
+          <div className="text-center py-16 text-slate-400 bg-white rounded-xl border border-slate-200">
             <Building2 className="h-12 w-12 mx-auto mb-3 opacity-30" />
-            <p className="text-base font-semibold text-slate-600 dark:text-slate-300">No worksites found</p>
+            <p className="text-base font-semibold text-slate-700">No worksites found</p>
             <p className="text-sm mt-1">Try adjusting your search criteria</p>
           </div>
         ) : (
@@ -263,168 +403,192 @@ export const BasePlanner: React.FC = () => {
             {filteredWorksites.map((ws) => (
               <div
                 key={ws.worksite_id}
-                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden"
+                className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden"
               >
-                {/* Worksite Overview Bar */}
-                <div className="px-6 py-4 bg-slate-50/70 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-3">
-                      <span className="font-mono text-sm font-bold text-indigo-600 dark:text-indigo-400">
+                {/* Worksite Banner Bar */}
+                <div className="px-6 py-3.5 bg-slate-50 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2.5">
+                      <span className="font-mono text-sm font-bold text-indigo-600">
                         {ws.job_number}
                       </span>
-                      <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+                      <h2 className="text-sm font-bold text-slate-900">
                         {ws.job_name}
                       </h2>
                       {ws.customer_type && (
-                        <span className="text-xs px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 font-medium">
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-slate-200 text-slate-700 font-medium">
                           {ws.customer_type}
                         </span>
                       )}
                       <span
-                        className={`text-xs px-2 py-0.5 rounded font-medium ${
+                        className={`text-[10px] px-2 py-0.5 rounded font-medium ${
                           ws.is_outdoor
-                            ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
-                            : "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300"
+                            ? "bg-amber-100 text-amber-800"
+                            : "bg-blue-100 text-blue-800"
                         }`}
                       >
                         {ws.is_outdoor ? "Outdoor Site" : "Indoor Site"}
                       </span>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 dark:text-slate-400 pt-1">
+                    <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 pt-0.5">
                       <div>
-                        <span className="font-medium text-slate-700 dark:text-slate-300">Contract Validity:</span>{" "}
+                        <span className="font-medium text-slate-700">Contract Validity:</span>{" "}
                         {ws.start_date || "N/A"} to {ws.end_date || "Ongoing"}
                       </div>
                       <div>
-                        <span className="font-medium text-slate-700 dark:text-slate-300">Annual Budget:</span>{" "}
-                        {ws.budget_amount ? `${Number(ws.budget_amount).toLocaleString()} AED / year` : "Not specified"}
+                        <span className="font-medium text-slate-700">Annual Budget:</span>{" "}
+                        {ws.budget_amount ? `${Number(ws.budget_amount).toLocaleString()} AED / yr` : "Not specified"}
                       </div>
                       <div>
-                        <span className="font-medium text-slate-700 dark:text-slate-300">Contract Line Items:</span>{" "}
-                        {ws.items.length} items
+                        <span className="font-medium text-slate-700">Items:</span> {ws.items.length} contract lines
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Job Items Table */}
+                {/* 7-Weekday Grid Table */}
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-slate-100/50 dark:bg-slate-800/20 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
-                      <tr>
-                        <th className="px-6 py-3">Code & Staff Grade</th>
-                        <th className="px-6 py-3">Frequency & Schedule</th>
-                        <th className="px-6 py-3">Headcount & Hours</th>
-                        <th className="px-6 py-3">Base Template Configuration</th>
-                        <th className="px-6 py-3 text-right">Actions</th>
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-100/70 text-slate-500 border-b border-slate-200">
+                        <th className="px-4 py-2.5 font-semibold w-72">Job Item & Quota</th>
+                        {WEEKDAYS.map((dow) => (
+                          <th
+                            key={dow}
+                            className={`px-3 py-2 text-center border-l border-slate-200 min-w-[130px] font-bold ${
+                              dow === "FRI"
+                                ? "text-purple-700 bg-purple-50/30"
+                                : dow === "SUN"
+                                ? "text-slate-400 bg-slate-50"
+                                : "text-slate-700"
+                            }`}
+                          >
+                            {dow}
+                            {dow === "FRI" && (
+                              <span className="block text-[9px] font-normal text-purple-600">
+                                Rest-Day Shift
+                              </span>
+                            )}
+                          </th>
+                        ))}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    <tbody className="divide-y divide-slate-100">
                       {ws.items.map((it) => {
-                        const hasTemplate = !!it.template && it.template.entries.length > 0;
                         const isUniform = it.template?.allocation_mode === "UNIFORM";
+                        const activeJobDays = it.weekday_pattern || ["MON", "TUE", "WED", "THU", "FRI", "SAT"];
+                        const targetOccurrences = Number(it.occurrences_per_period) || 1;
+
+                        // Calculate assigned days count in template
+                        const distinctAssignedDays = new Set<string>();
+                        if (it.template) {
+                          for (const e of it.template.entries) {
+                            if (e.weekday_mask === "ALL") {
+                              activeJobDays.forEach((d) => distinctAssignedDays.add(d));
+                            } else {
+                              distinctAssignedDays.add(e.weekday_mask);
+                            }
+                          }
+                        }
+                        const isQuotaMet = distinctAssignedDays.size >= targetOccurrences;
 
                         return (
-                          <tr
-                            key={it.job_item_id}
-                            className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors"
-                          >
-                            <td className="px-6 py-4">
-                              <div className="font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-                                <span className="font-mono text-indigo-600 dark:text-indigo-400">
-                                  {it.sub_item_code}
-                                </span>
+                          <tr key={it.job_item_id} className="hover:bg-slate-50/50 transition-colors">
+                            {/* Job Item Info Column */}
+                            <td className="px-4 py-3">
+                              <div className="font-semibold text-slate-900 flex items-center gap-1.5">
+                                <span className="font-mono text-indigo-600">{it.sub_item_code}</span>
                                 <span>{it.staff_grade_description}</span>
                               </div>
-                              <div className="text-xs text-slate-400 mt-0.5">
-                                Planned Grade: {it.planned_grade_code} • {it.deployment_type}
-                              </div>
-                            </td>
-
-                            <td className="px-6 py-4 text-xs text-slate-600 dark:text-slate-300">
-                              <div className="font-medium text-slate-800 dark:text-slate-200">
+                              <div className="text-[11px] text-slate-500 mt-0.5">
                                 {it.frequency_unit === "WEEK"
-                                  ? `Weekly (${it.occurrences_per_period} visits / week)`
-                                  : it.frequency_unit === "MONTH"
-                                  ? `Monthly (${it.occurrences_per_period} visits / month)`
-                                  : `${it.frequency_unit} (${it.occurrences_per_period} visits)`}
+                                  ? `Weekly (${it.occurrences_per_period}x/wk)`
+                                  : `${it.frequency_unit} (${it.occurrences_per_period}x)`}{" "}
+                                • {it.required_staff_count} staff • {it.hours_per_occurrence}h/visit
                               </div>
-                              <div className="text-slate-400 mt-0.5">
-                                {it.weekday_pattern && it.weekday_pattern.length > 0
-                                  ? `Active: ${it.weekday_pattern.join(", ")}`
-                                  : "Default working days (Mon-Sat)"}
-                              </div>
-                            </td>
-
-                            <td className="px-6 py-4 text-xs text-slate-600 dark:text-slate-300">
-                              <div className="font-semibold text-slate-800 dark:text-slate-200">
-                                {it.required_staff_count} Staff Required
-                              </div>
-                              <div className="text-slate-400 mt-0.5">
-                                {it.hours_per_occurrence} hrs / occurrence / staff
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-[10px] text-slate-600 font-medium">
+                                  Assigned: {distinctAssignedDays.size} / {targetOccurrences} days
+                                </span>
+                                {isQuotaMet && (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
+                                    <CheckCircle2 className="h-3 w-3" /> Quota Met
+                                  </span>
+                                )}
                               </div>
                             </td>
 
-                            <td className="px-6 py-4">
-                              {hasTemplate ? (
-                                <div className="space-y-1.5">
-                                  <div className="flex items-center gap-2">
-                                    <span
-                                      className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                                        isUniform
-                                          ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300"
-                                          : "bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300"
-                                      }`}
-                                    >
-                                      {isUniform ? "Mode A: Uniform Crew" : "Mode B: Day-of-Week Crew Matrix"}
-                                    </span>
-                                    <span className="text-xs text-slate-400">
-                                      ({it.template?.entries.length} assigned slots)
-                                    </span>
+                            {/* 7 Weekday Slot Cells */}
+                            {WEEKDAYS.map((dow) => {
+                              const isActiveDay = activeJobDays.includes(dow);
+                              const isRecommended = it.frequency_unit === "WEEK" && targetOccurrences === 1 && dow === "MON";
+
+                              // Find workers scheduled for this weekday
+                              const matchingEntries = (it.template?.entries || []).filter((e) =>
+                                isUniform ? (e.weekday_mask === "ALL" && isActiveDay) : (e.weekday_mask === dow)
+                              );
+
+                              return (
+                                <td
+                                  key={dow}
+                                  onClick={() => handleCellClick(ws, it, dow)}
+                                  className={`px-2 py-2 border-l border-slate-200 cursor-pointer transition-colors relative hover:bg-indigo-50/60 ${
+                                    isRecommended ? "ring-1 ring-inset ring-cyan-400" : ""
+                                  } ${!isActiveDay ? "bg-slate-50/60" : ""}`}
+                                >
+                                  <div className="space-y-1 min-h-[52px] flex flex-col justify-between">
+                                    {/* Top status */}
+                                    <div className="flex items-center justify-between text-[9px]">
+                                      {isRecommended && (
+                                        <span className="text-cyan-700 font-bold">Target</span>
+                                      )}
+                                      {!isActiveDay && (
+                                        <span className="text-slate-400">Site Off</span>
+                                      )}
+                                    </div>
+
+                                    {/* Assigned Workers List */}
+                                    {matchingEntries.length > 0 ? (
+                                      <div className="space-y-1">
+                                        {matchingEntries.map((e) => {
+                                          const isOffDay = (e.weekly_off_day || "").toUpperCase() === dow;
+                                          return (
+                                            <div
+                                              key={e.id}
+                                              className={`p-1 rounded text-[10px] border flex items-center justify-between ${
+                                                isOffDay
+                                                  ? "bg-amber-50 border-amber-300 text-amber-900"
+                                                  : "bg-indigo-50 border-indigo-200 text-indigo-900 font-medium"
+                                              }`}
+                                            >
+                                              <span className="truncate max-w-[85px]" title={e.employee_name || "Worker"}>
+                                                {e.employee_name || "Worker"}
+                                              </span>
+                                              {isOffDay && (
+                                                <span title="Rest Day Warning">
+                                                  <ShieldAlert className="h-3 w-3 text-amber-600 shrink-0" />
+                                                </span>
+                                              )}
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    ) : isActiveDay ? (
+                                      <div className="text-[10px] text-slate-400 hover:text-indigo-600 text-center py-2">
+                                        + Assign
+                                      </div>
+                                    ) : (
+                                      <div className="text-[10px] text-slate-300 text-center py-2">—</div>
+                                    )}
+
+                                    <div className="text-[9px] text-slate-400 text-right">
+                                      {matchingEntries.length > 0 && `${matchingEntries.length}/${it.required_staff_count}`}
+                                    </div>
                                   </div>
-
-                                  {/* Worker badges */}
-                                  <div className="flex flex-wrap gap-1.5 max-w-md">
-                                    {it.template?.entries.map((entry) => (
-                                      <span
-                                        key={entry.id}
-                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700"
-                                      >
-                                        <span className="font-medium">
-                                          {entry.employee_name || "Worker"}
-                                        </span>
-                                        {!isUniform && (
-                                          <span className="text-[10px] text-purple-600 dark:text-purple-400 font-bold">
-                                            [{entry.weekday_mask}]
-                                          </span>
-                                        )}
-                                        {entry.weekly_off_day && (
-                                          <span className="text-[10px] text-amber-600 dark:text-amber-400">
-                                            (Off: {entry.weekly_off_day})
-                                          </span>
-                                        )}
-                                      </span>
-                                    ))}
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                                  <AlertTriangle className="h-3.5 w-3.5" />
-                                  <span>No Recurring Template Configured</span>
-                                </div>
-                              )}
-                            </td>
-
-                            <td className="px-6 py-4 text-right">
-                              <button
-                                onClick={() => handleOpenConfigModal(ws, it)}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-300 dark:hover:bg-indigo-900 border border-indigo-200 dark:border-indigo-800 transition-colors"
-                              >
-                                <Settings2 className="h-3.5 w-3.5" />
-                                {hasTemplate ? "Edit Template" : "Configure Template"}
-                              </button>
-                            </td>
+                                </td>
+                              );
+                            })}
                           </tr>
                         );
                       })}
@@ -437,205 +601,110 @@ export const BasePlanner: React.FC = () => {
         )}
       </main>
 
-      {/* Template Configuration Modal */}
-      {activeItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+      {/* Click-to-Assign Slot Modal - Light Theme Enterprise */}
+      {activeSlot && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
             {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
               <div>
                 <div className="flex items-center gap-2">
-                  <Settings2 className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
-                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-                    Configure Base Roster Template
+                  <CalendarRange className="h-5 w-5 text-indigo-600" />
+                  <h3 className="text-base font-bold text-slate-900">
+                    Assign Recurring Staff to Slot
                   </h3>
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  {activeItem.worksite.job_number} - {activeItem.worksite.job_name} • Item{" "}
-                  <span className="font-semibold">{activeItem.item.sub_item_code}</span> (
-                  {activeItem.item.staff_grade_description})
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {activeSlot.worksite.job_number} - {activeSlot.worksite.job_name} • Item{" "}
+                  <span className="font-semibold">{activeSlot.item.sub_item_code}</span> (
+                  {activeSlot.item.staff_grade_description}) • Target:{" "}
+                  <strong className="text-indigo-700">{activeSlot.weekday}</strong>
                 </p>
               </div>
 
               <button
-                onClick={() => setActiveItem(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+                onClick={() => setActiveSlot(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             {/* Modal Body */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {/* Mode Selection Tabs */}
-              <div className="bg-slate-100 dark:bg-slate-800 p-1 rounded-xl flex gap-1">
-                <button
-                  type="button"
-                  onClick={() => setModalMode("UNIFORM")}
-                  className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all ${
-                    modalMode === "UNIFORM"
-                      ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm"
-                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
-                  }`}
-                >
-                  Mode A: Uniform Daily Team
-                  <span className="block text-[10px] font-normal text-slate-500 mt-0.5">
-                    Assign once; same team attends all active days
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setModalMode("DAY_OF_WEEK")}
-                  className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all ${
-                    modalMode === "DAY_OF_WEEK"
-                      ? "bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 shadow-sm"
-                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
-                  }`}
-                >
-                  Mode B: Day-of-Week Crew Matrix
-                  <span className="block text-[10px] font-normal text-slate-500 mt-0.5">
-                    Configure individual teams per day (resolves Friday off rotation)
-                  </span>
-                </button>
+            <div className="flex-1 overflow-y-auto p-6 space-y-5">
+              {/* Scope Toggle: Uniform vs Day-of-Week */}
+              <div className="p-3 rounded-lg bg-indigo-50/60 border border-indigo-100 flex items-center justify-between">
+                <div>
+                  <label className="text-xs font-bold text-indigo-900 flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={applyUniform}
+                      onChange={(e) => setApplyUniform(e.target.checked)}
+                      className="rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+                    />
+                    Apply this team to all active working days (Uniform Mode)
+                  </label>
+                  <p className="text-[11px] text-slate-500 ml-6 mt-0.5">
+                    If checked, this crew is scheduled Mon–Sat. If unchecked, applies only to {activeSlot.weekday}.
+                  </p>
+                </div>
               </div>
 
-              {/* Rest Day Warning Alert (for Mode A) */}
-              {restDayWarningsInModal.length > 0 && (
-                <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 flex items-start justify-between gap-4">
-                  <div className="flex items-start gap-3">
-                    <ShieldAlert className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                    <div className="text-xs text-amber-800 dark:text-amber-200">
-                      <p className="font-semibold">Weekly Rest-Day Warning in Uniform Mode:</p>
-                      <ul className="list-disc pl-4 mt-1 space-y-0.5">
-                        {restDayWarningsInModal.map((w, idx) => (
-                          <li key={idx}>
-                            <span className="font-semibold">{w.name}</span> has {w.offDay} off, which is an active job day.
-                          </li>
-                        ))}
-                      </ul>
-                      <p className="mt-1 text-slate-600 dark:text-slate-400">
-                        In Uniform Mode, these workers will be flagged with a Rest-Day warning. Switch to Day-of-Week Crew Matrix to schedule an alternate worker on that day.
-                      </p>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => setModalMode("DAY_OF_WEEK")}
-                    className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-200 text-amber-900 hover:bg-amber-300 dark:bg-amber-800 dark:text-amber-100 transition-colors"
-                  >
-                    Switch to Mode B
-                  </button>
+              {/* Currently Assigned Workers in this Slot */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs text-slate-600 font-semibold">
+                  <span>
+                    Currently Scheduled Workers ({slotEntries.length} / {activeSlot.item.required_staff_count} Required)
+                  </span>
                 </div>
-              )}
 
-              {/* Roster Configuration Grid */}
-              <div className="space-y-4">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  {modalMode === "UNIFORM"
-                    ? "Uniform Crew (Applies to all active job working days)"
-                    : "Day-of-Week Staffing Matrix"}
-                </h4>
-
-                {modalMode === "UNIFORM" ? (
-                  <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-4 bg-slate-50/50 dark:bg-slate-800/30 space-y-3">
-                    <div className="flex items-center justify-between text-xs text-slate-500">
-                      <span>
-                        Assigned Workers: {templateEntries.length} / Required:{" "}
-                        {activeItem.item.required_staff_count}
-                      </span>
-                    </div>
-
-                    {templateEntries.length === 0 ? (
-                      <p className="text-xs text-slate-400 italic py-2">
-                        No workers assigned to uniform crew yet. Select from the candidate pool below.
-                      </p>
-                    ) : (
-                      <div className="space-y-2">
-                        {templateEntries.map((e, idx) => (
-                          <div
-                            key={idx}
-                            className="flex items-center justify-between p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800"
-                          >
-                            <div className="flex items-center gap-3">
-                              <span className="text-xs font-bold font-mono text-slate-400">#{idx + 1}</span>
-                              <div>
-                                <span className="text-sm font-semibold text-slate-900 dark:text-white">
-                                  {e.employee_name}
-                                </span>
-                                <span className="text-xs text-slate-400 ml-2 font-mono">
-                                  ({e.tally_id})
-                                </span>
-                              </div>
-                              {e.weekly_off_day && (
-                                <span className="text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                                  Weekly Off: {e.weekly_off_day}
-                                </span>
-                              )}
-                            </div>
-
-                            <button
-                              onClick={() => handleRemoveEntry(idx)}
-                              className="text-red-500 hover:text-red-700 p-1 rounded"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                {slotEntries.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic py-2">
+                    No workers assigned to this slot yet. Choose from the recommended candidates below.
+                  </p>
                 ) : (
-                  /* Mode B: 7-Column Day-of-Week Matrix */
-                  <div className="grid grid-cols-1 md:grid-cols-7 gap-2">
-                    {WEEKDAYS.map((dow) => {
-                      const dayEntries = templateEntries.filter((e) => e.weekday_mask === dow);
-                      const isFriday = dow === "FRI";
+                  <div className="space-y-1.5">
+                    {slotEntries.map((e, idx) => {
+                      const isOffDay = (e.weekly_off_day || "").toUpperCase() === activeSlot.weekday;
 
                       return (
                         <div
-                          key={dow}
-                          className={`border rounded-xl p-3 flex flex-col justify-between min-h-[160px] ${
-                            isFriday
-                              ? "border-purple-300 dark:border-purple-800 bg-purple-50/30 dark:bg-purple-950/20"
-                              : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
-                          }`}
+                          key={e.employee_id}
+                          className="flex items-center justify-between p-2.5 rounded-lg border border-slate-200 bg-white shadow-sm"
                         >
-                          <div>
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="font-bold text-xs text-slate-900 dark:text-white">{dow}</span>
-                              {isFriday && (
-                                <span className="text-[10px] font-semibold text-purple-700 dark:text-purple-300">
-                                  Friday Shift
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs font-mono font-bold text-slate-400">#{idx + 1}</span>
+                            <div>
+                              <div className="text-xs font-bold text-slate-900">
+                                {e.employee_name}
+                                <span className="text-slate-400 font-mono font-normal ml-1.5">
+                                  ({e.tally_id})
                                 </span>
-                              )}
-                            </div>
-
-                            <div className="space-y-1.5">
-                              {dayEntries.map((e, idx) => (
-                                <div
-                                  key={idx}
-                                  className="text-[11px] p-1.5 rounded bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-between"
-                                >
-                                  <span className="truncate max-w-[80px]" title={e.employee_name}>
-                                    {e.employee_name}
+                              </div>
+                              <div className="text-[11px] text-slate-500 flex items-center gap-2 mt-0.5">
+                                <span>{e.assigned_hours} hrs/day</span>
+                                {e.weekly_off_day && (
+                                  <span className="text-slate-600 font-medium">
+                                    Weekly Off: {e.weekly_off_day}
                                   </span>
-                                  <button
-                                    onClick={() => {
-                                      const globalIdx = templateEntries.indexOf(e);
-                                      if (globalIdx !== -1) handleRemoveEntry(globalIdx);
-                                    }}
-                                    className="text-red-400 hover:text-red-600 ml-1"
-                                  >
-                                    <X className="h-3 w-3" />
-                                  </button>
-                                </div>
-                              ))}
+                                )}
+                              </div>
                             </div>
                           </div>
 
-                          <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-[10px] text-slate-400 text-center">
-                            {dayEntries.length} assigned
+                          <div className="flex items-center gap-2">
+                            {isOffDay && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                                <ShieldAlert className="h-3 w-3" /> Rest Day
+                              </span>
+                            )}
+                            <button
+                              onClick={() => handleRemoveEntry(e.employee_id)}
+                              className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition-colors"
+                              title="Remove worker from slot"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
                           </div>
                         </div>
                       );
@@ -644,109 +713,145 @@ export const BasePlanner: React.FC = () => {
                 )}
               </div>
 
-              {/* Candidate Worker Suggestions */}
-              <div className="space-y-3 pt-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-indigo-500" />
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                      Recommended Worker Candidates
+              {/* Candidate Worker Recommendations Section */}
+              <div className="space-y-3 pt-3 border-t border-slate-200">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles className="h-4 w-4 text-indigo-600" />
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                      Candidate Worker Recommendations
                     </h4>
                   </div>
-                  <span className="text-xs text-slate-400">
-                    Matches grade {activeItem.item.planned_grade_code} & job requirements
-                  </span>
+
+                  {/* Supervisor Crew Filter Toggle inside Modal */}
+                  {selectedSupervisorId && (
+                    <label className="text-xs font-medium text-indigo-700 flex items-center gap-1.5 cursor-pointer bg-indigo-50 px-2 py-1 rounded border border-indigo-200">
+                      <input
+                        type="checkbox"
+                        checked={filterToSupervisorCrew}
+                        onChange={(e) => setFilterToSupervisorCrew(e.target.checked)}
+                        className="rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
+                      />
+                      <span>Filter to Selected Supervisor's Crew</span>
+                    </label>
+                  )}
                 </div>
 
+                {/* Candidate Search Box */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search candidate by name, ID or grade..."
+                    value={candidateSearch}
+                    onChange={(e) => setCandidateSearch(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                {/* Candidate List */}
                 {loadingCandidates ? (
                   <div className="text-center py-6 text-slate-400 text-xs flex items-center justify-center gap-2">
                     <Loader2 className="h-4 w-4 animate-spin" /> Loading candidate pool...
                   </div>
-                ) : candidates.length === 0 ? (
-                  <p className="text-xs text-slate-400 py-2">No recommended candidates found.</p>
+                ) : filteredCandidates.length === 0 ? (
+                  <p className="text-xs text-slate-400 py-3 text-center">
+                    No matching candidates found. Try unchecking the crew filter or clearing the search.
+                  </p>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-56 overflow-y-auto">
-                    {candidates.map((cand) => (
-                      <div
-                        key={cand.employee_id}
-                        className="p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between gap-2 hover:border-indigo-300 dark:hover:border-indigo-700 transition-colors"
-                      >
-                        <div className="space-y-0.5">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-slate-900 dark:text-white">
-                              {cand.name}
-                            </span>
-                            <span className="text-[10px] text-slate-400 font-mono">
-                              ({cand.tally_id})
-                            </span>
-                          </div>
-                          <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                            <span>{cand.staff_grade_description || "Staff"}</span>
-                            <span>•</span>
-                            <span className="text-indigo-600 dark:text-indigo-400">
-                              Off: {cand.weekly_off_day || "None"}
-                            </span>
-                          </div>
-                        </div>
+                  <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                    {filteredCandidates.map((cand) => {
+                      const isExactMatch = cand.exact_staff_type_match;
+                      const isOffDay = (cand.weekly_off_day || "").toUpperCase() === activeSlot.weekday;
+                      const isAlreadyAssigned = slotEntries.some((e) => e.employee_id === cand.employee_id);
 
-                        {modalMode === "UNIFORM" ? (
-                          <button
-                            onClick={() => handleAddWorker(cand, "ALL")}
-                            className="px-2.5 py-1 rounded text-xs font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:text-indigo-300 flex items-center gap-1"
-                          >
-                            <Plus className="h-3 w-3" /> Add
-                          </button>
-                        ) : (
-                          <div className="flex items-center gap-1">
-                            <select
-                              defaultValue="FRI"
-                              id={`select-dow-${cand.employee_id}`}
-                              className="text-xs py-1 px-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800"
-                            >
-                              {WEEKDAYS.map((w) => (
-                                <option key={w} value={w}>
-                                  {w}
-                                </option>
-                              ))}
-                            </select>
-                            <button
-                              onClick={() => {
-                                const el = document.getElementById(
-                                  `select-dow-${cand.employee_id}`
-                                ) as HTMLSelectElement;
-                                handleAddWorker(cand, el?.value || "FRI");
-                              }}
-                              className="px-2 py-1 rounded text-xs font-semibold bg-purple-50 text-purple-700 hover:bg-purple-100 dark:bg-purple-950/60 dark:text-purple-300"
-                            >
-                              Add
-                            </button>
+                      return (
+                        <div
+                          key={cand.employee_id}
+                          className={`p-2.5 rounded-lg border flex items-center justify-between gap-3 transition-colors ${
+                            isAlreadyAssigned
+                              ? "bg-slate-50 border-slate-200 opacity-60"
+                              : "bg-white border-slate-200 hover:border-indigo-300"
+                          }`}
+                        >
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-slate-900">
+                                {cand.name} {isExactMatch && <span className="text-amber-500 font-bold">*</span>}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-mono">
+                                ({cand.tally_id})
+                              </span>
+                              {isExactMatch && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200">
+                                  Exact Staff Match
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="text-[11px] text-slate-500 flex flex-wrap items-center gap-2">
+                              <span>{cand.staff_grade_description || "Staff"}</span>
+                              <span>•</span>
+                              <span className="font-mono text-slate-600">{cand.grade_code}</span>
+                              <span>•</span>
+                              <span className={isOffDay ? "text-amber-700 font-bold" : "text-slate-600"}>
+                                Off: {cand.weekly_off_day || "None"}
+                              </span>
+                              {cand.supervisor_name && (
+                                <>
+                                  <span>•</span>
+                                  <span>Supervisor: {cand.supervisor_name}</span>
+                                </>
+                              )}
+                            </div>
+
+                            {isOffDay && (
+                              <div className="text-[10px] text-amber-700 font-semibold flex items-center gap-1">
+                                <ShieldAlert className="h-3 w-3" />
+                                <span>Rest-Day Warning: Off day is {activeSlot.weekday}</span>
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
-                    ))}
+
+                          <button
+                            type="button"
+                            onClick={() => handleAddCandidate(cand)}
+                            disabled={isAlreadyAssigned}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors ${
+                              isAlreadyAssigned
+                                ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                                : "bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 shadow-sm"
+                            }`}
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                            {isAlreadyAssigned ? "Assigned" : "Add to Slot"}
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
             </div>
 
             {/* Modal Footer */}
-            <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-end gap-3">
+            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-end gap-3">
               <button
                 type="button"
-                onClick={() => setActiveItem(null)}
-                className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                onClick={() => setActiveSlot(null)}
+                className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-200 transition-colors"
               >
                 Cancel
               </button>
 
               <button
                 type="button"
-                onClick={handleSaveTemplate}
-                disabled={savingTemplate || templateEntries.length === 0}
+                onClick={handleSaveSlot}
+                disabled={savingSlot}
                 className="px-4 py-2 rounded-lg text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center gap-1.5 shadow-sm"
               >
-                {savingTemplate && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                Save Master Template
+                {savingSlot && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Save Recurring Slot
               </button>
             </div>
           </div>

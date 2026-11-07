@@ -221,3 +221,4 @@ def test_operational_cell_precedence_and_overrides():
     w3 = next(w for w in cell_workers if w.employee_id == base_worker3)
     assert w3.display_type == "TO_BE_COVERED"
     assert w3.opacity_class == "warning"
+
