@@ -1,6 +1,8 @@
+import json
 from datetime import UTC, date, datetime, timedelta
 
 import structlog
+from geoalchemy2.functions import ST_AsGeoJSON
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -247,14 +249,18 @@ async def handle_worksite_boundary_changed(
     today = now.date()
     window_end = today + timedelta(days=30)
 
-    # Find worksite
-    ws_query = select(Worksite).where(Worksite.id == event.worksite_id)
+    # Find worksite with boundary GeoJSON explicitly loaded
+    ws_query = select(
+        Worksite,
+        ST_AsGeoJSON(Worksite.boundary).label("boundary_geojson"),
+    ).where(Worksite.id == event.worksite_id)
     ws_res = await session.execute(ws_query)
-    ws = ws_res.scalar_one_or_none()
-    if not ws:
+    ws_row = ws_res.first()
+    if not ws_row:
         return
+    ws, boundary_json_str = ws_row
+    boundary_geojson = json.loads(boundary_json_str) if boundary_json_str else None
 
-    boundary_geojson = _geometry_to_geojson(ws.boundary)
     circle = compute_geofence_circle(boundary_geojson, extra_radius_m=300.0)
     job_payload = JobPayload(
         job_id=ws.id,
@@ -404,11 +410,17 @@ async def handle_accommodation_boundary_changed(
     if not event.accommodation_id:
         return
 
-    acc = await session.get(Accommodation, event.accommodation_id)
-    if not acc:
+    query = select(
+        Accommodation,
+        ST_AsGeoJSON(Accommodation.boundary).label("boundary_geojson"),
+    ).where(Accommodation.id == event.accommodation_id)
+    res = await session.execute(query)
+    row = res.first()
+    if not row:
         return
 
-    boundary_geojson = _geometry_to_geojson(acc.boundary)
+    acc, boundary_json_str = row
+    boundary_geojson = json.loads(boundary_json_str) if boundary_json_str else None
     circle = compute_geofence_circle(boundary_geojson, extra_radius_m=300.0)
     acc_payload = AccommodationPayload(
         accommodation_id=acc.id,

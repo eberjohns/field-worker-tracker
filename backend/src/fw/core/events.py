@@ -94,7 +94,7 @@ class EventBus:
             except Exception as e:
                 logger.error(
                     "sync_event_handler_failed",
-                    event=event.event_name,
+                    domain_event=event.event_name,
                     handler=handler.__name__,
                     error=str(e),
                 )
@@ -109,7 +109,7 @@ class EventBus:
             except Exception as e:
                 logger.error(
                     "post_commit_event_handler_failed",
-                    event=event.event_name,
+                    domain_event=event.event_name,
                     handler=handler.__name__,
                     error=str(e),
                 )
