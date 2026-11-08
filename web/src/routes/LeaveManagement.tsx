@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "@tanstack/react-router";
 import {
   Calendar,
   Plus,
@@ -9,6 +10,8 @@ import {
   CheckCircle2,
   AlertTriangle,
   X,
+  HelpCircle,
+  Users,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
@@ -320,8 +323,12 @@ export const LeaveManagement: React.FC = () => {
           <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Leave Taken ({year})</div>
           <div className="text-2xl font-bold text-slate-900">
             {summaries.reduce((acc, s) => acc + s.total_working_days, 0)}{" "}
-            <span className="text-xs font-normal text-slate-500">
+            <span
+              className="text-xs font-normal text-slate-500 cursor-help inline-flex items-center gap-0.5"
+              title="Working days exclude employee weekly rest days and public holidays. '(cal)' indicates total elapsed calendar days."
+            >
               working days ({summaries.reduce((acc, s) => acc + s.total_calendar_days, 0)} cal)
+              <HelpCircle className="h-3 w-3 text-slate-400" />
             </span>
           </div>
           <p className="text-2xs text-slate-400">Total approved leaves across your scope</p>
@@ -331,8 +338,12 @@ export const LeaveManagement: React.FC = () => {
           <div className="text-xs font-semibold text-blue-600 uppercase tracking-wider">Annual Leaves</div>
           <div className="text-2xl font-bold text-blue-700">
             {summaries.reduce((acc, s) => acc + (s.by_type?.ANNUAL?.working_days || 0), 0)}{" "}
-            <span className="text-xs font-normal text-slate-500">
+            <span
+              className="text-xs font-normal text-slate-500 cursor-help inline-flex items-center gap-0.5"
+              title="Working days exclude employee weekly rest days and public holidays. '(cal)' indicates total elapsed calendar days."
+            >
               days ({summaries.reduce((acc, s) => acc + (s.by_type?.ANNUAL?.calendar_days || 0), 0)} cal)
+              <HelpCircle className="h-3 w-3 text-slate-400" />
             </span>
           </div>
           <p className="text-2xs text-slate-400">Excludes rest days & holidays</p>
@@ -342,8 +353,12 @@ export const LeaveManagement: React.FC = () => {
           <div className="text-xs font-semibold text-rose-600 uppercase tracking-wider">Sick Leaves</div>
           <div className="text-2xl font-bold text-rose-700">
             {summaries.reduce((acc, s) => acc + (s.by_type?.SICK?.working_days || 0), 0)}{" "}
-            <span className="text-xs font-normal text-slate-500">
+            <span
+              className="text-xs font-normal text-slate-500 cursor-help inline-flex items-center gap-0.5"
+              title="Working days exclude employee weekly rest days and public holidays. '(cal)' indicates total elapsed calendar days."
+            >
               days ({summaries.reduce((acc, s) => acc + (s.by_type?.SICK?.calendar_days || 0), 0)} cal)
+              <HelpCircle className="h-3 w-3 text-slate-400" />
             </span>
           </div>
           <p className="text-2xs text-slate-400">Approved medical absences</p>
@@ -491,14 +506,27 @@ export const LeaveManagement: React.FC = () => {
                       </span>
                     </td>
                     <td className="py-3.5 px-4 text-right">
-                      {(l.status === "REQUESTED" || l.status === "APPROVED") && (
-                        <button
-                          onClick={() => handleCancelLeave(l.id)}
-                          className="px-2.5 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50 border border-rose-200 rounded transition"
-                        >
-                          Cancel
-                        </button>
-                      )}
+                      <div className="flex items-center justify-end gap-2">
+                        {l.status === "APPROVED" && (
+                          <Link
+                            to="/operational-planner"
+                            search={{ date: l.from_date, employee_id: l.employee_id }}
+                            className="px-2.5 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-md transition flex items-center gap-1 shadow-2xs"
+                            title="Open Operational Planner to arrange a cover replacement for this approved leave"
+                          >
+                            <Users className="h-3 w-3" />
+                            Arrange Cover
+                          </Link>
+                        )}
+                        {(l.status === "REQUESTED" || l.status === "APPROVED") && (
+                          <button
+                            onClick={() => handleCancelLeave(l.id)}
+                            className="px-2.5 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50 border border-rose-200 rounded-md transition"
+                          >
+                            Cancel
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

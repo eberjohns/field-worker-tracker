@@ -9,6 +9,7 @@ import {
   Hexagon,
   ArrowRight,
   ShieldAlert,
+  Users,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import type { components } from "../api/schema";
@@ -176,17 +177,22 @@ export const Dashboard: React.FC = () => {
                 </span>
               </div>
               <p className="text-xs text-rose-900">{alert.message}</p>
-              <div className="flex items-center gap-3 pt-1">
+              <div className="flex flex-wrap items-center gap-2 pt-1">
                 <Link
                   to="/operational-planner"
-                  className="inline-flex items-center gap-1 text-xs font-bold text-rose-800 hover:text-rose-950"
+                  search={{
+                    date: alert.details?.date_from || undefined,
+                    employee_id: alert.employee_id || alert.details?.employee_id || undefined,
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-md text-xs font-semibold shadow-2xs transition"
                 >
-                  Operational Planner <ArrowRight className="h-3 w-3" />
+                  <Users className="h-3.5 w-3.5" />
+                  Assign Cover in Planner <ArrowRight className="h-3 w-3" />
                 </Link>
                 {(user?.role === "ADMIN" || user?.role === "ENGINEER") && (
                   <Link
                     to="/approvals"
-                    className="inline-flex items-center gap-1 text-xs font-bold text-indigo-700 hover:text-indigo-900"
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-slate-700 hover:text-slate-900 px-2.5 py-1.5"
                   >
                     Approvals Inbox <ArrowRight className="h-3 w-3" />
                   </Link>

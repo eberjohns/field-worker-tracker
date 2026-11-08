@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "@tanstack/react-router";
 import {
   CheckSquare,
   Clock,
@@ -10,6 +11,7 @@ import {
   ArrowRight,
   AlertCircle,
   Calendar,
+  Users,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
@@ -349,6 +351,18 @@ export const Approvals: React.FC = () => {
                               >
                                 Reject
                               </button>
+                            </div>
+                          ) : l.status === "APPROVED" ? (
+                            <div className="flex items-center justify-end gap-2">
+                              <Link
+                                to="/operational-planner"
+                                search={{ date: l.from_date, employee_id: l.employee_id }}
+                                className="px-2.5 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-md transition flex items-center gap-1 shadow-2xs"
+                                title="Open Operational Planner to arrange a cover replacement"
+                              >
+                                <Users className="h-3 w-3" />
+                                Arrange Cover
+                              </Link>
                             </div>
                           ) : (
                             <span className="text-xs text-slate-400">
