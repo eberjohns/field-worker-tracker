@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FWT Mobile Tester Proxy & GPS Route Player</title>
+  <title>FWT Mobile Simulator & GPS Route Player</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Leaflet CSS & JS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <style>
-    /* Phone frame styling (iPhone / Android style) */
+    /* Phone chassis styling */
     .phone-chassis {
       width: 375px;
       height: 760px;
@@ -82,6 +82,18 @@
       70% { box-shadow: 0 0 0 16px rgba(79, 70, 229, 0); }
       100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0); }
     }
+    .waypoint-pin {
+      background: #f59e0b;
+      color: #000;
+      font-weight: 800;
+      font-size: 11px;
+      border-radius: 50%;
+      border: 2px solid #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3);
+    }
   </style>
 </head>
 <body class="bg-slate-900 text-slate-100 flex flex-col h-screen overflow-hidden font-sans select-none">
@@ -91,7 +103,7 @@
       <div class="bg-indigo-600 text-white font-black px-2 py-0.5 rounded text-xs tracking-wider">DEV HUB</div>
       <h1 class="text-sm font-bold text-white tracking-tight flex items-center gap-2">
         FWT Android Studio Simulator & Route Player
-        <span class="text-2xs bg-emerald-950 border border-emerald-800 text-emerald-400 px-2 py-0.5 rounded-full font-mono">Phase 07 + 08 Verified</span>
+        <span class="text-2xs bg-emerald-950 border border-emerald-800 text-emerald-400 px-2 py-0.5 rounded-full font-mono">Real Mobile Protocol</span>
       </h1>
     </div>
 
@@ -154,13 +166,13 @@
                   FW
                 </div>
                 <h2 class="text-sm font-bold text-slate-900">Worker Portal Sign-In</h2>
-                <p class="text-3xs text-slate-500">Sign in with your company credentials to sync shifts, worksites & attendance.</p>
+                <p class="text-3xs text-slate-500">Sign in with any worker account (Tally ID & Password) to sync real server data.</p>
               </div>
 
               <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3">
                 <div class="space-y-1">
                   <label class="text-3xs uppercase font-bold text-slate-500 block">Tally Employee ID</label>
-                  <input id="phoneInputTally" type="text" value="1193" placeholder="e.g. 1193" class="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 font-mono text-slate-900 focus:outline-none focus:border-indigo-600">
+                  <input id="phoneInputTally" type="text" value="1193" placeholder="e.g. 1193, 1007, 1008" class="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 font-mono text-slate-900 focus:outline-none focus:border-indigo-600">
                 </div>
 
                 <div class="space-y-1">
@@ -169,7 +181,7 @@
                 </div>
 
                 <button id="phoneBtnLogin" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-2.5 rounded-lg shadow-sm transition">
-                  Sign In
+                  Sign In to Device
                 </button>
               </div>
 
@@ -190,13 +202,13 @@
                       <span class="text-lg">⏰</span>
                       <div>
                         <div class="text-2xs uppercase tracking-wider font-bold text-slate-400">Shift Alarm</div>
-                        <div id="alarmDisplayTime" class="text-base font-extrabold text-slate-900 font-mono">04:30 AM</div>
+                        <div id="alarmDisplayTime" class="text-base font-extrabold text-slate-900 font-mono">--:--</div>
                       </div>
                     </div>
                     <span id="alarmLeadTag" class="text-3xs bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-semibold">30m lead</span>
                   </div>
                   <div class="text-3xs text-slate-500 bg-slate-50 p-2 rounded-lg border border-slate-100 flex items-center justify-between">
-                    <span>Camp Departure: <strong id="plannedCampStart">05:00 AM</strong></span>
+                    <span>Camp Departure: <strong id="plannedCampStart">--:--</strong></span>
                     <button id="btnTestAlarm" class="bg-indigo-600 text-white px-2 py-1 rounded text-3xs font-semibold hover:bg-indigo-700">Test Chime</button>
                   </div>
                 </div>
@@ -206,20 +218,20 @@
                   <div class="flex justify-between items-start">
                     <div>
                       <span class="text-3xs font-bold uppercase tracking-wider text-indigo-600 block">Today's Assigned Site</span>
-                      <h3 id="shiftJobName" class="text-xs font-bold text-slate-900 leading-snug">Dubai Silicon Oasis Landscape Maintenance</h3>
-                      <div id="shiftJobNumber" class="text-3xs text-slate-500 font-mono">12A14301 • Commercial Maintenance</div>
+                      <h3 id="shiftJobName" class="text-xs font-bold text-slate-900 leading-snug">No Assigned Worksite</h3>
+                      <div id="shiftJobNumber" class="text-3xs text-slate-500 font-mono">--</div>
                     </div>
-                    <span id="shiftStatusBadge" class="text-3xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">WORKING</span>
+                    <span id="shiftStatusBadge" class="text-3xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-300">--</span>
                   </div>
 
                   <div class="grid grid-cols-2 gap-2 text-3xs pt-1 border-t border-slate-100">
                     <div class="bg-slate-50 p-1.5 rounded">
                       <span class="text-slate-400 block">Site Hours</span>
-                      <span id="shiftSiteHours" class="font-bold text-slate-800 font-mono">06:00 - 15:30</span>
+                      <span id="shiftSiteHours" class="font-bold text-slate-800 font-mono">--</span>
                     </div>
                     <div class="bg-slate-50 p-1.5 rounded">
                       <span class="text-slate-400 block">Break Window</span>
-                      <span id="shiftBreak" class="font-bold text-slate-800 font-mono">30 min midday</span>
+                      <span id="shiftBreak" class="font-bold text-slate-800 font-mono">--</span>
                     </div>
                   </div>
                 </div>
@@ -228,20 +240,20 @@
                 <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs text-3xs space-y-1.5">
                   <div class="font-bold text-slate-800 flex items-center justify-between">
                     <span class="flex items-center gap-1.5"><span>🏠</span> Assigned Camp</span>
-                    <span class="text-emerald-700 font-semibold" id="campDistance">0 m away</span>
+                    <span class="text-emerald-700 font-semibold" id="campDistance">--</span>
                   </div>
-                  <div id="campName" class="text-slate-700 font-medium">Warsan Staff Accommodation Camp</div>
-                  <div class="text-slate-400 truncate">Al Warsan 3, Dubai, UAE</div>
+                  <div id="campName" class="text-slate-700 font-medium">No Accommodation Configured</div>
+                  <div id="campAddress" class="text-slate-400 truncate">--</div>
                 </div>
 
                 <!-- Reporting Supervisor Contact Card -->
                 <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs text-3xs flex items-center justify-between">
                   <div>
                     <div class="text-slate-400 uppercase text-3xs font-bold">Reporting Supervisor</div>
-                    <div id="spvName" class="font-bold text-slate-800 text-2xs">Shakir Khisham</div>
-                    <div id="spvPhone" class="text-indigo-600 font-mono">+971 50 123 4567</div>
+                    <div id="spvName" class="font-bold text-slate-800 text-2xs">None Assigned</div>
+                    <div id="spvPhone" class="text-indigo-600 font-mono">--</div>
                   </div>
-                  <a id="spvCallLink" href="tel:+971501234567" class="px-2.5 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg font-bold hover:bg-indigo-100">Call</a>
+                  <a id="spvCallLink" href="tel:" class="px-2.5 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg font-bold hover:bg-indigo-100">Call</a>
                 </div>
               </div>
 
@@ -251,11 +263,11 @@
                 <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs space-y-2">
                   <div class="flex justify-between items-center">
                     <span class="text-2xs font-bold uppercase text-slate-500">Device Location State</span>
-                    <span id="phoneZoneBadge" class="text-2xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">CAMP (WARSAN)</span>
+                    <span id="phoneZoneBadge" class="text-2xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-300">IDLE</span>
                   </div>
                   <div class="grid grid-cols-2 gap-2 text-2xs font-mono bg-slate-50 p-2 rounded-lg">
-                    <div><span class="text-slate-400 block text-3xs">LAT</span><span id="phoneLat">25.158250</span></div>
-                    <div><span class="text-slate-400 block text-3xs">LNG</span><span id="phoneLng">55.412250</span></div>
+                    <div><span class="text-slate-400 block text-3xs">LAT</span><span id="phoneLat">--</span></div>
+                    <div><span class="text-slate-400 block text-3xs">LNG</span><span id="phoneLng">--</span></div>
                     <div><span class="text-slate-400 block text-3xs">ACCURACY</span><span>4.5 m</span></div>
                     <div><span class="text-slate-400 block text-3xs">SPEED</span><span id="phoneSpeed">0.0 km/h</span></div>
                   </div>
@@ -278,10 +290,10 @@
                 <!-- Unsent Events Local Buffer -->
                 <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs space-y-2">
                   <div class="flex justify-between items-center text-3xs">
-                    <span class="font-bold text-slate-600 uppercase">Local Event Buffer</span>
+                    <span class="font-bold text-slate-600 uppercase">Local Event Buffer (Unsent)</span>
                     <span id="phoneQueueCount" class="font-mono bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-bold">0 events</span>
                   </div>
-                  <div id="phoneQueueList" class="bg-slate-50 p-2 rounded-lg text-3xs font-mono space-y-1 max-h-28 overflow-y-auto border border-slate-100">
+                  <div id="phoneQueueList" class="bg-slate-50 p-2 rounded-lg text-3xs font-mono space-y-1 max-h-36 overflow-y-auto border border-slate-100">
                     <div class="text-slate-400 text-center py-2">Buffer is empty</div>
                   </div>
                   <button id="phoneBtnFlushBatch" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-2xs py-2 rounded-lg shadow-2xs">
@@ -293,7 +305,7 @@
               <!-- TAB 3: 30-DAY ROSTER (Hidden by default) -->
               <div id="tabContentRoster" class="space-y-2 hidden">
                 <div class="flex justify-between items-center text-3xs font-bold text-slate-500 uppercase px-1">
-                  <span>30-Day Forward Schedule</span>
+                  <span>Forward Schedule</span>
                   <span id="schedCount" class="bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full font-mono">0 days</span>
                 </div>
                 <div id="phoneScheduleList" class="space-y-1.5 max-h-[500px] overflow-y-auto pr-0.5">
@@ -308,9 +320,9 @@
                     👷
                   </div>
                   <div>
-                    <h3 id="profName" class="text-sm font-bold text-slate-900">Shanto Miah</h3>
-                    <p id="profGrade" class="text-2xs text-indigo-600 font-semibold">Landscape Gardener</p>
-                    <p id="profTally" class="text-3xs text-slate-400 font-mono">Tally ID: 1193</p>
+                    <h3 id="profName" class="text-sm font-bold text-slate-900">--</h3>
+                    <p id="profGrade" class="text-2xs text-indigo-600 font-semibold">--</p>
+                    <p id="profTally" class="text-3xs text-slate-400 font-mono">--</p>
                   </div>
                 </div>
 
@@ -318,23 +330,19 @@
                   <span class="text-3xs font-bold uppercase text-slate-400 block">Employment & Placement</span>
                   <div class="flex justify-between border-b border-slate-100 pb-1.5">
                     <span class="text-slate-500">Contact Phone:</span>
-                    <span id="profPhone" class="font-mono font-bold text-slate-800">+971 50 987 6543</span>
-                  </div>
-                  <div class="flex justify-between border-b border-slate-100 pb-1.5">
-                    <span class="text-slate-500">Country:</span>
-                    <span id="profCountry" class="font-bold text-slate-800">UAE (AE)</span>
+                    <span id="profPhone" class="font-mono font-bold text-slate-800">--</span>
                   </div>
                   <div class="flex justify-between border-b border-slate-100 pb-1.5">
                     <span class="text-slate-500">Weekly Off Day:</span>
-                    <span id="profWeeklyOff" class="font-bold text-indigo-600">Friday</span>
+                    <span id="profWeeklyOff" class="font-bold text-indigo-600">--</span>
                   </div>
                   <div class="flex justify-between border-b border-slate-100 pb-1.5">
                     <span class="text-slate-500">Living Camp:</span>
-                    <span id="profCamp" class="font-bold text-slate-800 truncate max-w-[170px]">Warsan Staff Camp</span>
+                    <span id="profCamp" class="font-bold text-slate-800 truncate max-w-[170px]">--</span>
                   </div>
                   <div class="flex justify-between">
                     <span class="text-slate-500">Supervisor:</span>
-                    <span id="profSpv" class="font-bold text-slate-800">Shakir Khisham</span>
+                    <span id="profSpv" class="font-bold text-slate-800">--</span>
                   </div>
                 </div>
 
@@ -375,10 +383,10 @@
                 <!-- Dynamic Settings Breakdown -->
                 <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs space-y-1.5 text-3xs">
                   <span class="font-bold uppercase text-slate-400 block">Dynamic Sync Settings</span>
-                  <div class="flex justify-between border-b border-slate-100 pb-1"><span>Geofence Buffer:</span><strong id="cfgRadius">300 m</strong></div>
-                  <div class="flex justify-between border-b border-slate-100 pb-1"><span>Approach Interval:</span><strong id="cfgApproach">60 s</strong></div>
-                  <div class="flex justify-between border-b border-slate-100 pb-1"><span>Confirm Interval:</span><strong id="cfgConfirm">300 s</strong></div>
-                  <div class="flex justify-between"><span>Alarm Lead Time:</span><strong id="cfgAlarmLead">30 min</strong></div>
+                  <div class="flex justify-between border-b border-slate-100 pb-1"><span>Geofence Buffer:</span><strong id="cfgRadius">--</strong></div>
+                  <div class="flex justify-between border-b border-slate-100 pb-1"><span>Approach Interval:</span><strong id="cfgApproach">--</strong></div>
+                  <div class="flex justify-between border-b border-slate-100 pb-1"><span>Confirm Interval:</span><strong id="cfgConfirm">--</strong></div>
+                  <div class="flex justify-between"><span>Alarm Lead Time:</span><strong id="cfgAlarmLead">--</strong></div>
                 </div>
               </div>
 
@@ -444,15 +452,27 @@
                 <option value="standard">Standard Workday (06:02 Site Entry - 15:31 Exit)</option>
                 <option value="late">Late Arrival (08:30 Site Entry)</option>
                 <option value="midday_gap">Midday Gap (Leaves 11:30, Returns 13:00)</option>
+                <option value="custom">Custom Marked Route</option>
               </select>
             </div>
+
+            <!-- Manual Route Recording Mode Toggle -->
+            <button id="btnToggleDrawMode" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-amber-300 px-3 py-1.5 rounded text-2xs font-semibold flex items-center gap-1.5">
+              <span>✏️</span> <span id="drawModeText">Record / Draw Route</span>
+            </button>
+            <button id="btnClearDrawnPoints" class="hidden bg-slate-800 hover:bg-rose-950 hover:text-rose-400 border border-slate-700 text-slate-400 px-2.5 py-1.5 rounded text-2xs">
+              Clear Drawn Points
+            </button>
           </div>
 
-          <!-- JSON Import / Export -->
+          <!-- Boundary Tools & JSON Import / Export -->
           <div class="flex items-center space-x-2 text-2xs">
+            <button id="btnOpenBoundaryModal" class="bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-700 text-emerald-300 px-3 py-1.5 rounded font-medium flex items-center gap-1">
+              📋 Copy Boundaries
+            </button>
             <input type="file" id="routeJsonInput" accept=".json" class="hidden">
             <button id="btnImportJson" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-3 py-1.5 rounded font-medium flex items-center gap-1">
-              📂 Import Route JSON
+              📂 Import JSON
             </button>
             <button id="btnExportJson" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-3 py-1.5 rounded font-medium flex items-center gap-1">
               💾 Export JSON
@@ -467,7 +487,7 @@
             <div class="flex justify-between text-3xs font-mono text-slate-400">
               <span>Start: <strong class="text-slate-200" id="routeStartTime">05:00:00</strong></span>
               <span>Simulated Clock: <strong class="text-indigo-400 text-xs" id="routeCurrentTime">05:00:00</strong></span>
-              <span>End: <strong class="text-slate-200" id="routeEndTime">16:30:00</strong></span>
+              <span>End: <strong class="text-slate-200" id="routeEndTime">16:00:00</strong></span>
             </div>
             <input id="routeTimelineSlider" type="range" min="0" max="1000" value="0" class="w-full accent-indigo-500 cursor-pointer h-2 bg-slate-800 rounded-lg">
           </div>
@@ -476,15 +496,15 @@
           <div class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 flex items-center space-x-6 text-2xs shrink-0">
             <div>
               <span class="text-slate-500 block text-3xs uppercase font-bold">Ground Truth Worked Time</span>
-              <span id="gtWorkedTime" class="text-sm font-extrabold text-emerald-400 font-mono">9h 29m (569m)</span>
+              <span id="gtWorkedTime" class="text-sm font-extrabold text-emerald-400 font-mono">0h 00m (0m)</span>
             </div>
             <div class="border-l border-slate-800 pl-4">
               <span class="text-slate-500 block text-3xs uppercase font-bold">In Transit</span>
-              <span id="gtTransitTime" class="text-xs font-bold text-amber-400 font-mono">0h 53m (53m)</span>
+              <span id="gtTransitTime" class="text-xs font-bold text-amber-400 font-mono">0h 00m</span>
             </div>
             <div class="border-l border-slate-800 pl-4">
               <span class="text-slate-500 block text-3xs uppercase font-bold">Events Generated</span>
-              <span id="gtEventsCount" class="text-xs font-bold text-indigo-400 font-mono">1 ENTRY • 4 PING • 1 EXIT</span>
+              <span id="gtEventsCount" class="text-xs font-bold text-indigo-400 font-mono">0 ENTRY • 0 PING • 0 EXIT</span>
             </div>
           </div>
         </div>
@@ -494,13 +514,30 @@
       <div class="flex-1 relative">
         <div id="map"></div>
 
+        <!-- Notification Toast -->
+        <div id="mapToast" class="hidden absolute top-4 left-1/2 -translate-x-1/2 z-[2000] bg-slate-950 border border-indigo-500 text-indigo-300 px-4 py-2 rounded-xl text-xs shadow-2xl backdrop-blur-xs flex items-center gap-2 animate-bounce">
+          <span id="mapToastText">Copied polygon to clipboard!</span>
+        </div>
+
+        <!-- Server Boundary Alert Banner -->
+        <div id="mapBoundaryAlert" class="hidden absolute top-4 left-1/2 -translate-x-1/2 z-[1000] bg-amber-950/90 border border-amber-700 text-amber-200 px-4 py-2 rounded-xl text-2xs shadow-xl backdrop-blur-xs flex items-center gap-2">
+          <span>⚠️</span> <span id="mapBoundaryAlertText">No assigned worksite boundary found on server.</span>
+        </div>
+
         <!-- Map Legend Badge -->
         <div class="absolute bottom-4 left-4 z-[1000] bg-slate-950/90 backdrop-blur-xs border border-slate-800 p-2.5 rounded-xl shadow-lg text-3xs space-y-1">
-          <div class="font-bold text-slate-300 uppercase tracking-wider mb-1">Map Layer Legend</div>
-          <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-emerald-500/30 border border-emerald-500"></span> <span>Warsan Staff Camp (Living Quarters)</span></div>
-          <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-blue-500/30 border border-blue-500"></span> <span>Dubai Silicon Oasis Maintenance (Worksite)</span></div>
+          <div class="font-bold text-slate-300 uppercase tracking-wider mb-1">Server Map Layers</div>
+          <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-emerald-500/30 border border-emerald-500"></span> <span id="legendCamp">Living Camp (Click to copy polygon)</span></div>
+          <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-blue-500/30 border border-blue-500"></span> <span id="legendWorksite">Assigned Worksite (Click to copy polygon)</span></div>
           <div class="flex items-center gap-2"><span class="w-3 h-3 rounded border border-dashed border-indigo-400 bg-indigo-500/10"></span> <span>Geofence Perimeter Buffer (300m)</span></div>
           <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-indigo-500 border border-white"></span> <span>Worker GPS Pin (Draggable)</span></div>
+        </div>
+
+        <!-- Drawing Instructions Banner -->
+        <div id="drawingBanner" class="hidden absolute bottom-4 right-4 z-[1000] bg-amber-950/90 border border-amber-700 text-amber-200 p-2.5 rounded-xl shadow-xl text-3xs space-y-1">
+          <div class="font-bold text-amber-300 uppercase">✏️ Manual Route Recording Active</div>
+          <div>Click anywhere on the map to add waypoint pins.</div>
+          <div class="text-amber-400">Waypoints auto-increment simulated time (+15 mins).</div>
         </div>
       </div>
 
@@ -521,6 +558,27 @@
         <div id="networkLogList" class="flex-1 p-3 overflow-y-auto space-y-1">
           <div class="text-emerald-400">[READY] Mobile Tester Proxy initialized. Listening on http://localhost:8000/api/v1</div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Boundary Copy Modal -->
+  <div id="boundaryModal" class="hidden fixed inset-0 z-[3000] bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-xl p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-lg">📋</span>
+          <h3 class="font-bold text-sm text-slate-100">Server Synced Boundary Polygons</h3>
+        </div>
+        <button id="btnCloseBoundaryModal" class="text-slate-400 hover:text-white text-base">✕</button>
+      </div>
+
+      <p class="text-2xs text-slate-400">
+        Copy polygon coordinates in standard GeoJSON or WKT format to paste into your worksite or accommodation setup forms.
+      </p>
+
+      <div id="boundaryModalList" class="space-y-3 max-h-80 overflow-y-auto">
+        <!-- Rendered dynamically -->
       </div>
     </div>
   </div>

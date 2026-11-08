@@ -23,6 +23,7 @@ export const EmployeeDetail: React.FC = () => {
   const { token, user } = useAuth();
 
   const [employee, setEmployee] = useState<any>(null);
+  const [accommodations, setAccommodations] = useState<any[]>([]);
   const [reportingLines, setReportingLines] = useState<any[]>([]);
   const [documents, setDocuments] = useState<any[]>([]);
   const [devices, setDevices] = useState<any[]>([]);
@@ -37,6 +38,7 @@ export const EmployeeDetail: React.FC = () => {
   const [editWeeklyOff, setEditWeeklyOff] = useState("");
   const [editBreakOverride, setEditBreakOverride] = useState<number | "">("");
   const [editPhone, setEditPhone] = useState("");
+  const [editAccommodationId, setEditAccommodationId] = useState("");
 
   // Add document state
   const [newDocType, setNewDocType] = useState("VISA");
@@ -56,6 +58,13 @@ export const EmployeeDetail: React.FC = () => {
         setEditWeeklyOff(empData.weekly_off_day || "");
         setEditBreakOverride(empData.break_override_minutes ?? "");
         setEditPhone(empData.phone || "");
+        setEditAccommodationId(empData.accommodation_id || "");
+      }
+
+      // Accommodations list
+      const accRes = await fetch(`/api/v1/accommodations`, { headers });
+      if (accRes.ok) {
+        setAccommodations(await accRes.json());
       }
 
       // 2. Reporting lines
@@ -99,6 +108,7 @@ export const EmployeeDetail: React.FC = () => {
         version: employee.version,
         weekly_off_day: editWeeklyOff || null,
         break_override_minutes: editBreakOverride !== "" ? Number(editBreakOverride) : null,
+        accommodation_id: editAccommodationId || null,
       };
       if (user?.role === "ADMIN") {
         payload.phone = editPhone || null;
@@ -365,8 +375,24 @@ export const EmployeeDetail: React.FC = () => {
                 />
               </div>
 
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Living Camp / Accommodation</label>
+                <select
+                  value={editAccommodationId}
+                  onChange={(e) => setEditAccommodationId(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg p-2 text-sm text-slate-800"
+                >
+                  <option value="">-- No Camp Assigned --</option>
+                  {accommodations.map((acc) => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.name} ({acc.accommodation_code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               {user?.role === "ADMIN" && (
-                <div className="col-span-2">
+                <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">Phone Number</label>
                   <input
                     type="text"
@@ -534,9 +560,16 @@ export const EmployeeDetail: React.FC = () => {
                     key={line.id}
                     className="flex items-center justify-between p-3 rounded-lg border border-slate-200 bg-slate-50 text-sm"
                   >
-                    <div>
-                      <span className="font-semibold text-slate-800">Manager: {line.manager_id}</span>
-                      <span className="ml-2 px-2 py-0.5 rounded text-xs font-mono font-medium bg-indigo-100 text-indigo-700">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-slate-900">
+                        {line.manager_name || `Manager ID: ${line.manager_id}`}
+                      </span>
+                      {line.manager_tally_id && (
+                        <span className="text-xs text-slate-500 font-mono bg-slate-200/60 px-1.5 py-0.5 rounded">
+                          Tally: {line.manager_tally_id}
+                        </span>
+                      )}
+                      <span className="px-2 py-0.5 rounded text-xs font-mono font-medium bg-indigo-100 text-indigo-700">
                         {line.relationship}
                       </span>
                     </div>

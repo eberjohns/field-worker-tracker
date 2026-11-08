@@ -67,7 +67,13 @@ async def get_mobile_auth_context(
         raise AppError(code="INVALID_TOKEN", message="Invalid token payload.", status_code=401)
 
     user = await UserService.get_by_id(session, UUID(user_id_str))
-    if not user or not user.is_active:
+    if not user:
+        raise AppError(
+            code="USER_NOT_FOUND",
+            message="User session is invalid. Please sign in again.",
+            status_code=401,
+        )
+    if not user.is_active:
         raise AppError(
             code="ACCOUNT_DISABLED",
             message="Account is deactivated.",

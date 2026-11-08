@@ -5,6 +5,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.core.events import (
+    AccommodationBoundaryChanged,
+    EmployeeProfileChanged,
     HolidayChanged,
     ScheduledWorkChanged,
     TimeRuleChanged,
@@ -12,15 +14,18 @@ from fw.core.events import (
     event_bus,
 )
 from fw.modules.jobs import JobItem, Worksite
-from fw.modules.org import Employee
+from fw.modules.org import Accommodation, Employee, EmployeeReportingLine
 from fw.modules.scheduling import LeaveApprovedEvent, ScheduledWork
 from fw.modules.sync.geo import compute_geofence_circle
 from fw.modules.sync.schemas import (
+    AccommodationPayload,
     DayPlanPayload,
     DayPlanPlannedTimes,
     GeofenceCircle,
     JobItemSummary,
     JobPayload,
+    ProfilePayload,
+    ProfileSupervisor,
     ScheduleItemPayload,
 )
 from fw.modules.sync.service import (
@@ -315,6 +320,125 @@ async def handle_leave_approved(event: LeaveApprovedEvent, session: AsyncSession
         cur += timedelta(days=1)
 
 
+async def handle_employee_profile_changed(
+    event: EmployeeProfileChanged, session: AsyncSession
+) -> None:
+    """When a worker profile, accommodation, or supervisor changes, write sync changes."""
+    if not event.employee_id:
+        return
+
+    employee = await session.get(Employee, event.employee_id)
+    if not employee or not employee.is_active:
+        return
+
+    # Query supervisor
+    rep_query = (
+        select(Employee)
+        .join(EmployeeReportingLine, EmployeeReportingLine.manager_id == Employee.id)
+        .where(
+            EmployeeReportingLine.employee_id == employee.id,
+            EmployeeReportingLine.relationship == "SUPERVISOR",
+        )
+    )
+    rep_res = await session.execute(rep_query)
+    supervisor_emp = rep_res.scalar_one_or_none()
+    supervisor_payload = None
+    if supervisor_emp:
+        supervisor_payload = ProfileSupervisor(
+            name=supervisor_emp.name,
+            phone=supervisor_emp.phone,
+        )
+
+    profile_payload = ProfilePayload(
+        employee_id=employee.id,
+        tally_id=employee.tally_id,
+        name=employee.name,
+        role=employee.role or "WORKER",
+        staff_grade_description=employee.staff_grade_description,
+        weekly_off_day=employee.weekly_off_day or "FRIDAY",
+        is_driver=employee.is_driver or False,
+        supervisor=supervisor_payload,
+        accommodation_id=employee.accommodation_id,
+    )
+
+    await SyncService.write_sync_change(
+        session=session,
+        employee_id=employee.id,
+        entity_type="PROFILE",
+        entity_id=str(employee.id),
+        entity_version=employee.version or 1,
+        op="UPSERT",
+        payload=profile_payload.model_dump(mode="json"),
+        priority=1,
+    )
+
+    # If accommodation is assigned, sync accommodation details and polygon
+    if employee.accommodation_id:
+        acc = await session.get(Accommodation, employee.accommodation_id)
+        if acc:
+            boundary_geojson = _geometry_to_geojson(acc.boundary)
+            circle = compute_geofence_circle(boundary_geojson, extra_radius_m=300.0)
+            acc_payload = AccommodationPayload(
+                accommodation_id=acc.id,
+                name=acc.name,
+                address=acc.address,
+                boundary=boundary_geojson,
+                geofence_circle=GeofenceCircle(**circle) if circle else None,
+            )
+            await SyncService.write_sync_change(
+                session=session,
+                employee_id=employee.id,
+                entity_type="ACCOMMODATION",
+                entity_id=str(acc.id),
+                entity_version=acc.version or 1,
+                op="UPSERT",
+                payload=acc_payload.model_dump(mode="json"),
+                priority=1,
+            )
+
+
+async def handle_accommodation_boundary_changed(
+    event: AccommodationBoundaryChanged, session: AsyncSession
+) -> None:
+    """When an accommodation camp boundary is updated, fan-out to all assigned workers."""
+    if not event.accommodation_id:
+        return
+
+    acc = await session.get(Accommodation, event.accommodation_id)
+    if not acc:
+        return
+
+    boundary_geojson = _geometry_to_geojson(acc.boundary)
+    circle = compute_geofence_circle(boundary_geojson, extra_radius_m=300.0)
+    acc_payload = AccommodationPayload(
+        accommodation_id=acc.id,
+        name=acc.name,
+        address=acc.address,
+        boundary=boundary_geojson,
+        geofence_circle=GeofenceCircle(**circle) if circle else None,
+    )
+
+    # Find all active workers living at this accommodation
+    w_query = select(Employee.id).where(
+        Employee.accommodation_id == event.accommodation_id,
+        Employee.is_active == True,  # noqa: E712
+    )
+    res = await session.execute(w_query)
+    employee_ids = list(res.scalars().all())
+
+    for emp_id in employee_ids:
+        await SyncService.write_sync_change(
+            session=session,
+            employee_id=emp_id,
+            entity_type="ACCOMMODATION",
+            entity_id=str(acc.id),
+            entity_version=acc.version or 1,
+            op="UPSERT",
+            payload=acc_payload.model_dump(mode="json"),
+            priority=1,
+        )
+
+
 _registered = False
 
 
@@ -329,3 +453,5 @@ def register_sync_listeners() -> None:
     event_bus.subscribe_sync(TimeRuleChanged, handle_time_rule_changed)
     event_bus.subscribe_sync(WorksiteBoundaryChanged, handle_worksite_boundary_changed)
     event_bus.subscribe_sync(LeaveApprovedEvent, handle_leave_approved)
+    event_bus.subscribe_sync(EmployeeProfileChanged, handle_employee_profile_changed)
+    event_bus.subscribe_sync(AccommodationBoundaryChanged, handle_accommodation_boundary_changed)

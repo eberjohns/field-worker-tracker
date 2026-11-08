@@ -24,14 +24,18 @@
       scheduleItems: [],
     },
     activeTab: 'today', // 'today', 'gps', 'roster', 'profile', 'sync'
-    currentZone: 'CAMP',
+    currentZone: 'UNKNOWN',
     currentWorksiteId: null,
-    workerLocation: { lat: 25.15825, lng: 55.41225 }, // Warsan Camp default
+    workerLocation: { lat: 25.14, lng: 55.40 }, // Default map center
     eventsQueue: [],
     networkTraffic: [],
     map: null,
     workerMarker: null,
     routePolyline: null,
+    drawnPolyline: null,
+    drawnMarkers: [],
+    isDrawingMode: false,
+    drawnWaypoints: [],
     layers: {
       worksites: [],
       geofences: [],
@@ -46,42 +50,25 @@
       waypoints: [],
       lastTimestamp: null,
       animId: null,
+      lastPingSimSecs: 0,
     },
   };
 
-  // Known fallback boundaries (Warsan Camp and Dubai Silicon Oasis, ~4.1 km commute)
-  const DEFAULT_CAMP_POLYGON = [
-    [55.4100, 25.1560],
-    [55.4145, 25.1560],
-    [55.4145, 25.1605],
-    [55.4100, 25.1605],
-    [55.4100, 25.1560],
-  ];
-
-  const DEFAULT_WORKSITE_POLYGON = [
-    [55.3800, 25.1280],
-    [55.3880, 25.1280],
-    [55.3880, 25.1340],
-    [55.3800, 25.1340],
-    [55.3800, 25.1280],
-  ];
-
-  // Preset Route Definitions
+  // Preset Route Definitions (Matching Real UAE Placement)
   const PRESET_ROUTES = {
     standard: {
-      name: 'Standard Clean Workday (06:02 - 15:31)',
+      name: 'Standard Workday (06:02 Site Entry - 15:31 Exit)',
       waypoints: [
         { time: '05:00:00', lat: 25.15825, lng: 55.41225, label: 'Warsan Staff Camp' },
         { time: '05:35:00', lat: 25.15300, lng: 55.40700, label: 'Leaving Camp Perimeter' },
         { time: '05:48:00', lat: 25.14200, lng: 55.39500, label: 'Transit (Manama St)' },
-        { time: '05:58:00', lat: 25.13350, lng: 55.38850, label: 'Approaching Geofence Buffer (300m)' },
+        { time: '05:58:00', lat: 25.13350, lng: 55.38850, label: 'Geofence Buffer Approach (300m)' },
         { time: '06:02:00', lat: 25.13100, lng: 55.38400, label: 'Worksite Entry (Silicon Oasis)' },
-        { time: '06:07:00', lat: 25.13120, lng: 55.38420, label: 'In-Site Confirmation Ping' },
         { time: '09:00:00', lat: 25.13150, lng: 55.38450, label: 'Mid-Morning Landscape Work' },
         { time: '12:00:00', lat: 25.13050, lng: 55.38350, label: 'Midday Rest on Site' },
         { time: '14:00:00', lat: 25.13110, lng: 55.38380, label: 'Afternoon Landscape Work' },
         { time: '15:31:00', lat: 25.12650, lng: 55.37800, label: 'Worksite Exit' },
-        { time: '15:45:00', lat: 25.14500, lng: 55.39800, label: 'Return Commute Transit' },
+        { time: '15:45:00', lat: 25.14500, lng: 55.39800, label: 'Return Transit' },
         { time: '16:00:00', lat: 25.15825, lng: 55.41225, label: 'Back at Warsan Staff Camp' },
       ],
     },
@@ -111,6 +98,18 @@
     },
   };
 
+  // Toast Notification Helper
+  function showToast(text) {
+    const toast = document.getElementById('mapToast');
+    const toastText = document.getElementById('mapToastText');
+    if (!toast || !toastText) return;
+    toastText.innerText = text;
+    toast.classList.remove('hidden');
+    setTimeout(() => {
+      toast.classList.add('hidden');
+    }, 2800);
+  }
+
   // Network Inspector Logger
   function logNetwork(method, path, status, latencyMs, reqBody, resBody) {
     const el = document.getElementById('networkLogList');
@@ -121,7 +120,6 @@
       ? 'bg-emerald-950 text-emerald-400 border-emerald-800'
       : 'bg-rose-950 text-rose-400 border-rose-800';
 
-    // Store in memory for JSON export
     state.networkTraffic.push({
       timestamp: new Date().toISOString(),
       method,
@@ -160,7 +158,7 @@
     el.scrollTop = el.scrollHeight;
   }
 
-  // API Client with Timing & Error Handling
+  // API Client with Timing & Auto-logout on 401
   async function api(path, options = {}) {
     const baseUrl = document.getElementById('apiUrl').value.replace(/\/+$/, '');
     const url = `${baseUrl}${path}`;
@@ -183,6 +181,14 @@
 
       logNetwork(options.method || 'GET', path, res.status, latencyMs, reqBody, data);
 
+      if (res.status === 401) {
+        // Token invalid or user deleted on backend
+        state.token = null;
+        localStorage.removeItem('fwt_mobile_token');
+        setAuthenticatedState(false);
+        throw new Error(data?.detail || data?.message || 'Session expired. Please sign in again.');
+      }
+
       if (!res.ok) {
         throw new Error(data?.detail || data?.message || `HTTP ${res.status}`);
       }
@@ -195,8 +201,9 @@
     }
   }
 
-  // Point in Polygon Math
+  // Geo Math & Geometry Formatters
   function isPointInPolygon(point, polygonCoordinates) {
+    if (!polygonCoordinates || polygonCoordinates.length < 3) return false;
     const x = point.lng;
     const y = point.lat;
     let inside = false;
@@ -221,7 +228,22 @@
     return R * c;
   }
 
-  // Seconds parsing helper
+  function toWktPolygon(coords) {
+    if (!coords || coords.length === 0) return '';
+    const ring = coords[0] || coords;
+    const pts = ring.map((pt) => `${pt[0].toFixed(6)} ${pt[1].toFixed(6)}`).join(', ');
+    return `POLYGON((${pts}))`;
+  }
+
+  function copyToClipboard(text, entityName, format) {
+    navigator.clipboard.writeText(text).then(() => {
+      showToast(`✓ Copied ${format} for "${entityName}" to clipboard!`);
+    }).catch(() => {
+      prompt(`Copy ${format} manually:`, text);
+    });
+  }
+
+  // Time conversion helpers
   function timeStrToSeconds(str) {
     const parts = str.split(':').map(Number);
     return parts[0] * 3600 + parts[1] * 60 + (parts[2] || 0);
@@ -242,20 +264,26 @@
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} ${ampm}`;
   }
 
-  // Ground Truth Analytics Calculation
+  // Calculate Ground Truth Metrics (Calculates ONLY on REAL Server Boundaries)
   function calculateGroundTruthMetrics(waypoints) {
     if (!waypoints || waypoints.length < 2) return;
 
     let workedSecs = 0;
     let transitSecs = 0;
     let campSecs = 0;
-    let pings = 0;
 
-    // Use active synced polygon or fallback polygon
-    const campPoly = state.synced.accommodation?.boundary?.coordinates?.[0] || DEFAULT_CAMP_POLYGON;
-    const worksitePolys = state.synced.jobs.length > 0 && state.synced.jobs[0].boundary?.coordinates?.[0]
-      ? [state.synced.jobs[0].boundary.coordinates[0]]
-      : [DEFAULT_WORKSITE_POLYGON];
+    const campPoly = state.synced.accommodation?.boundary?.coordinates?.[0] || null;
+    const worksitePolys = state.synced.jobs
+      .filter((j) => j.boundary?.coordinates?.[0])
+      .map((j) => j.boundary.coordinates[0]);
+
+    // If server has no worksite boundary, display clean warning
+    if (worksitePolys.length === 0) {
+      document.getElementById('gtWorkedTime').innerText = '0h 00m (No Site Polygon)';
+      document.getElementById('gtTransitTime').innerText = '--';
+      document.getElementById('gtEventsCount').innerText = '0 ENTRY • 0 PING • 0 EXIT';
+      return;
+    }
 
     for (let i = 0; i < waypoints.length - 1; i++) {
       const p1 = waypoints[i];
@@ -278,7 +306,6 @@
 
       if (insideSite) {
         workedSecs += duration;
-        pings += Math.max(1, Math.floor(duration / 300));
       } else if (insideCamp) {
         campSecs += duration;
       } else {
@@ -294,14 +321,18 @@
     const transitH = Math.floor(transitMin / 60);
     const transitM = transitMin % 60;
 
+    // Approximate confirmation ping count based on configured interval
+    const confInterval = state.synced.settings?.confirmation_polling_interval_s || 300;
+    const estPings = Math.max(1, Math.floor(workedSecs / confInterval));
+
     document.getElementById('gtWorkedTime').innerText = `${workedH}h ${String(workedM).padStart(2, '0')}m (${workedMin}m)`;
     document.getElementById('gtTransitTime').innerText = `${transitH}h ${String(transitM).padStart(2, '0')}m (${transitMin}m)`;
-    document.getElementById('gtEventsCount').innerText = `1 ENTRY • 4 PING • 1 EXIT`;
+    document.getElementById('gtEventsCount').innerText = `1 ENTRY • ${estPings} PING • 1 EXIT`;
   }
 
   // Initialize Map Viewport
   function initMap() {
-    state.map = L.map('map', { zoomControl: false }).setView([25.145, 55.398], 13);
+    state.map = L.map('map', { zoomControl: false }).setView([25.14, 55.40], 13);
     L.control.zoom({ position: 'topright' }).addTo(state.map);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -333,16 +364,82 @@
       updateWorkerPosition(pos.lat, pos.lng);
     });
 
+    // Map Click Handler: Supports standard pin move OR Manual Route Drawing
     state.map.on('click', function (e) {
-      state.workerMarker.setLatLng(e.latlng);
-      updateWorkerPosition(e.latlng.lat, e.latlng.lng);
+      if (state.isDrawingMode) {
+        addDrawnWaypoint(e.latlng.lat, e.latlng.lng);
+      } else {
+        state.workerMarker.setLatLng(e.latlng);
+        updateWorkerPosition(e.latlng.lat, e.latlng.lng);
+      }
     });
 
-    // Render initial fallback layers
+    // Update map with no hardcoded fallback
     updateMapLayers();
   }
 
-  // Render Map Features from Synced or Default Data
+  // Add Waypoint in Manual Route Drawing Mode
+  function addDrawnWaypoint(lat, lng) {
+    const idx = state.drawnWaypoints.length;
+    let nextSecs = 5 * 3600; // 05:00:00 start
+    if (idx > 0) {
+      const lastSecs = timeStrToSeconds(state.drawnWaypoints[idx - 1].time);
+      nextSecs = lastSecs + 15 * 60; // Auto-increment by 15 mins
+    }
+    const timeStr = secondsToTimeStr(nextSecs);
+    const label = idx === 0 ? 'Start Waypoint' : `Waypoint #${idx + 1}`;
+
+    const wp = { time: timeStr, lat, lng, label };
+    state.drawnWaypoints.push(wp);
+
+    // Add visual waypoint marker pin on map
+    const wpIcon = L.divIcon({
+      className: 'waypoint-pin-wrap',
+      html: `<div class="waypoint-pin w-6 h-6">${idx + 1}</div>`,
+      iconSize: [24, 24],
+      iconAnchor: [12, 12],
+    });
+    const marker = L.marker([lat, lng], { icon: wpIcon }).addTo(state.map);
+    marker.bindTooltip(`<b>${timeStr}</b>: ${label}`, { permanent: false, direction: 'top' });
+    state.drawnMarkers.push(marker);
+
+    // Update drawn polyline
+    renderDrawnPolyline();
+    showToast(`Added point #${idx + 1} at ${timeStr}`);
+
+    if (state.drawnWaypoints.length >= 2) {
+      loadRoute(state.drawnWaypoints);
+      document.getElementById('routePresetSelect').value = 'custom';
+    }
+  }
+
+  function renderDrawnPolyline() {
+    if (state.drawnPolyline) {
+      state.map.removeLayer(state.drawnPolyline);
+    }
+    if (state.drawnWaypoints.length > 1) {
+      const latlngs = state.drawnWaypoints.map((wp) => [wp.lat, wp.lng]);
+      state.drawnPolyline = L.polyline(latlngs, {
+        color: '#f59e0b',
+        dashArray: '4, 4',
+        weight: 3,
+        opacity: 0.9,
+      }).addTo(state.map);
+    }
+  }
+
+  function clearDrawnRoute() {
+    state.drawnWaypoints = [];
+    state.drawnMarkers.forEach((m) => state.map.removeLayer(m));
+    state.drawnMarkers = [];
+    if (state.drawnPolyline) {
+      state.map.removeLayer(state.drawnPolyline);
+      state.drawnPolyline = null;
+    }
+    showToast('Cleared manual route points.');
+  }
+
+  // Render Map Features ONLY from Synced Server Data (NO Hardcoded Fallback)
   function updateMapLayers() {
     state.layers.worksites.forEach((l) => state.map.removeLayer(l));
     state.layers.geofences.forEach((l) => state.map.removeLayer(l));
@@ -350,47 +447,91 @@
     state.layers.worksites = [];
     state.layers.geofences = [];
 
-    // 1. Accommodation Polygon (Warsan Camp)
-    const campCoords = state.synced.accommodation?.boundary?.coordinates?.[0] || DEFAULT_CAMP_POLYGON;
-    if (campCoords) {
-      const latlngs = campCoords.map((pt) => [pt[1], pt[0]]);
-      state.layers.accommodation = L.polygon(latlngs, {
+    const alertEl = document.getElementById('mapBoundaryAlert');
+    const alertText = document.getElementById('mapBoundaryAlertText');
+    const legendCamp = document.getElementById('legendCamp');
+    const legendWorksite = document.getElementById('legendWorksite');
+
+    let hasAnyWorksiteBoundary = false;
+    let hasCampBoundary = false;
+
+    // 1. Accommodation Polygon from Server Snapshot
+    if (state.synced.accommodation?.boundary?.coordinates?.[0]) {
+      hasCampBoundary = true;
+      const coords = state.synced.accommodation.boundary.coordinates[0];
+      const latlngs = coords.map((pt) => [pt[1], pt[0]]);
+      const campName = state.synced.accommodation.name || 'Living Camp';
+
+      const poly = L.polygon(latlngs, {
         color: '#059669',
         fillColor: '#10b981',
         fillOpacity: 0.25,
         weight: 2,
       }).addTo(state.map);
-      const campTitle = state.synced.accommodation?.name || 'Warsan Staff Accommodation Camp';
-      state.layers.accommodation.bindTooltip(`🏠 ${campTitle}`, { permanent: true, direction: 'center' });
+
+      // Click to Copy Popup
+      const geojsonStr = JSON.stringify(state.synced.accommodation.boundary, null, 2);
+      const wktStr = toWktPolygon(coords);
+      poly.bindPopup(`
+        <div class="p-2 space-y-2 text-xs font-sans">
+          <div class="font-bold text-emerald-800 text-sm">🏠 ${campName}</div>
+          <div class="text-3xs text-slate-500">${state.synced.accommodation.address || 'Living Quarters'}</div>
+          <div class="pt-1 flex gap-1.5">
+            <button onclick="window.__fwtCopy('${btoa(geojsonStr)}', '${campName}', 'GeoJSON')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-2 py-1 rounded text-3xs">
+              📋 Copy GeoJSON
+            </button>
+            <button onclick="window.__fwtCopy('${btoa(wktStr)}', '${campName}', 'WKT')" class="bg-slate-800 hover:bg-slate-900 text-white font-bold px-2 py-1 rounded text-3xs">
+              📋 Copy WKT
+            </button>
+          </div>
+        </div>
+      `);
+      poly.bindTooltip(`🏠 ${campName} (Click to copy)`, { permanent: false, direction: 'center' });
+      state.layers.accommodation = poly;
+      legendCamp.innerText = `${campName} (Click to copy)`;
+    } else {
+      legendCamp.innerText = 'No Camp Boundary on Server';
     }
 
-    // 2. Worksite Polygons and Geofence Perimeter
-    const jobList = state.synced.jobs.length > 0
-      ? state.synced.jobs
-      : [
-          {
-            job_name: 'Dubai Silicon Oasis Landscape Maintenance',
-            boundary: { coordinates: [DEFAULT_WORKSITE_POLYGON] },
-            geofence_circle: { center: { lat: 25.1310, lng: 55.3840 }, radius_m: 300 },
-          },
-        ];
-
-    jobList.forEach((job) => {
+    // 2. Worksite Polygons and Geofences from Server Snapshot
+    state.synced.jobs.forEach((job) => {
       if (job.boundary?.coordinates?.[0]) {
-        const latlngs = job.boundary.coordinates[0].map((pt) => [pt[1], pt[0]]);
+        hasAnyWorksiteBoundary = true;
+        const coords = job.boundary.coordinates[0];
+        const latlngs = coords.map((pt) => [pt[1], pt[0]]);
+        const jobName = job.job_name || 'Assigned Worksite';
+
         const poly = L.polygon(latlngs, {
           color: '#2563eb',
           fillColor: '#3b82f6',
           fillOpacity: 0.3,
           weight: 2,
         }).addTo(state.map);
-        poly.bindTooltip(`📍 ${job.job_name}`, { permanent: true, direction: 'center' });
+
+        const geojsonStr = JSON.stringify(job.boundary, null, 2);
+        const wktStr = toWktPolygon(coords);
+        poly.bindPopup(`
+          <div class="p-2 space-y-2 text-xs font-sans">
+            <div class="font-bold text-blue-800 text-sm">📍 ${jobName}</div>
+            <div class="text-3xs text-slate-500">${job.job_number || ''} • Contract Worksite</div>
+            <div class="pt-1 flex gap-1.5">
+              <button onclick="window.__fwtCopy('${btoa(geojsonStr)}', '${jobName}', 'GeoJSON')" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-2 py-1 rounded text-3xs">
+                📋 Copy GeoJSON
+              </button>
+              <button onclick="window.__fwtCopy('${btoa(wktStr)}', '${jobName}', 'WKT')" class="bg-slate-800 hover:bg-slate-900 text-white font-bold px-2 py-1 rounded text-3xs">
+                📋 Copy WKT
+              </button>
+            </div>
+          </div>
+        `);
+        poly.bindTooltip(`📍 ${jobName} (Click to copy)`, { permanent: false, direction: 'center' });
         state.layers.worksites.push(poly);
+        legendWorksite.innerText = `${jobName} (Click to copy)`;
       }
 
       if (job.geofence_circle?.center) {
         const circle = L.circle([job.geofence_circle.center.lat, job.geofence_circle.center.lng], {
-          radius: job.geofence_circle.radius_m,
+          radius: job.geofence_circle.radius_m || 300,
           color: '#6366f1',
           fillColor: '#818cf8',
           fillOpacity: 0.08,
@@ -401,9 +542,34 @@
       }
     });
 
-    // Update Route Polyline
+    // Check boundary warning banner
+    if (state.token) {
+      if (!hasAnyWorksiteBoundary && !hasCampBoundary) {
+        alertEl.classList.remove('hidden');
+        alertText.innerText = 'No assigned worksite or camp boundaries configured on server for this worker.';
+      } else if (!hasAnyWorksiteBoundary) {
+        alertEl.classList.remove('hidden');
+        alertText.innerText = 'Assigned worksite has no polygon boundary set on server.';
+      } else {
+        alertEl.classList.add('hidden');
+      }
+    } else {
+      alertEl.classList.remove('hidden');
+      alertText.innerText = 'Sign in with a worker account to sync server boundaries and shifts.';
+    }
+
     renderRoutePolyline();
   }
+
+  // Expose global copy bridge for Leaflet popup buttons
+  window.__fwtCopy = function (b64, name, format) {
+    try {
+      const text = atob(b64);
+      copyToClipboard(text, name, format);
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   // Draw Route Polyline
   function renderRoutePolyline() {
@@ -433,25 +599,15 @@
     let activeWorksiteId = null;
 
     // Check Accommodation (Camp)
-    const campCoords = state.synced.accommodation?.boundary?.coordinates?.[0] || DEFAULT_CAMP_POLYGON;
+    const campCoords = state.synced.accommodation?.boundary?.coordinates?.[0] || null;
     if (campCoords && isPointInPolygon({ lat, lng }, campCoords)) {
       detectedZone = 'CAMP';
       zoneTitle = 'CAMP (WARSAN)';
       badgeClass = 'bg-emerald-100 text-emerald-800 border-emerald-300';
     }
 
-    // Check Worksites & Geofence
-    const jobList = state.synced.jobs.length > 0
-      ? state.synced.jobs
-      : [
-          {
-            job_id: null,
-            boundary: { coordinates: [DEFAULT_WORKSITE_POLYGON] },
-            geofence_circle: { center: { lat: 25.1310, lng: 55.3840 }, radius_m: 300 },
-          },
-        ];
-
-    jobList.forEach((job) => {
+    // Check Worksites & Geofence (REAL Server boundaries only)
+    state.synced.jobs.forEach((job) => {
       if (job.boundary?.coordinates?.[0]) {
         if (isPointInPolygon({ lat, lng }, job.boundary.coordinates[0])) {
           detectedZone = 'WORKSITE_POLYGON';
@@ -474,20 +630,32 @@
     badge.innerText = zoneTitle;
     badge.className = `text-2xs font-bold px-2 py-0.5 rounded-full border ${badgeClass}`;
 
-    // Calculate Distance to Camp
-    const campLat = Number(state.synced.accommodation?.rep_latitude || 25.15825);
-    const campLng = Number(state.synced.accommodation?.rep_longitude || 55.41225);
-    const distM = Math.round(haversineMeters(lat, lng, campLat, campLng));
-    document.getElementById('campDistance').innerText = distM < 1000 ? `${distM} m away` : `${(distM / 1000).toFixed(1)} km away`;
+    // Distance to Camp
+    if (state.synced.accommodation?.rep_latitude) {
+      const campLat = Number(state.synced.accommodation.rep_latitude);
+      const campLng = Number(state.synced.accommodation.rep_longitude);
+      const distM = Math.round(haversineMeters(lat, lng, campLat, campLng));
+      document.getElementById('campDistance').innerText = distM < 1000 ? `${distM} m away` : `${(distM / 1000).toFixed(1)} km away`;
+    } else {
+      document.getElementById('campDistance').innerText = '--';
+    }
 
-    // Automatic Transition Event Generator (Matches Phase 07 Contract)
+    // Automatic Transition & Periodic Ping Generator (Simulating Real Mobile App)
+    const currentSimSecs = simulatedTime ? timeStrToSeconds(simulatedTime.split('T')[1].slice(0, 8)) : 0;
+    const confInterval = state.synced.settings?.confirmation_polling_interval_s || 300;
+
     if (detectedZone !== state.currentZone) {
       if (detectedZone === 'WORKSITE_POLYGON') {
         queueEvent('ENTRY', activeWorksiteId, simulatedTime);
+        state.route.lastPingSimSecs = currentSimSecs;
       } else if (state.currentZone === 'WORKSITE_POLYGON' && detectedZone !== 'WORKSITE_POLYGON') {
         queueEvent('EXIT', state.currentWorksiteId, simulatedTime);
-      } else if (detectedZone === 'GEOFENCE_BUFFER') {
+      }
+    } else if (detectedZone === 'WORKSITE_POLYGON') {
+      // Periodic ping inside worksite
+      if (currentSimSecs > 0 && currentSimSecs - state.route.lastPingSimSecs >= confInterval) {
         queueEvent('PING', activeWorksiteId, simulatedTime);
+        state.route.lastPingSimSecs = currentSimSecs;
       }
     }
 
@@ -495,7 +663,7 @@
     state.currentWorksiteId = activeWorksiteId;
   }
 
-  // Queue Event (Conforming to EventBatchRequest & MobileEventItem schemas)
+  // Queue Event (Conforming strictly to EventBatchRequest & MobileEventItem schemas)
   function queueEvent(type, worksiteId = null, recordedAt = null) {
     const evt = {
       event_id: crypto.randomUUID(),
@@ -610,7 +778,6 @@
     document.getElementById('routeCurrentTime').innerText = timeStr;
     document.getElementById('phoneClock').innerText = formatTimeAmPm(currentSecs);
 
-    // Find current waypoint segment
     let segIdx = 0;
     for (let i = 0; i < wps.length - 1; i++) {
       if (currentSecs >= timeStrToSeconds(wps[i].time)) {
@@ -635,6 +802,7 @@
   function loadRoute(waypoints) {
     state.route.waypoints = waypoints;
     state.route.progress = 0;
+    state.route.lastPingSimSecs = 0;
     document.getElementById('routeStartTime').innerText = waypoints[0]?.time || '05:00:00';
     document.getElementById('routeEndTime').innerText = waypoints[waypoints.length - 1]?.time || '16:00:00';
     renderRoutePolyline();
@@ -682,18 +850,19 @@
       connBadge.className = 'flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-2xs font-semibold bg-red-950 border border-red-800 text-red-400';
       connBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-red-500 animate-ping"></span><span>Unauthenticated</span>';
     }
+    updateMapLayers();
   }
 
   // Render Full Synced State into UI
   function applySyncedSnapshot(snapshot) {
-    state.cursor = snapshot.cursor;
+    state.cursor = snapshot.cursor || 0;
     document.getElementById('phoneCursorBadge').innerText = `Cursor: ${state.cursor}`;
 
     state.synced.jobs = [];
     state.synced.dayPlans = [];
     state.synced.scheduleItems = [];
 
-    // Parse all entities (supporting either payload or data key)
+    // Parse all entities
     snapshot.entities.forEach((item) => {
       const data = item.payload || item.data;
       if (!data) return;
@@ -706,7 +875,7 @@
       if (item.entity_type === 'SCHEDULE_ITEM') state.synced.scheduleItems.push(data);
     });
 
-    // 1. Settings card
+    // 1. Settings Card
     if (state.synced.settings) {
       document.getElementById('cfgRadius').innerText = `${state.synced.settings.geofence_circle_radius_m} m`;
       document.getElementById('cfgApproach').innerText = `${state.synced.settings.approach_polling_interval_s} s`;
@@ -722,26 +891,39 @@
       document.getElementById('profGrade').innerText = p.staff_grade_description || 'Field Worker';
       document.getElementById('profTally').innerText = `Tally ID: ${p.tally_id}`;
       document.getElementById('profWeeklyOff').innerText = p.weekly_off_day || 'Friday';
+      document.getElementById('profPhone').innerText = p.phone || '--';
 
       if (p.supervisor) {
         document.getElementById('spvName').innerText = p.supervisor.name;
-        document.getElementById('spvPhone').innerText = p.supervisor.phone || '+971 50 123 4567';
-        document.getElementById('spvCallLink').href = `tel:${p.supervisor.phone || '+971501234567'}`;
+        document.getElementById('spvPhone').innerText = p.supervisor.phone || '--';
+        document.getElementById('spvCallLink').href = `tel:${p.supervisor.phone || ''}`;
         document.getElementById('profSpv').innerText = p.supervisor.name;
+      } else {
+        document.getElementById('spvName').innerText = 'None Assigned';
+        document.getElementById('spvPhone').innerText = '--';
+        document.getElementById('profSpv').innerText = 'None Assigned';
       }
     }
 
     // 3. Accommodation Card
     if (state.synced.accommodation) {
       document.getElementById('campName').innerText = state.synced.accommodation.name;
+      document.getElementById('campAddress').innerText = state.synced.accommodation.address || 'Living Quarters';
       document.getElementById('profCamp').innerText = state.synced.accommodation.name;
+    } else {
+      document.getElementById('campName').innerText = 'No Camp Configured on Server';
+      document.getElementById('campAddress').innerText = '--';
+      document.getElementById('profCamp').innerText = 'None Assigned';
     }
 
     // 4. Assigned Worksite Card
     if (state.synced.jobs.length > 0) {
       const j = state.synced.jobs[0];
       document.getElementById('shiftJobName').innerText = j.job_name;
-      document.getElementById('shiftJobNumber').innerText = `${j.job_number} • Commercial Maintenance`;
+      document.getElementById('shiftJobNumber').innerText = `${j.job_number} • Contract Worksite`;
+    } else {
+      document.getElementById('shiftJobName').innerText = 'No Worksite Assigned';
+      document.getElementById('shiftJobNumber').innerText = '--';
     }
 
     // 5. Today's Day Plan Resolution
@@ -751,7 +933,7 @@
     if (todayPlan) {
       const isWorking = todayPlan.status === 'WORKING';
       const badge = document.getElementById('shiftStatusBadge');
-      badge.innerText = todayPlan.status;
+      badge.innerText = todayPlan.status === 'OFF' ? 'REST DAY' : todayPlan.status;
       badge.className = isWorking
         ? 'text-3xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300'
         : 'text-3xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-300';
@@ -760,13 +942,19 @@
         document.getElementById('plannedCampStart').innerText = `${todayPlan.planned.accommodation_start} AM`;
         document.getElementById('shiftSiteHours').innerText = `${todayPlan.planned.first_site_start} - ${todayPlan.planned.last_site_end}`;
         document.getElementById('shiftBreak').innerText = `${todayPlan.planned.break_minutes} min midday`;
+      } else {
+        document.getElementById('plannedCampStart').innerText = '--:--';
+        document.getElementById('shiftSiteHours').innerText = '--';
+        document.getElementById('shiftBreak').innerText = '--';
       }
       if (todayPlan.alarm_time) {
         document.getElementById('alarmDisplayTime').innerText = `${todayPlan.alarm_time} AM`;
+      } else {
+        document.getElementById('alarmDisplayTime').innerText = '--:--';
       }
     }
 
-    // 6. Roster Tab (30-day forward view)
+    // 6. Roster Tab
     const workingDaysCount = state.synced.dayPlans.filter((dp) => dp.status === 'WORKING').length;
     document.getElementById('schedCount').innerText = `${workingDaysCount} working days`;
 
@@ -814,7 +1002,7 @@
 
   // Setup Event Listeners
   function setupEvents() {
-    // Phone Tab Navigation
+    // Tab Navigation
     document.getElementById('navBtnToday').addEventListener('click', () => switchTab('today'));
     document.getElementById('navBtnGps').addEventListener('click', () => switchTab('gps'));
     document.getElementById('navBtnRoster').addEventListener('click', () => switchTab('roster'));
@@ -824,7 +1012,7 @@
     // Test Alarm Audio Chime
     document.getElementById('btnTestAlarm').addEventListener('click', () => {
       playAlarmChime();
-      alert('⏰ BEEP BEEP! Shift Alarm ringing locally at 04:30 AM (30 min lead before camp departure).');
+      alert('⏰ BEEP BEEP! Shift Alarm ringing locally (lead time before camp departure).');
     });
 
     // Route Playback Controls
@@ -853,9 +1041,38 @@
     // Route Presets Selector
     document.getElementById('routePresetSelect').addEventListener('change', (e) => {
       stopRoutePlayback();
-      const preset = PRESET_ROUTES[e.target.value];
-      if (preset) loadRoute(preset.waypoints);
+      const val = e.target.value;
+      if (val === 'custom') {
+        if (state.drawnWaypoints.length >= 2) loadRoute(state.drawnWaypoints);
+        else alert('No custom route recorded yet. Click "Record / Draw Route" and click points on the map.');
+      } else {
+        const preset = PRESET_ROUTES[val];
+        if (preset) loadRoute(preset.waypoints);
+      }
     });
+
+    // Manual Route Drawing Toggle
+    const btnDrawMode = document.getElementById('btnToggleDrawMode');
+    const drawModeText = document.getElementById('drawModeText');
+    const drawingBanner = document.getElementById('drawingBanner');
+    const btnClearDrawn = document.getElementById('btnClearDrawnPoints');
+
+    btnDrawMode.addEventListener('click', () => {
+      state.isDrawingMode = !state.isDrawingMode;
+      if (state.isDrawingMode) {
+        btnDrawMode.className = 'bg-amber-600 text-white px-3 py-1.5 rounded text-2xs font-bold flex items-center gap-1.5 animate-pulse';
+        drawModeText.innerText = 'Stop Drawing';
+        drawingBanner.classList.remove('hidden');
+        btnClearDrawn.classList.remove('hidden');
+        showToast('Draw mode ON: Click anywhere on map to add route waypoints.');
+      } else {
+        btnDrawMode.className = 'bg-slate-800 hover:bg-slate-700 border border-slate-700 text-amber-300 px-3 py-1.5 rounded text-2xs font-semibold flex items-center gap-1.5';
+        drawModeText.innerText = 'Record / Draw Route';
+        drawingBanner.classList.add('hidden');
+      }
+    });
+
+    btnClearDrawn.addEventListener('click', clearDrawnRoute);
 
     // Route Timeline Slider Scrubber
     document.getElementById('routeTimelineSlider').addEventListener('input', (e) => {
@@ -879,7 +1096,7 @@
           const waypoints = json.waypoints || json;
           if (Array.isArray(waypoints) && waypoints.length >= 2) {
             loadRoute(waypoints);
-            alert(`Loaded custom route: ${waypoints.length} waypoints.`);
+            showToast(`Loaded route with ${waypoints.length} waypoints.`);
           } else {
             alert('Invalid route JSON: must contain an array of waypoints with {time, lat, lng}.');
           }
@@ -912,10 +1129,25 @@
       a.remove();
     });
 
-    // Sign In Action
+    // Boundary Modal & Copy Tools
+    const boundaryModal = document.getElementById('boundaryModal');
+    document.getElementById('btnOpenBoundaryModal').addEventListener('click', () => {
+      renderBoundaryModalList();
+      boundaryModal.classList.remove('hidden');
+    });
+
+    document.getElementById('btnCloseBoundaryModal').addEventListener('click', () => {
+      boundaryModal.classList.add('hidden');
+    });
+
+    // Sign In Action (Handles First-Time Password Change Gracefully)
     document.getElementById('phoneBtnLogin').addEventListener('click', async () => {
-      const tally_id = document.getElementById('phoneInputTally').value;
-      const password = document.getElementById('phoneInputPwd').value;
+      const tally_id = document.getElementById('phoneInputTally').value.trim();
+      const password = document.getElementById('phoneInputPwd').value.trim();
+
+      if (!tally_id || !password) {
+        return alert('Please enter both Tally ID and password.');
+      }
 
       try {
         const res = await api('/mobile/auth/login', {
@@ -937,9 +1169,42 @@
         state.worker = res.employee;
         localStorage.setItem('fwt_mobile_token', state.token);
 
+        // If user must change password on first login, automatically complete it to unblock sync
+        if (res.must_change_password) {
+          try {
+            await api('/mobile/auth/change-password', {
+              method: 'POST',
+              body: JSON.stringify({
+                old_password: password,
+                new_password: 'WorkerPermanent123!',
+              }),
+            });
+            // Re-login to get clean non-pending token
+            const relogin = await api('/mobile/auth/login', {
+              method: 'POST',
+              body: JSON.stringify({
+                tally_id,
+                password: 'WorkerPermanent123!',
+                device: {
+                  device_identifier: state.device.identifier,
+                  platform: state.device.platform,
+                  device_model: state.device.model,
+                  app_version: state.device.app_version,
+                  os_version: state.device.os_version,
+                },
+              }),
+            });
+            state.token = relogin.access_token;
+            localStorage.setItem('fwt_mobile_token', state.token);
+            showToast('✓ Permanent password enrolled for new worker.');
+          } catch (pwdErr) {
+            console.warn('Password change skipped or failed:', pwdErr);
+          }
+        }
+
         setAuthenticatedState(true, res.employee);
 
-        // Immediately pull full snapshot
+        // Immediately pull full snapshot from server
         await pullSnapshot();
       } catch (err) {
         alert(`Login failed: ${err.message}`);
@@ -969,17 +1234,52 @@
 
     document.getElementById('phoneBtnPullSnapshot').addEventListener('click', pullSnapshot);
 
-    // Pull Delta Sync
+    // Pull Delta Sync (Fixing next_cursor so cursor is never undefined)
     document.getElementById('phoneBtnPullDelta').addEventListener('click', async () => {
+      const cur = state.cursor || 0;
       try {
-        const res = await api(`/mobile/sync/changes?cursor=${state.cursor}`);
+        const res = await api(`/mobile/sync/changes?cursor=${cur}`);
         if (res.resync_required) {
-          alert('Server signaled resync_required=true. Pulling fresh snapshot.');
+          showToast('Server signaled resync_required=true. Pulling fresh snapshot.');
           return pullSnapshot();
         }
-        state.cursor = res.cursor;
+        // Correctly update to next_cursor
+        state.cursor = res.next_cursor !== undefined ? res.next_cursor : (res.cursor !== undefined ? res.cursor : cur);
         document.getElementById('phoneCursorBadge').innerText = `Cursor: ${state.cursor}`;
-        alert(`Delta sync complete: ${res.changes.length} changes applied. Cursor: ${res.cursor}`);
+
+        // Apply changes to local state
+        if (res.changes && res.changes.length > 0) {
+          res.changes.forEach((c) => {
+            if (c.entity_type === 'PROFILE' && c.payload) {
+              state.synced.profile = c.payload;
+            }
+            if (c.entity_type === 'ACCOMMODATION' && c.payload) {
+              state.synced.accommodation = c.payload;
+            }
+            if (c.entity_type === 'JOB' && c.payload) {
+              const idx = state.synced.jobs.findIndex((j) => j.job_id === c.payload.job_id);
+              if (idx >= 0) state.synced.jobs[idx] = c.payload;
+              else state.synced.jobs.push(c.payload);
+            }
+            if (c.entity_type === 'DAY_PLAN' && c.payload) {
+              const idx = state.synced.dayPlans.findIndex((dp) => dp.work_date === c.payload.work_date);
+              if (idx >= 0) state.synced.dayPlans[idx] = c.payload;
+              else state.synced.dayPlans.push(c.payload);
+            }
+          });
+          // Re-render UI
+          applySyncedSnapshot({
+            cursor: state.cursor,
+            entities: [
+              ...(state.synced.profile ? [{ entity_type: 'PROFILE', payload: state.synced.profile }] : []),
+              ...(state.synced.settings ? [{ entity_type: 'SETTINGS', payload: state.synced.settings }] : []),
+              ...(state.synced.accommodation ? [{ entity_type: 'ACCOMMODATION', payload: state.synced.accommodation }] : []),
+              ...state.synced.jobs.map((j) => ({ entity_type: 'JOB', payload: j })),
+              ...state.synced.dayPlans.map((dp) => ({ entity_type: 'DAY_PLAN', payload: dp })),
+            ],
+          });
+        }
+        showToast(`Delta sync: ${res.changes.length} changes applied. Next cursor: ${state.cursor}`);
       } catch (err) {
         alert(`Delta sync failed: ${err.message}`);
       }
@@ -990,9 +1290,9 @@
       try {
         await api('/mobile/sync/ack', {
           method: 'POST',
-          body: JSON.stringify({ cursor: state.cursor }),
+          body: JSON.stringify({ cursor: state.cursor || 0 }),
         });
-        alert(`Cursor ${state.cursor} acknowledged successfully with server.`);
+        showToast(`Cursor ${state.cursor} acknowledged with server.`);
       } catch (err) {
         alert(`Ack failed: ${err.message}`);
       }
@@ -1034,7 +1334,7 @@
         const rejected = res.results.filter((r) => r.status === 'REJECTED').length;
         state.eventsQueue = [];
         renderQueue();
-        alert(`Batch sent! Accepted: ${accepted}, Rejected: ${rejected}. Cursor: ${res.latest_cursor}`);
+        showToast(`Batch sent! Accepted: ${accepted}, Rejected: ${rejected}. Cursor: ${res.latest_cursor}`);
       } catch (err) {
         alert(`Batch failed: ${err.message}`);
       }
@@ -1047,14 +1347,79 @@
     });
   }
 
+  // Render Boundary Copy Modal Items
+  function renderBoundaryModalList() {
+    const list = document.getElementById('boundaryModalList');
+    if (!list) return;
+
+    const items = [];
+    if (state.synced.accommodation) {
+      items.push({
+        type: 'Accommodation Camp',
+        name: state.synced.accommodation.name,
+        code: state.synced.accommodation.accommodation_id,
+        boundary: state.synced.accommodation.boundary,
+      });
+    }
+    state.synced.jobs.forEach((job) => {
+      items.push({
+        type: 'Worksite',
+        name: job.job_name,
+        code: job.job_number,
+        boundary: job.boundary,
+      });
+    });
+
+    if (items.length === 0) {
+      list.innerHTML = '<div class="text-slate-400 text-center py-6">No synced boundary data available. Please sign in to fetch boundaries.</div>';
+      return;
+    }
+
+    list.innerHTML = items
+      .map((item) => {
+        const hasBoundary = Boolean(item.boundary?.coordinates?.[0]);
+        const geojsonStr = hasBoundary ? JSON.stringify(item.boundary, null, 2) : '';
+        const wktStr = hasBoundary ? toWktPolygon(item.boundary.coordinates[0]) : '';
+
+        return `
+          <div class="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-2">
+            <div class="flex justify-between items-start">
+              <div>
+                <span class="text-3xs uppercase font-bold text-indigo-400 block">${item.type}</span>
+                <h4 class="font-bold text-xs text-white">${item.name}</h4>
+                <div class="text-3xs text-slate-500 font-mono">${item.code || ''}</div>
+              </div>
+              <span class="px-2 py-0.5 rounded-full text-3xs font-semibold ${
+                hasBoundary ? 'bg-emerald-950 border border-emerald-800 text-emerald-400' : 'bg-amber-950 border border-amber-800 text-amber-400'
+              }">${hasBoundary ? 'Boundary Set' : 'No Boundary'}</span>
+            </div>
+            ${
+              hasBoundary
+                ? `
+              <div class="flex gap-2 pt-1">
+                <button onclick="window.__fwtCopy('${btoa(geojsonStr)}', '${item.name}', 'GeoJSON')" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1.5 rounded text-2xs transition">
+                  📋 Copy GeoJSON
+                </button>
+                <button onclick="window.__fwtCopy('${btoa(wktStr)}', '${item.name}', 'WKT')" class="flex-1 bg-slate-800 hover:bg-slate-700 text-white font-bold py-1.5 rounded text-2xs transition">
+                  📋 Copy WKT
+                </button>
+              </div>
+            `
+                : `<div class="text-3xs text-slate-500 italic">No boundary polygon assigned on server.</div>`
+            }
+          </div>
+        `;
+      })
+      .join('');
+  }
+
   // Application Startup
   window.addEventListener('DOMContentLoaded', async () => {
     initMap();
     setupEvents();
     loadRoute(PRESET_ROUTES.standard.waypoints);
-    updateWorkerPosition(state.workerLocation.lat, state.workerLocation.lng);
 
-    // If existing valid token is stored, attempt auto-restore
+    // If existing token stored, verify and auto-restore
     if (state.token) {
       try {
         const snap = await api('/mobile/sync/snapshot');

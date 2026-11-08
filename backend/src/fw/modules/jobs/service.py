@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
 from fw.core.errors import AppError
+from fw.core.events import AccommodationBoundaryChanged, WorksiteBoundaryChanged, event_bus
 from fw.modules.audit import AuditService
 from fw.modules.jobs.models import JobItem, JobOccurrence, Worksite
 from fw.modules.jobs.schemas import (
@@ -464,6 +465,8 @@ class JobsService:
             actor_role=actor_role,
         )
 
+        await event_bus.publish(WorksiteBoundaryChanged(worksite_id=ws.id), session=session)
+
         return await JobsService.get_worksite(session, ws.id)
 
     @staticmethod
@@ -508,6 +511,8 @@ class JobsService:
             actor_role=actor_role,
         )
 
+        await event_bus.publish(WorksiteBoundaryChanged(worksite_id=target_ws.id), session=session)
+
         return await JobsService.get_worksite(session, target_ws.id)
 
     @staticmethod
@@ -546,6 +551,7 @@ class JobsService:
                     actor_user_id=actor_user_id,
                     actor_role=actor_role,
                 )
+                await event_bus.publish(WorksiteBoundaryChanged(worksite_id=tws.id), session=session)
                 res = await JobsService.get_worksite(session, tws.id)
                 updated.append(res)
 
@@ -599,6 +605,8 @@ class JobsService:
             actor_user_id=actor_user_id,
             actor_role=actor_role,
         )
+
+        await event_bus.publish(AccommodationBoundaryChanged(accommodation_id=acc.id), session=session)
 
     @staticmethod
     async def get_boundary_queue(

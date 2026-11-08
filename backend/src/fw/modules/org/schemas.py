@@ -162,6 +162,8 @@ class ReportingLineRead(BaseModel):
     id: UUID
     employee_id: UUID
     manager_id: UUID
+    manager_name: str | None = None
+    manager_tally_id: str | None = None
     relationship: str
     notes: str | None = None
     created_at: datetime
