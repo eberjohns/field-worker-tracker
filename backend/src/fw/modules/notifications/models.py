@@ -63,3 +63,4 @@ class Alert(Base):
     employee = relationship("Employee", foreign_keys=[employee_id])
     target_user = relationship("User", foreign_keys=[target_user_id])
     resolved_by = relationship("User", foreign_keys=[resolved_by_user_id])
+

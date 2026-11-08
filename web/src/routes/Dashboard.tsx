@@ -65,10 +65,10 @@ export const Dashboard: React.FC = () => {
         }
 
         if (user?.role === "ADMIN" || user?.role === "ENGINEER") {
-          const bRes = await fetch("/api/v1/boundary-queue?status=PENDING", { headers });
+          const bRes = await fetch("/api/v1/boundary-queue?status=UNSET", { headers });
           if (bRes.ok) {
             const bData = await bRes.json();
-            setPendingBoundaryCount(bData.total || (Array.isArray(bData) ? bData.length : 0));
+            setPendingBoundaryCount(bData.unset_count ?? bData.total_count ?? 0);
           }
         }
       } catch (err) {

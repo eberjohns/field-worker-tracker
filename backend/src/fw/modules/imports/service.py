@@ -953,7 +953,12 @@ class ImportService:
             a.accommodation_code: a.id
             for a in (await session.execute(select(Accommodation))).scalars().all()
         }
-        default_pwd_hash = hash_password("Password123!")
+        default_pwd = await SettingsService.get_setting(
+            session,
+            key="default_password",
+            default="ChangeMe123!",
+        )
+        default_pwd_hash = hash_password(str(default_pwd))
 
         for r in sheet_to_rows.get("Employees", []):
             if r.action in ("NEW", "UPDATED", "REACTIVATED"):

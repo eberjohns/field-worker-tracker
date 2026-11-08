@@ -13,7 +13,7 @@ from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import selectinload
 
 from fw.core.db import async_session_factory, engine
-from fw.modules.identity import User
+from fw.modules.identity import User, hash_password
 from fw.modules.jobs import JobItem, Worksite
 from fw.modules.notifications import Alert, NotificationService
 from fw.modules.org import Employee, EmployeeReportingLine, Group, Zone
@@ -49,8 +49,11 @@ async def run_demo() -> None:
             await session.flush()
         eng_user = (await session.execute(select(User).where(User.username == "1001"))).scalar_one_or_none()
         if not eng_user:
-            eng_user = User(id=uuid4(), employee_id=eng_emp.id, username="1001", credential_hash="hash", role="ENGINEER", is_active=True, must_change_password=False)
+            eng_user = User(id=uuid4(), employee_id=eng_emp.id, username="1001", credential_hash=hash_password("ChangeMe123!"), role="ENGINEER", is_active=True, must_change_password=False)
             session.add(eng_user)
+        else:
+            eng_user.credential_hash = hash_password("ChangeMe123!")
+            eng_user.must_change_password = False
 
         # Supervisor
         sup_emp = (await session.execute(select(Employee).where(Employee.tally_id == "1004"))).scalar_one_or_none()
@@ -62,8 +65,11 @@ async def run_demo() -> None:
             session.add(link_eng)
         sup_user = (await session.execute(select(User).where(User.username == "1004"))).scalar_one_or_none()
         if not sup_user:
-            sup_user = User(id=uuid4(), employee_id=sup_emp.id, username="1004", credential_hash="hash", role="SUPERVISOR", is_active=True, must_change_password=False)
+            sup_user = User(id=uuid4(), employee_id=sup_emp.id, username="1004", credential_hash=hash_password("ChangeMe123!"), role="SUPERVISOR", is_active=True, must_change_password=False)
             session.add(sup_user)
+        else:
+            sup_user.credential_hash = hash_password("ChangeMe123!")
+            sup_user.must_change_password = False
 
         # Worker 1 (Bilal Khan - Gardener)
         w1_emp = (await session.execute(select(Employee).where(Employee.tally_id == "1010"))).scalar_one_or_none()

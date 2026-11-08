@@ -46,3 +46,4 @@ Key architectural requirements from client specifications and the decision regis
 - Alembic migration `0008_leave_reassignment_approvals.py` adds `leave_requests`, `reassignment_requests`, `alerts`, and extends `scheduled_work`.
 - Domain events exported from `fw.modules.scheduling`.
 - New UI routes `/approvals` and `/leave` integrated into `Shell.tsx` navigation with dynamic badge indicators.
+

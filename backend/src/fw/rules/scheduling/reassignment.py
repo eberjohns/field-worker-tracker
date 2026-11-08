@@ -148,3 +148,4 @@ def preview_reassignment_hours(
         planned_overtime_hours=planned_ot,
         warnings=warnings,
     )
+

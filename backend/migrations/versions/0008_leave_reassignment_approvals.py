@@ -230,3 +230,4 @@ def downgrade() -> None:
     op.drop_column("scheduled_work", "reassignment_request_id")
     op.drop_table("reassignment_requests")
     op.drop_table("leave_requests")
+
