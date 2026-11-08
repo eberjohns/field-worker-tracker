@@ -254,6 +254,25 @@
     return `POLYGON((${pts}))`;
   }
 
+  function getPolygonCentroid(coords) {
+    if (!coords || coords.length === 0) return null;
+    let ring = coords;
+    if (Array.isArray(coords[0]) && Array.isArray(coords[0][0])) {
+      ring = coords[0];
+    }
+    let sumLat = 0;
+    let sumLng = 0;
+    let count = 0;
+    ring.forEach((pt) => {
+      if (Array.isArray(pt) && pt.length >= 2 && !isNaN(Number(pt[0])) && !isNaN(Number(pt[1]))) {
+        sumLng += Number(pt[0]);
+        sumLat += Number(pt[1]);
+        count++;
+      }
+    });
+    return count > 0 ? { lat: sumLat / count, lng: sumLng / count } : null;
+  }
+
   function copyToClipboard(text, entityName, format) {
     navigator.clipboard.writeText(text).then(() => {
       showToast(`✓ Copied ${format} for "${entityName}" to clipboard!`);
@@ -775,13 +794,62 @@
         alertText.innerText = 'No assigned worksite or camp boundaries configured on server for this worker.';
       } else if (!hasAnyWorksiteBoundary) {
         alertEl.classList.remove('hidden');
-        alertText.innerText = 'Assigned worksite has no polygon boundary set on server.';
+        if (state.synced.jobs.length === 0) {
+          alertText.innerText = 'Worker has no active shift scheduled today (Day Plan: FREE). Living camp loaded.';
+        } else {
+          alertText.innerText = 'Assigned worksite has no polygon boundary set on server.';
+        }
       } else {
         alertEl.classList.add('hidden');
       }
     } else {
       alertEl.classList.remove('hidden');
       alertText.innerText = 'Sign in with a worker account to sync server boundaries and shifts.';
+    }
+
+    // Auto-fit viewport to show accommodation and worksites
+    const allLayers = [...state.layers.worksites];
+    if (state.layers.accommodation) allLayers.push(state.layers.accommodation);
+    if (allLayers.length > 0 && state.map) {
+      const group = L.featureGroup(allLayers);
+      const bounds = group.getBounds();
+      if (bounds.isValid()) {
+        state.map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+      }
+    }
+
+    // Dynamic Auto-Route between Camp and Worksite
+    if (state.synced.accommodation?.boundary?.coordinates && state.synced.jobs[0]?.boundary?.coordinates) {
+      const campPt = getPolygonCentroid(state.synced.accommodation.boundary.coordinates);
+      const sitePt = getPolygonCentroid(state.synced.jobs[0].boundary.coordinates);
+      if (campPt && sitePt) {
+        const campName = state.synced.accommodation.name || 'Living Camp';
+        const jobName = state.synced.jobs[0].job_name || 'Assigned Worksite';
+        const midPt = { lat: (campPt.lat + sitePt.lat) / 2, lng: (campPt.lng + sitePt.lng) / 2 };
+
+        PRESET_ROUTES.auto_synced = {
+          name: `Auto: ${campName} ➔ ${jobName}`,
+          waypoints: [
+            { time: '05:00:00', lat: campPt.lat, lng: campPt.lng, label: `${campName} (At Camp)` },
+            { time: '05:35:00', lat: campPt.lat * 0.9 + midPt.lat * 0.1, lng: campPt.lng * 0.9 + midPt.lng * 0.1, label: 'Departing Camp' },
+            { time: '05:48:00', lat: midPt.lat, lng: midPt.lng, label: 'Transit Commute' },
+            { time: '05:58:00', lat: sitePt.lat * 0.9 + midPt.lat * 0.1, lng: sitePt.lng * 0.9 + midPt.lng * 0.1, label: 'Geofence Buffer Approach' },
+            { time: '06:02:00', lat: sitePt.lat, lng: sitePt.lng, label: `${jobName} Entry` },
+            { time: '09:00:00', lat: sitePt.lat, lng: sitePt.lng, label: 'Mid-Morning Work' },
+            { time: '12:00:00', lat: sitePt.lat, lng: sitePt.lng, label: 'Midday Rest on Site' },
+            { time: '14:00:00', lat: sitePt.lat, lng: sitePt.lng, label: 'Afternoon Work' },
+            { time: '15:31:00', lat: sitePt.lat * 0.9 + midPt.lat * 0.1, lng: sitePt.lng * 0.9 + midPt.lng * 0.1, label: 'Worksite Exit' },
+            { time: '15:45:00', lat: midPt.lat, lng: midPt.lng, label: 'Return Transit' },
+            { time: '16:00:00', lat: campPt.lat, lng: campPt.lng, label: `Back at ${campName}` },
+          ],
+        };
+
+        const optAuto = document.getElementById('optAutoSynced');
+        if (optAuto) {
+          optAuto.classList.remove('hidden');
+          optAuto.innerText = `Auto: ${campName} ➔ ${jobName}`;
+        }
+      }
     }
 
     renderRoutePolyline();
@@ -1517,6 +1585,10 @@
 
     // Pull Snapshot Function
     async function pullSnapshot() {
+      if (!state.token) {
+        showToast('Please sign in first.');
+        return;
+      }
       try {
         const res = await api('/mobile/sync/snapshot');
         applySyncedSnapshot(res);
@@ -1529,6 +1601,10 @@
 
     // Pull Delta Sync (Fixing next_cursor so cursor is never undefined)
     document.getElementById('phoneBtnPullDelta').addEventListener('click', async () => {
+      if (!state.token) {
+        showToast('Please sign in first.');
+        return;
+      }
       const cur = state.cursor || 0;
       try {
         const res = await api(`/mobile/sync/changes?cursor=${cur}`);
@@ -1580,6 +1656,10 @@
 
     // Ack Cursor
     document.getElementById('phoneBtnAck').addEventListener('click', async () => {
+      if (!state.token) {
+        showToast('Please sign in first.');
+        return;
+      }
       try {
         await api('/mobile/sync/ack', {
           method: 'POST',
@@ -1600,6 +1680,10 @@
 
     // Flush Batch (POST /api/v1/mobile/events/batch)
     document.getElementById('phoneBtnFlushBatch').addEventListener('click', async () => {
+      if (!state.token) {
+        alert('Please sign in first.');
+        return;
+      }
       if (state.eventsQueue.length === 0) return alert('Event buffer is empty.');
       const batchItems = [...state.eventsQueue];
 
