@@ -324,6 +324,14 @@ settings_data = [
     ("provision_transportation", "200.00", "AED", "AE", "2026-01-01", "GIVEN_BY_CLIENT", "Monthly staff transport provision"),
     ("standard_daily_hours", "8.0", "HOURS", "AE", "2026-01-01", "GIVEN_BY_CLIENT", "Standard daily working hours"),
     ("default_password", "ChangeMe123!", "TEXT", "AE", "2026-01-01", "GIVEN_BY_CLIENT", "Default onboarding password"),
+    ("default_password_max_days", "7", "DAYS", "AE", "2026-01-01", "GIVEN_BY_CLIENT", "Max days to change default password before lock"),
+    ("mobile_default_password", "Welcome123!", "TEXT", "AE", "2026-01-01", "GIVEN_BY_CLIENT", "Default password for mobile worker accounts"),
+    ("day_plan_alarm_lead_minutes", "30", "MINUTES", "AE", "2026-01-01", "GIVEN_BY_CLIENT", "Alarm lead time in minutes before shift start"),
+    ("day_plan_window_days_ahead", "30", "DAYS", "AE", "2026-01-01", "GIVEN_BY_CLIENT", "Number of days ahead to sync day plans"),
+    ("sync_retention_days", "30", "DAYS", "AE", "2026-01-01", "GIVEN_BY_CLIENT", "Sync changes compaction retention days"),
+    ("geofence_circle_radius_m", "300", "METERS", "AE", "2026-01-01", "GIVEN_BY_CLIENT", "Hardware geofence perimeter radius buffer"),
+    ("approach_polling_interval_s", "60", "SECONDS", "AE", "2026-01-01", "GIVEN_BY_CLIENT", "Approach polling interval inside perimeter"),
+    ("confirmation_polling_interval_s", "300", "SECONDS", "AE", "2026-01-01", "GIVEN_BY_CLIENT", "Confirmation polling interval inside polygon"),
 ]
 for idx, (key, val, unit, ctry, eff_from, status, desc) in enumerate(settings_data, start=5):
     ws_set.cell(row=idx, column=1, value=None)

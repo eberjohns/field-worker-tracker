@@ -34,10 +34,13 @@ async def seed():
     async with async_session_factory() as session:
         # 1. Company Settings
         settings_to_seed = [
-            ("mobile_default_password", {"value": "Welcome123!"}),
-            ("day_plan_alarm_lead_minutes", {"value": 30}),
-            ("day_plan_window_days_ahead", {"value": 30}),
-            ("sync_retention_days", {"value": 30}),
+            ("mobile_default_password", "Welcome123!"),
+            ("day_plan_alarm_lead_minutes", 30),
+            ("day_plan_window_days_ahead", 30),
+            ("sync_retention_days", 30),
+            ("geofence_circle_radius_m", 300),
+            ("approach_polling_interval_s", 60),
+            ("confirmation_polling_interval_s", 300),
         ]
         for key, val in settings_to_seed:
             res = await session.execute(
@@ -51,6 +54,8 @@ async def seed():
                     effective_from=date(2026, 1, 1),
                 )
                 session.add(setting)
+            else:
+                existing.value = val
         await session.flush()
         print("  ✓ Company settings configured")
 

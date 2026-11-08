@@ -21,7 +21,13 @@ from fw.modules.identity import (
 from fw.modules.jobs import JobItem, Worksite
 from fw.modules.org import Accommodation, Employee, EmployeeReportingLine, RegisteredDevice
 from fw.modules.scheduling import LeaveRequest, ScheduledWork
-from fw.modules.settings import CompanySettingValue, ConsentPolicy, PublicHoliday, TimeRule
+from fw.modules.settings import (
+    CompanySettingValue,
+    ConsentPolicy,
+    PublicHoliday,
+    SettingsService,
+    TimeRule,
+)
 from fw.modules.sync.geo import compute_geofence_circle
 from fw.modules.sync.models import ConsentRecord, SyncChange
 from fw.modules.sync.schemas import (
@@ -79,6 +85,15 @@ def _geometry_to_geojson(geom: Any) -> dict[str, Any] | None:
         return geometry.mapping(shapely_geom)
     except Exception:
         return None
+
+
+def _parse_int_setting(val: Any, default: int) -> int:
+    if isinstance(val, dict):
+        val = val.get("value", default)
+    try:
+        return int(val)
+    except (ValueError, TypeError):
+        return default
 
 
 class SyncService:
@@ -518,13 +533,33 @@ class SyncService:
         )
 
         # 3. SETTINGS
+        raw_alarm_lead = await SettingsService.get_setting(
+            session, key="day_plan_alarm_lead_minutes", country=employee.country, default=30
+        )
+        alarm_lead_minutes = _parse_int_setting(raw_alarm_lead, 30)
+
+        raw_geofence_radius = await SettingsService.get_setting(
+            session, key="geofence_circle_radius_m", country=employee.country, default=300
+        )
+        geofence_circle_radius_m = _parse_int_setting(raw_geofence_radius, 300)
+
+        raw_approach = await SettingsService.get_setting(
+            session, key="approach_polling_interval_s", country=employee.country, default=60
+        )
+        approach_polling_interval_s = _parse_int_setting(raw_approach, 60)
+
+        raw_conf = await SettingsService.get_setting(
+            session, key="confirmation_polling_interval_s", country=employee.country, default=300
+        )
+        confirmation_polling_interval_s = _parse_int_setting(raw_conf, 300)
+
         settings_payload = SettingsPayload(
-            geofence_circle_radius_m=300,
-            approach_polling_interval_s=60,
-            confirmation_polling_interval_s=300,
+            geofence_circle_radius_m=geofence_circle_radius_m,
+            approach_polling_interval_s=approach_polling_interval_s,
+            confirmation_polling_interval_s=confirmation_polling_interval_s,
             schedule_sync_window_days=window_days,
             location_policy_version=1,
-            alarm_lead_minutes=30,
+            alarm_lead_minutes=alarm_lead_minutes,
             timezone="Asia/Dubai" if employee.country == "AE" else "Asia/Riyadh",
             upcoming=[],
         )

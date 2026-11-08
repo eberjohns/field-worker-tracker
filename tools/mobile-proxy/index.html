@@ -3,278 +3,447 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FWT Mobile Tester Proxy & GPS Simulator</title>
+  <title>FWT Mobile Simulator & GPS Route Player</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Leaflet CSS & JS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <style>
-    #map { height: 100%; min-height: 480px; width: 100%; }
+    /* Phone frame styling */
+    .phone-chassis {
+      width: 375px;
+      height: 760px;
+      border-radius: 44px;
+      background: #0f172a;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4), 0 0 0 10px #1e293b, 0 0 0 12px #334155;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .phone-screen {
+      border-radius: 36px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      background: #f8fafc;
+    }
+    .dynamic-island {
+      width: 100px;
+      height: 24px;
+      background: #000;
+      border-radius: 12px;
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 50;
+    }
+    .phone-side-btn-vol-up {
+      position: absolute;
+      left: -14px;
+      top: 130px;
+      width: 4px;
+      height: 48px;
+      background: #475569;
+      border-radius: 3px 0 0 3px;
+    }
+    .phone-side-btn-vol-down {
+      position: absolute;
+      left: -14px;
+      top: 190px;
+      width: 4px;
+      height: 48px;
+      background: #475569;
+      border-radius: 3px 0 0 3px;
+    }
+    .phone-side-btn-power {
+      position: absolute;
+      right: -14px;
+      top: 150px;
+      width: 4px;
+      height: 60px;
+      background: #475569;
+      border-radius: 0 3px 3px 0;
+    }
+    #map { height: 100%; width: 100%; min-height: 480px; }
     .pulse-marker {
-      box-shadow: 0 0 0 rgba(79, 70, 229, 0.4);
-      animation: pulse 2s infinite;
+      box-shadow: 0 0 0 rgba(79, 70, 229, 0.5);
+      animation: pulse 1.8s infinite;
     }
     @keyframes pulse {
-      0% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.7); }
-      70% { box-shadow: 0 0 0 14px rgba(79, 70, 229, 0); }
+      0% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.8); }
+      70% { box-shadow: 0 0 0 16px rgba(79, 70, 229, 0); }
       100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0); }
     }
   </style>
 </head>
-<body class="bg-slate-100 text-slate-800 flex flex-col h-screen overflow-hidden">
-  <!-- Top Navigation Header -->
-  <header class="bg-indigo-900 text-white px-6 py-3 flex items-center justify-between shrink-0 shadow-md">
+<body class="bg-slate-900 text-slate-100 flex flex-col h-screen overflow-hidden font-sans select-none">
+  <!-- Top Global Bar -->
+  <header class="bg-slate-950 border-b border-slate-800 px-6 py-2.5 flex items-center justify-between shrink-0">
     <div class="flex items-center space-x-3">
-      <div class="bg-indigo-500 text-white font-bold px-2 py-1 rounded text-sm tracking-wider">PROXY</div>
-      <h1 class="text-base font-semibold">FWT Mobile Device Simulator & Contract Tester</h1>
-      <span class="text-xs bg-indigo-800 text-indigo-200 px-2.5 py-0.5 rounded-full">Phase 07 Contract (v1.0.0)</span>
+      <div class="bg-indigo-600 text-white font-black px-2 py-0.5 rounded text-xs tracking-wider">DEV HUB</div>
+      <h1 class="text-sm font-bold text-white tracking-tight flex items-center gap-2">
+        FWT Android Studio Simulator & Route Player
+        <span class="text-2xs bg-emerald-950 border border-emerald-800 text-emerald-400 px-2 py-0.5 rounded-full font-mono">Phase 07 + Phase 08 Ready</span>
+      </h1>
     </div>
+
+    <!-- API Connection Config -->
     <div class="flex items-center space-x-4 text-xs">
-      <div class="flex items-center space-x-1.5">
-        <span class="text-slate-300">API URL:</span>
-        <input id="apiUrl" type="text" value="http://localhost:8000/api/v1" class="bg-indigo-950 text-white border border-indigo-700 px-2 py-1 rounded w-64 focus:outline-none focus:border-indigo-400">
+      <div class="flex items-center space-x-2">
+        <span class="text-slate-400">Backend API:</span>
+        <input id="apiUrl" type="text" value="http://localhost:8000/api/v1" class="bg-slate-900 text-slate-100 border border-slate-700 px-2.5 py-1 rounded text-2xs w-64 focus:outline-none focus:border-indigo-500 font-mono">
       </div>
-      <div class="flex items-center space-x-2 border-l border-indigo-800 pl-4">
-        <span id="connStatus" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-900 text-red-200">
-          <span class="w-1.5 h-1.5 mr-1.5 bg-red-400 rounded-full animate-pulse"></span>Disconnected
-        </span>
+      <div id="connBadge" class="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-2xs font-semibold bg-red-950 border border-red-800 text-red-400">
+        <span class="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
+        <span>Disconnected</span>
       </div>
     </div>
   </header>
 
-  <!-- Main Grid Content -->
+  <!-- Workspace Container -->
   <div class="flex flex-1 overflow-hidden">
-    <!-- Left Sidebar: Controls & Mobile App State -->
-    <aside class="w-96 bg-white border-r border-slate-200 flex flex-col shrink-0 overflow-y-auto shadow-sm">
-      <!-- 1. Authentication Card -->
-      <section class="p-4 border-b border-slate-200 bg-slate-50/50">
-        <div class="flex items-center justify-between mb-3">
-          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500">1. Mobile Authentication</h2>
-          <span id="authBadge" class="text-2xs font-semibold px-2 py-0.5 rounded bg-slate-200 text-slate-600">Unauthenticated</span>
+    <!-- LEFT PANEL: Android Studio Style Phone Simulator Mockup -->
+    <div class="p-6 flex items-center justify-center shrink-0 bg-slate-950/60 border-r border-slate-800 relative">
+      <div class="phone-side-btn-vol-up"></div>
+      <div class="phone-side-btn-vol-down"></div>
+      <div class="phone-side-btn-power"></div>
+
+      <!-- Smartphone Chassis -->
+      <div class="phone-chassis">
+        <div class="dynamic-island flex items-center justify-center">
+          <div class="w-2.5 h-2.5 rounded-full bg-slate-900 border border-slate-800 ml-auto mr-2"></div>
         </div>
 
-        <div id="loginForm" class="space-y-2.5">
-          <div class="grid grid-cols-2 gap-2">
-            <div>
-              <label class="block text-2xs font-medium text-slate-500 mb-0.5">Tally ID / Username</label>
-              <input id="loginId" type="text" value="1193" class="w-full text-xs border border-slate-300 rounded px-2.5 py-1.5 focus:ring-1 focus:ring-indigo-500">
-            </div>
-            <div>
-              <label class="block text-2xs font-medium text-slate-500 mb-0.5">Password</label>
-              <input id="loginPwd" type="password" value="Welcome123!" class="w-full text-xs border border-slate-300 rounded px-2.5 py-1.5 focus:ring-1 focus:ring-indigo-500">
+        <div class="phone-screen text-slate-800">
+          <!-- 1. Phone Top Status Bar -->
+          <div class="pt-2 px-6 pb-1 bg-slate-900 text-white flex justify-between items-center text-3xs font-semibold shrink-0">
+            <span id="phoneClock" class="font-mono">06:00 AM</span>
+            <div class="flex items-center space-x-1.5">
+              <span>5G</span>
+              <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zm6-4a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zm6-3a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"></path></svg>
+              <span>88%</span>
             </div>
           </div>
-          <div class="grid grid-cols-2 gap-2 text-2xs text-slate-500">
-            <div>
-              <label class="block font-medium mb-0.5">Device ID</label>
-              <input id="loginDevId" type="text" value="DEV_SIM_1193_A" class="w-full text-xs border border-slate-300 rounded px-2 py-1">
+
+          <!-- 2. Mobile App Header -->
+          <div class="bg-indigo-600 text-white px-4 py-2.5 flex items-center justify-between shadow-xs shrink-0">
+            <div class="flex items-center space-x-2">
+              <div class="w-6 h-6 rounded-md bg-indigo-800 flex items-center justify-center font-black text-2xs text-white">FW</div>
+              <span class="font-bold text-xs tracking-tight">Field Worker Tracker</span>
             </div>
-            <div>
-              <label class="block font-medium mb-0.5">Platform</label>
-              <select id="loginPlatform" class="w-full text-xs border border-slate-300 rounded px-2 py-1">
-                <option value="ANDROID">ANDROID</option>
-                <option value="IOS">IOS</option>
+            <div id="phoneUserTag" class="text-3xs bg-indigo-700 px-2 py-0.5 rounded font-mono truncate max-w-[100px]">
+              Offline
+            </div>
+          </div>
+
+          <!-- 3. Screen Body (Tab Content) -->
+          <div class="flex-1 overflow-y-auto bg-slate-100 p-3 space-y-3">
+            <!-- TAB 1: SHIFT / TODAY -->
+            <div id="tabContentShift" class="space-y-2.5">
+              <!-- Morning Alarm Card -->
+              <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs space-y-2">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center space-x-2">
+                    <span class="text-lg">⏰</span>
+                    <div>
+                      <div class="text-2xs uppercase tracking-wider font-bold text-slate-400">Shift Alarm</div>
+                      <div id="alarmDisplayTime" class="text-base font-extrabold text-slate-900 font-mono">04:30 AM</div>
+                    </div>
+                  </div>
+                  <span id="alarmLeadTag" class="text-3xs bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-semibold">30m lead</span>
+                </div>
+                <div class="text-3xs text-slate-500 bg-slate-50 p-2 rounded-lg border border-slate-100 flex items-center justify-between">
+                  <span>Planned Departure: <strong id="plannedCampStart">05:00 AM</strong></span>
+                  <button id="btnTestAlarm" class="bg-indigo-600 text-white px-2 py-1 rounded text-3xs font-semibold hover:bg-indigo-700">Test Chime</button>
+                </div>
+              </div>
+
+              <!-- Today's Job Assignment Card -->
+              <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs space-y-2">
+                <div class="flex justify-between items-start">
+                  <div>
+                    <span class="text-3xs font-bold uppercase tracking-wider text-indigo-600 block">Today's Assigned Site</span>
+                    <h3 id="shiftJobName" class="text-xs font-bold text-slate-900 leading-snug">Dubai Marina Towers Landscape</h3>
+                    <div id="shiftJobNumber" class="text-3xs text-slate-500 font-mono">12A14301 • Commercial</div>
+                  </div>
+                  <span id="shiftStatusBadge" class="text-3xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">WORKING</span>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2 text-3xs pt-1 border-t border-slate-100">
+                  <div class="bg-slate-50 p-1.5 rounded">
+                    <span class="text-slate-400 block">Site Hours</span>
+                    <span id="shiftSiteHours" class="font-bold text-slate-800 font-mono">06:00 - 15:30</span>
+                  </div>
+                  <div class="bg-slate-50 p-1.5 rounded">
+                    <span class="text-slate-400 block">Break Window</span>
+                    <span id="shiftBreak" class="font-bold text-slate-800 font-mono">30 min midday</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Camp & Living Quarters Card -->
+              <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs text-3xs space-y-1.5">
+                <div class="font-bold text-slate-800 flex items-center justify-between">
+                  <span class="flex items-center gap-1.5"><span>🏠</span> Assigned Camp</span>
+                  <span class="text-emerald-700 font-semibold" id="campDistance">0 m away</span>
+                </div>
+                <div id="campName" class="text-slate-700 font-medium">Warsan Staff Accommodation Camp</div>
+                <div class="text-slate-400 truncate">Al Warsan 3, Dubai, UAE</div>
+              </div>
+
+              <!-- Supervisor Contact Card -->
+              <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs text-3xs flex items-center justify-between">
+                <div>
+                  <div class="text-slate-400 uppercase text-3xs font-bold">Reporting Supervisor</div>
+                  <div id="spvName" class="font-bold text-slate-800 text-2xs">Shakir Khisham</div>
+                  <div id="spvPhone" class="text-indigo-600 font-mono">+971 50 123 4567</div>
+                </div>
+                <a href="tel:+971501234567" class="p-2 bg-indigo-50 text-indigo-600 rounded-lg font-bold hover:bg-indigo-100">Call</a>
+              </div>
+            </div>
+
+            <!-- TAB 2: GPS & LIVE TRACKING (Hidden by default) -->
+            <div id="tabContentGps" class="space-y-2.5 hidden">
+              <!-- Live Zone Badge & Coordinates -->
+              <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs space-y-2">
+                <div class="flex justify-between items-center">
+                  <span class="text-2xs font-bold uppercase text-slate-500">Device Location State</span>
+                  <span id="phoneZoneBadge" class="text-2xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">CAMP (WARSAN)</span>
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-2xs font-mono bg-slate-50 p-2 rounded-lg">
+                  <div><span class="text-slate-400 block text-3xs">LAT</span><span id="phoneLat">25.158250</span></div>
+                  <div><span class="text-slate-400 block text-3xs">LNG</span><span id="phoneLng">55.412250</span></div>
+                  <div><span class="text-slate-400 block text-3xs">ACCURACY</span><span>4.5 m</span></div>
+                  <div><span class="text-slate-400 block text-3xs">SPEED</span><span id="phoneSpeed">0.0 km/h</span></div>
+                </div>
+              </div>
+
+              <!-- Manual Event Trigger Buttons -->
+              <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs space-y-2">
+                <span class="text-3xs font-bold uppercase text-slate-400 block">Manual Event Triggers</span>
+                <div class="grid grid-cols-3 gap-1.5 text-2xs">
+                  <button id="phoneBtnEntry" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1.5 rounded">ENTRY</button>
+                  <button id="phoneBtnPing" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1.5 rounded">PING</button>
+                  <button id="phoneBtnExit" class="bg-rose-600 hover:bg-rose-700 text-white font-bold py-1.5 rounded">EXIT</button>
+                </div>
+                <div class="grid grid-cols-2 gap-1.5 text-3xs pt-1">
+                  <button id="phoneBtnLocOff" class="bg-slate-200 hover:bg-slate-300 text-slate-700 py-1 rounded">LOCATION OFF</button>
+                  <button id="phoneBtnLocOn" class="bg-slate-200 hover:bg-slate-300 text-slate-700 py-1 rounded">LOCATION ON</button>
+                </div>
+              </div>
+
+              <!-- Unsent Events Local Buffer -->
+              <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs space-y-2">
+                <div class="flex justify-between items-center text-3xs">
+                  <span class="font-bold text-slate-600 uppercase">Local Queue</span>
+                  <span id="phoneQueueCount" class="font-mono bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-bold">0 events</span>
+                </div>
+                <div id="phoneQueueList" class="bg-slate-50 p-2 rounded-lg text-3xs font-mono space-y-1 max-h-28 overflow-y-auto border border-slate-100">
+                  <div class="text-slate-400 text-center py-2">Queue is empty</div>
+                </div>
+                <button id="phoneBtnFlushBatch" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-2xs py-2 rounded-lg shadow-2xs">
+                  Flush Batch (POST /events/batch)
+                </button>
+              </div>
+            </div>
+
+            <!-- TAB 3: 30-DAY SCHEDULE (Hidden by default) -->
+            <div id="tabContentSchedule" class="space-y-2 hidden">
+              <div class="flex justify-between items-center text-3xs font-bold text-slate-500 uppercase px-1">
+                <span>Forward Schedule (30 Days)</span>
+                <span id="schedCount">0 days</span>
+              </div>
+              <div id="phoneScheduleList" class="space-y-1.5 max-h-[500px] overflow-y-auto">
+                <div class="text-slate-400 text-center py-4 text-xs">No synced schedule. Click Sync.</div>
+              </div>
+            </div>
+
+            <!-- TAB 4: SETTINGS & AUTH (Hidden by default) -->
+            <div id="tabContentSettings" class="space-y-2.5 hidden">
+              <!-- Worker Authentication Form -->
+              <div id="phoneAuthForm" class="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs space-y-2">
+                <span class="text-3xs font-bold uppercase text-slate-400 block">Worker Login</span>
+                <div class="space-y-1.5">
+                  <input id="phoneInputTally" type="text" value="1193" placeholder="Tally ID" class="w-full text-2xs border border-slate-300 rounded px-2.5 py-1.5 font-mono">
+                  <input id="phoneInputPwd" type="password" value="Welcome123!" placeholder="Password" class="w-full text-2xs border border-slate-300 rounded px-2.5 py-1.5 font-mono">
+                  <button id="phoneBtnLogin" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-2xs py-2 rounded-lg">
+                    Sign In
+                  </button>
+                </div>
+              </div>
+
+              <!-- Authenticated State -->
+              <div id="phoneAuthProfile" class="hidden bg-white rounded-xl p-3 border border-slate-200 shadow-2xs space-y-2 text-2xs">
+                <div class="flex justify-between items-center">
+                  <div>
+                    <div id="phoneAuthWorkerName" class="font-bold text-slate-900 text-xs">Shanto Miah</div>
+                    <div id="phoneAuthWorkerRole" class="text-3xs text-indigo-600 font-mono">1193 • Landscape Gardener</div>
+                  </div>
+                  <button id="phoneBtnLogout" class="text-rose-600 border border-rose-200 px-2 py-0.5 rounded text-3xs hover:bg-rose-50">Log Out</button>
+                </div>
+              </div>
+
+              <!-- Sync Engine Controls -->
+              <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs space-y-2">
+                <div class="flex justify-between items-center">
+                  <span class="text-3xs font-bold uppercase text-slate-400">Change Log Sync</span>
+                  <span id="phoneCursorBadge" class="text-3xs font-mono font-bold text-slate-600">Cursor: 0</span>
+                </div>
+                <div class="grid grid-cols-2 gap-1.5 text-3xs font-bold">
+                  <button id="phoneBtnPullSnapshot" class="bg-blue-600 hover:bg-blue-700 text-white py-1.5 rounded">Full Snapshot</button>
+                  <button id="phoneBtnPullDelta" class="bg-indigo-600 hover:bg-indigo-700 text-white py-1.5 rounded">Delta Sync</button>
+                </div>
+                <button id="phoneBtnAck" class="w-full bg-slate-800 hover:bg-slate-900 text-white py-1.5 rounded text-3xs font-bold">
+                  Ack Cursor (POST /sync/ack)
+                </button>
+              </div>
+
+              <!-- Dynamic Settings Breakdown -->
+              <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs space-y-1.5 text-3xs">
+                <span class="font-bold uppercase text-slate-400 block">Dynamic Sync Settings</span>
+                <div class="flex justify-between border-b border-slate-100 pb-1"><span>Geofence Buffer:</span><strong id="cfgRadius">300 m</strong></div>
+                <div class="flex justify-between border-b border-slate-100 pb-1"><span>Approach Interval:</span><strong id="cfgApproach">60 s</strong></div>
+                <div class="flex justify-between border-b border-slate-100 pb-1"><span>Confirm Interval:</span><strong id="cfgConfirm">300 s</strong></div>
+                <div class="flex justify-between"><span>Alarm Lead Time:</span><strong id="cfgAlarmLead">30 min</strong></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. Phone Bottom Navigation Bar -->
+          <div class="bg-white border-t border-slate-200 px-3 py-2 flex justify-around items-center shrink-0">
+            <button id="navBtnShift" class="flex flex-col items-center text-indigo-600 font-bold text-3xs space-y-0.5">
+              <span class="text-base">📅</span>
+              <span>Today</span>
+            </button>
+            <button id="navBtnGps" class="flex flex-col items-center text-slate-400 hover:text-slate-700 font-medium text-3xs space-y-0.5">
+              <span class="text-base">📍</span>
+              <span>GPS</span>
+            </button>
+            <button id="navBtnSchedule" class="flex flex-col items-center text-slate-400 hover:text-slate-700 font-medium text-3xs space-y-0.5">
+              <span class="text-base">🗓️</span>
+              <span>Roster</span>
+            </button>
+            <button id="navBtnSettings" class="flex flex-col items-center text-slate-400 hover:text-slate-700 font-medium text-3xs space-y-0.5">
+              <span class="text-base">⚙️</span>
+              <span>Sync</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CENTER & RIGHT: Map + Route Timeline Player + Ground Truth Analytics -->
+    <div class="flex-1 flex flex-col bg-slate-900 overflow-hidden">
+      <!-- Top Route Timeline Player Bar (Android Studio Extended Control Style) -->
+      <div class="bg-slate-950 border-b border-slate-800 p-4 shrink-0 space-y-3">
+        <!-- Route Control Ribbon -->
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <div class="flex items-center space-x-1.5 bg-slate-900 p-1 rounded-lg border border-slate-800">
+              <button id="btnPlayRoute" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1.5 rounded text-xs flex items-center gap-1.5">
+                <span id="playIcon">▶</span> <span id="playText">Play Route</span>
+              </button>
+              <button id="btnResetRoute" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1.5 rounded text-xs">
+                ↺ Reset
+              </button>
+            </div>
+
+            <!-- Speed Multiplier -->
+            <div class="flex items-center space-x-1 bg-slate-900 p-1 rounded-lg border border-slate-800 text-2xs">
+              <span class="text-slate-500 px-1 font-semibold">Speed:</span>
+              <button class="speed-btn px-2 py-1 rounded bg-slate-800 text-slate-300 font-mono" data-speed="1">1x</button>
+              <button class="speed-btn px-2 py-1 rounded bg-indigo-600 text-white font-mono font-bold" data-speed="10">10x</button>
+              <button class="speed-btn px-2 py-1 rounded bg-slate-800 text-slate-300 font-mono" data-speed="60">60x</button>
+              <button class="speed-btn px-2 py-1 rounded bg-slate-800 text-slate-300 font-mono" data-speed="300">300x</button>
+            </div>
+
+            <!-- Route Presets Dropdown -->
+            <div class="flex items-center space-x-1.5 text-2xs">
+              <span class="text-slate-400">Preset:</span>
+              <select id="routePresetSelect" class="bg-slate-900 border border-slate-700 text-slate-200 px-2.5 py-1.5 rounded text-2xs focus:outline-none focus:border-indigo-500">
+                <option value="standard">Standard Workday (06:02 Site Entry - 15:31 Exit)</option>
+                <option value="late">Late Arrival (08:30 Site Entry)</option>
+                <option value="midday_gap">Midday Gap (Leaves 11:30, Returns 13:00)</option>
               </select>
             </div>
           </div>
-          <button id="btnLogin" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold py-2 px-3 rounded shadow transition">
-            Sign In (POST /mobile/auth/login)
-          </button>
+
+          <!-- JSON Import / Export -->
+          <div class="flex items-center space-x-2 text-2xs">
+            <input type="file" id="routeJsonInput" accept=".json" class="hidden">
+            <button id="btnImportJson" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-3 py-1.5 rounded font-medium flex items-center gap-1">
+              📂 Import Route JSON
+            </button>
+            <button id="btnExportJson" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-3 py-1.5 rounded font-medium flex items-center gap-1">
+              💾 Export JSON
+            </button>
+          </div>
         </div>
 
-        <!-- Authenticated State Panel (Hidden by default) -->
-        <div id="authProfile" class="hidden space-y-2">
-          <div class="flex items-center justify-between text-xs bg-indigo-50 text-indigo-900 p-2.5 rounded border border-indigo-100">
+        <!-- Scrubber Slider & Ground Truth Analytics -->
+        <div class="flex items-center space-x-6">
+          <!-- Timeline Slider -->
+          <div class="flex-1 space-y-1">
+            <div class="flex justify-between text-3xs font-mono text-slate-400">
+              <span>Start: <strong class="text-slate-200" id="routeStartTime">05:00:00</strong></span>
+              <span>Simulated Clock: <strong class="text-indigo-400 text-xs" id="routeCurrentTime">05:00:00</strong></span>
+              <span>End: <strong class="text-slate-200" id="routeEndTime">16:30:00</strong></span>
+            </div>
+            <input id="routeTimelineSlider" type="range" min="0" max="1000" value="0" class="w-full accent-indigo-500 cursor-pointer h-2 bg-slate-800 rounded-lg">
+          </div>
+
+          <!-- Ground-Truth Attendance Box (For Phase 08 Cross-Check) -->
+          <div class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 flex items-center space-x-6 text-2xs shrink-0">
             <div>
-              <div class="font-bold text-sm" id="profName">Worker Name</div>
-              <div class="text-2xs text-indigo-700" id="profRole">Tally: 1193 • Landscape Gardener</div>
+              <span class="text-slate-500 block text-3xs uppercase font-bold">Ground Truth Worked Time</span>
+              <span id="gtWorkedTime" class="text-sm font-extrabold text-emerald-400 font-mono">9h 29m (569m)</span>
             </div>
-            <button id="btnLogout" class="text-2xs bg-white text-rose-600 hover:bg-rose-50 border border-rose-200 px-2 py-1 rounded font-medium shadow-2xs">
-              Log Out
-            </button>
-          </div>
-          <!-- Consent Status & Heartbeat -->
-          <div class="flex items-center justify-between text-2xs pt-1">
-            <span id="consentBadge" class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-medium">Consent: Pending</span>
-            <div class="flex space-x-1">
-              <button id="btnAcceptConsent" class="bg-emerald-600 text-white px-2 py-0.5 rounded font-medium hover:bg-emerald-700">Accept Consent</button>
-              <button id="btnHeartbeat" class="bg-slate-200 text-slate-700 px-2 py-0.5 rounded font-medium hover:bg-slate-300">Heartbeat</button>
+            <div class="border-l border-slate-800 pl-4">
+              <span class="text-slate-500 block text-3xs uppercase font-bold">In Transit</span>
+              <span id="gtTransitTime" class="text-xs font-bold text-amber-400 font-mono">1h 01m</span>
+            </div>
+            <div class="border-l border-slate-800 pl-4">
+              <span class="text-slate-500 block text-3xs uppercase font-bold">Events Generated</span>
+              <span id="gtEventsCount" class="text-xs font-bold text-indigo-400 font-mono">1 ENTRY • 4 PING • 1 EXIT</span>
             </div>
           </div>
         </div>
+      </div>
 
-        <!-- Forced Password Change Modal/Prompt -->
-        <div id="pwdChangePrompt" class="hidden mt-3 p-3 bg-amber-50 border border-amber-300 rounded-lg text-xs space-y-2">
-          <div class="font-semibold text-amber-900 flex items-center">
-            <svg class="w-4 h-4 mr-1 text-amber-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
-            First Login: Change Password Required
-          </div>
-          <p class="text-2xs text-amber-800">Server requires changing default password before performing normal operations.</p>
-          <input id="newPwd" type="password" placeholder="New Password (min 8 chars)" class="w-full text-xs border border-amber-300 rounded px-2 py-1">
-          <button id="btnSubmitNewPwd" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-1 rounded text-2xs">
-            Change Password (POST /mobile/auth/change-password)
-          </button>
-        </div>
-      </section>
-
-      <!-- 2. Sync Manager Card -->
-      <section class="p-4 border-b border-slate-200">
-        <div class="flex items-center justify-between mb-2">
-          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500">2. Synchronization Engine</h2>
-          <span class="text-2xs text-slate-400 font-mono" id="cursorDisplay">Cursor: 0</span>
-        </div>
-        <div class="grid grid-cols-3 gap-1.5 mb-2.5">
-          <button id="btnSnapshot" class="bg-blue-600 hover:bg-blue-700 text-white text-2xs font-semibold py-1.5 px-2 rounded shadow-2xs">
-            Full Snapshot
-          </button>
-          <button id="btnDelta" class="bg-indigo-600 hover:bg-indigo-700 text-white text-2xs font-semibold py-1.5 px-2 rounded shadow-2xs">
-            Delta Sync
-          </button>
-          <button id="btnAck" class="bg-slate-700 hover:bg-slate-800 text-white text-2xs font-semibold py-1.5 px-2 rounded shadow-2xs">
-            Ack Cursor
-          </button>
-        </div>
-
-        <!-- Synced Summary Pills -->
-        <div class="grid grid-cols-2 gap-2 text-2xs">
-          <div class="p-2 bg-slate-50 rounded border border-slate-200">
-            <span class="text-slate-400 block font-medium">Synced Worksites</span>
-            <span class="font-bold text-slate-800 text-sm" id="cntJobs">0</span>
-          </div>
-          <div class="p-2 bg-slate-50 rounded border border-slate-200">
-            <span class="text-slate-400 block font-medium">Day Plans (30d)</span>
-            <span class="font-bold text-slate-800 text-sm" id="cntDays">0</span>
-          </div>
-        </div>
-
-        <div id="todayPlanDetails" class="mt-2 text-2xs bg-indigo-50/50 p-2 rounded border border-indigo-100 hidden">
-          <div class="font-bold text-indigo-900 mb-0.5">Today's Schedule (<span id="todayDate">2026-11-08</span>)</div>
-          <div id="todayTimes" class="text-slate-600">07:00 - 16:00 (Alarm: 06:30)</div>
-          <div id="todayMarkers" class="text-2xs text-indigo-600 font-medium">Markers: SCHEDULED</div>
-        </div>
-      </section>
-
-      <!-- 3. GPS Position & State -->
-      <section class="p-4 border-b border-slate-200 bg-slate-50/30">
-        <div class="flex items-center justify-between mb-2">
-          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500">3. GPS & Zone Detection</h2>
-          <span id="zoneStatusBadge" class="text-2xs font-bold px-2 py-0.5 rounded bg-slate-200 text-slate-600">OUTSIDE</span>
-        </div>
-        
-        <div class="space-y-1.5 text-2xs font-mono">
-          <div class="flex justify-between text-slate-600">
-            <span>Latitude:</span> <span id="posLat" class="font-semibold text-slate-900">25.158250</span>
-          </div>
-          <div class="flex justify-between text-slate-600">
-            <span>Longitude:</span> <span id="posLng" class="font-semibold text-slate-900">55.412250</span>
-          </div>
-          <div class="flex justify-between text-slate-600">
-            <span>Accuracy:</span> <span class="font-semibold text-slate-900">4.5 m</span>
-          </div>
-          <div class="flex justify-between text-slate-600">
-            <span>Current Zone:</span> <span id="posZoneName" class="font-semibold text-indigo-700">Warsan Accommodation</span>
-          </div>
-        </div>
-
-        <!-- Teleport Presets -->
-        <div class="mt-3">
-          <label class="block text-3xs font-bold uppercase text-slate-400 mb-1">Quick Teleport:</label>
-          <div class="grid grid-cols-2 gap-1 text-2xs">
-            <button id="btnTeleportWorksite" class="bg-white border border-slate-300 hover:bg-slate-100 py-1 px-1.5 rounded text-left truncate">
-              📍 Worksite (Inside)
-            </button>
-            <button id="btnTeleportBuffer" class="bg-white border border-slate-300 hover:bg-slate-100 py-1 px-1.5 rounded text-left truncate">
-              ⭕ Geofence Edge
-            </button>
-            <button id="btnTeleportAccom" class="bg-white border border-slate-300 hover:bg-slate-100 py-1 px-1.5 rounded text-left truncate">
-              🏠 Accommodation
-            </button>
-            <button id="btnTeleportTransit" class="bg-white border border-slate-300 hover:bg-slate-100 py-1 px-1.5 rounded text-left truncate">
-              🚗 Highway / Outside
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <!-- 4. Location Events Queue & Dispatch -->
-      <section class="p-4 flex-1 flex flex-col">
-        <div class="flex items-center justify-between mb-2">
-          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500">4. Events Batch Queue</h2>
-          <span id="queueCount" class="text-2xs bg-slate-200 text-slate-700 font-bold px-1.5 py-0.5 rounded">0 events</span>
-        </div>
-
-        <!-- Manual Event Trigger Buttons -->
-        <div class="grid grid-cols-3 gap-1 mb-2 text-2xs">
-          <button id="btnEvtEntry" class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-1 rounded">
-            + ENTRY
-          </button>
-          <button id="btnEvtPing" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-1 rounded">
-            + PING
-          </button>
-          <button id="btnEvtExit" class="bg-rose-600 hover:bg-rose-700 text-white font-medium py-1 rounded">
-            + EXIT
-          </button>
-        </div>
-
-        <!-- Queue Preview List -->
-        <div id="queueList" class="flex-1 bg-white border border-slate-200 rounded p-2 overflow-y-auto space-y-1 text-2xs font-mono max-h-40">
-          <div class="text-slate-400 text-center py-4">No events queued</div>
-        </div>
-
-        <div class="mt-2.5 flex space-x-2">
-          <button id="btnSendBatch" class="flex-1 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold py-2 px-3 rounded shadow transition">
-            Send Batch to Server
-          </button>
-          <button id="btnClearQueue" class="bg-slate-200 hover:bg-slate-300 text-slate-600 text-xs px-2.5 py-2 rounded">
-            Clear
-          </button>
-        </div>
-      </section>
-    </aside>
-
-    <!-- Right Main Area: Map + Live Log Console -->
-    <main class="flex-1 flex flex-col bg-slate-50 overflow-hidden">
-      <!-- Interactive Leaflet Map Area -->
+      <!-- Main Map Viewport -->
       <div class="flex-1 relative">
         <div id="map"></div>
 
-        <!-- Map Overlay Info Badge -->
-        <div class="absolute top-4 right-4 z-[1000] bg-white/95 backdrop-blur-xs p-3 rounded-lg shadow-md border border-slate-200 text-xs space-y-1 w-64 pointer-events-auto">
-          <div class="font-bold text-slate-800 flex items-center justify-between">
-            <span>Map Simulation Controls</span>
-            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-          </div>
-          <p class="text-2xs text-slate-500">Drag the worker marker <span class="inline-block w-2.5 h-2.5 bg-indigo-600 rounded-full"></span> anywhere to simulate phone movement.</p>
-          <div class="pt-1 border-t border-slate-200 flex justify-between items-center text-2xs">
-            <label class="flex items-center space-x-1 cursor-pointer">
-              <input id="autoGenEvents" type="checkbox" checked class="rounded text-indigo-600 focus:ring-0">
-              <span class="text-slate-700">Auto-queue events</span>
-            </label>
-            <button id="btnSimulateShift" class="bg-indigo-100 hover:bg-indigo-200 text-indigo-800 font-bold px-2 py-1 rounded">
-              ▶ Auto Tour
-            </button>
-          </div>
+        <!-- Map Legend Badge -->
+        <div class="absolute bottom-4 left-4 z-[1000] bg-slate-950/90 backdrop-blur-xs border border-slate-800 p-2.5 rounded-xl shadow-lg text-3xs space-y-1">
+          <div class="font-bold text-slate-300 uppercase tracking-wider mb-1">Map Layer Legend</div>
+          <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-emerald-500/30 border border-emerald-500"></span> <span>Warsan Staff Camp (Polygon)</span></div>
+          <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-blue-500/30 border border-blue-500"></span> <span>Dubai Marina Towers (Polygon)</span></div>
+          <div class="flex items-center gap-2"><span class="w-3 h-3 rounded border border-dashed border-indigo-400 bg-indigo-500/10"></span> <span>Geofence Perimeter Buffer (300m)</span></div>
+          <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-indigo-500 border border-white"></span> <span>Worker GPS Pin (Draggable)</span></div>
         </div>
       </div>
 
-      <!-- Live API & Event Logs Drawer -->
-      <div class="h-44 bg-slate-900 text-slate-200 flex flex-col border-t border-slate-700 shrink-0 font-mono text-2xs">
-        <div class="bg-slate-950 px-4 py-1.5 border-b border-slate-800 flex items-center justify-between">
-          <div class="flex items-center space-x-2">
-            <span class="font-bold uppercase tracking-wider text-slate-400">Integration Audit & Network Log</span>
-            <span class="bg-slate-800 text-slate-400 px-1.5 py-0.2 rounded text-3xs">REST / JSON</span>
+      <!-- BOTTOM PANEL: Network Log & REST Inspector Drawer -->
+      <div class="h-44 bg-slate-950 border-t border-slate-800 flex flex-col shrink-0 font-mono text-3xs">
+        <div class="px-4 py-1.5 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <span class="font-bold uppercase tracking-wider text-slate-300">REST Network & Audit Inspector</span>
+            <span class="bg-indigo-950 border border-indigo-800 text-indigo-400 px-2 py-0.2 rounded-full">JSON / HTTP</span>
           </div>
-          <button id="btnClearLog" class="text-slate-400 hover:text-white text-3xs">Clear Console</button>
+          <button id="btnClearNetworkLog" class="text-slate-400 hover:text-white">Clear Traffic</button>
         </div>
-        <div id="consoleLog" class="flex-1 p-3 overflow-y-auto space-y-1">
-          <div class="text-emerald-400">[READY] Mobile Tester Proxy initialized. Connect to http://localhost:8000/api/v1</div>
+        <div id="networkLogList" class="flex-1 p-3 overflow-y-auto space-y-1">
+          <div class="text-emerald-400">[READY] Mobile Tester Proxy initialized. Listening on http://localhost:8000/api/v1</div>
         </div>
       </div>
-    </main>
+    </div>
   </div>
 
   <script src="app.js"></script>
 </body>
 </html>
-
