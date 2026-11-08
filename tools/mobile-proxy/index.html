@@ -172,12 +172,36 @@
               <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3">
                 <div class="space-y-1">
                   <label class="text-3xs uppercase font-bold text-slate-500 block">Tally Employee ID</label>
-                  <input id="phoneInputTally" type="text" value="1193" placeholder="e.g. 1193, 1007, 1008" class="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 font-mono text-slate-900 focus:outline-none focus:border-indigo-600">
+                  <input id="phoneInputTally" type="text" value="1017" placeholder="e.g. 1017, 1004, 1001" class="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 font-mono text-slate-900 focus:outline-none focus:border-indigo-600">
                 </div>
 
                 <div class="space-y-1">
                   <label class="text-3xs uppercase font-bold text-slate-500 block">Password</label>
                   <input id="phoneInputPwd" type="password" value="Welcome123!" placeholder="Enter password" class="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 font-mono text-slate-900 focus:outline-none focus:border-indigo-600">
+                </div>
+
+                <!-- Quick Fill Buttons -->
+                <div class="space-y-1 pt-1">
+                  <span class="text-3xs font-semibold text-slate-400 uppercase tracking-wider block">Quick Fill Account:</span>
+                  <div class="flex flex-wrap gap-1.5 text-3xs font-mono">
+                    <button type="button" class="btn-quick-fill px-2 py-1 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-700 rounded border border-slate-200 font-medium" data-tally="1017">
+                      1017 (Mohan Lal)
+                    </button>
+                    <button type="button" class="btn-quick-fill px-2 py-1 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-700 rounded border border-slate-200 font-medium" data-tally="1004">
+                      1004 (Zaid)
+                    </button>
+                    <button type="button" class="btn-quick-fill px-2 py-1 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-700 rounded border border-slate-200 font-medium" data-tally="1001">
+                      1001 (Ahmed)
+                    </button>
+                    <button type="button" class="btn-quick-fill px-2 py-1 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-700 rounded border border-slate-200 font-medium" data-tally="1014">
+                      1014 (Ramesh)
+                    </button>
+                  </div>
+                </div>
+
+                <div class="p-2 bg-slate-50 border border-slate-200 rounded-lg text-3xs text-slate-600 space-y-0.5">
+                  <div>Initial Password: <code class="font-bold text-indigo-700">Welcome123!</code></div>
+                  <div class="text-slate-400">Permanent Enrolled: <code class="font-bold text-emerald-700">WorkerPermanent123!</code> (auto-detected)</div>
                 </div>
 
                 <button id="phoneBtnLogin" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-2.5 rounded-lg shadow-sm transition">
@@ -460,9 +484,35 @@
             <button id="btnToggleDrawMode" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-amber-300 px-3 py-1.5 rounded text-2xs font-semibold flex items-center gap-1.5">
               <span>✏️</span> <span id="drawModeText">Record / Draw Route</span>
             </button>
+            <!-- Step / Dwell Selector -->
+            <div id="drawStepContainer" class="hidden flex items-center space-x-1.5 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-2xs">
+              <span class="text-slate-400">Step:</span>
+              <select id="drawStepMinutes" class="bg-slate-900 text-amber-300 font-bold border border-slate-700 rounded px-1.5 py-0.5 text-3xs focus:outline-none">
+                <option value="5">+5 mins</option>
+                <option value="15" selected>+15 mins</option>
+                <option value="30">+30 mins</option>
+                <option value="60">+1 hour</option>
+                <option value="120">+2 hours (Dwell)</option>
+                <option value="240">+4 hours (Dwell)</option>
+              </select>
+            </div>
             <button id="btnClearDrawnPoints" class="hidden bg-slate-800 hover:bg-rose-950 hover:text-rose-400 border border-slate-700 text-slate-400 px-2.5 py-1.5 rounded text-2xs">
               Clear Drawn Points
             </button>
+
+            <!-- Custom Polygon Drawing Tool -->
+            <button id="btnTogglePolygonDraw" class="bg-slate-800 hover:bg-cyan-950 hover:text-cyan-300 border border-slate-700 text-cyan-400 px-3 py-1.5 rounded text-2xs font-semibold flex items-center gap-1.5">
+              <span>📐</span> <span id="polyDrawText">Draw Custom Polygon</span>
+            </button>
+            <div id="polyDrawControls" class="hidden flex items-center space-x-1 text-2xs">
+              <span id="polyVertexCount" class="px-2 py-1 bg-cyan-950/80 border border-cyan-800 text-cyan-300 rounded font-mono text-3xs font-bold">0 pts</span>
+              <button id="btnCompletePolygon" class="bg-cyan-600 hover:bg-cyan-500 text-white font-bold px-2 py-1 rounded text-3xs shadow-xs">
+                ✓ Finish Polygon
+              </button>
+              <button id="btnCancelPolygon" class="text-slate-400 hover:text-white px-1.5 py-1 text-3xs">
+                Cancel
+              </button>
+            </div>
           </div>
 
           <!-- Boundary Tools & JSON Import / Export -->
@@ -579,6 +629,49 @@
 
       <div id="boundaryModalList" class="space-y-3 max-h-80 overflow-y-auto">
         <!-- Rendered dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Custom Drawn Polygon Modal -->
+  <div id="customPolygonModal" class="hidden fixed inset-0 z-[3000] bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-cyan-800 rounded-2xl w-full max-w-lg p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-lg">📐</span>
+          <h3 class="font-bold text-sm text-cyan-300">Custom Boundary Polygon Created</h3>
+        </div>
+        <button id="btnCloseCustomPolyModal" class="text-slate-400 hover:text-white text-base">✕</button>
+      </div>
+
+      <div class="text-2xs text-slate-300 flex items-center justify-between">
+        <span>Vertices: <strong id="customPolyVertCount" class="font-mono text-cyan-400">0</strong></span>
+        <span>Calculated Area: <strong id="customPolyArea" class="font-mono text-emerald-400">0 m²</strong></span>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-3xs uppercase font-bold text-slate-400">GeoJSON Coordinates</span>
+            <button id="btnCopyCustomGeoJson" class="text-3xs text-indigo-400 hover:text-indigo-300 font-bold">📋 Copy GeoJSON</button>
+          </div>
+          <pre id="customPolyGeoJson" class="text-3xs font-mono bg-slate-950 border border-slate-800 p-2.5 rounded-lg text-slate-300 max-h-24 overflow-x-auto overflow-y-auto select-all"></pre>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-3xs uppercase font-bold text-slate-400">WKT Format</span>
+            <button id="btnCopyCustomWkt" class="text-3xs text-cyan-400 hover:text-cyan-300 font-bold">📋 Copy WKT</button>
+          </div>
+          <pre id="customPolyWkt" class="text-3xs font-mono bg-slate-950 border border-slate-800 p-2.5 rounded-lg text-slate-300 max-h-20 overflow-x-auto overflow-y-auto select-all"></pre>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between pt-2 border-t border-slate-800">
+        <button id="btnClearCustomPoly" class="text-rose-400 hover:text-rose-300 text-2xs font-medium">Remove from Map</button>
+        <button id="btnDoneCustomPoly" class="bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-2xs px-4 py-1.5 rounded-lg">
+          Done
+        </button>
       </div>
     </div>
   </div>

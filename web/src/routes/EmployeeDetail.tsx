@@ -550,31 +550,62 @@ export const EmployeeDetail: React.FC = () => {
       {activeTab === "hierarchy" && (
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm max-w-2xl space-y-6">
           <div>
-            <h3 className="text-sm font-semibold text-slate-900 mb-3">Management Reporting Chain</h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-slate-900">Management Reporting Chain</h3>
+              <span className="text-xs text-slate-500 font-medium">Full Upstream Tree</span>
+            </div>
             {reportingLines.length === 0 ? (
               <p className="text-xs text-slate-500">No managers assigned.</p>
             ) : (
-              <div className="space-y-2">
-                {reportingLines.map((line) => (
-                  <div
-                    key={line.id}
-                    className="flex items-center justify-between p-3 rounded-lg border border-slate-200 bg-slate-50 text-sm"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-slate-900">
-                        {line.manager_name || `Manager ID: ${line.manager_id}`}
-                      </span>
-                      {line.manager_tally_id && (
-                        <span className="text-xs text-slate-500 font-mono bg-slate-200/60 px-1.5 py-0.5 rounded">
-                          Tally: {line.manager_tally_id}
-                        </span>
+              <div className="space-y-2.5">
+                {reportingLines.map((line) => {
+                  const relBadgeClass =
+                    line.relationship === "SUPERVISOR"
+                      ? "bg-indigo-100 text-indigo-700 border-indigo-200"
+                      : line.relationship === "SUPERINTENDENT"
+                      ? "bg-purple-100 text-purple-700 border-purple-200"
+                      : "bg-sky-100 text-sky-700 border-sky-200";
+
+                  return (
+                    <div
+                      key={`${line.id}-${line.manager_id}`}
+                      className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/70 text-sm hover:bg-slate-50 transition"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold text-slate-900">
+                            {line.manager_name || `Manager ID: ${line.manager_id}`}
+                          </span>
+                          {line.manager_tally_id && (
+                            <span className="text-xs text-slate-500 font-mono bg-slate-200/60 px-1.5 py-0.5 rounded">
+                              Tally: {line.manager_tally_id}
+                            </span>
+                          )}
+                          <span className={`px-2 py-0.5 rounded text-xs font-mono font-medium border ${relBadgeClass}`}>
+                            {line.relationship}
+                          </span>
+                        </div>
+                        <div>
+                          {line.is_direct ? (
+                            <span className="px-2 py-0.5 rounded-full text-2xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                              Direct Manager
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-2xs font-semibold bg-slate-200 text-slate-700 border border-slate-300">
+                              Upstream Chain
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {!line.is_direct && line.via_name && (
+                        <div className="mt-1.5 text-xs text-slate-500 flex items-center gap-1.5">
+                          <span className="text-slate-400">↳ Reports via:</span>
+                          <span className="font-medium text-slate-700">{line.via_name}</span>
+                        </div>
                       )}
-                      <span className="px-2 py-0.5 rounded text-xs font-mono font-medium bg-indigo-100 text-indigo-700">
-                        {line.relationship}
-                      </span>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

@@ -167,6 +167,8 @@ class ReportingLineRead(BaseModel):
     relationship: str
     notes: str | None = None
     created_at: datetime
+    is_direct: bool = True
+    via_name: str | None = None
 
 
 class GradeChangeRequest(BaseModel):

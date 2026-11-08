@@ -36,6 +36,12 @@
     drawnMarkers: [],
     isDrawingMode: false,
     drawnWaypoints: [],
+    // Custom Polygon Drawing Engine
+    isPolyDrawing: false,
+    polyPoints: [],
+    polyMarkers: [],
+    polyLinePreview: null,
+    customPolygonLayer: null,
     layers: {
       worksites: [],
       geofences: [],
@@ -364,9 +370,11 @@
       updateWorkerPosition(pos.lat, pos.lng);
     });
 
-    // Map Click Handler: Supports standard pin move OR Manual Route Drawing
+    // Map Click Handler: Supports standard pin move, Manual Route Drawing, or Custom Polygon Tracing
     state.map.on('click', function (e) {
-      if (state.isDrawingMode) {
+      if (state.isPolyDrawing) {
+        addPolyVertex(e.latlng.lat, e.latlng.lng);
+      } else if (state.isDrawingMode) {
         addDrawnWaypoint(e.latlng.lat, e.latlng.lng);
       } else {
         state.workerMarker.setLatLng(e.latlng);
@@ -382,12 +390,13 @@
   function addDrawnWaypoint(lat, lng) {
     const idx = state.drawnWaypoints.length;
     let nextSecs = 5 * 3600; // 05:00:00 start
+    const stepMins = parseInt(document.getElementById('drawStepMinutes')?.value || '15', 10);
     if (idx > 0) {
       const lastSecs = timeStrToSeconds(state.drawnWaypoints[idx - 1].time);
-      nextSecs = lastSecs + 15 * 60; // Auto-increment by 15 mins
+      nextSecs = lastSecs + stepMins * 60; // Auto-increment by chosen interval
     }
     const timeStr = secondsToTimeStr(nextSecs);
-    const label = idx === 0 ? 'Start Waypoint' : `Waypoint #${idx + 1}`;
+    const label = idx === 0 ? 'Start Waypoint' : `Waypoint #${idx + 1} (+${stepMins}m)`;
 
     const wp = { time: timeStr, lat, lng, label };
     state.drawnWaypoints.push(wp);
@@ -405,7 +414,7 @@
 
     // Update drawn polyline
     renderDrawnPolyline();
-    showToast(`Added point #${idx + 1} at ${timeStr}`);
+    showToast(`Added point #${idx + 1} at ${timeStr} (+${stepMins}m)`);
 
     if (state.drawnWaypoints.length >= 2) {
       loadRoute(state.drawnWaypoints);
@@ -437,6 +446,156 @@
       state.drawnPolyline = null;
     }
     showToast('Cleared manual route points.');
+  }
+
+  // Custom Boundary Polygon Tracing Tools
+  function togglePolyDrawMode(enable) {
+    state.isPolyDrawing = enable !== undefined ? enable : !state.isPolyDrawing;
+    if (state.isPolyDrawing && state.isDrawingMode) {
+      document.getElementById('btnToggleDrawMode').click();
+    }
+    const btn = document.getElementById('btnTogglePolygonDraw');
+    const controls = document.getElementById('polyDrawControls');
+    const text = document.getElementById('polyDrawText');
+    if (state.isPolyDrawing) {
+      btn.className = 'bg-cyan-900 border border-cyan-500 text-cyan-200 px-3 py-1.5 rounded text-2xs font-bold flex items-center gap-1.5 animate-pulse';
+      controls.classList.remove('hidden');
+      text.textContent = 'Tracing Boundary...';
+      state.map.getContainer().style.cursor = 'crosshair';
+      showToast('Click corners on map to trace polygon boundary.');
+    } else {
+      btn.className = 'bg-slate-800 hover:bg-cyan-950 hover:text-cyan-300 border border-slate-700 text-cyan-400 px-3 py-1.5 rounded text-2xs font-semibold flex items-center gap-1.5';
+      controls.classList.add('hidden');
+      text.textContent = 'Draw Custom Polygon';
+      state.map.getContainer().style.cursor = '';
+    }
+  }
+
+  function addPolyVertex(lat, lng) {
+    state.polyPoints.push([lng, lat]); // GeoJSON order: [lng, lat]
+    const count = state.polyPoints.length;
+    document.getElementById('polyVertexCount').textContent = `${count} pts`;
+
+    const marker = L.circleMarker([lat, lng], {
+      radius: 6,
+      fillColor: count === 1 ? '#10b981' : '#06b6d4',
+      color: '#ffffff',
+      weight: 2,
+      fillOpacity: 0.9,
+    }).addTo(state.map);
+
+    if (count === 1) {
+      marker.bindTooltip('Click to close & finish polygon', { permanent: false });
+      marker.on('click', () => {
+        if (state.polyPoints.length >= 3) {
+          completeCustomPolygon();
+        }
+      });
+    }
+
+    state.polyMarkers.push(marker);
+
+    // Update polyline preview
+    if (state.polyLinePreview) {
+      state.map.removeLayer(state.polyLinePreview);
+    }
+    const latlngs = state.polyPoints.map((p) => [p[1], p[0]]);
+    state.polyLinePreview = L.polyline(latlngs, {
+      color: '#06b6d4',
+      weight: 3,
+      dashArray: '4, 4',
+    }).addTo(state.map);
+  }
+
+  function completeCustomPolygon() {
+    if (state.polyPoints.length < 3) {
+      return alert('A polygon requires at least 3 points.');
+    }
+
+    // Ensure ring is closed
+    const first = state.polyPoints[0];
+    const last = state.polyPoints[state.polyPoints.length - 1];
+    if (first[0] !== last[0] || first[1] !== last[1]) {
+      state.polyPoints.push([first[0], first[1]]);
+    }
+
+    // Remove temp markers & line
+    state.polyMarkers.forEach((m) => state.map.removeLayer(m));
+    state.polyMarkers = [];
+    if (state.polyLinePreview) {
+      state.map.removeLayer(state.polyLinePreview);
+      state.polyLinePreview = null;
+    }
+
+    if (state.customPolygonLayer) {
+      state.map.removeLayer(state.customPolygonLayer);
+    }
+
+    const latlngs = state.polyPoints.map((p) => [p[1], p[0]]);
+    state.customPolygonLayer = L.polygon(latlngs, {
+      color: '#06b6d4',
+      weight: 3,
+      fillColor: '#0891b2',
+      fillOpacity: 0.35,
+    }).addTo(state.map);
+
+    // Calculate approximate area
+    let areaSqM = 0;
+    for (let i = 0; i < state.polyPoints.length - 1; i++) {
+      const p1 = state.polyPoints[i];
+      const p2 = state.polyPoints[i + 1];
+      const latMid = (((p1[1] + p2[1]) / 2) * Math.PI) / 180;
+      const mPerDegLat = 111132.954 - 559.822 * Math.cos(2 * latMid) + 1.175 * Math.cos(4 * latMid);
+      const mPerDegLon = 111412.84 * Math.cos(latMid) - 93.5 * Math.cos(3 * latMid);
+      areaSqM += (p2[0] - p1[0]) * mPerDegLon * (((p2[1] + p1[1]) / 2) * mPerDegLat);
+    }
+    areaSqM = Math.abs(areaSqM);
+    const ha = (areaSqM / 10000).toFixed(2);
+
+    const geoJsonCoordinates = [state.polyPoints];
+    const geoJsonStr = JSON.stringify(geoJsonCoordinates, null, 2);
+    const wktStr = toWktPolygon(state.polyPoints);
+
+    state.customPolygonLayer.bindPopup(`
+      <div class="font-sans text-xs space-y-2 p-1">
+        <div class="font-bold text-cyan-700 flex items-center gap-1">📐 Custom Drawn Polygon</div>
+        <div class="text-slate-500 font-mono text-3xs">Area: ${Math.round(areaSqM).toLocaleString()} m² (${ha} ha)</div>
+        <div class="flex items-center gap-1.5 pt-1">
+          <button class="px-2 py-1 bg-indigo-600 text-white rounded text-3xs font-bold" onclick="window.__fwtCopy('${btoa(geoJsonStr)}', 'Custom Polygon', 'GeoJSON')">📋 Copy GeoJSON</button>
+          <button class="px-2 py-1 bg-cyan-600 text-white rounded text-3xs font-bold" onclick="window.__fwtCopy('${btoa(wktStr)}', 'Custom Polygon', 'WKT')">📋 Copy WKT</button>
+        </div>
+      </div>
+    `);
+
+    // Populate and open custom polygon modal
+    document.getElementById('customPolyVertCount').textContent = `${state.polyPoints.length - 1} corners`;
+    document.getElementById('customPolyArea').textContent = `${Math.round(areaSqM).toLocaleString()} m² (${ha} ha)`;
+    document.getElementById('customPolyGeoJson').textContent = geoJsonStr;
+    document.getElementById('customPolyWkt').textContent = wktStr;
+
+    // Attach copy button listeners for this modal
+    document.getElementById('btnCopyCustomGeoJson').onclick = () => {
+      copyToClipboard(geoJsonStr, 'Custom Polygon', 'GeoJSON');
+    };
+    document.getElementById('btnCopyCustomWkt').onclick = () => {
+      copyToClipboard(wktStr, 'Custom Polygon', 'WKT');
+    };
+
+    document.getElementById('customPolygonModal').classList.remove('hidden');
+    togglePolyDrawMode(false);
+  }
+
+  function cancelCustomPolygon() {
+    state.polyMarkers.forEach((m) => state.map.removeLayer(m));
+    state.polyMarkers = [];
+    if (state.polyLinePreview) {
+      state.map.removeLayer(state.polyLinePreview);
+      state.polyLinePreview = null;
+    }
+    state.polyPoints = [];
+    document.getElementById('polyVertexCount').textContent = '0 pts';
+    togglePolyDrawMode(false);
+    showToast('Cancelled polygon drawing.');
   }
 
   // Render Map Features ONLY from Synced Server Data (NO Hardcoded Fallback)
@@ -1056,23 +1215,57 @@
     const drawModeText = document.getElementById('drawModeText');
     const drawingBanner = document.getElementById('drawingBanner');
     const btnClearDrawn = document.getElementById('btnClearDrawnPoints');
+    const drawStepContainer = document.getElementById('drawStepContainer');
 
     btnDrawMode.addEventListener('click', () => {
       state.isDrawingMode = !state.isDrawingMode;
       if (state.isDrawingMode) {
+        if (state.isPolyDrawing) togglePolyDrawMode(false);
         btnDrawMode.className = 'bg-amber-600 text-white px-3 py-1.5 rounded text-2xs font-bold flex items-center gap-1.5 animate-pulse';
         drawModeText.innerText = 'Stop Drawing';
         drawingBanner.classList.remove('hidden');
         btnClearDrawn.classList.remove('hidden');
+        if (drawStepContainer) drawStepContainer.classList.remove('hidden');
         showToast('Draw mode ON: Click anywhere on map to add route waypoints.');
       } else {
         btnDrawMode.className = 'bg-slate-800 hover:bg-slate-700 border border-slate-700 text-amber-300 px-3 py-1.5 rounded text-2xs font-semibold flex items-center gap-1.5';
         drawModeText.innerText = 'Record / Draw Route';
         drawingBanner.classList.add('hidden');
+        if (drawStepContainer) drawStepContainer.classList.add('hidden');
       }
     });
 
     btnClearDrawn.addEventListener('click', clearDrawnRoute);
+
+    // Custom Polygon Tracing Controls
+    document.getElementById('btnTogglePolygonDraw')?.addEventListener('click', () => togglePolyDrawMode());
+    document.getElementById('btnCompletePolygon')?.addEventListener('click', completeCustomPolygon);
+    document.getElementById('btnCancelPolygon')?.addEventListener('click', cancelCustomPolygon);
+    document.getElementById('btnCloseCustomPolyModal')?.addEventListener('click', () => {
+      document.getElementById('customPolygonModal').classList.add('hidden');
+    });
+    document.getElementById('btnDoneCustomPoly')?.addEventListener('click', () => {
+      document.getElementById('customPolygonModal').classList.add('hidden');
+    });
+    document.getElementById('btnClearCustomPoly')?.addEventListener('click', () => {
+      if (state.customPolygonLayer) {
+        state.map.removeLayer(state.customPolygonLayer);
+        state.customPolygonLayer = null;
+      }
+      state.polyPoints = [];
+      document.getElementById('customPolygonModal').classList.add('hidden');
+      showToast('Custom polygon removed from map.');
+    });
+
+    // Quick Fill Account Buttons
+    document.querySelectorAll('.btn-quick-fill').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const tally = btn.getAttribute('data-tally');
+        document.getElementById('phoneInputTally').value = tally;
+        document.getElementById('phoneInputPwd').value = 'Welcome123!';
+        showToast(`Selected worker ${tally}.`);
+      });
+    });
 
     // Route Timeline Slider Scrubber
     document.getElementById('routeTimelineSlider').addEventListener('input', (e) => {
@@ -1150,20 +1343,50 @@
       }
 
       try {
-        const res = await api('/mobile/auth/login', {
-          method: 'POST',
-          body: JSON.stringify({
-            tally_id,
-            password,
-            device: {
-              device_identifier: state.device.identifier,
-              platform: state.device.platform,
-              device_model: state.device.model,
-              app_version: state.device.app_version,
-              os_version: state.device.os_version,
-            },
-          }),
-        });
+        let res;
+        let activePwd = password;
+        try {
+          res = await api('/mobile/auth/login', {
+            method: 'POST',
+            body: JSON.stringify({
+              tally_id,
+              password: activePwd,
+              device: {
+                device_identifier: state.device.identifier,
+                platform: state.device.platform,
+                device_model: state.device.model,
+                app_version: state.device.app_version,
+                os_version: state.device.os_version,
+              },
+            }),
+          });
+        } catch (loginErr) {
+          // If the worker was already enrolled on a previous run, fallback to permanent password
+          if (password === 'Welcome123!') {
+            try {
+              res = await api('/mobile/auth/login', {
+                method: 'POST',
+                body: JSON.stringify({
+                  tally_id,
+                  password: 'WorkerPermanent123!',
+                  device: {
+                    device_identifier: state.device.identifier,
+                    platform: state.device.platform,
+                    device_model: state.device.model,
+                    app_version: state.device.app_version,
+                    os_version: state.device.os_version,
+                  },
+                }),
+              });
+              activePwd = 'WorkerPermanent123!';
+              showToast('✓ Signed in with enrolled permanent password.');
+            } catch {
+              throw loginErr;
+            }
+          } else {
+            throw loginErr;
+          }
+        }
 
         state.token = res.access_token;
         state.worker = res.employee;
@@ -1175,7 +1398,7 @@
             await api('/mobile/auth/change-password', {
               method: 'POST',
               body: JSON.stringify({
-                old_password: password,
+                old_password: activePwd,
                 new_password: 'WorkerPermanent123!',
               }),
             });

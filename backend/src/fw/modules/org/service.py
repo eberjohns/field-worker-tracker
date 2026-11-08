@@ -329,27 +329,45 @@ class OrgService:
         session: AsyncSession,
         employee_id: UUID,
     ) -> list[ReportingLineRead]:
-        query = (
-            select(EmployeeReportingLine, Employee)
-            .outerjoin(Employee, EmployeeReportingLine.manager_id == Employee.id)
-            .where(EmployeeReportingLine.employee_id == employee_id)
-        )
-        result = await session.execute(query)
-        lines = []
-        for rl, mgr in result.all():
-            lines.append(
-                ReportingLineRead(
-                    id=rl.id,
-                    employee_id=rl.employee_id,
-                    manager_id=rl.manager_id,
-                    manager_name=mgr.name if mgr else None,
-                    manager_tally_id=mgr.tally_id if mgr else None,
-                    relationship=rl.relationship,
-                    notes=rl.notes,
-                    created_at=rl.created_at,
+        """List all direct and upstream reporting lines for an employee (full management chain)."""
+        all_lines_query = select(EmployeeReportingLine)
+        all_lines = (await session.execute(all_lines_query)).scalars().all()
+
+        emp_query = select(Employee)
+        emp_map = {e.id: e for e in (await session.execute(emp_query)).scalars().all()}
+
+        upwards: dict[UUID, list[EmployeeReportingLine]] = {}
+        for line_item in all_lines:
+            upwards.setdefault(line_item.employee_id, []).append(line_item)
+
+        visited: set[UUID] = set()
+        result_lines: list[ReportingLineRead] = []
+
+        def traverse(curr_emp_id: UUID, is_direct: bool, via_name: str | None = None) -> None:
+            for line in upwards.get(curr_emp_id, []):
+                if line.manager_id in visited or line.manager_id == employee_id:
+                    continue
+                visited.add(line.manager_id)
+                mgr = emp_map.get(line.manager_id)
+                result_lines.append(
+                    ReportingLineRead(
+                        id=line.id,
+                        employee_id=employee_id,
+                        manager_id=line.manager_id,
+                        manager_name=mgr.name if mgr else None,
+                        manager_tally_id=mgr.tally_id if mgr else None,
+                        relationship=line.relationship,
+                        notes=line.notes,
+                        created_at=line.created_at,
+                        is_direct=is_direct,
+                        via_name=via_name,
+                    )
                 )
-            )
-        return lines
+                if mgr:
+                    traverse(mgr.id, False, mgr.name)
+
+        traverse(employee_id, is_direct=True, via_name=None)
+        return result_lines
 
     @staticmethod
     async def add_reporting_line(

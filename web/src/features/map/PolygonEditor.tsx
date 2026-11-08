@@ -10,7 +10,7 @@ import { TerraDrawMapLibreGLAdapter } from "terra-draw-maplibre-gl-adapter";
 import area from "@turf/area";
 import booleanValid from "@turf/boolean-valid";
 import kinks from "@turf/kinks";
-import { CheckCircle2, AlertCircle, Trash2, Save, MousePointer, Hexagon, Info } from "lucide-react";
+import { CheckCircle2, AlertCircle, Trash2, Save, MousePointer, Hexagon, Info, Clipboard, X } from "lucide-react";
 
 interface PolygonEditorProps {
   map: MapLibreMap | null;
@@ -289,6 +289,8 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   const [areaSqM, setAreaSqM] = useState<number>(0);
   const [isValid, setIsValid] = useState<boolean>(true);
   const [validationMessage, setValidationMessage] = useState<string>("");
+  const [showPasteModal, setShowPasteModal] = useState<boolean>(false);
+  const [pasteInput, setPasteInput] = useState<string>("");
 
   // Initialize Terra Draw & preview layers once map is ready
   useEffect(() => {
@@ -650,6 +652,101 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
     return `${formattedSqM} m² (${ha} ha)`;
   };
 
+  const parsePolygonInput = (text: string): GeoJSON.Polygon | null => {
+    const trimmed = text.trim();
+    if (!trimmed) return null;
+
+    // 1. Try parsing JSON (GeoJSON Polygon, Feature, or coordinates array)
+    if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (parsed.type === "Polygon" && Array.isArray(parsed.coordinates)) {
+          return parsed as GeoJSON.Polygon;
+        }
+        if (parsed.type === "Feature" && parsed.geometry?.type === "Polygon") {
+          return parsed.geometry as GeoJSON.Polygon;
+        }
+        if (Array.isArray(parsed)) {
+          let ring = parsed;
+          if (Array.isArray(ring[0]) && Array.isArray(ring[0][0])) {
+            return { type: "Polygon", coordinates: ring as [number, number][][] };
+          } else if (Array.isArray(ring[0]) && typeof ring[0][0] === "number") {
+            return { type: "Polygon", coordinates: [ring as [number, number][]] };
+          }
+        }
+      } catch {
+        // Not valid JSON, continue to WKT
+      }
+    }
+
+    // 2. Try parsing WKT: POLYGON((lng lat, ...))
+    const match = trimmed.match(/POLYGON\s*\(\s*\(\s*(.*?)\s*\)\s*\)/i);
+    if (match) {
+      const rawPairs = match[1].split(",");
+      const coords: [number, number][] = [];
+      for (const pair of rawPairs) {
+        const parts = pair.trim().split(/\s+/).map(Number);
+        if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+          coords.push([parts[0], parts[1]]);
+        }
+      }
+      if (coords.length >= 3) {
+        const first = coords[0];
+        const last = coords[coords.length - 1];
+        if (first[0] !== last[0] || first[1] !== last[1]) {
+          coords.push([first[0], first[1]]);
+        }
+        return { type: "Polygon", coordinates: [coords] };
+      }
+    }
+
+    return null;
+  };
+
+  const handleApplyPastedPolygon = () => {
+    const polygon = parsePolygonInput(pasteInput);
+    if (!polygon) {
+      alert("Invalid polygon format. Please paste valid GeoJSON coordinates or WKT POLYGON((lng lat, ...)).");
+      return;
+    }
+    if (!drawRef.current || !map) return;
+
+    drawRef.current.clear();
+    drawRef.current.addFeatures([
+      {
+        type: "Feature",
+        geometry: polygon,
+        properties: { mode: "polygon" },
+      },
+    ]);
+    drawRef.current.setMode("select");
+    setCurrentMode("select");
+    setCurrentPolygon(polygon);
+    currentPolygonRef.current = polygon;
+    evaluateGeometry(polygon);
+    updatePreviewSource(map, polygon);
+
+    const ring = polygon.coordinates[0];
+    if (ring && ring.length > 0) {
+      try {
+        const lats = ring.map((p) => p[1]);
+        const lngs = ring.map((p) => p[0]);
+        map.fitBounds(
+          [
+            [Math.min(...lngs), Math.min(...lats)],
+            [Math.max(...lngs), Math.max(...lats)],
+          ],
+          { padding: 80, maxZoom: 18 }
+        );
+      } catch (err) {
+        console.warn("Could not fit bounds:", err);
+      }
+    }
+
+    setShowPasteModal(false);
+    setPasteInput("");
+  };
+
   return (
     <div className={`space-y-2.5 ${className}`}>
       {/* Visual Step-by-Step Helper Banner */}
@@ -713,6 +810,16 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
 
           <button
             type="button"
+            onClick={() => setShowPasteModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 rounded-md text-xs font-semibold text-slate-700 transition"
+            title="Paste GeoJSON or WKT polygon from clipboard"
+          >
+            <Clipboard className="h-3.5 w-3.5 text-indigo-600" />
+            Paste Polygon
+          </button>
+
+          <button
+            type="button"
             onClick={handleClear}
             className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-red-50 hover:text-red-600 rounded-md text-xs font-medium text-slate-600 transition"
             title="Delete current boundary"
@@ -762,6 +869,60 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Paste Polygon Modal */}
+      {showPasteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-lg w-full p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Clipboard className="h-5 w-5 text-indigo-600" />
+                <h3 className="text-sm font-bold text-slate-900">Paste Boundary Polygon</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPasteModal(false);
+                  setPasteInput("");
+                }}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-500">
+              Paste a <strong>GeoJSON Polygon</strong> or <strong>WKT string</strong> (e.g. copied from the Mobile Tester Proxy) to load and save as this boundary.
+            </p>
+            <textarea
+              rows={6}
+              value={pasteInput}
+              onChange={(e) => setPasteInput(e.target.value)}
+              placeholder="Paste GeoJSON: [[ [55.38, 25.13], ... ]] or WKT: POLYGON((55.38 25.13, ...))"
+              className="w-full font-mono text-xs p-3 rounded-lg border border-slate-300 focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 bg-slate-50"
+            />
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPasteModal(false);
+                  setPasteInput("");
+                }}
+                className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!pasteInput.trim()}
+                onClick={handleApplyPastedPolygon}
+                className="px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg disabled:opacity-50 transition"
+              >
+                Apply Boundary
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
