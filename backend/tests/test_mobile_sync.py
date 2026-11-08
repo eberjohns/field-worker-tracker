@@ -375,3 +375,149 @@ async def test_worker_isolation_and_holiday_update():
             await session.execute(delete(Employee).where(Employee.id.in_([emp_a_id, emp_b_id])))
             await session.commit()
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+@db_required
+async def test_mobile_sync_snapshot_includes_base_planner_blueprint():
+    """Verify that recurring Base Planner blueprint allocations (BaseRosterTemplate)
+
+    sync to mobile snapshot as active SCHEDULE_ITEM, JOB with boundary, and WORKING DAY_PLAN,
+    even when no single-day operational ScheduledWork rows exist.
+    """
+    from decimal import Decimal
+
+    from fw.modules.jobs import JobItem, JobsService, Worksite
+    from fw.modules.scheduling import BaseRosterEntry, BaseRosterTemplate
+
+    transport = ASGITransport(app=app)
+    emp_id = uuid4()
+    tally_id = f"BP_{str(uuid4())[:6]}"
+    today = datetime.now(UTC).date()
+    tmpl_id = uuid4()
+
+    async with async_session_factory() as session:
+        # 1. Employee + User + Device
+        emp = Employee(
+            id=emp_id,
+            tally_id=tally_id,
+            name="Base Blueprint Worker",
+            role="WORKER",
+            country="AE",
+            is_active=True,
+            weekly_off_day="FRIDAY" if today.strftime("%A").upper() != "FRIDAY" else "SUNDAY",
+            staff_grade_description="Gardener",
+        )
+        session.add(emp)
+        await session.flush()
+
+        user = User(
+            id=uuid4(),
+            username=tally_id,
+            credential_hash="fakehash",
+            role="WORKER",
+            is_active=True,
+            must_change_password=False,
+            employee_id=emp_id,
+        )
+        session.add(user)
+
+        device = RegisteredDevice(
+            employee_id=emp_id,
+            device_identifier="device-bp-1",
+            platform="ANDROID",
+            app_version="1.0.0",
+            registered_at=datetime.now(UTC),
+            last_seen_at=datetime.now(UTC),
+            last_acked_cursor=0,
+            is_active=True,
+        )
+        session.add(device)
+
+        # 2. Find or use active worksite + job item
+        ws = (await session.execute(select(Worksite).where(Worksite.is_active.is_(True)))).scalars().first()
+        assert ws is not None, "At least one worksite required in test db"
+
+        # Ensure boundary exists on worksite
+        polygon_geojson = {
+            "type": "Polygon",
+            "coordinates": [
+                [
+                    [55.2400, 25.1100],
+                    [55.2500, 25.1100],
+                    [55.2500, 25.1200],
+                    [55.2400, 25.1200],
+                    [55.2400, 25.1100],
+                ]
+            ],
+        }
+        await JobsService.update_worksite_boundary(
+            session=session,
+            worksite_id=ws.id,
+            geojson_dict=polygon_geojson,
+            actor_role="ADMIN",
+        )
+
+        ji = (await session.execute(select(JobItem).where(JobItem.worksite_id == ws.id, JobItem.is_active.is_(True)))).scalars().first()
+        assert ji is not None, "At least one job item required"
+
+        # 3. Create Base Planner Blueprint Template + Entry (NO ScheduledWork!)
+        tmpl = BaseRosterTemplate(
+            id=tmpl_id,
+            job_item_id=ji.id,
+            allocation_mode="DAY_OF_WEEK",
+            start_date=today,
+            is_active=True,
+            version=1,
+        )
+        session.add(tmpl)
+        await session.flush()
+
+        entry = BaseRosterEntry(
+            id=uuid4(),
+            template_id=tmpl.id,
+            employee_id=emp_id,
+            weekday_mask="ALL",
+            assigned_hours=Decimal("8.0"),
+            sequence=1,
+        )
+        session.add(entry)
+        await session.commit()
+
+    token = AuthService.create_access_token(user)
+
+    try:
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://test",
+            headers={"Authorization": f"Bearer {token}"},
+        ) as client:
+            res = await client.get("/api/v1/mobile/sync/snapshot")
+            assert res.status_code == 200, res.text
+            snapshot = res.json()
+            entities = snapshot["entities"]
+
+            # Assert JOB entity with boundary polygon is present
+            job_entities = [e for e in entities if e["entity_type"] == "JOB" and e["entity_id"] == str(ws.id)]
+            assert len(job_entities) == 1, f"Expected JOB entity {ws.id} in snapshot"
+            assert job_entities[0]["payload"]["boundary"] is not None
+            assert job_entities[0]["payload"]["boundary"]["type"] == "Polygon"
+
+            # Assert SCHEDULE_ITEM entities were generated from Base Blueprint
+            sched_items = [e for e in entities if e["entity_type"] == "SCHEDULE_ITEM" and e["payload"]["job_id"] == str(ws.id)]
+            assert len(sched_items) > 0, "Expected SCHEDULE_ITEM entities from base blueprint"
+
+            # Assert DAY_PLAN for today is WORKING
+            day_plans = [e for e in entities if e["entity_type"] == "DAY_PLAN" and e["entity_id"] == today.isoformat()]
+            assert len(day_plans) == 1
+            assert day_plans[0]["payload"]["status"] == "WORKING"
+            assert day_plans[0]["payload"]["planned"] is not None
+    finally:
+        async with async_session_factory() as session:
+            await session.execute(delete(BaseRosterEntry).where(BaseRosterEntry.template_id == tmpl_id))
+            await session.execute(delete(BaseRosterTemplate).where(BaseRosterTemplate.id == tmpl_id))
+            await session.execute(delete(RegisteredDevice).where(RegisteredDevice.employee_id == emp_id))
+            await session.execute(delete(User).where(User.employee_id == emp_id))
+            await session.execute(delete(Employee).where(Employee.id == emp_id))
+            await session.commit()
+        await engine.dispose()

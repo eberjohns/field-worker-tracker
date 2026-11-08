@@ -1,5 +1,6 @@
 import json
 from datetime import UTC, date, datetime, timedelta
+from uuid import UUID, uuid5
 
 import structlog
 from geoalchemy2.functions import ST_AsGeoJSON
@@ -17,7 +18,12 @@ from fw.core.events import (
 )
 from fw.modules.jobs import JobItem, Worksite
 from fw.modules.org import Accommodation, Employee, EmployeeReportingLine
-from fw.modules.scheduling import LeaveApprovedEvent, ScheduledWork
+from fw.modules.scheduling import (
+    BaseRosterEntry,
+    BaseRosterTemplate,
+    LeaveApprovedEvent,
+    ScheduledWork,
+)
 from fw.modules.sync.geo import compute_geofence_circle
 from fw.modules.sync.schemas import (
     AccommodationPayload,
@@ -35,6 +41,7 @@ from fw.modules.sync.service import (
     _geometry_to_geojson,
     _subtract_minutes_from_time_str,
 )
+from fw.rules.scheduling import INT_TO_WEEKDAY
 
 logger = structlog.get_logger(__name__)
 
@@ -150,6 +157,130 @@ async def handle_scheduled_work_changed(event: ScheduledWorkChanged, session: As
                 payload=day_payload.model_dump(mode="json"),
                 priority=priority,
             )
+
+        # Also merge Base Blueprint entries for dates without an operational shift
+        bp_query = (
+            select(BaseRosterEntry, BaseRosterTemplate, JobItem, Worksite)
+            .join(BaseRosterTemplate, BaseRosterEntry.template_id == BaseRosterTemplate.id)
+            .join(JobItem, BaseRosterTemplate.job_item_id == JobItem.id)
+            .join(Worksite, JobItem.worksite_id == Worksite.id)
+            .where(
+                BaseRosterEntry.employee_id == emp_id,
+                BaseRosterTemplate.is_active.is_(True),
+                JobItem.is_active.is_(True),
+                Worksite.is_active.is_(True),
+            )
+        )
+        bp_rows = (await session.execute(bp_query)).all()
+        covered_dates = {sw.work_date for sw, _, _ in rows}
+
+        cur_check = today
+        while cur_check <= window_end:
+            if cur_check not in covered_dates:
+                dow = INT_TO_WEEKDAY[cur_check.weekday()]
+                for entry, tmpl, ji, ws in bp_rows:
+                    if tmpl.start_date and tmpl.start_date > cur_check:
+                        continue
+                    if tmpl.end_date and tmpl.end_date < cur_check:
+                        continue
+
+                    mask = (entry.weekday_mask or "").upper()
+                    matches_dow = mask in ("ALL", dow)
+                    if not matches_dow and "_" in mask:
+                        parts = mask.split("_")
+                        if len(parts) == 2 and parts[1] == dow:
+                            day_of_month = cur_check.day
+                            week_num = (day_of_month - 1) // 7 + 1
+                            if parts[0] == f"W{week_num}":
+                                matches_dow = True
+
+                    if matches_dow:
+                        bp_item_id = uuid5(
+                            UUID("00000000-0000-0000-0000-000000000001"),
+                            f"bp_{entry.id}_{cur_check.isoformat()}",
+                        )
+                        is_urgent = (cur_check - today).days <= 1
+                        priority = 1 if is_urgent else 0
+
+                        item_summary = JobItemSummary(
+                            staff_grade_description=ji.staff_grade_description,
+                            deployment_type=ji.deployment_type or "PERMANENT",
+                            required_staff_count=ji.required_staff_count or 1,
+                            hours_per_occurrence_per_staff=float(ji.hours_per_occurrence_per_staff or 9.0),
+                        )
+                        sch_payload = ScheduleItemPayload(
+                            scheduled_work_id=bp_item_id,
+                            work_date=cur_check.isoformat(),
+                            sequence=entry.sequence or 1,
+                            assigned_hours=float(entry.assigned_hours or 0.0),
+                            status="ACTIVE",
+                            job_id=ws.id,
+                            job_item_id=ji.id,
+                            sub_item_code=ji.sub_item_code,
+                            occurrence_id=None,
+                            job_item_summary=item_summary,
+                            source="PLANNED",
+                            is_reassignment=False,
+                        )
+                        await SyncService.write_sync_change(
+                            session=session,
+                            employee_id=emp_id,
+                            entity_type="SCHEDULE_ITEM",
+                            entity_id=str(bp_item_id),
+                            entity_version=1,
+                            op="UPSERT",
+                            payload=sch_payload.model_dump(mode="json"),
+                            priority=priority,
+                        )
+
+                        boundary_geojson = _geometry_to_geojson(ws.boundary)
+                        circle = compute_geofence_circle(boundary_geojson, extra_radius_m=300.0)
+                        job_payload = JobPayload(
+                            job_id=ws.id,
+                            job_number=ws.job_number,
+                            job_name=ws.job_name,
+                            boundary=boundary_geojson,
+                            geofence_circle=GeofenceCircle(**circle) if circle else None,
+                            boundary_missing=(boundary_geojson is None),
+                        )
+                        await SyncService.write_sync_change(
+                            session=session,
+                            employee_id=emp_id,
+                            entity_type="JOB",
+                            entity_id=str(ws.id),
+                            entity_version=ws.version or 1,
+                            op="UPSERT",
+                            payload=job_payload.model_dump(mode="json"),
+                            priority=priority,
+                        )
+
+                        day_str = cur_check.isoformat()
+                        alarm_time = _subtract_minutes_from_time_str("05:00", 30)
+                        day_payload = DayPlanPayload(
+                            work_date=day_str,
+                            status="WORKING",
+                            marker=None,
+                            planned=DayPlanPlannedTimes(
+                                accommodation_start="05:00",
+                                first_site_start="06:00",
+                                break_minutes=30,
+                                last_site_end="15:30",
+                                accommodation_end="17:00",
+                            ),
+                            standard_hours=8,
+                            alarm_time=alarm_time,
+                        )
+                        await SyncService.write_sync_change(
+                            session=session,
+                            employee_id=emp_id,
+                            entity_type="DAY_PLAN",
+                            entity_id=day_str,
+                            entity_version=1,
+                            op="UPSERT",
+                            payload=day_payload.model_dump(mode="json"),
+                            priority=priority,
+                        )
+            cur_check += timedelta(days=1)
 
 
 async def handle_holiday_changed(event: HolidayChanged, session: AsyncSession) -> None:

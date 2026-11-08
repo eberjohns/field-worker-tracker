@@ -1,7 +1,7 @@
 import hashlib
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid5
 
 import geoalchemy2.shape
 import structlog
@@ -20,7 +20,12 @@ from fw.modules.identity import (
 )
 from fw.modules.jobs import JobItem, Worksite
 from fw.modules.org import Accommodation, Employee, EmployeeReportingLine, RegisteredDevice
-from fw.modules.scheduling import LeaveRequest, ScheduledWork
+from fw.modules.scheduling import (
+    BaseRosterEntry,
+    BaseRosterTemplate,
+    LeaveRequest,
+    ScheduledWork,
+)
 from fw.modules.settings import (
     CompanySettingValue,
     ConsentPolicy,
@@ -55,6 +60,7 @@ from fw.modules.sync.schemas import (
     SyncSnapshotResponse,
 )
 from fw.rules.password import is_default_password_expired, validate_password_strength
+from fw.rules.scheduling import INT_TO_WEEKDAY
 
 logger = structlog.get_logger(__name__)
 
@@ -605,17 +611,21 @@ class SyncService:
                 ScheduledWork.employee_id == employee_id,
                 ScheduledWork.work_date >= today,
                 ScheduledWork.work_date <= to_date,
-                ScheduledWork.status == "ACTIVE",
             )
             .order_by(ScheduledWork.work_date.asc(), ScheduledWork.sequence.asc())
         )
         sw_res = await session.execute(sw_query)
-        rows = sw_res.all()
+        sw_rows = sw_res.all()
 
         seen_jobs: dict[UUID, Worksite] = {}
         working_dates: set[date] = set()
+        cancelled_dates: set[date] = set()
 
-        for sw, ji, ws in rows:
+        for sw, ji, ws in sw_rows:
+            if sw.status == "CANCELLED":
+                cancelled_dates.add(sw.work_date)
+                continue
+
             working_dates.add(sw.work_date)
             seen_jobs[ws.id] = ws
 
@@ -648,6 +658,81 @@ class SyncService:
                     payload=sch_payload.model_dump(mode="json"),
                 )
             )
+
+        # Merge Base Blueprint recurring allocations (BaseRosterTemplate + BaseRosterEntry)
+        bp_query = (
+            select(BaseRosterEntry, BaseRosterTemplate, JobItem, Worksite)
+            .join(BaseRosterTemplate, BaseRosterEntry.template_id == BaseRosterTemplate.id)
+            .join(JobItem, BaseRosterTemplate.job_item_id == JobItem.id)
+            .join(Worksite, JobItem.worksite_id == Worksite.id)
+            .where(
+                BaseRosterEntry.employee_id == employee_id,
+                BaseRosterTemplate.is_active.is_(True),
+                JobItem.is_active.is_(True),
+                Worksite.is_active.is_(True),
+            )
+            .order_by(BaseRosterEntry.sequence.asc())
+        )
+        bp_res = await session.execute(bp_query)
+        bp_rows = bp_res.all()
+
+        cur_check = today
+        while cur_check <= to_date:
+            if cur_check not in working_dates and cur_check not in cancelled_dates:
+                dow = INT_TO_WEEKDAY[cur_check.weekday()]
+                for entry, tmpl, ji, ws in bp_rows:
+                    if tmpl.start_date and tmpl.start_date > cur_check:
+                        continue
+                    if tmpl.end_date and tmpl.end_date < cur_check:
+                        continue
+
+                    mask = (entry.weekday_mask or "").upper()
+                    matches_dow = mask in ("ALL", dow)
+                    if not matches_dow and "_" in mask:
+                        parts = mask.split("_")
+                        if len(parts) == 2 and parts[1] == dow:
+                            day_of_month = cur_check.day
+                            week_num = (day_of_month - 1) // 7 + 1
+                            if parts[0] == f"W{week_num}":
+                                matches_dow = True
+
+                    if matches_dow:
+                        working_dates.add(cur_check)
+                        seen_jobs[ws.id] = ws
+
+                        bp_item_id = uuid5(
+                            UUID("00000000-0000-0000-0000-000000000001"),
+                            f"bp_{entry.id}_{cur_check.isoformat()}",
+                        )
+                        item_summary = JobItemSummary(
+                            staff_grade_description=ji.staff_grade_description,
+                            deployment_type=ji.deployment_type or "PERMANENT",
+                            required_staff_count=ji.required_staff_count or 1,
+                            hours_per_occurrence_per_staff=float(ji.hours_per_occurrence_per_staff or 9.0),
+                        )
+                        sch_payload = ScheduleItemPayload(
+                            scheduled_work_id=bp_item_id,
+                            work_date=cur_check.isoformat(),
+                            sequence=entry.sequence or 1,
+                            assigned_hours=float(entry.assigned_hours or 0.0),
+                            status="ACTIVE",
+                            job_id=ws.id,
+                            job_item_id=ji.id,
+                            sub_item_code=ji.sub_item_code,
+                            occurrence_id=None,
+                            job_item_summary=item_summary,
+                            source="PLANNED",
+                            is_reassignment=False,
+                        )
+                        entities.append(
+                            SnapshotEntity(
+                                entity_type="SCHEDULE_ITEM",
+                                entity_id=str(bp_item_id),
+                                entity_version=1,
+                                payload=sch_payload.model_dump(mode="json"),
+                            )
+                        )
+            cur_check += timedelta(days=1)
 
         # Add unique JOB entities
         for ws in seen_jobs.values():
@@ -729,15 +814,6 @@ class SyncService:
                     standard_hours=8,
                     alarm_time=None,
                 )
-            elif is_weekly_off:
-                day_payload = DayPlanPayload(
-                    work_date=day_str,
-                    status="OFF",
-                    marker="WEEKLY_OFF",
-                    planned=None,
-                    standard_hours=8,
-                    alarm_time=None,
-                )
             elif is_scheduled:
                 # Find matching time rule
                 # Simple resolution: matching start_date/end_date if present
@@ -778,6 +854,15 @@ class SyncService:
                     ),
                     standard_hours=std_hours,
                     alarm_time=alarm_time,
+                )
+            elif is_weekly_off:
+                day_payload = DayPlanPayload(
+                    work_date=day_str,
+                    status="OFF",
+                    marker="WEEKLY_OFF",
+                    planned=None,
+                    standard_hours=8,
+                    alarm_time=None,
                 )
             else:
                 day_payload = DayPlanPayload(

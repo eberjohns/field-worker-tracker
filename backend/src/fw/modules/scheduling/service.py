@@ -2423,12 +2423,19 @@ class SchedulingService:
                 )
 
         # Inactivate existing active templates
-        existing_stmt = select(BaseRosterTemplate).where(
-            BaseRosterTemplate.job_item_id == payload.job_item_id,
-            BaseRosterTemplate.is_active.is_(True),
+        existing_stmt = (
+            select(BaseRosterTemplate)
+            .where(
+                BaseRosterTemplate.job_item_id == payload.job_item_id,
+                BaseRosterTemplate.is_active.is_(True),
+            )
+            .options(selectinload(BaseRosterTemplate.entries))
         )
         existing_templates = (await self.session.execute(existing_stmt)).scalars().all()
+        affected_emp_ids = {entry.employee_id for entry in payload.entries}
         for old_tmpl in existing_templates:
+            for old_entry in old_tmpl.entries:
+                affected_emp_ids.add(old_entry.employee_id)
             old_tmpl.is_active = False
             old_tmpl.updated_at = datetime.now(UTC)
 
@@ -2461,6 +2468,14 @@ class SchedulingService:
             self.session.add(new_entry)
 
         await self.session.commit()
+
+        if affected_emp_ids:
+            from fw.core.events import ScheduledWorkChanged, event_bus
+
+            await event_bus.publish(
+                ScheduledWorkChanged(employee_ids=list(affected_emp_ids)),
+                session=self.session,
+            )
 
         await AuditService.log_action(
             session=self.session,
