@@ -47,16 +47,39 @@ class AuthService:
         settings = get_settings()
         now = datetime.now(UTC)
 
-        query = select(User).where(User.username == request.username)
-        result = await session.execute(query)
-        user = result.scalar_one_or_none()
+        # DEV-ONLY SHORTCUT (Development Phase Convenience):
+        # In local environment only, submitting blank username & password logs in as active ADMIN.
+        is_dev_blank_admin = (
+            settings.APP_ENV == "local"
+            and not request.username.strip()
+            and not request.password.strip()
+        )
 
-        if not user or not verify_password(request.password, user.credential_hash):
-            raise AppError(
-                code="UNAUTHENTICATED",
-                message="Invalid username or password.",
-                status_code=401,
+        if is_dev_blank_admin:
+            query = (
+                select(User)
+                .where(User.role == "ADMIN", User.is_active.is_(True))
+                .order_by(User.created_at.asc())
             )
+            result = await session.execute(query)
+            user = result.scalar_one_or_none()
+            if not user:
+                raise AppError(
+                    code="UNAUTHENTICATED",
+                    message="No active ADMIN user found for dev blank login.",
+                    status_code=401,
+                )
+        else:
+            query = select(User).where(User.username == request.username)
+            result = await session.execute(query)
+            user = result.scalar_one_or_none()
+
+            if not user or not verify_password(request.password, user.credential_hash):
+                raise AppError(
+                    code="UNAUTHENTICATED",
+                    message="Invalid username or password.",
+                    status_code=401,
+                )
 
         if not user.is_active:
             raise AppError(

@@ -185,4 +185,3 @@ async def test_mobile_events_batch_validation_and_ingestion():
             await session.execute(delete(Employee).where(Employee.id == emp_id))
             await session.commit()
         await engine.dispose()
-

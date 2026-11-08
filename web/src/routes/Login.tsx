@@ -160,11 +160,10 @@ export const Login: React.FC = () => {
                 </div>
                 <input
                   type="text"
-                  required
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   className="pl-9 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="e.g. ADMIN001 or WRK001"
+                  placeholder="e.g. ADMIN001 (or blank for Admin in dev)"
                 />
               </div>
             </div>
@@ -177,13 +176,17 @@ export const Login: React.FC = () => {
                 </div>
                 <input
                   type="password"
-                  required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="pl-9 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="••••••••"
+                  placeholder="•••••••• (or blank for Admin in dev)"
                 />
               </div>
+            </div>
+
+            <div className="p-2 rounded-lg bg-indigo-50/80 border border-indigo-200/80 text-[11px] text-indigo-900 flex items-center gap-1.5">
+              <span>⚡</span>
+              <span><strong>Dev Shortcut:</strong> Leave blank and click Sign in to log in as Admin.</span>
             </div>
 
             <button

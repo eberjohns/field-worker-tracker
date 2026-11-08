@@ -121,3 +121,56 @@ async def test_auth_service_change_password_clears_must_change_flag() -> None:
     assert updated_user.must_change_password is False
     assert updated_user.password_changed_at is not None
     assert updated_user.version == 2
+
+
+@pytest.mark.asyncio
+async def test_auth_service_blank_credentials_logs_in_admin_in_local_env() -> None:
+    session = AsyncMock()
+    admin_id = uuid4()
+    admin_user = User(
+        id=admin_id,
+        employee_id=uuid4(),
+        username="ADMIN001",
+        credential_hash=hash_password("AnySecret123!"),
+        role="ADMIN",
+        is_active=True,
+        must_change_password=False,
+        created_at=datetime.now(UTC),
+    )
+
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = admin_user
+    session.execute.return_value = mock_result
+
+    req = LoginRequest(username="", password="")
+    authenticated_user, token, refresh_token = await AuthService.authenticate(
+        session=session,
+        request=req,
+    )
+
+    assert authenticated_user.username == "ADMIN001"
+    assert authenticated_user.role == "ADMIN"
+    assert token is not None
+    assert refresh_token is not None
+
+
+@pytest.mark.asyncio
+async def test_auth_service_blank_credentials_rejected_in_production(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from fw.core.config import get_settings
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "APP_ENV", "production")
+
+    session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = None
+    session.execute.return_value = mock_result
+
+    req = LoginRequest(username="", password="")
+    with pytest.raises(AppError) as exc:
+        await AuthService.authenticate(session=session, request=req)
+
+    assert exc.value.code == "UNAUTHENTICATED"
+    assert exc.value.status_code == 401
