@@ -653,12 +653,13 @@ async def cancel_reassignment_request(
 
 @router.get("/approvals", response_model=ApprovalsInboxResponse)
 async def get_approvals_inbox(
+    status: str | None = Query("PENDING", description="Filter status: PENDING, APPROVED, REJECTED, DECIDED, ALL"),
     current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
     session: AsyncSession = Depends(get_db),
 ) -> ApprovalsInboxResponse:
     """Get approvals inbox items (leave requests, reassignments) in scope with badge counts."""
     service = SchedulingService(session)
-    return await service.get_approvals_inbox(current_user)
+    return await service.get_approvals_inbox(current_user=current_user, status=status)
 
 
 @router.get("/staffing-gaps", response_model=StaffingGapsResponse)

@@ -6,7 +6,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   XCircle,
-  Filter,
   RefreshCw,
   ArrowRight,
   AlertCircle,
@@ -53,7 +52,8 @@ interface ReassignmentItem {
   is_late_approval: boolean;
   is_orphaned: boolean;
   requested_by_name: string | null;
-  requested_at: string;
+  requested_at?: string;
+  created_at?: string;
   decided_by_name: string | null;
   decided_at: string | null;
   decision_note: string | null;
@@ -188,20 +188,38 @@ export const Approvals: React.FC = () => {
             Review and decide leave requests and temporary operational reassignments for your reporting scope.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 shadow-2xs">
-            <Filter className="h-4 w-4 text-slate-400" />
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="text-xs font-medium text-slate-700 bg-transparent border-none focus:outline-hidden cursor-pointer"
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
+            <button
+              onClick={() => setStatusFilter("PENDING")}
+              className={`px-3 py-1 text-xs font-semibold rounded-md transition cursor-pointer ${
+                statusFilter === "PENDING"
+                  ? "bg-white text-indigo-700 shadow-2xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
             >
-              <option value="PENDING">Pending Only</option>
-              <option value="ALL">All Statuses</option>
-              <option value="APPROVED">Approved</option>
-              <option value="REJECTED">Rejected</option>
-              <option value="CANCELLED">Cancelled</option>
-            </select>
+              Pending ({counts.total})
+            </button>
+            <button
+              onClick={() => setStatusFilter("APPROVED")}
+              className={`px-3 py-1 text-xs font-semibold rounded-md transition cursor-pointer ${
+                statusFilter === "APPROVED"
+                  ? "bg-white text-emerald-700 shadow-2xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              Approved History
+            </button>
+            <button
+              onClick={() => setStatusFilter("ALL")}
+              className={`px-3 py-1 text-xs font-semibold rounded-md transition cursor-pointer ${
+                statusFilter === "ALL"
+                  ? "bg-white text-slate-900 shadow-2xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              All History
+            </button>
           </div>
           <button
             onClick={fetchInbox}
@@ -403,6 +421,7 @@ export const Approvals: React.FC = () => {
                     <th className="py-3 px-4">Workers</th>
                     <th className="py-3 px-4">Target Job / Site</th>
                     <th className="py-3 px-4">Dates</th>
+                    <th className="py-3 px-4">Requested By</th>
                     <th className="py-3 px-4">Reason</th>
                     <th className="py-3 px-4">Notice Status</th>
                     <th className="py-3 px-4">Status</th>
@@ -449,6 +468,12 @@ export const Approvals: React.FC = () => {
                         <td className="py-3.5 px-4 text-xs font-medium text-slate-800">
                           {r.date_from === r.date_to ? r.date_from : `${r.date_from} to ${r.date_to}`}
                         </td>
+                        <td className="py-3.5 px-4 text-xs text-slate-500">
+                          <div className="font-medium text-slate-800">{r.requested_by_name || "Supervisor"}</div>
+                          <div className="text-2xs text-slate-400">
+                            {new Date(r.created_at || r.requested_at || Date.now()).toLocaleDateString()}
+                          </div>
+                        </td>
                         <td className="py-3.5 px-4 text-xs text-slate-600 max-w-xs truncate" title={r.reason}>
                           <span className="font-medium text-slate-700">[{r.reason_category}]</span> {r.reason}
                         </td>
@@ -472,22 +497,44 @@ export const Approvals: React.FC = () => {
                           }`}>
                             {r.status}
                           </span>
+                          {r.decided_by_name && (
+                            <div className="text-2xs text-slate-500 pt-0.5">
+                              by {r.decided_by_name}
+                              {r.decision_note && <div className="text-slate-400 italic">"{r.decision_note}"</div>}
+                            </div>
+                          )}
                         </td>
                         <td className="py-3.5 px-4 text-right">
                           {isPending && (user?.role === "ADMIN" || user?.role === "ENGINEER") ? (
                             <div className="flex items-center justify-end gap-2">
                               <button
                                 onClick={() => handleOpenDecision("REASSIGNMENT", "APPROVE", r)}
-                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-xs font-medium transition shadow-2xs"
+                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-xs font-medium transition shadow-2xs cursor-pointer"
                               >
                                 Approve
                               </button>
                               <button
                                 onClick={() => handleOpenDecision("REASSIGNMENT", "REJECT", r)}
-                                className="px-3 py-1 bg-white hover:bg-rose-50 text-rose-700 border border-rose-300 rounded-md text-xs font-medium transition"
+                                className="px-3 py-1 bg-white hover:bg-rose-50 text-rose-700 border border-rose-300 rounded-md text-xs font-medium transition cursor-pointer"
                               >
                                 Reject
                               </button>
+                            </div>
+                          ) : r.status === "APPROVED" ? (
+                            <div className="flex items-center justify-end">
+                              <Link
+                                to="/operational-planner"
+                                search={{
+                                  date: r.date_from,
+                                  job_item_id: r.target_job_item_id || undefined,
+                                  lens: "COVERAGE",
+                                }}
+                                className="px-2.5 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-md transition flex items-center gap-1 shadow-2xs"
+                                title="Open Operational Planner to view this reassignment"
+                              >
+                                <Users className="h-3 w-3" />
+                                View in Planner
+                              </Link>
                             </div>
                           ) : (
                             <span className="text-xs text-slate-400">

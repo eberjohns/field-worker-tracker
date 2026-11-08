@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class StandingAssignmentCreate(BaseModel):
@@ -511,6 +511,13 @@ class LeaveRequestResponse(BaseModel):
     version: int = 1
     created_at: datetime
     updated_at: datetime
+    recorded_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def populate_recorded_at(self) -> "LeaveRequestResponse":
+        if self.recorded_at is None:
+            self.recorded_at = self.created_at
+        return self
 
 
 class LeaveDecisionRequest(BaseModel):
@@ -617,6 +624,13 @@ class ReassignmentResponse(BaseModel):
     version: int = 1
     created_at: datetime
     updated_at: datetime
+    recorded_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def populate_recorded_at(self) -> "ReassignmentResponse":
+        if self.recorded_at is None:
+            self.recorded_at = self.created_at
+        return self
 
 
 class ReassignmentDecisionRequest(BaseModel):

@@ -435,3 +435,61 @@ async def test_leave_taken_counts_correct():
         assert "ANNUAL" in worker_summary["by_type"]
         # Working days <= calendar days
         assert worker_summary["total_working_days"] <= worker_summary["total_calendar_days"]
+
+
+@db_required
+@pytest.mark.asyncio
+async def test_approvals_inbox_filtering_and_recorded_at():
+    """Verify approvals inbox status filter and recorded_at in leave response."""
+    data = await get_test_data()
+    admin_token = AuthService.create_access_token(data["admin"])
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        # Create leave request
+        from_dt = date.today() + timedelta(days=20)
+        to_dt = from_dt + timedelta(days=2)
+        leave_res = await ac.post(
+            "/api/v1/leave-requests",
+            json={
+                "employee_id": str(data["w1"].id),
+                "leave_type": "SICK",
+                "from_date": from_dt.isoformat(),
+                "to_date": to_dt.isoformat(),
+                "reason": "Medical appointment",
+            },
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert leave_res.status_code == 201
+        leave_data = leave_res.json()
+        assert "recorded_at" in leave_data
+        assert leave_data["recorded_at"] is not None
+        assert leave_data["recorded_at"] == leave_data["created_at"]
+        leave_id = leave_data["id"]
+
+        # Pending inbox contains this leave
+        inbox_pending = await ac.get("/api/v1/approvals?status=PENDING", headers={"Authorization": f"Bearer {admin_token}"})
+        assert inbox_pending.status_code == 200
+        pending_ids = [item["id"] for item in inbox_pending.json()["leave_requests"]]
+        assert leave_id in pending_ids
+
+        # Approve the leave
+        app_res = await ac.post(
+            f"/api/v1/leave-requests/{leave_id}/approve",
+            json={"reason": "Approved by doctor certificate"},
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert app_res.status_code == 200
+
+        # Approved inbox now contains this leave
+        inbox_approved = await ac.get("/api/v1/approvals?status=APPROVED", headers={"Authorization": f"Bearer {admin_token}"})
+        assert inbox_approved.status_code == 200
+        approved_ids = [item["id"] for item in inbox_approved.json()["leave_requests"]]
+        assert leave_id in approved_ids
+
+        # ALL inbox also contains this leave
+        inbox_all = await ac.get("/api/v1/approvals?status=ALL", headers={"Authorization": f"Bearer {admin_token}"})
+        assert inbox_all.status_code == 200
+        all_ids = [item["id"] for item in inbox_all.json()["leave_requests"]]
+        assert leave_id in all_ids
+

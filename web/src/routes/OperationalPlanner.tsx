@@ -21,6 +21,7 @@ import {
   Filter,
   RotateCcw,
   AlertCircle,
+  Clock,
 } from "lucide-react";
 import {
   OperationalCoverageResponse,
@@ -129,6 +130,9 @@ export const OperationalPlanner: React.FC = () => {
   const [reassignSuccess, setReassignSuccess] = useState<string | null>(null);
   const [reassignPreview, setReassignPreview] = useState<any | null>(null);
   const [previewLoading, setPreviewLoading] = useState<boolean>(false);
+  const [highlightedJobItemId, setHighlightedJobItemId] = useState<string | null>(null);
+  const [recentReassignments, setRecentReassignments] = useState<any[]>([]);
+  const [showReassignmentsHistory, setShowReassignmentsHistory] = useState<boolean>(false);
 
   // Check notice days (>= 3 days notice required)
   const noticeDays = useMemo(() => {
@@ -315,11 +319,29 @@ export const OperationalPlanner: React.FC = () => {
     }
   };
 
-  // Auto-focus on date / worker if passed via URL parameters
+  // Fetch recent temporary reassignments
+  const fetchRecentReassignments = async () => {
+    try {
+      const res = await fetch("/api/v1/reassignment-requests", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setRecentReassignments(data || []);
+      }
+    } catch (e) {
+      console.error("Failed to fetch reassignments:", e);
+    }
+  };
+
+  // Auto-focus on date / worker / job if passed via URL parameters
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const dateParam = params.get("date");
     const empParam = params.get("employee_id");
+    const jobParam = params.get("job_item_id");
+    const lensParam = params.get("lens");
+
     if (dateParam) {
       try {
         const parts = dateParam.split("-").map(Number);
@@ -333,9 +355,18 @@ export const OperationalPlanner: React.FC = () => {
         console.error("Invalid date query param", e);
       }
     }
-    if (empParam) {
-      setRosterSearchQuery(empParam);
+
+    if (jobParam) {
+      setHighlightedJobItemId(jobParam);
+    }
+
+    if (lensParam === "ROSTER") {
       setActiveLens("ROSTER");
+      if (empParam) {
+        setRosterSearchQuery(empParam);
+      }
+    } else {
+      setActiveLens("COVERAGE");
     }
   }, []);
 
@@ -345,8 +376,30 @@ export const OperationalPlanner: React.FC = () => {
       fetchSupervisors();
       fetchStaffingGaps();
       fetchAllEmployees();
+      fetchRecentReassignments();
     }
   }, [token, weekStartDate, activeLens]);
+
+  // Focus on a specific reassignment in the planner grid
+  const handleFocusReassignment = (item: any) => {
+    if (item.date_from) {
+      try {
+        const parts = item.date_from.split("-").map(Number);
+        const d = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+        const day = d.getUTCDay();
+        const diff = d.getUTCDate() - day + (day === 0 ? -6 : 1);
+        const monday = new Date(d);
+        monday.setUTCDate(diff);
+        setWeekStartDate(monday.toISOString().split("T")[0]);
+      } catch (e) {
+        console.error("Invalid date on reassignment", e);
+      }
+    }
+    setActiveLens("COVERAGE");
+    if (item.target_job_item_id) {
+      setHighlightedJobItemId(item.target_job_item_id);
+    }
+  };
 
   // Available job items for reassignment targets
   const availableJobItems = useMemo(() => {
@@ -1149,6 +1202,21 @@ export const OperationalPlanner: React.FC = () => {
               </div>
             )}
 
+            {/* Reassignments History Toggle Button */}
+            <button
+              type="button"
+              onClick={() => setShowReassignmentsHistory(!showReassignmentsHistory)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition flex items-center gap-1.5 cursor-pointer ${
+                showReassignmentsHistory
+                  ? "bg-purple-100 text-purple-800 border-purple-300"
+                  : "bg-white text-slate-700 hover:bg-slate-50 border-slate-200 shadow-2xs"
+              }`}
+              title="View recent temporary reassignments and audit history"
+            >
+              <Clock className="h-3.5 w-3.5 text-purple-600" />
+              Reassignments ({recentReassignments.length})
+            </button>
+
             {/* Request Reassignment Action Button */}
             <button
               type="button"
@@ -1158,7 +1226,7 @@ export const OperationalPlanner: React.FC = () => {
                 setReassignPreview(null);
                 setReassignmentModalOpen(true);
               }}
-              className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1.5 shadow-sm transition"
+              className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1.5 shadow-sm transition cursor-pointer"
             >
               <Plus className="h-3.5 w-3.5" />
               Request Reassignment
@@ -1194,6 +1262,74 @@ export const OperationalPlanner: React.FC = () => {
           </div>
         </div>
       </header>
+
+      {/* Reassignments History Tray */}
+      {showReassignmentsHistory && (
+        <div className="bg-purple-50/80 border-b border-purple-200 px-6 py-3 shadow-2xs space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-purple-900 flex items-center gap-1.5">
+              <Clock className="h-4 w-4 text-purple-600" />
+              Temporary Operational Reassignments ({recentReassignments.length})
+            </span>
+            <button
+              onClick={() => setShowReassignmentsHistory(false)}
+              className="text-xs text-purple-700 hover:text-purple-900 font-semibold cursor-pointer"
+            >
+              ✕ Close
+            </button>
+          </div>
+          {recentReassignments.length === 0 ? (
+            <p className="text-xs text-purple-700 italic">No temporary reassignments on record.</p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-h-56 overflow-y-auto pt-1">
+              {recentReassignments.map((r: any) => (
+                <div
+                  key={r.id}
+                  className="p-2.5 bg-white rounded-lg border border-purple-200 shadow-2xs text-xs space-y-1 flex flex-col justify-between"
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-purple-100 text-purple-800">
+                        {r.reassignment_type}
+                      </span>
+                      <span
+                        className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                          r.status === "APPROVED"
+                            ? "bg-emerald-100 text-emerald-800"
+                            : r.status === "PENDING"
+                            ? "bg-amber-100 text-amber-800"
+                            : "bg-rose-100 text-rose-800"
+                        }`}
+                      >
+                        {r.status}
+                      </span>
+                    </div>
+                    <div className="font-semibold text-slate-800 mt-1">
+                      {r.reassignment_type === "REPLACE"
+                        ? `${r.original_employee_name} → ${r.new_employee_name}`
+                        : r.new_employee_name || r.original_employee_name}
+                    </div>
+                    <div className="text-[11px] text-slate-500">
+                      {r.date_from === r.date_to ? r.date_from : `${r.date_from} to ${r.date_to}`}
+                      {r.target_job_name && ` · ${r.target_job_name}`}
+                    </div>
+                    <div className="text-[10px] text-slate-400">
+                      Req by: {r.requested_by_name || "Supervisor"}
+                      {r.decided_by_name && ` · Decided: ${r.decided_by_name}`}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleFocusReassignment(r)}
+                    className="mt-1 w-full py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded text-[11px] border border-purple-200 transition cursor-pointer"
+                  >
+                    Focus in Planner
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Staffing Gaps / Uncovered Leave Shortages Banner */}
       {staffingGaps.length > 0 && (
@@ -1641,7 +1777,14 @@ export const OperationalPlanner: React.FC = () => {
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {ws.items.map((it) => (
-                          <tr key={it.job_item_id} className="hover:bg-slate-50/50 transition-colors">
+                          <tr
+                            key={it.job_item_id}
+                            className={`transition-colors ${
+                              highlightedJobItemId === it.job_item_id
+                                ? "bg-indigo-50/90 ring-2 ring-indigo-500 shadow-xs"
+                                : "hover:bg-slate-50/50"
+                            }`}
+                          >
                             {/* Item Info Column */}
                             <td className="px-4 py-3">
                               <div className="font-semibold text-slate-900 flex items-center gap-1.5">

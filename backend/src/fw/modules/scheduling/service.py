@@ -4199,22 +4199,50 @@ class SchedulingService:
     async def get_approvals_inbox(
         self,
         current_user: User,
+        status: str | None = None,
     ) -> ApprovalsInboxResponse:
-        """Fetch pending items needing approval (leave requests, reassignments) in user scope."""
-        pending_leaves = await self.list_leave_requests(status="REQUESTED", current_user=current_user)
-        pending_reassigns = await self.list_reassignment_requests(status="PENDING", current_user=current_user)
+        """Fetch items needing approval or decided history (leave requests, reassignments) in user scope."""
+        norm_status = (status or "PENDING").upper()
+
+        if norm_status == "PENDING":
+            leaves = await self.list_leave_requests(status="REQUESTED", current_user=current_user)
+            reassigns = await self.list_reassignment_requests(status="PENDING", current_user=current_user)
+        elif norm_status == "APPROVED":
+            leaves = await self.list_leave_requests(status="APPROVED", current_user=current_user)
+            reassigns = await self.list_reassignment_requests(status="APPROVED", current_user=current_user)
+        elif norm_status == "REJECTED":
+            leaves = await self.list_leave_requests(status="REJECTED", current_user=current_user)
+            reassigns = await self.list_reassignment_requests(status="REJECTED", current_user=current_user)
+        elif norm_status == "DECIDED":
+            all_leaves = await self.list_leave_requests(status=None, current_user=current_user)
+            all_reassigns = await self.list_reassignment_requests(status=None, current_user=current_user)
+            leaves = [item for item in all_leaves if item.status in ("APPROVED", "REJECTED")]
+            reassigns = [req for req in all_reassigns if req.status in ("APPROVED", "REJECTED")]
+        else:  # "ALL"
+            leaves = await self.list_leave_requests(status=None, current_user=current_user)
+            reassigns = await self.list_reassignment_requests(status=None, current_user=current_user)
+
+        # Always calculate badge counts based on PENDING items
+        if norm_status == "PENDING":
+            pending_leaves_count = len(leaves)
+            pending_reassigns_count = len(reassigns)
+        else:
+            pending_l = await self.list_leave_requests(status="REQUESTED", current_user=current_user)
+            pending_r = await self.list_reassignment_requests(status="PENDING", current_user=current_user)
+            pending_leaves_count = len(pending_l)
+            pending_reassigns_count = len(pending_r)
 
         counts = ApprovalsCounts(
-            leave=len(pending_leaves),
-            reassignments=len(pending_reassigns),
+            leave=pending_leaves_count,
+            reassignments=pending_reassigns_count,
             attendance=0,
-            total=len(pending_leaves) + len(pending_reassigns),
+            total=pending_leaves_count + pending_reassigns_count,
         )
 
         return ApprovalsInboxResponse(
             counts=counts,
-            leave_requests=pending_leaves,
-            reassignment_requests=pending_reassigns,
+            leave_requests=leaves,
+            reassignment_requests=reassigns,
             attendance_rows=[],
         )
 

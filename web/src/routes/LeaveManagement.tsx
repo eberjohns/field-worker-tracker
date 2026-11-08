@@ -28,7 +28,8 @@ interface LeaveRequestItem {
   reason: string;
   status: string;
   recorded_by_name: string | null;
-  recorded_at: string;
+  recorded_at?: string;
+  created_at?: string;
   approved_by_name: string | null;
   approved_at: string | null;
   decision_note: string | null;
@@ -493,7 +494,9 @@ export const LeaveManagement: React.FC = () => {
                     </td>
                     <td className="py-3.5 px-4 text-xs text-slate-500">
                       <div>{l.recorded_by_name || "Unknown"}</div>
-                      <div className="text-2xs text-slate-400">{new Date(l.recorded_at).toLocaleDateString()}</div>
+                      <div className="text-2xs text-slate-400">
+                        {new Date(l.recorded_at || l.created_at || Date.now()).toLocaleDateString()}
+                      </div>
                     </td>
                     <td className="py-3.5 px-4">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold ${
@@ -510,7 +513,7 @@ export const LeaveManagement: React.FC = () => {
                         {l.status === "APPROVED" && (
                           <Link
                             to="/operational-planner"
-                            search={{ date: l.from_date, employee_id: l.employee_id }}
+                            search={{ date: l.from_date, employee_id: l.employee_id, lens: "COVERAGE" }}
                             className="px-2.5 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-md transition flex items-center gap-1 shadow-2xs"
                             title="Open Operational Planner to arrange a cover replacement for this approved leave"
                           >
