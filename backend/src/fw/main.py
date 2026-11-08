@@ -23,11 +23,17 @@ from fw.core.logging import setup_logging
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     settings = get_settings()
     setup_logging(log_level=settings.LOG_LEVEL)
+    from fw.modules.sync import register_sync_listeners
+
+    register_sync_listeners()
     yield
 
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    from fw.modules.sync import register_sync_listeners
+
+    register_sync_listeners()
 
     app = FastAPI(
         title="Field Worker Tracker API",

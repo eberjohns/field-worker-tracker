@@ -25,6 +25,7 @@ import { WorksiteDetail } from "./routes/WorksiteDetail";
 import { Boundaries } from "./routes/Boundaries";
 import { Approvals } from "./routes/Approvals";
 import { LeaveManagement } from "./routes/LeaveManagement";
+import { Devices } from "./routes/Devices";
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -160,6 +161,12 @@ const leaveRoute = createRoute({
   component: LeaveManagement,
 });
 
+const devicesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/devices",
+  component: Devices,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
@@ -170,6 +177,7 @@ const routeTree = rootRoute.addChildren([
   boundariesRoute,
   approvalsRoute,
   leaveRoute,
+  devicesRoute,
   usersRoute,
   auditLogsRoute,
   liveRoute,

@@ -20,6 +20,7 @@ One decision per file, numbered. Use the `write-adr` skill. Status: Proposed, Ac
 | 014 | [Planner: standing assignments, scheduled work, and roster markers](014-planner-standing-assignments-and-markers.md) | Accepted |
 | 015 | [Rebuilt planner architecture: base planner and operational planner](015-rebuilt-planner-base-and-operational.md) | Accepted |
 | 016 | [Leave management, temporary reassignments, and approvals inbox](016-leave-and-temporary-reassignment.md) | Accepted |
+| 017 | [Mobile authentication, change log synchronization, and events architecture](017-mobile-sync-and-events-architecture.md) | Accepted |
 
 See also [decision-register.md](decision-register.md) for business decisions awaiting client confirmation.
 

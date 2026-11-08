@@ -44,6 +44,9 @@ jobs:
       - name: Unit Tests
         run: uv run pytest
 
+      - name: Export openapi-mobile.json Check
+        run: uv run python ../tools/export_openapi.py --tag mobile --out ../openapi-mobile.json
+
   migration-check:
     name: Database Migration Check
     runs-on: ubuntu-latest

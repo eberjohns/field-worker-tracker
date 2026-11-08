@@ -31,14 +31,14 @@ The mobile team can build against a working contract: login, device binding, sna
 - Transport entity (Phase 10)
 
 ## Checklist (tick each before asking for review)
-- [ ] A simulated phone logs in, changes password, snapshots, receives a schedule change as a delta and acks
-- [ ] Second device is refused; Admin reset allows rebinding
-- [ ] Cursor too old triggers resync
-- [ ] A holiday/season change updates DAY_PLAN and alarm times
-- [ ] `openapi-mobile.json` generated in CI; contract changelog updated
-- [ ] Data from other workers never appears in a worker's sync
-- [ ] Docs updated in the same change (`.agents/rules/documentation.md`), ADR written for any design decision, CHANGELOG entry
-- [ ] Pull request opened with the template; nothing merged by the agent
+- [x] A simulated phone logs in, changes password, snapshots, receives a schedule change as a delta and acks
+- [x] Second device is refused; Admin reset allows rebinding
+- [x] Cursor too old triggers resync
+- [x] A holiday/season change updates DAY_PLAN and alarm times
+- [x] `openapi-mobile.json` generated in CI; contract changelog updated
+- [x] Data from other workers never appears in a worker's sync
+- [x] Docs updated in the same change (`.agents/rules/documentation.md`), ADR written for any design decision, CHANGELOG entry
+- [x] Pull request opened with the template; nothing merged by the agent
 
 ## Demo script
 - Run the simulator through login, snapshot, a roster change and an ack; show the device sync lag in the web.

@@ -22,6 +22,7 @@ import {
   CalendarRange,
   PanelLeftClose,
   PanelLeftOpen,
+  Smartphone,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { Login } from "../../routes/Login";
@@ -47,6 +48,7 @@ const navItems: NavItem[] = [
   { label: "Payroll", to: "/payroll", icon: DollarSign, roles: ["ADMIN", "ENGINEER"] },
   { label: "Salary Structures", to: "/salary-structures", icon: Banknote, roles: ["ADMIN", "ENGINEER"] },
   { label: "Master Data Import", to: "/imports", icon: UploadCloud, roles: ["ADMIN"] },
+  { label: "Devices", to: "/devices", icon: Smartphone, roles: ["ADMIN", "ENGINEER", "SUPERINTENDENT"] },
   { label: "Reports", to: "/reports", icon: FileBarChart },
   { label: "Users & Security", to: "/users", icon: UserCheck, roles: ["ADMIN"] },
   { label: "Audit Logs", to: "/audit-logs", icon: History, roles: ["ADMIN"] },

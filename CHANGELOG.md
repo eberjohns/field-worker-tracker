@@ -3,6 +3,43 @@ All notable changes. Format: Keep a Changelog. Mobile-contract changes are also 
 
 ## [Unreleased]
 ### Added
+- PHASE-07 (Mobile Contract, Login and Change Synchronization):
+  - Database migration `0009_mobile_sync.py`:
+    - `sync_changes`: Per-worker append-only change log with monotonic cursor (`id BIGINT IDENTITY`), `employee_id`, `entity_type`, `entity_id`, `op`, `payload` JSONB, `priority`, and `created_at`.
+    - `consent_records`: Workers' accepted privacy and location tracking consent history.
+    - `mobile_event_logs`: PostGIS-enabled immutable raw location event logs (`Geometry(POINT, 4326)`), device timestamp, capture timestamp, coordinates, accuracy, battery, and server processing flags.
+  - Domain Events & Synchronous Listeners:
+    - Domain events (`ScheduledWorkChanged`, `HolidayChanged`, `TimeRuleChanged`, `EmployeeProfileChanged`, `WorksiteBoundaryChanged`, `AccommodationBoundaryChanged`) registered on `fw.core.event_bus`.
+    - Synchronous listeners in `fw.modules.sync.listeners` materialize changes into `sync_changes` in the same database transaction.
+  - Mobile Auth & Security:
+    - Worker authentication (`POST /mobile/auth/login`) by Employee ID (`tally_id`) and default password (`Welcome123!`).
+    - Forced first-login password change (`POST /mobile/auth/change-password`).
+    - Single-device binding (`registered_devices`): rejects subsequent logins from mismatching devices with HTTP 409 `DEVICE_MISMATCH`.
+    - Admin-only device reset action (`POST /devices/{device_id}/reset-binding`).
+    - Location consent verification (`GET /mobile/auth/consent`, `POST /mobile/auth/consent`).
+    - Mobile heartbeat (`POST /mobile/auth/heartbeat`) and token revocation (`POST /mobile/auth/logout`).
+  - Change Log Synchronization Engine:
+    - Full baseline snapshot (`GET /mobile/sync/snapshot`) returning `PROFILE`, `SETTINGS`, `DAY_PLAN` (30-day sliding window), `SCHEDULE_ITEM`, `JOB` (with boundary polygon and geofence circle helper), and `ACCOMMODATION`.
+    - Delta sync (`GET /mobile/sync/changes?cursor=N`) with server-side entity coalescing, returning only the latest state per entity.
+    - Compaction floor check signaling `resync_required = true` when cursor falls below retention floor.
+    - Client sync acknowledgment (`POST /mobile/sync/ack`).
+  - Location Event Batch Ingestion:
+    - Batch ingestion endpoint `POST /mobile/events/batch` accepting up to 200 raw events per request.
+    - Validates timestamps (rejects >30 days old or >5 min future clock skew) and WGS84 coordinate bounds.
+    - Idempotent deduplication returning `DUPLICATE` without double-inserting.
+    - Persists raw events immutably in `mobile_event_logs`.
+  - Push Adapter:
+    - `PushProvider` port with `NullPushProvider` and `FcmPushProvider`.
+  - Web Dashboard Devices View:
+    - `Devices.tsx` (`/devices`): Device status KPIs, search/filter, platform badges, sync lag calculation, and Admin-only device binding reset.
+    - Wired into React router and `Shell.tsx` navigation bar with `Smartphone` icon.
+  - Developer & Integration Tooling:
+    - Standalone Mobile Tester Proxy & GPS Simulator (`tools/mobile-proxy/`) with interactive Leaflet map, worksite/camp polygon rendering, geofence circle visualization, draggable worker pin, Point-in-Polygon detection, auto-event queueing, and batch dispatch.
+    - Demo seed script `tools/seed_phase07_demo.py` provisioning worker 1193 ("Shanto Miah"), company settings, consent policy, accommodation, and worksite.
+    - OpenAPI export script `tools/export_openapi.py --tag mobile` and exported `openapi-mobile.json`.
+    - CI check in `.github/workflows/ci.yml` verifying OpenAPI schema synchronization.
+    - Mobile developer onboarding guide in `docs/18-mobile-integration-guide.md`.
+    - Architecture Decision Record `docs/decisions/017-mobile-sync-and-events-architecture.md`.
 - PHASE-06 (Leave Management, Temporary Reassignment & Approvals Inbox):
   - Pure domain rules in `backend/src/fw/rules/scheduling/`:
     - `leave.py`: Date order validation, overlapping leave checks against requested/approved leaves, notice period checking (3+ days ahead for non-admin, past leaves allowed for Admin), and leave taken counting (working days excluding worker's weekly off day and public holidays vs calendar days).
