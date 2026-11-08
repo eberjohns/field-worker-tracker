@@ -49,3 +49,4 @@ def get_push_provider() -> PushProvider:
     if backend == "fcm":
         return FcmPushProvider(credentials=settings.FCM_CREDENTIALS)
     return NullPushProvider()
+

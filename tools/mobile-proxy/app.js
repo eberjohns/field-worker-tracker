@@ -625,3 +625,4 @@
     updateWorkerPosition(state.workerLocation.lat, state.workerLocation.lng);
   });
 })();
+

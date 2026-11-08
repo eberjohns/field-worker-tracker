@@ -74,3 +74,4 @@ Now open your browser at **[http://localhost:8085](http://localhost:8085)**.
    - In a private/incognito window or using another browser tab, log in with `1193` using a different Device ID (e.g. `DEV_SIM_1193_B`).
    - The server rejects the login with `409 Conflict: DEVICE_MISMATCH` because employee `1193` is already bound to `DEV_SIM_1193_A`.
    - In the web dashboard at `http://localhost:5173/devices`, an Admin can view the device and click **Reset Binding** to permit re-registration.
+

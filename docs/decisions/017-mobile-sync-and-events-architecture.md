@@ -75,3 +75,4 @@ Key architectural requirements and client decisions (DEC-13, DEC-14, DEC-15, DEC
 - Database migration `0009_mobile_sync.py` adds `sync_changes`, `consent_records`, and `mobile_event_logs`.
 - Web dashboard adds dedicated `/devices` route with Admin-restricted reset binding.
 - Mobile team receives published contract (`docs/09-mobile-sync-contract.md`), onboarding guide (`docs/18-mobile-integration-guide.md`), `openapi-mobile.json`, and `tools/mobile-proxy/`.
+
