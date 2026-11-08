@@ -69,6 +69,8 @@ class ScopeService:
 
 
 class OrgService:
+    get_scoped_employee_ids = ScopeService.get_scoped_employee_ids
+
     @staticmethod
     async def list_employees(
         session: AsyncSession,

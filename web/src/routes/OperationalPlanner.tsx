@@ -20,6 +20,8 @@ import {
   Pin,
   Filter,
   RotateCcw,
+  AlertCircle,
+  Clock,
 } from "lucide-react";
 import {
   OperationalCoverageResponse,
@@ -89,11 +91,32 @@ interface StagedBaseRemoval {
 }
 
 export const OperationalPlanner: React.FC = () => {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
 
   // Navigation & Lens
-  const [activeLens, setActiveLens] = useState<"COVERAGE" | "ROSTER">("COVERAGE");
+  const [activeLens, setActiveLens] = useState<"COVERAGE" | "ROSTER">(() => {
+    try {
+      return new URLSearchParams(window.location.search).get("lens") === "ROSTER" ? "ROSTER" : "COVERAGE";
+    } catch {
+      return "COVERAGE";
+    }
+  });
   const [weekStartDate, setWeekStartDate] = useState<string>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const dateParam = params.get("date");
+      if (dateParam) {
+        const parts = dateParam.split("-").map(Number);
+        const d = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+        const day = d.getUTCDay();
+        const diff = d.getUTCDate() - day + (day === 0 ? -6 : 1);
+        const monday = new Date(d);
+        monday.setUTCDate(diff);
+        return monday.toISOString().split("T")[0];
+      }
+    } catch (e) {
+      console.error("Failed to parse initial date query param", e);
+    }
     const now = new Date();
     const day = now.getDay();
     const diff = now.getDate() - day + (day === 0 ? -6 : 1);
@@ -104,6 +127,49 @@ export const OperationalPlanner: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>("");
+
+  // Staffing Gaps & Reassignment Request Modal State
+  const [staffingGaps, setStaffingGaps] = useState<any[]>([]);
+  const [allEmployeesList, setAllEmployeesList] = useState<any[]>([]);
+  const [reassignmentModalOpen, setReassignmentModalOpen] = useState<boolean>(false);
+  const [reassignType, setReassignType] = useState<"REPLACE" | "MOVE" | "ADD" | "CANCEL">("REPLACE");
+  const [reassignDateFrom, setReassignDateFrom] = useState<string>(() => {
+    const d = new Date(Date.now() + 3 * 86400000);
+    return d.toISOString().split("T")[0];
+  });
+  const [reassignDateTo, setReassignDateTo] = useState<string>(() => {
+    const d = new Date(Date.now() + 3 * 86400000);
+    return d.toISOString().split("T")[0];
+  });
+  const [reassignOrigEmpId, setReassignOrigEmpId] = useState<string>("");
+  const [reassignNewEmpId, setReassignNewEmpId] = useState<string>("");
+  const [reassignJobItemId, setReassignJobItemId] = useState<string>("");
+  const [reassignReasonCategory, setReassignReasonCategory] = useState<string>("LEAVE_COVER");
+  const [reassignReason, setReassignReason] = useState<string>("");
+  const [reassignSubmitting, setReassignSubmitting] = useState<boolean>(false);
+  const [reassignError, setReassignError] = useState<string | null>(null);
+  const [reassignSuccess, setReassignSuccess] = useState<string | null>(null);
+  const [reassignPreview, setReassignPreview] = useState<any | null>(null);
+  const [previewLoading, setPreviewLoading] = useState<boolean>(false);
+  const [highlightedJobItemId, setHighlightedJobItemId] = useState<string | null>(() => {
+    try {
+      return new URLSearchParams(window.location.search).get("job_item_id") || null;
+    } catch {
+      return null;
+    }
+  });
+  const [recentReassignments, setRecentReassignments] = useState<any[]>([]);
+  const [showReassignmentsHistory, setShowReassignmentsHistory] = useState<boolean>(false);
+
+  // Check notice days (>= 3 days notice required)
+  const noticeDays = useMemo(() => {
+    if (!reassignDateFrom) return 0;
+    const parts = reassignDateFrom.split("-").map(Number);
+    const target = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+    const now = new Date();
+    const todayUtc = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+    return Math.round((target.getTime() - todayUtc.getTime()) / (1000 * 3600 * 24));
+  }, [reassignDateFrom]);
 
   // Pinning state
   const [pinnedWorksites, setPinnedWorksites] = useState<Set<string>>(() => {
@@ -185,9 +251,12 @@ export const OperationalPlanner: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
   const scrollPosRef = useRef<number>(0);
+  const activeWeekRef = useRef<string>(weekStartDate);
+  activeWeekRef.current = weekStartDate;
 
   // Fetch Operational Data
   const fetchOperationalData = async (silent: boolean = false) => {
+    const requestedWeek = weekStartDate;
     const hasExistingData = activeLens === "COVERAGE" ? !!coverageData : !!rosterData;
     const shouldSilent = silent || hasExistingData;
     if (!shouldSilent) setLoading(true);
@@ -198,26 +267,32 @@ export const OperationalPlanner: React.FC = () => {
     try {
       if (activeLens === "COVERAGE") {
         const res = await fetch(
-          `/api/v1/operational-planner/coverage?week_start=${weekStartDate}`,
+          `/api/v1/operational-planner/coverage?week_start=${requestedWeek}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         if (!res.ok) throw new Error("Failed to load Operational Coverage");
         const data: OperationalCoverageResponse = await res.json();
+        if (activeWeekRef.current !== requestedWeek) return;
         setCoverageData(data);
       } else {
         const res = await fetch(
-          `/api/v1/operational-planner/roster?week_start=${weekStartDate}`,
+          `/api/v1/operational-planner/roster?week_start=${requestedWeek}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         if (!res.ok) throw new Error("Failed to load Operational Roster");
         const data: OperationalRosterResponse = await res.json();
+        if (activeWeekRef.current !== requestedWeek) return;
         setRosterData(data);
       }
     } catch (err: any) {
-      setError(err.message || "An error occurred");
+      if (activeWeekRef.current === requestedWeek) {
+        setError(err.message || "An error occurred");
+      }
     } finally {
-      if (!shouldSilent) setLoading(false);
-      else setIsRefreshing(false);
+      if (activeWeekRef.current === requestedWeek) {
+        if (!shouldSilent) setLoading(false);
+        else setIsRefreshing(false);
+      }
       requestAnimationFrame(() => {
         if (scrollPosRef.current > 0) {
           window.scrollTo({ top: scrollPosRef.current, behavior: "instant" });
@@ -247,12 +322,273 @@ export const OperationalPlanner: React.FC = () => {
     }
   };
 
+  // Fetch Staffing Gaps (TO_BE_COVERED slots from approved leave)
+  const fetchStaffingGaps = async () => {
+    try {
+      const today = new Date().toISOString().split("T")[0];
+      const future = new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0];
+      const res = await fetch(`/api/v1/staffing-gaps?from_date=${today}&to_date=${future}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setStaffingGaps(data.gaps || []);
+      }
+    } catch (e) {
+      console.error("Failed to fetch staffing gaps:", e);
+    }
+  };
+
+  // Fetch all employees for reassignment dropdowns
+  const fetchAllEmployees = async () => {
+    try {
+      const res = await fetch("/api/v1/employees?limit=500", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const items = data.items || data || [];
+        setAllEmployeesList(items);
+      }
+    } catch (e) {
+      console.error("Failed to fetch all employees:", e);
+    }
+  };
+
+  // Fetch recent temporary reassignments
+  const fetchRecentReassignments = async () => {
+    try {
+      const res = await fetch("/api/v1/reassignment-requests", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setRecentReassignments(data || []);
+      }
+    } catch (e) {
+      console.error("Failed to fetch reassignments:", e);
+    }
+  };
+
+  // Auto-focus on date / worker / job if passed via URL parameters
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const dateParam = params.get("date");
+    const empParam = params.get("employee_id");
+    const jobParam = params.get("job_item_id");
+    const lensParam = params.get("lens");
+
+    if (dateParam) {
+      try {
+        const parts = dateParam.split("-").map(Number);
+        const d = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+        const day = d.getUTCDay();
+        const diff = d.getUTCDate() - day + (day === 0 ? -6 : 1);
+        const monday = new Date(d);
+        monday.setUTCDate(diff);
+        const targetWeek = monday.toISOString().split("T")[0];
+        setWeekStartDate((prev) => (prev !== targetWeek ? targetWeek : prev));
+      } catch (e) {
+        console.error("Invalid date query param", e);
+      }
+    }
+
+    if (jobParam) {
+      setHighlightedJobItemId(jobParam);
+    }
+
+    if (lensParam === "ROSTER") {
+      setActiveLens("ROSTER");
+      if (empParam) {
+        setRosterSearchQuery(empParam);
+      }
+    } else {
+      setActiveLens("COVERAGE");
+    }
+  }, []);
+
   useEffect(() => {
     if (token) {
       fetchOperationalData();
       fetchSupervisors();
+      fetchStaffingGaps();
+      fetchAllEmployees();
+      fetchRecentReassignments();
     }
   }, [token, weekStartDate, activeLens]);
+
+  // Focus on a specific reassignment in the planner grid
+  const handleFocusReassignment = (item: any) => {
+    if (item.date_from) {
+      try {
+        const parts = item.date_from.split("-").map(Number);
+        const d = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+        const day = d.getUTCDay();
+        const diff = d.getUTCDate() - day + (day === 0 ? -6 : 1);
+        const monday = new Date(d);
+        monday.setUTCDate(diff);
+        setWeekStartDate(monday.toISOString().split("T")[0]);
+      } catch (e) {
+        console.error("Invalid date on reassignment", e);
+      }
+    }
+    setActiveLens("COVERAGE");
+    if (item.target_job_item_id) {
+      setHighlightedJobItemId(item.target_job_item_id);
+    }
+  };
+
+  // Available job items for reassignment targets
+  const availableJobItems = useMemo(() => {
+    if (!coverageData?.worksites) return [];
+    const list: { job_item_id: string; label: string }[] = [];
+    for (const ws of coverageData.worksites) {
+      for (const item of ws.items) {
+        list.push({
+          job_item_id: item.job_item_id,
+          label: `${ws.job_number} - ${ws.job_name} (${item.sub_item_code} - ${item.staff_grade_description})`,
+        });
+      }
+    }
+    return list;
+  }, [coverageData]);
+
+  // Available employees for reassignment
+  const availableEmployees = useMemo(() => {
+    if (allEmployeesList.length > 0) return allEmployeesList;
+    if (rosterData?.workers) {
+      return rosterData.workers.map((w) => ({
+        id: w.employee_id,
+        name: w.name,
+        tally_id: w.tally_id,
+        staff_grade_description: w.staff_grade_description,
+      }));
+    }
+    return [];
+  }, [allEmployeesList, rosterData]);
+
+  // Open Reassignment Modal pre-filled for a specific staffing gap
+  const handleOpenReassignmentForGap = (gap: any) => {
+    setReassignType("REPLACE");
+    setReassignDateFrom(gap.work_date);
+    setReassignDateTo(gap.work_date);
+    setReassignOrigEmpId(gap.original_employee_id);
+    setReassignJobItemId(gap.job_item_id);
+    setReassignReasonCategory("LEAVE_COVER");
+    setReassignReason(`Cover replacement for ${gap.original_employee_name}`);
+    setReassignError(null);
+    setReassignSuccess(null);
+    setReassignPreview(null);
+    setReassignmentModalOpen(true);
+  };
+
+  // Preview hours impact for reassignment
+  const handlePreviewReassignment = async () => {
+    if (!reassignNewEmpId || !reassignDateFrom || !reassignDateTo) return;
+    setPreviewLoading(true);
+    setReassignPreview(null);
+    try {
+      const payload: any = {
+        employee_id: reassignNewEmpId,
+        date_from: reassignDateFrom,
+        date_to: reassignDateTo,
+        additional_hours_per_day: 8.0,
+      };
+      if (reassignJobItemId) payload.target_job_item_id = reassignJobItemId;
+
+      const res = await fetch("/api/v1/reassignment-requests/preview", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setReassignPreview(data);
+      }
+    } catch (e) {
+      console.error("Preview failed", e);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  // Submit Reassignment Request (strictly validates >= 3 days notice per BR-SC-04)
+  const handleCreateReassignment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setReassignError(null);
+    setReassignSuccess(null);
+
+    if (noticeDays < 3 && user?.role !== "ADMIN") {
+      setReassignError("Notice is under 3 days. Requests with less than 3 days notice are strictly refused by company policy.");
+      return;
+    }
+
+    if ((reassignType === "REPLACE" || reassignType === "MOVE" || reassignType === "CANCEL") && !reassignOrigEmpId) {
+      setReassignError("Please select the original employee.");
+      return;
+    }
+
+    if ((reassignType === "REPLACE" || reassignType === "ADD") && !reassignNewEmpId) {
+      setReassignError("Please select the new / replacement employee.");
+      return;
+    }
+
+    if ((reassignType === "REPLACE" || reassignType === "MOVE" || reassignType === "ADD") && !reassignJobItemId) {
+      setReassignError("Please select the target worksite / job item.");
+      return;
+    }
+
+    if (!reassignReason.trim()) {
+      setReassignError("Please provide a reason for the reassignment.");
+      return;
+    }
+
+    setReassignSubmitting(true);
+    try {
+      const payload: any = {
+        reassignment_type: reassignType,
+        date_from: reassignDateFrom,
+        date_to: reassignDateTo,
+        reason_category: reassignReasonCategory,
+        reason: reassignReason.trim(),
+      };
+      if (reassignOrigEmpId) payload.original_employee_id = reassignOrigEmpId;
+      if (reassignNewEmpId) payload.new_employee_id = reassignNewEmpId;
+      if (reassignJobItemId) payload.target_job_item_id = reassignJobItemId;
+
+      const res = await fetch("/api/v1/reassignment-requests", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        const msg = data?.detail?.message || data?.detail || "Failed to create reassignment request";
+        setReassignError(String(msg));
+        return;
+      }
+
+      setReassignSuccess("Reassignment request submitted successfully! It is now pending review in the Approvals Inbox.");
+      setTimeout(() => {
+        setReassignmentModalOpen(false);
+        setReassignSuccess(null);
+        fetchOperationalData(true);
+        fetchStaffingGaps();
+      }, 1500);
+    } catch (err: any) {
+      setReassignError(err.message || "Network error submitting reassignment request.");
+    } finally {
+      setReassignSubmitting(false);
+    }
+  };
 
   // Week navigation helpers
   const handlePrevWeek = () => {
@@ -902,6 +1238,36 @@ export const OperationalPlanner: React.FC = () => {
                 />
               </div>
             )}
+
+            {/* Reassignments History Toggle Button */}
+            <button
+              type="button"
+              onClick={() => setShowReassignmentsHistory(!showReassignmentsHistory)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition flex items-center gap-1.5 cursor-pointer ${
+                showReassignmentsHistory
+                  ? "bg-purple-100 text-purple-800 border-purple-300"
+                  : "bg-white text-slate-700 hover:bg-slate-50 border-slate-200 shadow-2xs"
+              }`}
+              title="View recent temporary reassignments and audit history"
+            >
+              <Clock className="h-3.5 w-3.5 text-purple-600" />
+              Reassignments ({recentReassignments.length})
+            </button>
+
+            {/* Request Reassignment Action Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setReassignError(null);
+                setReassignSuccess(null);
+                setReassignPreview(null);
+                setReassignmentModalOpen(true);
+              }}
+              className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1.5 shadow-sm transition cursor-pointer"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Request Reassignment
+            </button>
           </div>
         </div>
 
@@ -933,6 +1299,415 @@ export const OperationalPlanner: React.FC = () => {
           </div>
         </div>
       </header>
+
+      {/* Reassignments History Tray */}
+      {showReassignmentsHistory && (
+        <div className="bg-purple-50/80 border-b border-purple-200 px-6 py-3 shadow-2xs space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-purple-900 flex items-center gap-1.5">
+              <Clock className="h-4 w-4 text-purple-600" />
+              Temporary Operational Reassignments ({recentReassignments.length})
+            </span>
+            <button
+              onClick={() => setShowReassignmentsHistory(false)}
+              className="text-xs text-purple-700 hover:text-purple-900 font-semibold cursor-pointer"
+            >
+              ✕ Close
+            </button>
+          </div>
+          {recentReassignments.length === 0 ? (
+            <p className="text-xs text-purple-700 italic">No temporary reassignments on record.</p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-h-56 overflow-y-auto pt-1">
+              {recentReassignments.map((r: any) => (
+                <div
+                  key={r.id}
+                  className="p-2.5 bg-white rounded-lg border border-purple-200 shadow-2xs text-xs space-y-1 flex flex-col justify-between"
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-purple-100 text-purple-800">
+                        {r.reassignment_type}
+                      </span>
+                      <span
+                        className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                          r.status === "APPROVED"
+                            ? "bg-emerald-100 text-emerald-800"
+                            : r.status === "PENDING"
+                            ? "bg-amber-100 text-amber-800"
+                            : "bg-rose-100 text-rose-800"
+                        }`}
+                      >
+                        {r.status}
+                      </span>
+                    </div>
+                    <div className="font-semibold text-slate-800 mt-1">
+                      {r.reassignment_type === "REPLACE"
+                        ? `${r.original_employee_name} → ${r.new_employee_name}`
+                        : r.new_employee_name || r.original_employee_name}
+                    </div>
+                    <div className="text-[11px] text-slate-500">
+                      {r.date_from === r.date_to ? r.date_from : `${r.date_from} to ${r.date_to}`}
+                      {r.target_job_name && ` · ${r.target_job_name}`}
+                    </div>
+                    <div className="text-[10px] text-slate-400">
+                      Req by: {r.requested_by_name || "Supervisor"}
+                      {r.decided_by_name && ` · Decided: ${r.decided_by_name}`}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleFocusReassignment(r)}
+                    className="mt-1 w-full py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded text-[11px] border border-purple-200 transition cursor-pointer"
+                  >
+                    Focus in Planner
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Staffing Gaps / Uncovered Leave Shortages Banner */}
+      {staffingGaps.length > 0 && (
+        <div className="bg-amber-50 border-b border-amber-200 px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+          <div className="flex items-center gap-2.5">
+            <div className="p-1.5 bg-amber-100 rounded-full text-amber-700">
+              <AlertTriangle className="h-4 w-4" />
+            </div>
+            <div>
+              <span className="font-bold text-xs text-amber-950">
+                {staffingGaps.length} Leave Shift{staffingGaps.length > 1 ? "s" : ""} Requiring Cover:
+              </span>
+              <div className="flex flex-wrap items-center gap-2 mt-1">
+                {staffingGaps.slice(0, 4).map((gap, idx) => (
+                  <span
+                    key={idx}
+                    className="inline-flex items-center gap-1.5 bg-white px-2 py-0.5 rounded border border-amber-300 text-slate-800 text-xs shadow-2xs"
+                  >
+                    <span className="font-semibold text-slate-900">{gap.original_employee_name}</span>
+                    <span className="text-2xs text-slate-500">
+                      {gap.work_date} • {gap.job_number}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenReassignmentForGap(gap)}
+                      className="text-xs font-bold text-indigo-700 hover:text-indigo-900 ml-1 underline cursor-pointer"
+                    >
+                      Assign
+                    </button>
+                  </span>
+                ))}
+                {staffingGaps.length > 4 && (
+                  <span className="text-xs font-semibold text-amber-800">
+                    +{staffingGaps.length - 4} more
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (staffingGaps.length > 0) handleOpenReassignmentForGap(staffingGaps[0]);
+              else setReassignmentModalOpen(true);
+            }}
+            className="px-3 py-1.5 bg-amber-700 hover:bg-amber-800 text-white font-semibold rounded-md text-xs transition shadow-2xs flex items-center gap-1 cursor-pointer"
+          >
+            <Users className="h-3.5 w-3.5" />
+            Assign Cover for Gap
+          </button>
+        </div>
+      )}
+
+      {/* Request Temporary Reassignment Modal (D2, BR-SC-04) */}
+      {reassignmentModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-xl max-h-[92vh] flex flex-col overflow-hidden">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <Users className="h-5 w-5 text-indigo-600" />
+                  Request Temporary Reassignment
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Operational adjustment for specific dates (requires ≥ 3 days notice per company policy).
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReassignmentModalOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Modal Body / Form */}
+            <form onSubmit={handleCreateReassignment} className="flex-1 overflow-y-auto p-6 space-y-4">
+              {/* Type Switcher */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                  Reassignment Type
+                </label>
+                <div className="grid grid-cols-4 gap-2">
+                  {(["REPLACE", "MOVE", "ADD", "CANCEL"] as const).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => {
+                        setReassignType(t);
+                        setReassignError(null);
+                        setReassignPreview(null);
+                      }}
+                      className={`py-2 px-2.5 rounded-lg text-xs font-bold text-center border transition cursor-pointer ${
+                        reassignType === t
+                          ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
+                          : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-2xs text-slate-500 mt-1.5">
+                  {reassignType === "REPLACE" && "Assign a replacement worker to cover an absent worker's shift."}
+                  {reassignType === "MOVE" && "Relocate a worker from their blueprint site to another job site."}
+                  {reassignType === "ADD" && "Deploy an additional worker to a job site for operational need."}
+                  {reassignType === "CANCEL" && "Cancel a scheduled shift due to client closure or weather conditions."}
+                </p>
+              </div>
+
+              {/* Date Selectors & Notice Period Banner */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Date From <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={reassignDateFrom}
+                    onChange={(e) => setReassignDateFrom(e.target.value)}
+                    className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Date To <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={reassignDateTo}
+                    onChange={(e) => setReassignDateTo(e.target.value)}
+                    className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
+                  />
+                </div>
+              </div>
+
+              {/* Notice Validation Banner */}
+              <div
+                className={`p-3 rounded-lg border text-xs flex items-center justify-between gap-2 ${
+                  noticeDays >= 3
+                    ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                    : "bg-rose-50 border-rose-200 text-rose-800"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {noticeDays >= 3 ? (
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0" />
+                  )}
+                  <span>
+                    {noticeDays >= 3
+                      ? `${noticeDays} days advance notice (Valid notice period per BR-SC-04)`
+                      : `Notice is ${noticeDays} day(s). System requires strictly ≥ 3 days notice.`}
+                  </span>
+                </div>
+                <span className="text-2xs font-extrabold uppercase tracking-wide">
+                  {noticeDays >= 3 ? "Allowed" : user?.role === "ADMIN" ? "Admin Override" : "Refused"}
+                </span>
+              </div>
+
+              {/* Original Worker (REPLACE, MOVE, CANCEL) */}
+              {(reassignType === "REPLACE" || reassignType === "MOVE" || reassignType === "CANCEL") && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Original Worker (Absent / Being Moved) <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={reassignOrigEmpId}
+                    onChange={(e) => setReassignOrigEmpId(e.target.value)}
+                    className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
+                  >
+                    <option value="">-- Select Worker --</option>
+                    {availableEmployees.map((emp: any) => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.name || emp.employee_name} ({emp.tally_id || "No Tally"} • {emp.staff_grade_description || emp.role || "Worker"})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Target Worksite & Job Item (REPLACE, MOVE, ADD) */}
+              {(reassignType === "REPLACE" || reassignType === "MOVE" || reassignType === "ADD") && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Target Worksite & Job Item <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={reassignJobItemId}
+                    onChange={(e) => setReassignJobItemId(e.target.value)}
+                    className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
+                  >
+                    <option value="">-- Select Target Job Item --</option>
+                    {availableJobItems.map((j) => (
+                      <option key={j.job_item_id} value={j.job_item_id}>
+                        {j.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Replacement / New Worker (REPLACE, ADD) */}
+              {(reassignType === "REPLACE" || reassignType === "ADD") && (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-slate-700">
+                      Replacement / New Worker <span className="text-rose-500">*</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handlePreviewReassignment}
+                      disabled={previewLoading || !reassignNewEmpId}
+                      className="text-xs text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 disabled:opacity-40 cursor-pointer"
+                    >
+                      {previewLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                      Preview Worker Hours
+                    </button>
+                  </div>
+                  <select
+                    value={reassignNewEmpId}
+                    onChange={(e) => setReassignNewEmpId(e.target.value)}
+                    className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
+                  >
+                    <option value="">-- Select Replacement Worker --</option>
+                    {availableEmployees.map((emp: any) => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.name || emp.employee_name} ({emp.tally_id || "No Tally"} • {emp.staff_grade_description || emp.role || "Worker"})
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* Preview Result Card */}
+                  {reassignPreview && (
+                    <div className="mt-2.5 p-3 rounded-lg bg-indigo-50/70 border border-indigo-200 text-xs space-y-1">
+                      <div className="font-bold text-indigo-900 flex items-center justify-between">
+                        <span>Projected Total Weekly Hours: {reassignPreview.total_weekly_hours}h</span>
+                        {reassignPreview.planned_overtime_hours > 0 && (
+                          <span className="text-amber-700 font-bold">
+                            OT: +{reassignPreview.planned_overtime_hours}h
+                          </span>
+                        )}
+                      </div>
+                      {reassignPreview.warnings?.length > 0 ? (
+                        <div className="text-rose-700 space-y-0.5 pt-1">
+                          {reassignPreview.warnings.map((w: string, idx: number) => (
+                            <div key={idx} className="flex items-center gap-1">
+                              <AlertCircle className="h-3 w-3 shrink-0" />
+                              <span>{w}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-2xs text-emerald-700 font-medium">
+                          ✓ No schedule conflicts or overtime violations detected.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Reason Category & Reason */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Reason Category <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={reassignReasonCategory}
+                    onChange={(e) => setReassignReasonCategory(e.target.value)}
+                    className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
+                  >
+                    <option value="LEAVE_COVER">Leave Cover Absence</option>
+                    <option value="CAPACITY">Operational Capacity Shortfall</option>
+                    <option value="WEATHER">Weather Conditions</option>
+                    <option value="PRIORITY">High-Priority Client Request</option>
+                    <option value="OTHER">Other Operational Need</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Reason Details <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Covering sick leave for gardener..."
+                    value={reassignReason}
+                    onChange={(e) => setReassignReason(e.target.value)}
+                    className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
+                  />
+                </div>
+              </div>
+
+              {/* Errors & Success Banners */}
+              {reassignError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-lg flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span>{reassignError}</span>
+                </div>
+              )}
+              {reassignSuccess && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-lg flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 shrink-0" />
+                  <span>{reassignSuccess}</span>
+                </div>
+              )}
+
+              {/* Modal Footer Actions */}
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                <span className="text-2xs text-slate-400">
+                  Engineer or Admin approval required before operational schedule is updated.
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setReassignmentModalOpen(false)}
+                    className="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={reassignSubmitting || (noticeDays < 3 && user?.role !== "ADMIN")}
+                    className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+                  >
+                    {reassignSubmitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    Submit Reassignment Request
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Main Grid Content */}
       <main className="flex-1 overflow-auto p-6 space-y-6">
@@ -1039,7 +1814,14 @@ export const OperationalPlanner: React.FC = () => {
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {ws.items.map((it) => (
-                          <tr key={it.job_item_id} className="hover:bg-slate-50/50 transition-colors">
+                          <tr
+                            key={it.job_item_id}
+                            className={`transition-colors ${
+                              highlightedJobItemId === it.job_item_id
+                                ? "bg-indigo-50/90 ring-2 ring-indigo-500 shadow-xs"
+                                : "hover:bg-slate-50/50"
+                            }`}
+                          >
                             {/* Item Info Column */}
                             <td className="px-4 py-3">
                               <div className="font-semibold text-slate-900 flex items-center gap-1.5">
@@ -1473,9 +2255,16 @@ export const OperationalPlanner: React.FC = () => {
                                 {w.tally_id && (
                                   <span className="font-mono text-[10px] text-slate-400">({w.tally_id})</span>
                                 )}
-                                <span className="text-[9px] px-1.5 py-0.5 rounded uppercase font-bold bg-slate-200 text-slate-700">
-                                  Blueprint
-                                </span>
+                                {w.display_type === "TO_BE_COVERED" ? (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded uppercase font-bold bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1">
+                                    <AlertTriangle className="h-2.5 w-2.5 text-amber-600" />
+                                    To Be Covered
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded uppercase font-bold bg-slate-200 text-slate-700">
+                                    Blueprint
+                                  </span>
+                                )}
                               </div>
 
                               {!isPromptingRemoval && (
@@ -1485,11 +2274,17 @@ export const OperationalPlanner: React.FC = () => {
                                     onClick={() => setReplacementTargetId(w.employee_id)}
                                     className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors ${
                                       replacementTargetId === w.employee_id
-                                        ? "bg-indigo-600 text-white shadow-sm"
+                                        ? "bg-amber-600 text-white shadow-sm"
+                                        : w.display_type === "TO_BE_COVERED"
+                                        ? "bg-amber-100 text-amber-900 hover:bg-amber-200 border border-amber-300 font-bold"
                                         : "bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200"
                                     }`}
                                   >
-                                    {replacementTargetId === w.employee_id ? "Target Selected" : "Replace with Cover"}
+                                    {replacementTargetId === w.employee_id
+                                      ? "Target Selected"
+                                      : w.display_type === "TO_BE_COVERED"
+                                      ? "Select Cover"
+                                      : "Replace with Cover"}
                                   </button>
                                   <button
                                     type="button"
@@ -1897,6 +2692,295 @@ export const OperationalPlanner: React.FC = () => {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Request Temporary Reassignment Modal (D2, BR-SC-04) */}
+      {reassignmentModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-xl max-h-[92vh] flex flex-col overflow-hidden">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <Users className="h-5 w-5 text-indigo-600" />
+                  Request Temporary Reassignment
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Operational adjustment for specific dates (requires ≥ 3 days notice per company policy).
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReassignmentModalOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Modal Body / Form */}
+            <form onSubmit={handleCreateReassignment} className="flex-1 overflow-y-auto p-6 space-y-4">
+              {/* Type Switcher */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                  Reassignment Type
+                </label>
+                <div className="grid grid-cols-4 gap-2">
+                  {(["REPLACE", "MOVE", "ADD", "CANCEL"] as const).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => {
+                        setReassignType(t);
+                        setReassignError(null);
+                        setReassignPreview(null);
+                      }}
+                      className={`py-2 px-2.5 rounded-lg text-xs font-bold text-center border transition cursor-pointer ${
+                        reassignType === t
+                          ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
+                          : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-2xs text-slate-500 mt-1.5">
+                  {reassignType === "REPLACE" && "Assign a replacement worker to cover an absent worker's shift."}
+                  {reassignType === "MOVE" && "Relocate a worker from their blueprint site to another job site."}
+                  {reassignType === "ADD" && "Deploy an additional worker to a job site for operational need."}
+                  {reassignType === "CANCEL" && "Cancel a scheduled shift due to client closure or weather conditions."}
+                </p>
+              </div>
+
+              {/* Date Selectors & Notice Period Banner */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Date From <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={reassignDateFrom}
+                    onChange={(e) => setReassignDateFrom(e.target.value)}
+                    className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Date To <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={reassignDateTo}
+                    onChange={(e) => setReassignDateTo(e.target.value)}
+                    className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
+                  />
+                </div>
+              </div>
+
+              {/* Notice Validation Banner */}
+              <div
+                className={`p-3 rounded-lg border text-xs flex items-center justify-between gap-2 ${
+                  noticeDays >= 3
+                    ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                    : "bg-rose-50 border-rose-200 text-rose-800"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {noticeDays >= 3 ? (
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0" />
+                  )}
+                  <span>
+                    {noticeDays >= 3
+                      ? `${noticeDays} days advance notice (Valid notice period per BR-SC-04)`
+                      : `Notice is ${noticeDays} day(s). System requires strictly ≥ 3 days notice.`}
+                  </span>
+                </div>
+                <span className="text-2xs font-extrabold uppercase tracking-wide">
+                  {noticeDays >= 3 ? "Allowed" : user?.role === "ADMIN" ? "Admin Override" : "Refused"}
+                </span>
+              </div>
+
+              {/* Original Worker (REPLACE, MOVE, CANCEL) */}
+              {(reassignType === "REPLACE" || reassignType === "MOVE" || reassignType === "CANCEL") && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Original Worker (Absent / Being Moved) <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={reassignOrigEmpId}
+                    onChange={(e) => setReassignOrigEmpId(e.target.value)}
+                    className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
+                  >
+                    <option value="">-- Select Worker --</option>
+                    {availableEmployees.map((emp: any) => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.name || emp.employee_name} ({emp.tally_id || "No Tally"} • {emp.staff_grade_description || emp.role || "Worker"})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Target Worksite & Job Item (REPLACE, MOVE, ADD) */}
+              {(reassignType === "REPLACE" || reassignType === "MOVE" || reassignType === "ADD") && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Target Worksite & Job Item <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={reassignJobItemId}
+                    onChange={(e) => setReassignJobItemId(e.target.value)}
+                    className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
+                  >
+                    <option value="">-- Select Target Job Item --</option>
+                    {availableJobItems.map((j) => (
+                      <option key={j.job_item_id} value={j.job_item_id}>
+                        {j.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Replacement / New Worker (REPLACE, ADD) */}
+              {(reassignType === "REPLACE" || reassignType === "ADD") && (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-slate-700">
+                      Replacement / New Worker <span className="text-rose-500">*</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handlePreviewReassignment}
+                      disabled={previewLoading || !reassignNewEmpId}
+                      className="text-xs text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 disabled:opacity-40 cursor-pointer"
+                    >
+                      {previewLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                      Preview Worker Hours
+                    </button>
+                  </div>
+                  <select
+                    value={reassignNewEmpId}
+                    onChange={(e) => setReassignNewEmpId(e.target.value)}
+                    className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
+                  >
+                    <option value="">-- Select Replacement Worker --</option>
+                    {availableEmployees.map((emp: any) => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.name || emp.employee_name} ({emp.tally_id || "No Tally"} • {emp.staff_grade_description || emp.role || "Worker"})
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* Preview Result Card */}
+                  {reassignPreview && (
+                    <div className="mt-2.5 p-3 rounded-lg bg-indigo-50/70 border border-indigo-200 text-xs space-y-1">
+                      <div className="font-bold text-indigo-900 flex items-center justify-between">
+                        <span>Projected Total Weekly Hours: {reassignPreview.total_weekly_hours}h</span>
+                        {reassignPreview.planned_overtime_hours > 0 && (
+                          <span className="text-amber-700 font-bold">
+                            OT: +{reassignPreview.planned_overtime_hours}h
+                          </span>
+                        )}
+                      </div>
+                      {reassignPreview.warnings?.length > 0 ? (
+                        <div className="text-rose-700 space-y-0.5 pt-1">
+                          {reassignPreview.warnings.map((w: string, idx: number) => (
+                            <div key={idx} className="flex items-center gap-1">
+                              <AlertCircle className="h-3 w-3 shrink-0" />
+                              <span>{w}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-2xs text-emerald-700 font-medium">
+                          ✓ No schedule conflicts or overtime violations detected.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Reason Category & Reason */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Reason Category <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={reassignReasonCategory}
+                    onChange={(e) => setReassignReasonCategory(e.target.value)}
+                    className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
+                  >
+                    <option value="LEAVE_COVER">Leave Cover Absence</option>
+                    <option value="CAPACITY">Operational Capacity Shortfall</option>
+                    <option value="WEATHER">Weather Conditions</option>
+                    <option value="PRIORITY">High-Priority Client Request</option>
+                    <option value="OTHER">Other Operational Need</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Reason Details <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Covering sick leave for gardener..."
+                    value={reassignReason}
+                    onChange={(e) => setReassignReason(e.target.value)}
+                    className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
+                  />
+                </div>
+              </div>
+
+              {/* Errors & Success Banners */}
+              {reassignError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-lg flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span>{reassignError}</span>
+                </div>
+              )}
+              {reassignSuccess && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-lg flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 shrink-0" />
+                  <span>{reassignSuccess}</span>
+                </div>
+              )}
+
+              {/* Modal Footer Actions */}
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                <span className="text-2xs text-slate-400">
+                  Engineer or Admin approval required before operational schedule is updated.
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setReassignmentModalOpen(false)}
+                    className="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={reassignSubmitting || (noticeDays < 3 && user?.role !== "ADMIN")}
+                    className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+                  >
+                    {reassignSubmitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    Submit Reassignment Request
+                  </button>
+                </div>
+              </div>
+            </form>
           </div>
         </div>
       )}

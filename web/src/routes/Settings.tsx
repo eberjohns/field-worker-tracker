@@ -960,80 +960,80 @@ export const Settings: React.FC = () => {
 
           {resolvedResult && (
             <div className="space-y-4 animate-in fade-in">
-              {/* Client example card layout */}
-              <div className="bg-gradient-to-r from-slate-900 to-indigo-950 text-white rounded-xl p-5 shadow-sm space-y-4">
-                <div className="flex items-center justify-between border-b border-indigo-800 pb-3">
+              {/* Client example card layout - Clean Light Theme */}
+              <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 pb-3 gap-2">
                   <div>
-                    <span className="text-xs font-mono text-indigo-300">
+                    <span className="text-2xs font-mono font-bold tracking-wider uppercase text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded">
                       RESOLVED SCHEDULE AS OF {resolvedResult.date}
                     </span>
-                    <h3 className="text-lg font-bold">
+                    <h3 className="text-lg font-bold text-slate-900 mt-1">
                       Winning Primary Rule: {resolvedResult.winning_rule_name || "None"}
                     </h3>
                   </div>
-                  <div className="text-right">
-                    <span className="text-xs text-indigo-300">Company Accommodation:</span>
-                    <div className="text-xs font-semibold">
+                  <div className="text-left sm:text-right">
+                    <span className="text-xs text-slate-400">Company Accommodation:</span>
+                    <div className="text-xs font-semibold text-slate-800">
                       {resolvedResult.has_accommodation ? "Company Provided" : "None (n/a times)"}
                     </div>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-center">
-                  <div className="bg-indigo-900/40 p-2.5 rounded-lg border border-indigo-700/50">
-                    <div className="text-[11px] text-indigo-300 uppercase">Acc. Departure</div>
-                    <div className="text-base font-bold font-mono">
+                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                    <div className="text-[11px] font-semibold text-slate-500 uppercase">Acc. Departure</div>
+                    <div className="text-base font-bold font-mono text-slate-900 mt-0.5">
                       {resolvedResult.accommodation_start || "n/a"}
                     </div>
                   </div>
-                  <div className="bg-indigo-900/40 p-2.5 rounded-lg border border-indigo-700/50">
-                    <div className="text-[11px] text-indigo-300 uppercase">1st Site Entry</div>
-                    <div className="text-base font-bold font-mono">
+                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                    <div className="text-[11px] font-semibold text-slate-500 uppercase">1st Site Entry</div>
+                    <div className="text-base font-bold font-mono text-slate-900 mt-0.5">
                       {resolvedResult.first_site_start || "-"}
                     </div>
                   </div>
-                  <div className="bg-indigo-900/40 p-2.5 rounded-lg border border-indigo-700/50">
-                    <div className="text-[11px] text-indigo-300 uppercase">Planned Break</div>
-                    <div className="text-base font-bold font-mono">
+                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                    <div className="text-[11px] font-semibold text-slate-500 uppercase">Planned Break</div>
+                    <div className="text-base font-bold font-mono text-slate-900 mt-0.5">
                       {resolvedResult.break_minutes} min
                     </div>
                   </div>
-                  <div className="bg-indigo-900/40 p-2.5 rounded-lg border border-indigo-700/50">
-                    <div className="text-[11px] text-indigo-300 uppercase">Last Site Exit</div>
-                    <div className="text-base font-bold font-mono">
+                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                    <div className="text-[11px] font-semibold text-slate-500 uppercase">Last Site Exit</div>
+                    <div className="text-base font-bold font-mono text-slate-900 mt-0.5">
                       {resolvedResult.last_site_end || "-"}
                     </div>
                   </div>
-                  <div className="bg-indigo-900/40 p-2.5 rounded-lg border border-indigo-700/50">
-                    <div className="text-[11px] text-indigo-300 uppercase">Acc. Return</div>
-                    <div className="text-base font-bold font-mono">
+                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                    <div className="text-[11px] font-semibold text-slate-500 uppercase">Acc. Return</div>
+                    <div className="text-base font-bold font-mono text-slate-900 mt-0.5">
                       {resolvedResult.accommodation_end || "n/a"}
                     </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-indigo-800">
-                  <div className="bg-white/10 p-3 rounded-lg text-center">
-                    <div className="text-xs text-indigo-200">Planned Total Span</div>
-                    <div className="text-xl font-bold font-mono">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-slate-200">
+                  <div className="bg-indigo-50/60 border border-indigo-100 p-3.5 rounded-lg text-center">
+                    <div className="text-xs font-medium text-indigo-700">Planned Total Span</div>
+                    <div className="text-xl font-bold font-mono text-indigo-950 mt-0.5">
                       {formatMinutes(resolvedResult.planned_total_minutes)}
-                      <span className="text-xs font-normal text-indigo-300 ml-1">
+                      <span className="text-xs font-normal text-indigo-600 ml-1">
                         ({resolvedResult.planned_total_minutes}m)
                       </span>
                     </div>
                   </div>
-                  <div className="bg-white/10 p-3 rounded-lg text-center">
-                    <div className="text-xs text-indigo-200">Planned Worked Time</div>
-                    <div className="text-xl font-bold font-mono text-emerald-300">
+                  <div className="bg-emerald-50/60 border border-emerald-100 p-3.5 rounded-lg text-center">
+                    <div className="text-xs font-medium text-emerald-700">Planned Worked Time</div>
+                    <div className="text-xl font-bold font-mono text-emerald-950 mt-0.5">
                       {formatMinutes(resolvedResult.planned_worked_minutes)}
-                      <span className="text-xs font-normal text-emerald-200 ml-1">
+                      <span className="text-xs font-normal text-emerald-600 ml-1">
                         ({resolvedResult.planned_worked_minutes}m)
                       </span>
                     </div>
                   </div>
-                  <div className="bg-white/10 p-3 rounded-lg text-center">
-                    <div className="text-xs text-indigo-200">Standard Hours Shift</div>
-                    <div className="text-xl font-bold font-mono text-amber-300">
+                  <div className="bg-amber-50/60 border border-amber-100 p-3.5 rounded-lg text-center">
+                    <div className="text-xs font-medium text-amber-700">Standard Hours Shift</div>
+                    <div className="text-xl font-bold font-mono text-amber-950 mt-0.5">
                       {resolvedResult.standard_hours_change_minutes} min
                     </div>
                   </div>

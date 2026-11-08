@@ -43,10 +43,10 @@ All client questions are answered. **CONFIRMED** = the client decided; **PROPOSE
 | DEC-40 | Out of scope | Checklists, manual shift confirmation, WPS | 01 | CONFIRMED |
 | DEC-41 | Time rules | Five-point planned schedule (accommodation start, first site, break, last site, accommodation end); company default, overridden for a team, drivers or one person, by season and outdoor/indoor; engineers manage within scope | 05, D3, ADR-012 | CONFIRMED |
 | DEC-42 | Planner | Yearly standing assignments, weekly roster as main view, allocated hours vs standard hours in a side panel, markers for skipped/off/leave/to-be-covered | 04, D1, ADR-014 | CONFIRMED |
-| DEC-43 | Approvals | Engineer approves leave, temporary reassignments (3 days notice) and attendance rows with variation, flags or overtime; clean rows are automatic | 04, 05, D2 | CONFIRMED |
+| DEC-43 | Approvals | Engineer approves leave, temporary reassignments (3 days notice) and attendance rows with variation, flags or overtime; clean rows are automatic | 04, 05, D2, ADR-016 | CONFIRMED |
 | DEC-44 | Transport | Drivers section: vehicles and daily runs (driver, ordered stops, passengers) synced to the driver and the workers | D5 | CONFIRMED |
 | DEC-45 | Month-end | Auto draft 5 days after month-end (setting); Admin re-runs and approves; later events ignored; abnormal cases outside the system | 06, D4 | CONFIRMED |
-| DEC-46 | Reports history | Month-end reports auto-generated and every file kept, named `<Company>_<Report>_<Country>_<Period>_generated-<date>.xlsx`; leave taken is counted, no balances | 12, D4 | CONFIRMED |
+| DEC-46 | Reports history | Month-end reports auto-generated and every file kept, named `<Company>_<Report>_<Country>_<Period>_generated-<date>.xlsx`; leave taken is counted, no balances | 12, D4, ADR-016 | CONFIRMED |
 | DEC-47 | Report visibility | Operational reports: Admin, Engineers, Superintendents, Supervisors; salary/cost reports: Admin and Engineers | 12 | CONFIRMED |
 | DEC-48 | Budget-only list | (see DEC-09) | 03 | CONFIRMED |
 | DEC-49 | Who is measured how | Everyone by site visits; only drivers accommodation-to-accommodation; no-accommodation workers have n/a accommodation columns | 05 | CONFIRMED |

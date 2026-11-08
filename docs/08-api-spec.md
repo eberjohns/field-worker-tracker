@@ -89,10 +89,15 @@ Roles: A = Admin, E = Engineer, S = Superintendent, V = Supervisor. "scope" = li
 | POST | /scheduled-work/reorder | A E | `{ employee_id, work_date, ordered_ids }` |
 | POST | /scheduled-work/validate | A E V | dry-run validation |
 | POST | /reassignment-requests | A E S V | request a temporary reassignment (REPLACE / MOVE / ADD / CANCEL, date or range, reason; >= 3 days ahead) |
+| POST | /reassignment-requests/preview | A E S V | live preview of worker hours, free hours, planned overtime, and warnings across proposed dates |
 | GET | /reassignment-requests | scope | list by status; `POST /reassignment-requests/{id}/approve`, `/reject`, `/cancel` (approve/reject: Engineer, Admin) |
-| GET/POST/PATCH | /leave-requests | A E (all), V (record a request), scope (read) | `POST /leave-requests/{id}/approve` and `/reject` (Engineer, Admin); `GET /leave-requests/summary?year=` = leave taken per worker and type |
+| GET/POST/PATCH | /leave-requests | A E (all), V (record a request), scope (read) | `POST /leave-requests/{id}/approve`, `/reject`, `/cancel` (Engineer, Admin, requester); `GET /leave-requests/summary?year=` = leave taken |
+| GET | /leave-requests/template | A | Download standalone leave import Excel template (.xlsx) |
+| POST | /leave-requests/import | A | Bulk import leaves from Excel with validation reporting |
 | GET | /staffing-gaps?from=&to= | A E S V scope | gaps from leave and understaffing |
 | GET | /approvals?type=&status=PENDING | A E | **approvals inbox**: leave, reassignment requests, overtime/variation attendance rows, with counts for the badge |
+| GET | /alerts | scope | active open operational alerts (COVER_NEEDED, PENDING_BOUNDARY, DOC_EXPIRY) |
+| POST | /alerts/{id}/resolve | scope | mark alert as resolved |
 
 ### Base Planner & Operational Planner
 | Method | Path | Roles | Purpose |

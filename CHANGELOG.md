@@ -3,6 +3,31 @@ All notable changes. Format: Keep a Changelog. Mobile-contract changes are also 
 
 ## [Unreleased]
 ### Added
+- PHASE-06 (Leave Management, Temporary Reassignment & Approvals Inbox):
+  - Pure domain rules in `backend/src/fw/rules/scheduling/`:
+    - `leave.py`: Date order validation, overlapping leave checks against requested/approved leaves, notice period checking (3+ days ahead for non-admin, past leaves allowed for Admin), and leave taken counting (working days excluding worker's weekly off day and public holidays vs calendar days).
+    - `reassignment.py`: 3-day notice validation strictly enforced for all roles (`date_from - today >= 3`), late approval detection (`LATE_APPROVAL` flag if decided within 3 days of shift), expired request detection, and live hours preview calculation with overtime and grade group mismatch warnings.
+  - Database migration `0008_leave_reassignment_approvals.py`:
+    - `leave_requests`: Stores employee leave records (`ANNUAL`, `SICK`, `UNPAID`, `EMERGENCY`, `OTHER`), date bounds, status (`REQUESTED`, `APPROVED`, `REJECTED`, `CANCELLED`), reason, and audit user references.
+    - `reassignment_requests`: Stores operational change requests (`REPLACE`, `MOVE`, `ADD`, `CANCEL`), dates, original and cover workers, target job item, reason category, notice flags, and decision audit metadata.
+    - `alerts`: Stores operational alerts (`COVER_NEEDED`, `PENDING_BOUNDARY`, `DOC_EXPIRY`) for supervisors, superintendents, engineers, and administrators.
+    - `scheduled_work`: Extended with `reassignment_request_id` and `is_late_approval` boolean flag.
+  - Event-driven notifications and alerts:
+    - Domain events (`LeaveApprovedEvent`, `LeaveCancelledEvent`, `ReassignmentApprovedEvent`) published on the core event bus by `SchedulingService`.
+    - `NotificationService` subscribes synchronously: creates `COVER_NEEDED` alert on leave approval and resolves it on leave cancellation or cover reassignment approval, preserving strict modular monolith layer boundaries.
+  - Web API endpoints mounted under `/api/v1`:
+    - Leave endpoints: `POST /leave-requests`, `GET /leave-requests`, `GET /leave-requests/{id}`, `POST /leave-requests/{id}/approve`, `POST /leave-requests/{id}/reject` (mandatory reason), `POST /leave-requests/{id}/cancel`, `GET /leave-requests/summary` (working days vs calendar days per worker/type), `GET /leave-requests/template` (downloadable Excel template), `POST /leave-requests/import` (bulk Excel import with error reporting).
+    - Reassignment endpoints: `POST /reassignment-requests` (refused if <3 days notice for any role), `POST /reassignment-requests/preview` (live preview of worker hours impact), `GET /reassignment-requests`, `GET /reassignment-requests/{id}`, `POST /reassignment-requests/{id}/approve`, `POST /reassignment-requests/{id}/reject` (mandatory reason), `POST /reassignment-requests/{id}/cancel`.
+    - Approvals inbox: `GET /approvals` (scoped to engineer's reporting lines, Admin sees all, counts badge).
+    - Staffing gaps: `GET /staffing-gaps` (surfaces uncovered approved leave slots).
+    - Alerts: `GET /alerts`, `POST /alerts/{id}/resolve`.
+  - Frontend views:
+    - `Approvals.tsx` (`/approvals`): Tabs for Leave Requests, Reassignments, and Attendance placeholder; status filtering; approve/reject actions with mandatory rejection reason dialog.
+    - `LeaveManagement.tsx` (`/leave`): Year selector; working days vs calendar days summary cards; record leave modal with 3-day notice client validation; cancel leave action; admin-only standalone leave Excel import modal with template downloader.
+    - `OperationalPlanner.tsx`: `TO_BE_COVERED` cells rendered with amber dashed border, alert icons, and one-click "Select Cover" candidate modal; coverage badges rendered on roster and operational grid cells.
+    - `Shell.tsx`: Navigation updated with Approvals Inbox and Leave Management links; dynamic red pill badge showing real-time pending approvals count.
+    - `Dashboard.tsx`: Active operational alerts widget displaying `COVER_NEEDED` and `PENDING_BOUNDARY` action items.
+  - Architecture Decision Record `docs/decisions/016-leave-and-temporary-reassignment.md`.
 - PHASE-05 (Rebuilt Planner: Base Planner & Operational Planner):
   - Clean architectural separation into two dedicated workspaces:
     - **Base Planner (`/base-planner`)**: Blueprint recurring master schedule engine. High-density 7-weekday matrix grid (`MON` to `SUN`) grouped by Worksite. Explicit day-by-day storage (`MON`..`SUN`) and in-modal cadence selection for monthly (`W1_MON`..`W4_SUN`) and quarterly (`M1_W1_MON`..`M3_W4_SUN`) line items without fragile mask overwrites. Contract quota enforcement prevents planning excess visits in the base blueprint. Fully enables all 7 days with candidate warnings for rest days.
