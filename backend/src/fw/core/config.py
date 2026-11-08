@@ -24,7 +24,15 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_MINUTES: int = 60
     REFRESH_TOKEN_DAYS: int = 30
     CORS_ORIGINS: list[str] = Field(
-        default_factory=lambda: ["http://localhost:3000", "http://localhost:5173"]
+        default_factory=lambda: [
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "http://localhost:8080",
+            "http://127.0.0.1:8080",
+            "http://localhost:8085",
+            "http://127.0.0.1:8085",
+            "http://localhost:4173",
+        ]
     )
 
     PUSH_BACKEND: str = "null"

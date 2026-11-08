@@ -23,11 +23,17 @@ from fw.core.logging import setup_logging
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     settings = get_settings()
     setup_logging(log_level=settings.LOG_LEVEL)
+    from fw.modules.sync import register_sync_listeners
+
+    register_sync_listeners()
     yield
 
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    from fw.modules.sync import register_sync_listeners
+
+    register_sync_listeners()
 
     app = FastAPI(
         title="Field Worker Tracker API",
@@ -40,6 +46,9 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.CORS_ORIGINS,
+        allow_origin_regex=(
+            r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$" if settings.APP_ENV == "local" else None
+        ),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

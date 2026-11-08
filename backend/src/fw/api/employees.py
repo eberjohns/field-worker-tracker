@@ -193,7 +193,7 @@ async def list_reporting_lines(
     if scoped_ids is not None and employee_id not in scoped_ids:
         raise AppError(code="OUT_OF_SCOPE", message="Employee is out of scope.", status_code=403)
     lines = await OrgService.list_reporting_lines(session, employee_id)
-    return [ReportingLineRead.model_validate(line) for line in lines]
+    return lines
 
 
 @router.post("/{employee_id}/reporting-lines", response_model=ReportingLineRead, status_code=201)
@@ -203,14 +203,13 @@ async def add_reporting_line(
     current_user: User = Depends(require_role("ADMIN")),
     session: AsyncSession = Depends(get_db),
 ) -> ReportingLineRead:
-    line = await OrgService.add_reporting_line(
+    return await OrgService.add_reporting_line(
         session=session,
         employee_id=employee_id,
         data=request,
         actor_user_id=current_user.id,
         actor_role=current_user.role,
     )
-    return ReportingLineRead.model_validate(line)
 
 
 @router.delete("/{employee_id}/reporting-lines/{line_id}")

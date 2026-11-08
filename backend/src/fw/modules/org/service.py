@@ -6,6 +6,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.core.errors import AppError
+from fw.core.events import EmployeeProfileChanged, event_bus
 from fw.modules.audit import AuditService
 from fw.modules.identity import User, hash_password
 from fw.modules.org.models import (
@@ -30,6 +31,7 @@ from fw.modules.org.schemas import (
     GroupUpdate,
     HierarchyTreeNode,
     ReportingLineCreate,
+    ReportingLineRead,
     ZoneCreate,
     ZoneUpdate,
 )
@@ -232,6 +234,9 @@ class OrgService:
                 actor_user_id=actor_user_id,
                 actor_role=actor_role,
             )
+            await event_bus.publish(
+                EmployeeProfileChanged(employee_id=employee.id), session=session
+            )
         return employee
 
     @staticmethod
@@ -277,6 +282,9 @@ class OrgService:
                     actor_user_id=actor_user_id,
                     actor_role=actor_role,
                     reason="Bulk update action",
+                )
+                await event_bus.publish(
+                    EmployeeProfileChanged(employee_id=employee.id), session=session
                 )
                 count += 1
         return count
@@ -324,12 +332,46 @@ class OrgService:
     async def list_reporting_lines(
         session: AsyncSession,
         employee_id: UUID,
-    ) -> list[EmployeeReportingLine]:
-        query = select(EmployeeReportingLine).where(
-            EmployeeReportingLine.employee_id == employee_id
-        )
-        result = await session.execute(query)
-        return list(result.scalars().all())
+    ) -> list[ReportingLineRead]:
+        """List all direct and upstream reporting lines for an employee (full management chain)."""
+        all_lines_query = select(EmployeeReportingLine)
+        all_lines = (await session.execute(all_lines_query)).scalars().all()
+
+        emp_query = select(Employee)
+        emp_map = {e.id: e for e in (await session.execute(emp_query)).scalars().all()}
+
+        upwards: dict[UUID, list[EmployeeReportingLine]] = {}
+        for line_item in all_lines:
+            upwards.setdefault(line_item.employee_id, []).append(line_item)
+
+        visited: set[UUID] = set()
+        result_lines: list[ReportingLineRead] = []
+
+        def traverse(curr_emp_id: UUID, is_direct: bool, via_name: str | None = None) -> None:
+            for line in upwards.get(curr_emp_id, []):
+                if line.manager_id in visited or line.manager_id == employee_id:
+                    continue
+                visited.add(line.manager_id)
+                mgr = emp_map.get(line.manager_id)
+                result_lines.append(
+                    ReportingLineRead(
+                        id=line.id,
+                        employee_id=employee_id,
+                        manager_id=line.manager_id,
+                        manager_name=mgr.name if mgr else None,
+                        manager_tally_id=mgr.tally_id if mgr else None,
+                        relationship=line.relationship,
+                        notes=line.notes,
+                        created_at=line.created_at,
+                        is_direct=is_direct,
+                        via_name=via_name,
+                    )
+                )
+                if mgr:
+                    traverse(mgr.id, False, mgr.name)
+
+        traverse(employee_id, is_direct=True, via_name=None)
+        return result_lines
 
     @staticmethod
     async def add_reporting_line(
@@ -338,7 +380,7 @@ class OrgService:
         data: ReportingLineCreate,
         actor_user_id: UUID,
         actor_role: str,
-    ) -> EmployeeReportingLine:
+    ) -> ReportingLineRead:
         # Load all existing reporting lines for cycle and constraint validation
         query = select(
             EmployeeReportingLine.employee_id,
@@ -382,7 +424,20 @@ class OrgService:
             actor_user_id=actor_user_id,
             actor_role=actor_role,
         )
-        return link
+
+        await event_bus.publish(EmployeeProfileChanged(employee_id=employee_id), session=session)
+
+        mgr = await session.get(Employee, data.manager_id)
+        return ReportingLineRead(
+            id=link.id,
+            employee_id=link.employee_id,
+            manager_id=link.manager_id,
+            manager_name=mgr.name if mgr else None,
+            manager_tally_id=mgr.tally_id if mgr else None,
+            relationship=link.relationship,
+            notes=link.notes,
+            created_at=link.created_at,
+        )
 
     @staticmethod
     async def remove_reporting_line(
@@ -397,6 +452,7 @@ class OrgService:
         if not link:
             raise AppError(code="NOT_FOUND", message="Reporting line not found.", status_code=404)
 
+        emp_id = link.employee_id
         await session.delete(link)
         await session.flush()
 
@@ -408,6 +464,8 @@ class OrgService:
             actor_user_id=actor_user_id,
             actor_role=actor_role,
         )
+
+        await event_bus.publish(EmployeeProfileChanged(employee_id=emp_id), session=session)
 
     # --- Hierarchy Tree ---
     @staticmethod

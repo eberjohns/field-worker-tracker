@@ -20,8 +20,48 @@ class DomainEvent:
         return self.__class__.__name__
 
 
-SyncHandler = Callable[[DomainEvent, Any], Awaitable[None]]
-PostCommitHandler = Callable[[DomainEvent], Awaitable[None]]
+@dataclass
+class ScheduledWorkChanged(DomainEvent):
+    employee_ids: list[UUID] = field(default_factory=list)
+    work_date: Any = None
+
+
+@dataclass
+class HolidayChanged(DomainEvent):
+    country: str = "AE"
+    holiday_date: Any = None
+
+
+@dataclass
+class TimeRuleChanged(DomainEvent):
+    country: str = "AE"
+    effective_from: Any = None
+
+
+@dataclass
+class EmployeeProfileChanged(DomainEvent):
+    employee_id: UUID | None = None
+
+
+@dataclass
+class WorksiteBoundaryChanged(DomainEvent):
+    worksite_id: UUID | None = None
+
+
+@dataclass
+class AccommodationBoundaryChanged(DomainEvent):
+    accommodation_id: UUID | None = None
+
+
+@dataclass
+class SyncChangesCommitted(DomainEvent):
+    employee_id: UUID | None = None
+    latest_cursor: int = 0
+    priority: int = 0
+
+
+SyncHandler = Callable[[Any, Any], Awaitable[None]]
+PostCommitHandler = Callable[[Any], Awaitable[None]]
 
 
 class EventBus:
@@ -54,7 +94,7 @@ class EventBus:
             except Exception as e:
                 logger.error(
                     "sync_event_handler_failed",
-                    event=event.event_name,
+                    domain_event=event.event_name,
                     handler=handler.__name__,
                     error=str(e),
                 )
@@ -69,7 +109,7 @@ class EventBus:
             except Exception as e:
                 logger.error(
                     "post_commit_event_handler_failed",
-                    event=event.event_name,
+                    domain_event=event.event_name,
                     handler=handler.__name__,
                     error=str(e),
                 )

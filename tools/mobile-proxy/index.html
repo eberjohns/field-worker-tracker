@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FWT Mobile Simulator & GPS Route Player</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <style>
+    /* Phone chassis styling */
+    .phone-chassis {
+      width: 375px;
+      height: 760px;
+      border-radius: 44px;
+      background: #0f172a;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 10px #1e293b, 0 0 0 12px #334155;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .phone-screen {
+      border-radius: 36px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      background: #f8fafc;
+    }
+    .dynamic-island {
+      width: 110px;
+      height: 24px;
+      background: #000;
+      border-radius: 12px;
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding-right: 8px;
+    }
+    .phone-side-btn-vol-up {
+      position: absolute;
+      left: -14px;
+      top: 130px;
+      width: 4px;
+      height: 48px;
+      background: #475569;
+      border-radius: 3px 0 0 3px;
+    }
+    .phone-side-btn-vol-down {
+      position: absolute;
+      left: -14px;
+      top: 190px;
+      width: 4px;
+      height: 48px;
+      background: #475569;
+      border-radius: 3px 0 0 3px;
+    }
+    .phone-side-btn-power {
+      position: absolute;
+      right: -14px;
+      top: 150px;
+      width: 4px;
+      height: 60px;
+      background: #475569;
+      border-radius: 0 3px 3px 0;
+    }
+    #map { height: 100%; width: 100%; min-height: 480px; }
+    .pulse-marker {
+      box-shadow: 0 0 0 rgba(79, 70, 229, 0.5);
+      animation: pulse 1.8s infinite;
+    }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.8); }
+      70% { box-shadow: 0 0 0 16px rgba(79, 70, 229, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0); }
+    }
+    .waypoint-pin {
+      background: #f59e0b;
+      color: #000;
+      font-weight: 800;
+      font-size: 11px;
+      border-radius: 50%;
+      border: 2px solid #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3);
+    }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 flex flex-col h-screen overflow-hidden font-sans select-none">
+  <!-- Top Global Bar -->
+  <header class="bg-slate-950 border-b border-slate-800 px-6 py-2.5 flex items-center justify-between shrink-0">
+    <div class="flex items-center space-x-3">
+      <div class="bg-indigo-600 text-white font-black px-2 py-0.5 rounded text-xs tracking-wider">DEV HUB</div>
+      <h1 class="text-sm font-bold text-white tracking-tight flex items-center gap-2">
+        FWT Android Studio Simulator & Route Player
+        <span class="text-2xs bg-emerald-950 border border-emerald-800 text-emerald-400 px-2 py-0.5 rounded-full font-mono">Real Mobile Protocol</span>
+      </h1>
+    </div>
+
+    <!-- API Connection Config -->
+    <div class="flex items-center space-x-4 text-xs">
+      <div class="flex items-center space-x-2">
+        <span class="text-slate-400">Backend API:</span>
+        <input id="apiUrl" type="text" value="http://localhost:8000/api/v1" class="bg-slate-900 text-slate-100 border border-slate-700 px-2.5 py-1 rounded text-2xs w-64 focus:outline-none focus:border-indigo-500 font-mono">
+      </div>
+      <div id="connBadge" class="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-2xs font-semibold bg-red-950 border border-red-800 text-red-400">
+        <span class="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
+        <span>Unauthenticated</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Workspace Container -->
+  <div class="flex flex-1 overflow-hidden">
+    <!-- LEFT PANEL: Android Studio Style Phone Simulator Mockup -->
+    <div class="p-6 flex items-center justify-center shrink-0 bg-slate-950/60 border-r border-slate-800 relative">
+      <div class="phone-side-btn-vol-up"></div>
+      <div class="phone-side-btn-vol-down"></div>
+      <div class="phone-side-btn-power"></div>
+
+      <!-- Smartphone Chassis -->
+      <div class="phone-chassis">
+        <div class="dynamic-island">
+          <div class="w-2.5 h-2.5 rounded-full bg-slate-900 border border-slate-800"></div>
+        </div>
+
+        <div class="phone-screen text-slate-800">
+          <!-- 1. Phone Top Status Bar -->
+          <div class="pt-2 px-6 pb-1 bg-slate-900 text-white flex justify-between items-center text-3xs font-semibold shrink-0">
+            <span id="phoneClock" class="font-mono">06:00 AM</span>
+            <div class="flex items-center space-x-1.5">
+              <span>5G</span>
+              <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zm6-4a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zm6-3a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"></path></svg>
+              <span>92%</span>
+            </div>
+          </div>
+
+          <!-- 2. Mobile App Header -->
+          <div class="bg-indigo-600 text-white px-4 py-2.5 flex items-center justify-between shadow-xs shrink-0">
+            <div class="flex items-center space-x-2">
+              <div class="w-6 h-6 rounded-md bg-indigo-800 flex items-center justify-center font-black text-2xs text-white">FW</div>
+              <span class="font-bold text-xs tracking-tight">Field Worker Tracker</span>
+            </div>
+            <div id="phoneUserTag" class="text-3xs bg-indigo-700 px-2 py-0.5 rounded font-mono truncate max-w-[110px]">
+              Offline
+            </div>
+          </div>
+
+          <!-- 3. Screen Body (Scrollable Viewport) -->
+          <div class="flex-1 overflow-y-auto bg-slate-100 p-3 space-y-3">
+            
+            <!-- VIEW A: SIGN IN SCREEN (Displayed when unauthenticated) -->
+            <div id="phoneLoginView" class="space-y-4 pt-4">
+              <div class="text-center space-y-1">
+                <div class="w-14 h-14 bg-indigo-600 text-white rounded-2xl mx-auto flex items-center justify-center text-xl font-black shadow-md">
+                  FW
+                </div>
+                <h2 class="text-sm font-bold text-slate-900">Worker Portal Sign-In</h2>
+                <p class="text-3xs text-slate-500">Sign in with any worker account (Tally ID & Password) to sync real server data.</p>
+              </div>
+
+              <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3">
+                <div class="space-y-1">
+                  <label class="text-3xs uppercase font-bold text-slate-500 block">Tally Employee ID</label>
+                  <input id="phoneInputTally" type="text" value="1017" placeholder="e.g. 1017, 1004, 1001" class="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 font-mono text-slate-900 focus:outline-none focus:border-indigo-600">
+                </div>
+
+                <div class="space-y-1">
+                  <label class="text-3xs uppercase font-bold text-slate-500 block">Password</label>
+                  <input id="phoneInputPwd" type="password" value="Welcome123!" placeholder="Enter password" class="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 font-mono text-slate-900 focus:outline-none focus:border-indigo-600">
+                </div>
+
+                <!-- Quick Fill Buttons -->
+                <div class="space-y-1 pt-1">
+                  <span class="text-3xs font-semibold text-slate-400 uppercase tracking-wider block">Quick Fill Account:</span>
+                  <div class="flex flex-wrap gap-1.5 text-3xs font-mono">
+                    <button type="button" class="btn-quick-fill px-2 py-1 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-700 rounded border border-slate-200 font-medium" data-tally="1017">
+                      1017 (Mohan Lal)
+                    </button>
+                    <button type="button" class="btn-quick-fill px-2 py-1 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-700 rounded border border-slate-200 font-medium" data-tally="1004">
+                      1004 (Zaid)
+                    </button>
+                    <button type="button" class="btn-quick-fill px-2 py-1 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-700 rounded border border-slate-200 font-medium" data-tally="1001">
+                      1001 (Ahmed)
+                    </button>
+                    <button type="button" class="btn-quick-fill px-2 py-1 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-700 rounded border border-slate-200 font-medium" data-tally="1014">
+                      1014 (Ramesh)
+                    </button>
+                  </div>
+                </div>
+
+                <div class="p-2 bg-slate-50 border border-slate-200 rounded-lg text-3xs text-slate-600 space-y-0.5">
+                  <div>Initial Password: <code class="font-bold text-indigo-700">Welcome123!</code></div>
+                  <div class="text-slate-400">Permanent Enrolled: <code class="font-bold text-emerald-700">WorkerPermanent123!</code> (auto-detected)</div>
+                </div>
+
+                <button id="phoneBtnLogin" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-2.5 rounded-lg shadow-sm transition">
+                  Sign In to Device
+                </button>
+              </div>
+
+              <div class="text-3xs text-slate-400 text-center px-4 leading-normal">
+                Enrolled device: <span class="font-mono text-slate-600 font-semibold">Pixel 8 Pro (DEV_SIM_1193_A)</span>. Securely managed under UAE Law No. 45.
+              </div>
+            </div>
+
+            <!-- VIEW B: AUTHENTICATED TABS CONTAINER (Hidden when unauthenticated) -->
+            <div id="phoneAuthContainer" class="hidden space-y-3">
+              
+              <!-- TAB 1: TODAY'S SHIFT -->
+              <div id="tabContentToday" class="space-y-2.5">
+                <!-- Morning Alarm Card -->
+                <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs space-y-2">
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-2">
+                      <span class="text-lg">⏰</span>
+                      <div>
+                        <div class="text-2xs uppercase tracking-wider font-bold text-slate-400">Shift Alarm</div>
+                        <div id="alarmDisplayTime" class="text-base font-extrabold text-slate-900 font-mono">--:--</div>
+                      </div>
+                    </div>
+                    <span id="alarmLeadTag" class="text-3xs bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-semibold">30m lead</span>
+                  </div>
+                  <div class="text-3xs text-slate-500 bg-slate-50 p-2 rounded-lg border border-slate-100 flex items-center justify-between">
+                    <span>Camp Departure: <strong id="plannedCampStart">--:--</strong></span>
+                    <button id="btnTestAlarm" class="bg-indigo-600 text-white px-2 py-1 rounded text-3xs font-semibold hover:bg-indigo-700">Test Chime</button>
+                  </div>
+                </div>
+
+                <!-- Today's Job Assignment Card -->
+                <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs space-y-2">
+                  <div class="flex justify-between items-start">
+                    <div>
+                      <span class="text-3xs font-bold uppercase tracking-wider text-indigo-600 block">Today's Assigned Site</span>
+                      <h3 id="shiftJobName" class="text-xs font-bold text-slate-900 leading-snug">No Assigned Worksite</h3>
+                      <div id="shiftJobNumber" class="text-3xs text-slate-500 font-mono">--</div>
+                    </div>
+                    <span id="shiftStatusBadge" class="text-3xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-300">--</span>
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-2 text-3xs pt-1 border-t border-slate-100">
+                    <div class="bg-slate-50 p-1.5 rounded">
+                      <span class="text-slate-400 block">Site Hours</span>
+                      <span id="shiftSiteHours" class="font-bold text-slate-800 font-mono">--</span>
+                    </div>
+                    <div class="bg-slate-50 p-1.5 rounded">
+                      <span class="text-slate-400 block">Break Window</span>
+                      <span id="shiftBreak" class="font-bold text-slate-800 font-mono">--</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Camp & Living Quarters Card -->
+                <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs text-3xs space-y-1.5">
+                  <div class="font-bold text-slate-800 flex items-center justify-between">
+                    <span class="flex items-center gap-1.5"><span>🏠</span> Assigned Camp</span>
+                    <span class="text-emerald-700 font-semibold" id="campDistance">--</span>
+                  </div>
+                  <div id="campName" class="text-slate-700 font-medium">No Accommodation Configured</div>
+                  <div id="campAddress" class="text-slate-400 truncate">--</div>
+                </div>
+
+                <!-- Reporting Supervisor Contact Card -->
+                <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs text-3xs flex items-center justify-between">
+                  <div>
+                    <div class="text-slate-400 uppercase text-3xs font-bold">Reporting Supervisor</div>
+                    <div id="spvName" class="font-bold text-slate-800 text-2xs">None Assigned</div>
+                    <div id="spvPhone" class="text-indigo-600 font-mono">--</div>
+                  </div>
+                  <a id="spvCallLink" href="tel:" class="px-2.5 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg font-bold hover:bg-indigo-100">Call</a>
+                </div>
+              </div>
+
+              <!-- TAB 2: GPS & LIVE TRACKING (Hidden by default) -->
+              <div id="tabContentGps" class="space-y-2.5 hidden">
+                <!-- Live Zone Badge & Coordinates -->
+                <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs space-y-2">
+                  <div class="flex justify-between items-center">
+                    <span class="text-2xs font-bold uppercase text-slate-500">Device Location State</span>
+                    <span id="phoneZoneBadge" class="text-2xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-300">IDLE</span>
+                  </div>
+                  <div class="grid grid-cols-2 gap-2 text-2xs font-mono bg-slate-50 p-2 rounded-lg">
+                    <div><span class="text-slate-400 block text-3xs">LAT</span><span id="phoneLat">--</span></div>
+                    <div><span class="text-slate-400 block text-3xs">LNG</span><span id="phoneLng">--</span></div>
+                    <div><span class="text-slate-400 block text-3xs">ACCURACY</span><span>4.5 m</span></div>
+                    <div><span class="text-slate-400 block text-3xs">SPEED</span><span id="phoneSpeed">0.0 km/h</span></div>
+                  </div>
+                </div>
+
+                <!-- Manual Event Trigger Buttons -->
+                <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs space-y-2">
+                  <span class="text-3xs font-bold uppercase text-slate-400 block">Manual Event Triggers</span>
+                  <div class="grid grid-cols-3 gap-1.5 text-2xs">
+                    <button id="phoneBtnEntry" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1.5 rounded">ENTRY</button>
+                    <button id="phoneBtnPing" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1.5 rounded">PING</button>
+                    <button id="phoneBtnExit" class="bg-rose-600 hover:bg-rose-700 text-white font-bold py-1.5 rounded">EXIT</button>
+                  </div>
+                  <div class="grid grid-cols-2 gap-1.5 text-3xs pt-1">
+                    <button id="phoneBtnLocOff" class="bg-slate-200 hover:bg-slate-300 text-slate-700 py-1 rounded">LOCATION OFF</button>
+                    <button id="phoneBtnLocOn" class="bg-slate-200 hover:bg-slate-300 text-slate-700 py-1 rounded">LOCATION ON</button>
+                  </div>
+                </div>
+
+                <!-- Unsent Events Local Buffer -->
+                <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs space-y-2">
+                  <div class="flex justify-between items-center text-3xs">
+                    <span class="font-bold text-slate-600 uppercase">Local Event Buffer (Unsent)</span>
+                    <span id="phoneQueueCount" class="font-mono bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-bold">0 events</span>
+                  </div>
+                  <div id="phoneQueueList" class="bg-slate-50 p-2 rounded-lg text-3xs font-mono space-y-1 max-h-36 overflow-y-auto border border-slate-100">
+                    <div class="text-slate-400 text-center py-2">Buffer is empty</div>
+                  </div>
+                  <button id="phoneBtnFlushBatch" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-2xs py-2 rounded-lg shadow-2xs">
+                    Flush Batch (POST /events/batch)
+                  </button>
+                </div>
+              </div>
+
+              <!-- TAB 3: 30-DAY ROSTER (Hidden by default) -->
+              <div id="tabContentRoster" class="space-y-2 hidden">
+                <div class="flex justify-between items-center text-3xs font-bold text-slate-500 uppercase px-1">
+                  <span>Forward Schedule</span>
+                  <span id="schedCount" class="bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full font-mono">0 days</span>
+                </div>
+                <div id="phoneScheduleList" class="space-y-1.5 max-h-[500px] overflow-y-auto pr-0.5">
+                  <div class="text-slate-400 text-center py-4 text-xs">Loading forward schedule...</div>
+                </div>
+              </div>
+
+              <!-- TAB 4: PROFILE (Hidden by default) -->
+              <div id="tabContentProfile" class="space-y-2.5 hidden">
+                <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-2xs text-center space-y-2">
+                  <div class="w-16 h-16 rounded-full bg-indigo-100 text-indigo-600 border-2 border-indigo-200 mx-auto flex items-center justify-center text-2xl font-black">
+                    👷
+                  </div>
+                  <div>
+                    <h3 id="profName" class="text-sm font-bold text-slate-900">--</h3>
+                    <p id="profGrade" class="text-2xs text-indigo-600 font-semibold">--</p>
+                    <p id="profTally" class="text-3xs text-slate-400 font-mono">--</p>
+                  </div>
+                </div>
+
+                <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs text-3xs space-y-2">
+                  <span class="text-3xs font-bold uppercase text-slate-400 block">Employment & Placement</span>
+                  <div class="flex justify-between border-b border-slate-100 pb-1.5">
+                    <span class="text-slate-500">Contact Phone:</span>
+                    <span id="profPhone" class="font-mono font-bold text-slate-800">--</span>
+                  </div>
+                  <div class="flex justify-between border-b border-slate-100 pb-1.5">
+                    <span class="text-slate-500">Weekly Off Day:</span>
+                    <span id="profWeeklyOff" class="font-bold text-indigo-600">--</span>
+                  </div>
+                  <div class="flex justify-between border-b border-slate-100 pb-1.5">
+                    <span class="text-slate-500">Living Camp:</span>
+                    <span id="profCamp" class="font-bold text-slate-800 truncate max-w-[170px]">--</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-slate-500">Supervisor:</span>
+                    <span id="profSpv" class="font-bold text-slate-800">--</span>
+                  </div>
+                </div>
+
+                <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs text-3xs space-y-2">
+                  <span class="text-3xs font-bold uppercase text-slate-400 block">Device Registration</span>
+                  <div class="flex justify-between border-b border-slate-100 pb-1.5">
+                    <span class="text-slate-500">Hardware Model:</span>
+                    <span class="font-mono font-bold text-slate-800">Pixel 8 Pro (Sim)</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-slate-500">Platform / OS:</span>
+                    <span class="font-mono text-slate-700">Android 14 (v1.0.0)</span>
+                  </div>
+                </div>
+
+                <button id="phoneBtnLogout" class="w-full bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 font-bold text-2xs py-2 rounded-lg">
+                  Sign Out from Device
+                </button>
+              </div>
+
+              <!-- TAB 5: SYNC & SETTINGS (Hidden by default) -->
+              <div id="tabContentSync" class="space-y-2.5 hidden">
+                <!-- Sync Engine Controls -->
+                <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs space-y-2">
+                  <div class="flex justify-between items-center">
+                    <span class="text-3xs font-bold uppercase text-slate-400">Change Log Sync</span>
+                    <span id="phoneCursorBadge" class="text-3xs font-mono font-bold text-slate-600">Cursor: 0</span>
+                  </div>
+                  <div class="grid grid-cols-2 gap-1.5 text-3xs font-bold">
+                    <button id="phoneBtnPullSnapshot" class="bg-blue-600 hover:bg-blue-700 text-white py-1.5 rounded">Full Snapshot</button>
+                    <button id="phoneBtnPullDelta" class="bg-indigo-600 hover:bg-indigo-700 text-white py-1.5 rounded">Delta Sync</button>
+                  </div>
+                  <button id="phoneBtnAck" class="w-full bg-slate-800 hover:bg-slate-900 text-white py-1.5 rounded text-3xs font-bold">
+                    Ack Cursor (POST /sync/ack)
+                  </button>
+                </div>
+
+                <!-- Dynamic Settings Breakdown -->
+                <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs space-y-1.5 text-3xs">
+                  <span class="font-bold uppercase text-slate-400 block">Dynamic Sync Settings</span>
+                  <div class="flex justify-between border-b border-slate-100 pb-1"><span>Geofence Buffer:</span><strong id="cfgRadius">--</strong></div>
+                  <div class="flex justify-between border-b border-slate-100 pb-1"><span>Approach Interval:</span><strong id="cfgApproach">--</strong></div>
+                  <div class="flex justify-between border-b border-slate-100 pb-1"><span>Confirm Interval:</span><strong id="cfgConfirm">--</strong></div>
+                  <div class="flex justify-between"><span>Alarm Lead Time:</span><strong id="cfgAlarmLead">--</strong></div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- 4. Phone Bottom Navigation Bar (Hidden when unauthenticated) -->
+          <div id="phoneBottomNav" class="hidden bg-white border-t border-slate-200 px-2 py-1.5 flex justify-around items-center shrink-0">
+            <button id="navBtnToday" class="flex flex-col items-center text-indigo-600 font-bold text-3xs space-y-0.5">
+              <span class="text-sm">📅</span>
+              <span>Today</span>
+            </button>
+            <button id="navBtnGps" class="flex flex-col items-center text-slate-400 hover:text-slate-700 font-medium text-3xs space-y-0.5">
+              <span class="text-sm">📍</span>
+              <span>GPS</span>
+            </button>
+            <button id="navBtnRoster" class="flex flex-col items-center text-slate-400 hover:text-slate-700 font-medium text-3xs space-y-0.5">
+              <span class="text-sm">🗓️</span>
+              <span>Roster</span>
+            </button>
+            <button id="navBtnProfile" class="flex flex-col items-center text-slate-400 hover:text-slate-700 font-medium text-3xs space-y-0.5">
+              <span class="text-sm">👤</span>
+              <span>Profile</span>
+            </button>
+            <button id="navBtnSync" class="flex flex-col items-center text-slate-400 hover:text-slate-700 font-medium text-3xs space-y-0.5">
+              <span class="text-sm">🔄</span>
+              <span>Sync</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CENTER & RIGHT: Map + Route Timeline Player + Ground Truth Analytics -->
+    <div class="flex-1 flex flex-col bg-slate-900 overflow-hidden">
+      <!-- Top Route Timeline Player Bar (Android Studio Extended Control Style) -->
+      <div class="bg-slate-950 border-b border-slate-800 p-4 shrink-0 space-y-3">
+        <!-- Route Control Ribbon -->
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <div class="flex items-center space-x-1.5 bg-slate-900 p-1 rounded-lg border border-slate-800">
+              <button id="btnPlayRoute" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1.5 rounded text-xs flex items-center gap-1.5">
+                <span id="playIcon">▶</span> <span id="playText">Play Route</span>
+              </button>
+              <button id="btnResetRoute" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1.5 rounded text-xs">
+                ↺ Reset
+              </button>
+            </div>
+
+            <!-- Speed Multiplier -->
+            <div class="flex items-center space-x-1 bg-slate-900 p-1 rounded-lg border border-slate-800 text-2xs">
+              <span class="text-slate-500 px-1 font-semibold">Speed:</span>
+              <button class="speed-btn px-2 py-1 rounded bg-slate-800 text-slate-300 font-mono" data-speed="1">1x</button>
+              <button class="speed-btn px-2 py-1 rounded bg-indigo-600 text-white font-mono font-bold" data-speed="10">10x</button>
+              <button class="speed-btn px-2 py-1 rounded bg-slate-800 text-slate-300 font-mono" data-speed="60">60x</button>
+              <button class="speed-btn px-2 py-1 rounded bg-slate-800 text-slate-300 font-mono" data-speed="300">300x</button>
+            </div>
+
+            <!-- Route Presets Dropdown -->
+            <div class="flex items-center space-x-1.5 text-2xs">
+              <span class="text-slate-400">Preset:</span>
+              <select id="routePresetSelect" class="bg-slate-900 border border-slate-700 text-slate-200 px-2.5 py-1.5 rounded text-2xs focus:outline-none focus:border-indigo-500">
+                <option value="auto_synced" id="optAutoSynced" class="hidden">Auto: Camp ➔ Worksite</option>
+                <option value="standard">Standard Workday (06:02 Site Entry - 15:31 Exit)</option>
+                <option value="late">Late Arrival (08:30 Site Entry)</option>
+                <option value="midday_gap">Midday Gap (Leaves 11:30, Returns 13:00)</option>
+                <option value="custom">Custom Marked Route</option>
+              </select>
+            </div>
+
+            <!-- Manual Route Recording Mode Toggle -->
+            <button id="btnToggleDrawMode" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-amber-300 px-3 py-1.5 rounded text-2xs font-semibold flex items-center gap-1.5">
+              <span>✏️</span> <span id="drawModeText">Record / Draw Route</span>
+            </button>
+            <!-- Step / Dwell Selector -->
+            <div id="drawStepContainer" class="hidden flex items-center space-x-1.5 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-2xs">
+              <span class="text-slate-400">Step:</span>
+              <select id="drawStepMinutes" class="bg-slate-900 text-amber-300 font-bold border border-slate-700 rounded px-1.5 py-0.5 text-3xs focus:outline-none">
+                <option value="5">+5 mins</option>
+                <option value="15" selected>+15 mins</option>
+                <option value="30">+30 mins</option>
+                <option value="60">+1 hour</option>
+                <option value="120">+2 hours (Dwell)</option>
+                <option value="240">+4 hours (Dwell)</option>
+              </select>
+            </div>
+            <button id="btnClearDrawnPoints" class="hidden bg-slate-800 hover:bg-rose-950 hover:text-rose-400 border border-slate-700 text-slate-400 px-2.5 py-1.5 rounded text-2xs">
+              Clear Drawn Points
+            </button>
+
+            <!-- Custom Polygon Drawing Tool -->
+            <button id="btnTogglePolygonDraw" class="bg-slate-800 hover:bg-cyan-950 hover:text-cyan-300 border border-slate-700 text-cyan-400 px-3 py-1.5 rounded text-2xs font-semibold flex items-center gap-1.5">
+              <span>📐</span> <span id="polyDrawText">Draw Custom Polygon</span>
+            </button>
+            <div id="polyDrawControls" class="hidden flex items-center space-x-1 text-2xs">
+              <span id="polyVertexCount" class="px-2 py-1 bg-cyan-950/80 border border-cyan-800 text-cyan-300 rounded font-mono text-3xs font-bold">0 pts</span>
+              <button id="btnCompletePolygon" class="bg-cyan-600 hover:bg-cyan-500 text-white font-bold px-2 py-1 rounded text-3xs shadow-xs">
+                ✓ Finish Polygon
+              </button>
+              <button id="btnCancelPolygon" class="text-slate-400 hover:text-white px-1.5 py-1 text-3xs">
+                Cancel
+              </button>
+            </div>
+          </div>
+
+          <!-- Boundary Tools & JSON Import / Export -->
+          <div class="flex items-center space-x-2 text-2xs">
+            <button id="btnOpenBoundaryModal" class="bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-700 text-emerald-300 px-3 py-1.5 rounded font-medium flex items-center gap-1">
+              📋 Copy Boundaries
+            </button>
+            <input type="file" id="routeJsonInput" accept=".json" class="hidden">
+            <button id="btnImportJson" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-3 py-1.5 rounded font-medium flex items-center gap-1">
+              📂 Import JSON
+            </button>
+            <button id="btnExportJson" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-3 py-1.5 rounded font-medium flex items-center gap-1">
+              💾 Export JSON
+            </button>
+            <button id="btnClearMapAll" class="bg-slate-800 hover:bg-rose-950 hover:text-rose-400 border border-slate-700 text-slate-300 px-3 py-1.5 rounded font-medium flex items-center gap-1" title="Clear all custom polygons, drawn routes, and reset map">
+              <span>🧹</span> Clear Map
+            </button>
+          </div>
+        </div>
+
+        <!-- Scrubber Slider & Ground Truth Analytics -->
+        <div class="flex items-center space-x-6">
+          <!-- Timeline Slider -->
+          <div class="flex-1 space-y-1">
+            <div class="flex justify-between text-3xs font-mono text-slate-400">
+              <span>Start: <strong class="text-slate-200" id="routeStartTime">05:00:00</strong></span>
+              <span>Simulated Clock: <strong class="text-indigo-400 text-xs" id="routeCurrentTime">05:00:00</strong></span>
+              <span>End: <strong class="text-slate-200" id="routeEndTime">16:00:00</strong></span>
+            </div>
+            <input id="routeTimelineSlider" type="range" min="0" max="1000" value="0" class="w-full accent-indigo-500 cursor-pointer h-2 bg-slate-800 rounded-lg">
+          </div>
+
+          <!-- Ground-Truth Attendance Box (For Phase 08 Cross-Check) -->
+          <div class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 flex items-center space-x-6 text-2xs shrink-0">
+            <div>
+              <span class="text-slate-500 block text-3xs uppercase font-bold">Ground Truth Worked Time</span>
+              <span id="gtWorkedTime" class="text-sm font-extrabold text-emerald-400 font-mono">0h 00m (0m)</span>
+            </div>
+            <div class="border-l border-slate-800 pl-4">
+              <span class="text-slate-500 block text-3xs uppercase font-bold">In Transit</span>
+              <span id="gtTransitTime" class="text-xs font-bold text-amber-400 font-mono">0h 00m</span>
+            </div>
+            <div class="border-l border-slate-800 pl-4">
+              <span class="text-slate-500 block text-3xs uppercase font-bold">Events Generated</span>
+              <span id="gtEventsCount" class="text-xs font-bold text-indigo-400 font-mono">0 ENTRY • 0 PING • 0 EXIT</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Map Viewport -->
+      <div class="flex-1 relative">
+        <div id="map"></div>
+
+        <!-- Notification Toast -->
+        <div id="mapToast" class="hidden absolute top-4 left-1/2 -translate-x-1/2 z-[2000] bg-slate-950 border border-indigo-500 text-indigo-300 px-4 py-2 rounded-xl text-xs shadow-2xl backdrop-blur-xs flex items-center gap-2 animate-bounce">
+          <span id="mapToastText">Copied polygon to clipboard!</span>
+        </div>
+
+        <!-- Server Boundary Alert Banner -->
+        <div id="mapBoundaryAlert" class="hidden absolute top-4 left-1/2 -translate-x-1/2 z-[1000] bg-amber-950/90 border border-amber-700 text-amber-200 px-4 py-2 rounded-xl text-2xs shadow-xl backdrop-blur-xs flex items-center gap-2">
+          <span>⚠️</span> <span id="mapBoundaryAlertText">No assigned worksite boundary found on server.</span>
+        </div>
+
+        <!-- Map Legend Badge -->
+        <div class="absolute bottom-4 left-4 z-[1000] bg-slate-950/90 backdrop-blur-xs border border-slate-800 p-2.5 rounded-xl shadow-lg text-3xs space-y-1">
+          <div class="font-bold text-slate-300 uppercase tracking-wider mb-1">Server Map Layers</div>
+          <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-emerald-500/30 border border-emerald-500"></span> <span id="legendCamp">Living Camp (Click to copy polygon)</span></div>
+          <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-blue-500/30 border border-blue-500"></span> <span id="legendWorksite">Assigned Worksite (Click to copy polygon)</span></div>
+          <div class="flex items-center gap-2"><span class="w-3 h-3 rounded border border-dashed border-indigo-400 bg-indigo-500/10"></span> <span>Geofence Perimeter Buffer (300m)</span></div>
+          <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-indigo-500 border border-white"></span> <span>Worker GPS Pin (Draggable)</span></div>
+        </div>
+
+        <!-- Drawing Instructions Banner -->
+        <div id="drawingBanner" class="hidden absolute bottom-4 right-4 z-[1000] bg-amber-950/90 border border-amber-700 text-amber-200 p-2.5 rounded-xl shadow-xl text-3xs space-y-1">
+          <div class="font-bold text-amber-300 uppercase">✏️ Manual Route Recording Active</div>
+          <div>Click anywhere on the map to add waypoint pins.</div>
+          <div class="text-amber-400">Waypoints auto-increment simulated time (+15 mins).</div>
+        </div>
+      </div>
+
+      <!-- BOTTOM PANEL: Network Log & REST Inspector Drawer -->
+      <div class="h-44 bg-slate-950 border-t border-slate-800 flex flex-col shrink-0 font-mono text-3xs">
+        <div class="px-4 py-1.5 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <span class="font-bold uppercase tracking-wider text-slate-300">REST Network & Audit Inspector</span>
+            <span class="bg-indigo-950 border border-indigo-800 text-indigo-400 px-2 py-0.2 rounded-full">HTTP Traffic Log</span>
+          </div>
+          <div class="flex items-center space-x-2">
+            <button id="btnExportNetworkLog" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-2.5 py-0.5 rounded text-3xs flex items-center gap-1">
+              📥 Export Network Log (JSON)
+            </button>
+            <button id="btnClearNetworkLog" class="text-slate-400 hover:text-white px-2 py-0.5">Clear Traffic</button>
+          </div>
+        </div>
+        <div id="networkLogList" class="flex-1 p-3 overflow-y-auto space-y-1">
+          <div class="text-emerald-400">[READY] Mobile Tester Proxy initialized. Listening on http://localhost:8000/api/v1</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Boundary Copy Modal -->
+  <div id="boundaryModal" class="hidden fixed inset-0 z-[3000] bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-xl p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-lg">📋</span>
+          <h3 class="font-bold text-sm text-slate-100">Server Synced Boundary Polygons</h3>
+        </div>
+        <button id="btnCloseBoundaryModal" class="text-slate-400 hover:text-white text-base">✕</button>
+      </div>
+
+      <p class="text-2xs text-slate-400">
+        Copy polygon coordinates in standard GeoJSON or WKT format to paste into your worksite or accommodation setup forms.
+      </p>
+
+      <div id="boundaryModalList" class="space-y-3 max-h-80 overflow-y-auto">
+        <!-- Rendered dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Custom Drawn Polygon Modal -->
+  <div id="customPolygonModal" class="hidden fixed inset-0 z-[3000] bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-cyan-800 rounded-2xl w-full max-w-lg p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-lg">📐</span>
+          <h3 class="font-bold text-sm text-cyan-300">Custom Boundary Polygon Created</h3>
+        </div>
+        <button id="btnCloseCustomPolyModal" class="text-slate-400 hover:text-white text-base">✕</button>
+      </div>
+
+      <div class="text-2xs text-slate-300 flex items-center justify-between">
+        <span>Vertices: <strong id="customPolyVertCount" class="font-mono text-cyan-400">0</strong></span>
+        <span>Calculated Area: <strong id="customPolyArea" class="font-mono text-emerald-400">0 m²</strong></span>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-3xs uppercase font-bold text-slate-400">GeoJSON Coordinates</span>
+            <button id="btnCopyCustomGeoJson" class="text-3xs text-indigo-400 hover:text-indigo-300 font-bold">📋 Copy GeoJSON</button>
+          </div>
+          <pre id="customPolyGeoJson" class="text-3xs font-mono bg-slate-950 border border-slate-800 p-2.5 rounded-lg text-slate-300 max-h-24 overflow-x-auto overflow-y-auto select-all"></pre>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-3xs uppercase font-bold text-slate-400">WKT Format</span>
+            <button id="btnCopyCustomWkt" class="text-3xs text-cyan-400 hover:text-cyan-300 font-bold">📋 Copy WKT</button>
+          </div>
+          <pre id="customPolyWkt" class="text-3xs font-mono bg-slate-950 border border-slate-800 p-2.5 rounded-lg text-slate-300 max-h-20 overflow-x-auto overflow-y-auto select-all"></pre>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between pt-2 border-t border-slate-800">
+        <button id="btnClearCustomPoly" class="text-rose-400 hover:text-rose-300 text-2xs font-medium">Remove from Map</button>
+        <button id="btnDoneCustomPoly" class="bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-2xs px-4 py-1.5 rounded-lg">
+          Done
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
