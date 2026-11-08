@@ -47,9 +47,7 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.CORS_ORIGINS,
         allow_origin_regex=(
-            r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
-            if settings.APP_ENV == "local"
-            else None
+            r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$" if settings.APP_ENV == "local" else None
         ),
         allow_credentials=True,
         allow_methods=["*"],

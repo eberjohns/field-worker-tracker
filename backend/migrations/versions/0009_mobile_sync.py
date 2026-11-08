@@ -168,4 +168,3 @@ def downgrade() -> None:
 
     op.drop_index("ix_sync_changes_employee_id_id", table_name="sync_changes")
     op.drop_table("sync_changes")
-

@@ -206,7 +206,9 @@ async def handle_scheduled_work_changed(event: ScheduledWorkChanged, session: As
                             staff_grade_description=ji.staff_grade_description,
                             deployment_type=ji.deployment_type or "PERMANENT",
                             required_staff_count=ji.required_staff_count or 1,
-                            hours_per_occurrence_per_staff=float(ji.hours_per_occurrence_per_staff or 9.0),
+                            hours_per_occurrence_per_staff=float(
+                                ji.hours_per_occurrence_per_staff or 9.0
+                            ),
                         )
                         sch_payload = ScheduleItemPayload(
                             scheduled_work_id=bp_item_id,

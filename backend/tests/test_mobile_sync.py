@@ -435,7 +435,11 @@ async def test_mobile_sync_snapshot_includes_base_planner_blueprint():
         session.add(device)
 
         # 2. Find or use active worksite + job item
-        ws = (await session.execute(select(Worksite).where(Worksite.is_active.is_(True)))).scalars().first()
+        ws = (
+            (await session.execute(select(Worksite).where(Worksite.is_active.is_(True))))
+            .scalars()
+            .first()
+        )
         assert ws is not None, "At least one worksite required in test db"
 
         # Ensure boundary exists on worksite
@@ -458,7 +462,15 @@ async def test_mobile_sync_snapshot_includes_base_planner_blueprint():
             actor_role="ADMIN",
         )
 
-        ji = (await session.execute(select(JobItem).where(JobItem.worksite_id == ws.id, JobItem.is_active.is_(True)))).scalars().first()
+        ji = (
+            (
+                await session.execute(
+                    select(JobItem).where(JobItem.worksite_id == ws.id, JobItem.is_active.is_(True))
+                )
+            )
+            .scalars()
+            .first()
+        )
         assert ji is not None, "At least one job item required"
 
         # 3. Create Base Planner Blueprint Template + Entry (NO ScheduledWork!)
@@ -498,25 +510,41 @@ async def test_mobile_sync_snapshot_includes_base_planner_blueprint():
             entities = snapshot["entities"]
 
             # Assert JOB entity with boundary polygon is present
-            job_entities = [e for e in entities if e["entity_type"] == "JOB" and e["entity_id"] == str(ws.id)]
+            job_entities = [
+                e for e in entities if e["entity_type"] == "JOB" and e["entity_id"] == str(ws.id)
+            ]
             assert len(job_entities) == 1, f"Expected JOB entity {ws.id} in snapshot"
             assert job_entities[0]["payload"]["boundary"] is not None
             assert job_entities[0]["payload"]["boundary"]["type"] == "Polygon"
 
             # Assert SCHEDULE_ITEM entities were generated from Base Blueprint
-            sched_items = [e for e in entities if e["entity_type"] == "SCHEDULE_ITEM" and e["payload"]["job_id"] == str(ws.id)]
+            sched_items = [
+                e
+                for e in entities
+                if e["entity_type"] == "SCHEDULE_ITEM" and e["payload"]["job_id"] == str(ws.id)
+            ]
             assert len(sched_items) > 0, "Expected SCHEDULE_ITEM entities from base blueprint"
 
             # Assert DAY_PLAN for today is WORKING
-            day_plans = [e for e in entities if e["entity_type"] == "DAY_PLAN" and e["entity_id"] == today.isoformat()]
+            day_plans = [
+                e
+                for e in entities
+                if e["entity_type"] == "DAY_PLAN" and e["entity_id"] == today.isoformat()
+            ]
             assert len(day_plans) == 1
             assert day_plans[0]["payload"]["status"] == "WORKING"
             assert day_plans[0]["payload"]["planned"] is not None
     finally:
         async with async_session_factory() as session:
-            await session.execute(delete(BaseRosterEntry).where(BaseRosterEntry.template_id == tmpl_id))
-            await session.execute(delete(BaseRosterTemplate).where(BaseRosterTemplate.id == tmpl_id))
-            await session.execute(delete(RegisteredDevice).where(RegisteredDevice.employee_id == emp_id))
+            await session.execute(
+                delete(BaseRosterEntry).where(BaseRosterEntry.template_id == tmpl_id)
+            )
+            await session.execute(
+                delete(BaseRosterTemplate).where(BaseRosterTemplate.id == tmpl_id)
+            )
+            await session.execute(
+                delete(RegisteredDevice).where(RegisteredDevice.employee_id == emp_id)
+            )
             await session.execute(delete(User).where(User.employee_id == emp_id))
             await session.execute(delete(Employee).where(Employee.id == emp_id))
             await session.commit()

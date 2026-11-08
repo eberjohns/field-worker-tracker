@@ -551,7 +551,9 @@ class JobsService:
                     actor_user_id=actor_user_id,
                     actor_role=actor_role,
                 )
-                await event_bus.publish(WorksiteBoundaryChanged(worksite_id=tws.id), session=session)
+                await event_bus.publish(
+                    WorksiteBoundaryChanged(worksite_id=tws.id), session=session
+                )
                 res = await JobsService.get_worksite(session, tws.id)
                 updated.append(res)
 
@@ -606,7 +608,9 @@ class JobsService:
             actor_role=actor_role,
         )
 
-        await event_bus.publish(AccommodationBoundaryChanged(accommodation_id=acc.id), session=session)
+        await event_bus.publish(
+            AccommodationBoundaryChanged(accommodation_id=acc.id), session=session
+        )
 
     @staticmethod
     async def get_boundary_queue(

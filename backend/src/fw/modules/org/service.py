@@ -234,7 +234,9 @@ class OrgService:
                 actor_user_id=actor_user_id,
                 actor_role=actor_role,
             )
-            await event_bus.publish(EmployeeProfileChanged(employee_id=employee.id), session=session)
+            await event_bus.publish(
+                EmployeeProfileChanged(employee_id=employee.id), session=session
+            )
         return employee
 
     @staticmethod
@@ -281,7 +283,9 @@ class OrgService:
                     actor_role=actor_role,
                     reason="Bulk update action",
                 )
-                await event_bus.publish(EmployeeProfileChanged(employee_id=employee.id), session=session)
+                await event_bus.publish(
+                    EmployeeProfileChanged(employee_id=employee.id), session=session
+                )
                 count += 1
         return count
 
