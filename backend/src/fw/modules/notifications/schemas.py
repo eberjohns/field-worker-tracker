@@ -31,4 +31,3 @@ class AlertResolveRequest(BaseModel):
     """Optional payload when resolving an alert."""
 
     note: str | None = None
-

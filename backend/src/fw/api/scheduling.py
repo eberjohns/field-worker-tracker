@@ -425,7 +425,9 @@ async def get_leave_taken_summary(
 ) -> list[LeaveTakenWorkerSummary]:
     """Get leave taken summary per worker, leave type, and calendar year (working vs calendar days)."""
     service = SchedulingService(session)
-    return await service.get_leave_taken_summary(year=year, employee_id=employee_id, current_user=current_user)
+    return await service.get_leave_taken_summary(
+        year=year, employee_id=employee_id, current_user=current_user
+    )
 
 
 @router.get("/leave-requests/template.xlsx")
@@ -529,7 +531,9 @@ async def reject_leave_request(
 ) -> LeaveRequestResponse:
     """Reject a leave request with mandatory reason."""
     service = SchedulingService(session)
-    return await service.reject_leave_request(leave_id, reason=payload.reason, current_user=current_user)
+    return await service.reject_leave_request(
+        leave_id, reason=payload.reason, current_user=current_user
+    )
 
 
 @router.post("/leave-requests/{leave_id}/cancel", response_model=LeaveRequestResponse)
@@ -653,7 +657,9 @@ async def cancel_reassignment_request(
 
 @router.get("/approvals", response_model=ApprovalsInboxResponse)
 async def get_approvals_inbox(
-    status: str | None = Query("PENDING", description="Filter status: PENDING, APPROVED, REJECTED, DECIDED, ALL"),
+    status: str | None = Query(
+        "PENDING", description="Filter status: PENDING, APPROVED, REJECTED, DECIDED, ALL"
+    ),
     current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
     session: AsyncSession = Depends(get_db),
 ) -> ApprovalsInboxResponse:
@@ -671,5 +677,6 @@ async def get_staffing_gaps(
 ) -> StaffingGapsResponse:
     """Get staffing gaps (TO_BE_COVERED slots from leave) needing cover in scope."""
     service = SchedulingService(session)
-    return await service.get_staffing_gaps(from_date=from_date, to_date=to_date, current_user=current_user)
-
+    return await service.get_staffing_gaps(
+        from_date=from_date, to_date=to_date, current_user=current_user
+    )

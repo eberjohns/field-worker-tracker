@@ -558,7 +558,9 @@ class ReassignmentRequestCreate(BaseModel):
     standing_assignment_id: UUID | None = None
     target_job_item_id: UUID | None = None
     hours_per_day: Decimal | None = None
-    reason_category: str = Field(..., description="LEAVE_COVER | CAPACITY | WEATHER | PRIORITY | OTHER")
+    reason_category: str = Field(
+        ..., description="LEAVE_COVER | CAPACITY | WEATHER | PRIORITY | OTHER"
+    )
     reason: str
 
 
@@ -682,4 +684,3 @@ class StaffingGapsResponse(BaseModel):
     from_date: date
     to_date: date
     gaps: list[StaffingGapSlot]
-

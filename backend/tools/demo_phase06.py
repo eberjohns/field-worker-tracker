@@ -5,12 +5,11 @@ Demo script per docs/phases/PHASE-06-leave-reassignment-approvals.md:
 """
 
 import asyncio
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
 from sqlalchemy import delete, or_, select
-from sqlalchemy.orm import selectinload
 
 from fw.core.db import async_session_factory, engine
 from fw.modules.identity import User, hash_password
@@ -22,7 +21,6 @@ from fw.modules.scheduling import (
     BaseRosterTemplate,
     LeaveRequest,
     LeaveRequestCreate,
-    ReassignmentDecisionRequest,
     ReassignmentRequest,
     ReassignmentRequestCreate,
     ScheduledWork,
@@ -42,51 +40,119 @@ async def run_demo() -> None:
     # 1. Setup Demo Entities
     async with async_session_factory() as session:
         # Engineer
-        eng_emp = (await session.execute(select(Employee).where(Employee.tally_id == "1001"))).scalar_one_or_none()
+        eng_emp = (
+            await session.execute(select(Employee).where(Employee.tally_id == "1001"))
+        ).scalar_one_or_none()
         if not eng_emp:
-            eng_emp = Employee(id=uuid4(), tally_id="1001", name="Ahmed Al-Mansoor", role="ENGINEER", country="AE", is_active=True)
+            eng_emp = Employee(
+                id=uuid4(),
+                tally_id="1001",
+                name="Ahmed Al-Mansoor",
+                role="ENGINEER",
+                country="AE",
+                is_active=True,
+            )
             session.add(eng_emp)
             await session.flush()
-        eng_user = (await session.execute(select(User).where(User.username == "1001"))).scalar_one_or_none()
+        eng_user = (
+            await session.execute(select(User).where(User.username == "1001"))
+        ).scalar_one_or_none()
         if not eng_user:
-            eng_user = User(id=uuid4(), employee_id=eng_emp.id, username="1001", credential_hash=hash_password("ChangeMe123!"), role="ENGINEER", is_active=True, must_change_password=False)
+            eng_user = User(
+                id=uuid4(),
+                employee_id=eng_emp.id,
+                username="1001",
+                credential_hash=hash_password("ChangeMe123!"),
+                role="ENGINEER",
+                is_active=True,
+                must_change_password=False,
+            )
             session.add(eng_user)
         else:
             eng_user.credential_hash = hash_password("ChangeMe123!")
             eng_user.must_change_password = False
 
         # Supervisor
-        sup_emp = (await session.execute(select(Employee).where(Employee.tally_id == "1004"))).scalar_one_or_none()
+        sup_emp = (
+            await session.execute(select(Employee).where(Employee.tally_id == "1004"))
+        ).scalar_one_or_none()
         if not sup_emp:
-            sup_emp = Employee(id=uuid4(), tally_id="1004", name="Omar Al-Nuaimi", role="SUPERVISOR", country="AE", is_active=True)
+            sup_emp = Employee(
+                id=uuid4(),
+                tally_id="1004",
+                name="Omar Al-Nuaimi",
+                role="SUPERVISOR",
+                country="AE",
+                is_active=True,
+            )
             session.add(sup_emp)
             await session.flush()
-            link_eng = EmployeeReportingLine(employee_id=sup_emp.id, manager_id=eng_emp.id, relationship="ENGINEER")
+            link_eng = EmployeeReportingLine(
+                employee_id=sup_emp.id, manager_id=eng_emp.id, relationship="ENGINEER"
+            )
             session.add(link_eng)
-        sup_user = (await session.execute(select(User).where(User.username == "1004"))).scalar_one_or_none()
+        sup_user = (
+            await session.execute(select(User).where(User.username == "1004"))
+        ).scalar_one_or_none()
         if not sup_user:
-            sup_user = User(id=uuid4(), employee_id=sup_emp.id, username="1004", credential_hash=hash_password("ChangeMe123!"), role="SUPERVISOR", is_active=True, must_change_password=False)
+            sup_user = User(
+                id=uuid4(),
+                employee_id=sup_emp.id,
+                username="1004",
+                credential_hash=hash_password("ChangeMe123!"),
+                role="SUPERVISOR",
+                is_active=True,
+                must_change_password=False,
+            )
             session.add(sup_user)
         else:
             sup_user.credential_hash = hash_password("ChangeMe123!")
             sup_user.must_change_password = False
 
         # Worker 1 (Bilal Khan - Gardener)
-        w1_emp = (await session.execute(select(Employee).where(Employee.tally_id == "1010"))).scalar_one_or_none()
+        w1_emp = (
+            await session.execute(select(Employee).where(Employee.tally_id == "1010"))
+        ).scalar_one_or_none()
         if not w1_emp:
-            w1_emp = Employee(id=uuid4(), tally_id="1010", name="Bilal Khan", role="WORKER", grade_code="G2A", staff_grade_description="Gardener", weekly_off_day="SUNDAY", country="AE", is_active=True)
+            w1_emp = Employee(
+                id=uuid4(),
+                tally_id="1010",
+                name="Bilal Khan",
+                role="WORKER",
+                grade_code="G2A",
+                staff_grade_description="Gardener",
+                weekly_off_day="SUNDAY",
+                country="AE",
+                is_active=True,
+            )
             session.add(w1_emp)
             await session.flush()
-            link_w1 = EmployeeReportingLine(employee_id=w1_emp.id, manager_id=sup_emp.id, relationship="SUPERVISOR")
+            link_w1 = EmployeeReportingLine(
+                employee_id=w1_emp.id, manager_id=sup_emp.id, relationship="SUPERVISOR"
+            )
             session.add(link_w1)
 
         # Worker 2 (Carlos Morales - Cover)
-        w2_emp = (await session.execute(select(Employee).where(Employee.tally_id == "1011"))).scalar_one_or_none()
+        w2_emp = (
+            await session.execute(select(Employee).where(Employee.tally_id == "1011"))
+        ).scalar_one_or_none()
         if not w2_emp:
-            w2_emp = Employee(id=uuid4(), tally_id="1011", name="Carlos Morales", role="WORKER", grade_code="G2A", staff_grade_description="Gardener", weekly_off_day="SUNDAY", country="AE", is_active=True)
+            w2_emp = Employee(
+                id=uuid4(),
+                tally_id="1011",
+                name="Carlos Morales",
+                role="WORKER",
+                grade_code="G2A",
+                staff_grade_description="Gardener",
+                weekly_off_day="SUNDAY",
+                country="AE",
+                is_active=True,
+            )
             session.add(w2_emp)
             await session.flush()
-            link_w2 = EmployeeReportingLine(employee_id=w2_emp.id, manager_id=sup_emp.id, relationship="SUPERVISOR")
+            link_w2 = EmployeeReportingLine(
+                employee_id=w2_emp.id, manager_id=sup_emp.id, relationship="SUPERVISOR"
+            )
             session.add(link_w2)
 
         # Worksite & Job Item
@@ -101,7 +167,9 @@ async def run_demo() -> None:
             session.add(zone)
             await session.flush()
 
-        ws = (await session.execute(select(Worksite).where(Worksite.job_number == "99A00001"))).scalar_one_or_none()
+        ws = (
+            await session.execute(select(Worksite).where(Worksite.job_number == "99A00001"))
+        ).scalar_one_or_none()
         if not ws:
             ws = Worksite(
                 job_number="99A00001",
@@ -114,7 +182,9 @@ async def run_demo() -> None:
             session.add(ws)
             await session.flush()
 
-        ji = (await session.execute(select(JobItem).where(JobItem.worksite_id == ws.id))).scalar_one_or_none()
+        ji = (
+            await session.execute(select(JobItem).where(JobItem.worksite_id == ws.id))
+        ).scalar_one_or_none()
         if not ji:
             ji = JobItem(
                 worksite_id=ws.id,
@@ -134,16 +204,28 @@ async def run_demo() -> None:
             await session.flush()
 
         # Clean up any prior demo records
-        await session.execute(delete(ScheduledWork).where(ScheduledWork.employee_id.in_([w1_emp.id, w2_emp.id])))
-        await session.execute(delete(ReassignmentRequest).where(or_(
-            ReassignmentRequest.original_employee_id.in_([w1_emp.id, w2_emp.id]),
-            ReassignmentRequest.new_employee_id.in_([w1_emp.id, w2_emp.id]),
-        )))
+        await session.execute(
+            delete(ScheduledWork).where(ScheduledWork.employee_id.in_([w1_emp.id, w2_emp.id]))
+        )
+        await session.execute(
+            delete(ReassignmentRequest).where(
+                or_(
+                    ReassignmentRequest.original_employee_id.in_([w1_emp.id, w2_emp.id]),
+                    ReassignmentRequest.new_employee_id.in_([w1_emp.id, w2_emp.id]),
+                )
+            )
+        )
         await session.execute(delete(Alert).where(Alert.employee_id.in_([w1_emp.id, w2_emp.id])))
-        await session.execute(delete(LeaveRequest).where(LeaveRequest.employee_id.in_([w1_emp.id, w2_emp.id])))
+        await session.execute(
+            delete(LeaveRequest).where(LeaveRequest.employee_id.in_([w1_emp.id, w2_emp.id]))
+        )
 
         # Ensure Base Roster Template for Job Item with Worker 1
-        tmpl = (await session.execute(select(BaseRosterTemplate).where(BaseRosterTemplate.job_item_id == ji.id))).scalar_one_or_none()
+        tmpl = (
+            await session.execute(
+                select(BaseRosterTemplate).where(BaseRosterTemplate.job_item_id == ji.id)
+            )
+        ).scalar_one_or_none()
         if not tmpl:
             tmpl = BaseRosterTemplate(
                 job_item_id=ji.id,
@@ -164,7 +246,13 @@ async def run_demo() -> None:
             session.add(entry)
 
         # Seed initial ScheduledWork for Worker 1 on target_date
-        existing_sw = (await session.execute(select(ScheduledWork).where(ScheduledWork.employee_id == w1_emp.id, ScheduledWork.work_date == target_date))).scalar_one_or_none()
+        existing_sw = (
+            await session.execute(
+                select(ScheduledWork).where(
+                    ScheduledWork.employee_id == w1_emp.id, ScheduledWork.work_date == target_date
+                )
+            )
+        ).scalar_one_or_none()
         if not existing_sw:
             sw = ScheduledWork(
                 employee_id=w1_emp.id,
@@ -180,7 +268,7 @@ async def run_demo() -> None:
 
         await session.commit()
 
-    print(f"\n[Actors Initialized]")
+    print("\n[Actors Initialized]")
     print(f"  * Engineer:       {eng_emp.name} (Tally: {eng_emp.tally_id})")
     print(f"  * Supervisor:     {sup_emp.name} (Tally: {sup_emp.tally_id})")
     print(f"  * Primary Worker: {w1_emp.name} (Tally: {w1_emp.tally_id})")
@@ -220,7 +308,9 @@ async def run_demo() -> None:
 
         # Check Alert Created
         alerts = await NotificationService.get_open_alerts(session, sup_user)
-        cover_alerts = [a for a in alerts if a.alert_type == "COVER_NEEDED" and a.ref_id == leave_id]
+        cover_alerts = [
+            a for a in alerts if a.alert_type == "COVER_NEEDED" and a.ref_id == leave_id
+        ]
         print(f"Active COVER_NEEDED Alerts: {len(cover_alerts)}")
         if cover_alerts:
             print(f"  Alert Title: '{cover_alerts[0].title}'")
@@ -243,7 +333,9 @@ async def run_demo() -> None:
                 for day in item.days:
                     if day.work_date == target_date:
                         for w in day.workers:
-                            print(f"  [Cov check] Date: {day.work_date} | Worker: {w.employee_name} ({w.employee_id}) | Type: {w.display_type} | Tags: {w.tags}")
+                            print(
+                                f"  [Cov check] Date: {day.work_date} | Worker: {w.employee_name} ({w.employee_id}) | Type: {w.display_type} | Tags: {w.tags}"
+                            )
                             if w.employee_id == w1_emp.id and w.display_type == "TO_BE_COVERED":
                                 found_to_be_covered = True
         print(f"Confirmed TO_BE_COVERED slot displayed: {found_to_be_covered}")
@@ -269,7 +361,7 @@ async def run_demo() -> None:
         print(f"  Type:              {reassign_req.reassignment_type}")
         print(f"  Original Worker:   {reassign_req.original_employee_name}")
         print(f"  Cover Worker:      {reassign_req.new_employee_name}")
-        print(f"  Notice Period:     5 days (>= 3 days notice requirement passed)")
+        print("  Notice Period:     5 days (>= 3 days notice requirement passed)")
         print(f"  Status:            {reassign_req.status}")
         reassign_id = reassign_req.id
 
@@ -285,7 +377,9 @@ async def run_demo() -> None:
             current_user=eng_user,
         )
         print(f"Reassignment Status after approval: {approved_reassign.status}")
-        print(f"Decided By: {approved_reassign.decided_by_name} (Late approval: {approved_reassign.is_late_approval})")
+        print(
+            f"Decided By: {approved_reassign.decided_by_name} (Late approval: {approved_reassign.is_late_approval})"
+        )
 
         # Verify operational shift materialized in scheduled_work
         stmt_sw = select(ScheduledWork).where(
@@ -295,7 +389,7 @@ async def run_demo() -> None:
         )
         sw_cover = (await session.execute(stmt_sw)).scalar_one_or_none()
         if sw_cover:
-            print(f"Materialized ScheduledWork Exception:")
+            print("Materialized ScheduledWork Exception:")
             print(f"  ID:         {sw_cover.id}")
             print(f"  Worker:     {w2_emp.name}")
             print(f"  Status:     {sw_cover.status}")
@@ -305,8 +399,12 @@ async def run_demo() -> None:
 
         # Verify Alert was resolved
         open_alerts = await NotificationService.get_open_alerts(session, sup_user)
-        resolved_alerts = [a for a in open_alerts if a.alert_type == "COVER_NEEDED" and a.ref_id == leave_id]
-        print(f"Remaining open COVER_NEEDED alerts: {len(resolved_alerts)} (Resolved automatically on cover approval)")
+        resolved_alerts = [
+            a for a in open_alerts if a.alert_type == "COVER_NEEDED" and a.ref_id == leave_id
+        ]
+        print(
+            f"Remaining open COVER_NEEDED alerts: {len(resolved_alerts)} (Resolved automatically on cover approval)"
+        )
 
     # 7. Step 6: See Badge on the Operational Roster
     print("\n" + "-" * 70)
@@ -325,7 +423,9 @@ async def run_demo() -> None:
             for day in worker_row.days:
                 if day.work_date == target_date:
                     for s in day.shifts:
-                        print(f"  Worker: {worker_row.name:<20} | Date: {day.work_date} | Type: {s.display_type} | Covering: {s.original_employee_name} | Tags: {s.tags}")
+                        print(
+                            f"  Worker: {worker_row.name:<20} | Date: {day.work_date} | Type: {s.display_type} | Covering: {s.original_employee_name} | Tags: {s.tags}"
+                        )
                         if s.original_employee_name == w1_emp.name or "Cover Shift" in s.tags:
                             badge_found = True
         print(f"Confirmed Coverage Badge displayed on Roster: {badge_found}")
@@ -346,7 +446,9 @@ async def run_demo() -> None:
             print(f"  Total Working Days:  {s.total_working_days}")
             print(f"  Total Calendar Days: {s.total_calendar_days}")
             for l_type, l_data in s.by_type.items():
-                print(f"    - {l_type}: {l_data.working_days} working days ({l_data.calendar_days} calendar days)")
+                print(
+                    f"    - {l_type}: {l_data.working_days} working days ({l_data.calendar_days} calendar days)"
+                )
 
     print("\n" + "=" * 80)
     print("PHASE 06 DEMO COMPLETE: ALL FLOWS EXECUTED AND VERIFIED SUCCESSFULLY")

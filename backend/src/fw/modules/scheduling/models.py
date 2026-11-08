@@ -172,6 +172,7 @@ class ScheduledWork(Base):
         Index("ix_scheduled_work_job_item", "job_item_id"),
         Index("ix_scheduled_work_occurrence", "occurrence_id"),
         Index("ix_scheduled_work_status", "status"),
+        Index("ix_scheduled_work_reassign_id", "reassignment_request_id"),
         Index(
             "uq_scheduled_work_emp_date_occ_active",
             "employee_id",
@@ -229,7 +230,12 @@ class ScheduledWork(Base):
     override_reason: Mapped[str | None] = mapped_column(String(100), nullable=True)
     reassignment_request_id: Mapped[UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
-        ForeignKey("reassignment_requests.id", ondelete="SET NULL"),
+        ForeignKey(
+            "reassignment_requests.id",
+            ondelete="SET NULL",
+            use_alter=True,
+            name="fk_scheduled_work_reassign_req_id",
+        ),
         nullable=True,
     )
     is_late_approval: Mapped[bool] = mapped_column(default=False, nullable=False)
@@ -417,4 +423,3 @@ class ReassignmentRequest(Base):
         back_populates="reassignment_request",
         foreign_keys="ScheduledWork.reassignment_request_id",
     )
-

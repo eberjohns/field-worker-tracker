@@ -2975,7 +2975,9 @@ class SchedulingService:
                                 else ("DIRECT" if not s.original_employee_id else "OVERRIDE"),
                                 opacity_class="removed" if is_cancelled else "solid",
                                 original_employee_id=s.original_employee_id,
-                                original_employee_name=emp_map[s.original_employee_id].name if s.original_employee_id and s.original_employee_id in emp_map else None,
+                                original_employee_name=emp_map[s.original_employee_id].name
+                                if s.original_employee_id and s.original_employee_id in emp_map
+                                else None,
                                 shift_id=s.id,
                                 reason=s.override_reason,
                                 is_public_holiday=is_holiday,
@@ -3179,7 +3181,9 @@ class SchedulingService:
             min_notice_days=3,
         )
         if not ok_dates:
-            raise AppError(code="INVALID_DATES", message=err_dates or "Invalid leave dates", status_code=400)
+            raise AppError(
+                code="INVALID_DATES", message=err_dates or "Invalid leave dates", status_code=400
+            )
 
         # 2. Check overlap
         stmt = select(LeaveRequest).where(
@@ -3206,7 +3210,11 @@ class SchedulingService:
             existing_leaves=existing_records,
         )
         if not ok_overlap:
-            raise AppError(code="DUPLICATE_LEAVE", message=err_overlap or "Leave overlaps with existing leave", status_code=400)
+            raise AppError(
+                code="DUPLICATE_LEAVE",
+                message=err_overlap or "Leave overlaps with existing leave",
+                status_code=400,
+            )
 
         leave = LeaveRequest(
             employee_id=payload.employee_id,
@@ -3341,18 +3349,30 @@ class SchedulingService:
     ) -> LeaveRequestResponse:
         """Approve a leave request, creating COVER_NEEDED alert and marking slots TO_BE_COVERED."""
         if current_user.role not in ("ADMIN", "ENGINEER"):
-            raise AppError(code="FORBIDDEN", message="Only Engineers or Admin can approve leave", status_code=403)
+            raise AppError(
+                code="FORBIDDEN",
+                message="Only Engineers or Admin can approve leave",
+                status_code=403,
+            )
 
         leave = await self.session.get(LeaveRequest, leave_id)
         if not leave:
             raise AppError(code="NOT_FOUND", message="Leave request not found", status_code=404)
         if leave.status != "REQUESTED":
-            raise AppError(code="INVALID_STATE", message=f"Cannot approve leave in {leave.status} status", status_code=400)
+            raise AppError(
+                code="INVALID_STATE",
+                message=f"Cannot approve leave in {leave.status} status",
+                status_code=400,
+            )
 
         # Check reporting scope for Engineers
         scoped_ids = await ScopeService.get_scoped_employee_ids(self.session, current_user)
         if scoped_ids is not None and leave.employee_id not in scoped_ids:
-            raise AppError(code="OUT_OF_SCOPE", message="Employee outside your engineering scope", status_code=403)
+            raise AppError(
+                code="OUT_OF_SCOPE",
+                message="Employee outside your engineering scope",
+                status_code=403,
+            )
 
         leave.status = "APPROVED"
         leave.approved_by_user_id = current_user.id
@@ -3396,20 +3416,34 @@ class SchedulingService:
     ) -> LeaveRequestResponse:
         """Reject a leave request with mandatory rejection reason."""
         if current_user.role not in ("ADMIN", "ENGINEER"):
-            raise AppError(code="FORBIDDEN", message="Only Engineers or Admin can reject leave", status_code=403)
+            raise AppError(
+                code="FORBIDDEN",
+                message="Only Engineers or Admin can reject leave",
+                status_code=403,
+            )
 
         if not reason or not reason.strip():
-            raise AppError(code="REASON_REQUIRED", message="A rejection reason is mandatory", status_code=400)
+            raise AppError(
+                code="REASON_REQUIRED", message="A rejection reason is mandatory", status_code=400
+            )
 
         leave = await self.session.get(LeaveRequest, leave_id)
         if not leave:
             raise AppError(code="NOT_FOUND", message="Leave request not found", status_code=404)
         if leave.status != "REQUESTED":
-            raise AppError(code="INVALID_STATE", message=f"Cannot reject leave in {leave.status} status", status_code=400)
+            raise AppError(
+                code="INVALID_STATE",
+                message=f"Cannot reject leave in {leave.status} status",
+                status_code=400,
+            )
 
         scoped_ids = await ScopeService.get_scoped_employee_ids(self.session, current_user)
         if scoped_ids is not None and leave.employee_id not in scoped_ids:
-            raise AppError(code="OUT_OF_SCOPE", message="Employee outside your engineering scope", status_code=403)
+            raise AppError(
+                code="OUT_OF_SCOPE",
+                message="Employee outside your engineering scope",
+                status_code=403,
+            )
 
         leave.status = "REJECTED"
         leave.approved_by_user_id = current_user.id
@@ -3447,7 +3481,9 @@ class SchedulingService:
         in_scope = scoped_ids is None or leave.employee_id in scoped_ids
 
         if not (is_admin or is_requester or in_scope):
-            raise AppError(code="FORBIDDEN", message="Permission denied to cancel this leave", status_code=403)
+            raise AppError(
+                code="FORBIDDEN", message="Permission denied to cancel this leave", status_code=403
+            )
 
         leave.status = "CANCELLED"
         leave.version += 1
@@ -3485,7 +3521,9 @@ class SchedulingService:
         )
         cover_shifts = (await self.session.execute(stmt_sw)).scalars().all()
         for cs in cover_shifts:
-            cs.override_reason = (cs.override_reason or "") + " [COVER_NOT_NEEDED - LEAVE CANCELLED]"
+            cs.override_reason = (
+                cs.override_reason or ""
+            ) + " [COVER_NOT_NEEDED - LEAVE CANCELLED]"
 
         await self.session.commit()
 
@@ -3611,7 +3649,9 @@ class SchedulingService:
     ) -> dict[str, Any]:
         """Standalone leave import for Admin."""
         if current_user.role != "ADMIN":
-            raise AppError(code="FORBIDDEN", message="Only Admin can import leaves", status_code=403)
+            raise AppError(
+                code="FORBIDDEN", message="Only Admin can import leaves", status_code=403
+            )
 
         wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
         sheet = wb.active
@@ -3640,8 +3680,16 @@ class SchedulingService:
                 continue
 
             try:
-                from_d = datetime.strptime(str(from_str)[:10], "%Y-%m-%d").date() if not isinstance(from_str, date) else from_str
-                to_d = datetime.strptime(str(to_str)[:10], "%Y-%m-%d").date() if not isinstance(to_str, date) else to_str
+                from_d = (
+                    datetime.strptime(str(from_str)[:10], "%Y-%m-%d").date()
+                    if not isinstance(from_str, date)
+                    else from_str
+                )
+                to_d = (
+                    datetime.strptime(str(to_str)[:10], "%Y-%m-%d").date()
+                    if not isinstance(to_str, date)
+                    else to_str
+                )
             except Exception:
                 errors.append(f"Row {idx}: Invalid date format (expected YYYY-MM-DD)")
                 continue
@@ -3683,20 +3731,38 @@ class SchedulingService:
         today = date.today()
 
         # Strict notice validation (checklist: a request under 3 days is refused for any role)
-        ok_notice, err_notice = validate_reassignment_notice(payload.date_from, today, min_notice_days=3)
+        ok_notice, err_notice = validate_reassignment_notice(
+            payload.date_from, today, min_notice_days=3
+        )
         if not ok_notice:
-            raise AppError(code="INSUFFICIENT_NOTICE", message=err_notice or "Notice period insufficient", status_code=400)
+            raise AppError(
+                code="INSUFFICIENT_NOTICE",
+                message=err_notice or "Notice period insufficient",
+                status_code=400,
+            )
 
         if payload.date_to < payload.date_from:
-            raise AppError(code="INVALID_DATES", message="End date cannot be before start date", status_code=400)
+            raise AppError(
+                code="INVALID_DATES",
+                message="End date cannot be before start date",
+                status_code=400,
+            )
 
         # Scope validation for non-admin
         scoped_ids = await ScopeService.get_scoped_employee_ids(self.session, current_user)
         if scoped_ids is not None:
             if payload.original_employee_id and payload.original_employee_id not in scoped_ids:
-                raise AppError(code="OUT_OF_SCOPE", message="Original employee is outside your scope", status_code=403)
+                raise AppError(
+                    code="OUT_OF_SCOPE",
+                    message="Original employee is outside your scope",
+                    status_code=403,
+                )
             if payload.new_employee_id and payload.new_employee_id not in scoped_ids:
-                raise AppError(code="OUT_OF_SCOPE", message="New employee is outside your scope", status_code=403)
+                raise AppError(
+                    code="OUT_OF_SCOPE",
+                    message="New employee is outside your scope",
+                    status_code=403,
+                )
 
         req = ReassignmentRequest(
             reassignment_type=payload.reassignment_type.upper(),
@@ -3748,7 +3814,9 @@ class SchedulingService:
         )
         req = (await self.session.execute(stmt)).scalar_one_or_none()
         if not req:
-            raise AppError(code="NOT_FOUND", message="Reassignment request not found", status_code=404)
+            raise AppError(
+                code="NOT_FOUND", message="Reassignment request not found", status_code=404
+            )
 
         return ReassignmentResponse(
             id=req.id,
@@ -3760,8 +3828,12 @@ class SchedulingService:
             new_employee_id=req.new_employee_id,
             new_employee_name=req.new_employee.name if req.new_employee else None,
             target_job_item_id=req.target_job_item_id,
-            target_job_number=req.target_job_item.worksite.job_number if req.target_job_item and req.target_job_item.worksite else None,
-            target_job_name=req.target_job_item.worksite.job_name if req.target_job_item and req.target_job_item.worksite else None,
+            target_job_number=req.target_job_item.worksite.job_number
+            if req.target_job_item and req.target_job_item.worksite
+            else None,
+            target_job_name=req.target_job_item.worksite.job_name
+            if req.target_job_item and req.target_job_item.worksite
+            else None,
             hours_per_day=req.hours_per_day,
             reason_category=req.reason_category,
             reason=req.reason,
@@ -3837,8 +3909,12 @@ class SchedulingService:
                 new_employee_id=r.new_employee_id,
                 new_employee_name=r.new_employee.name if r.new_employee else None,
                 target_job_item_id=r.target_job_item_id,
-                target_job_number=r.target_job_item.worksite.job_number if r.target_job_item and r.target_job_item.worksite else None,
-                target_job_name=r.target_job_item.worksite.job_name if r.target_job_item and r.target_job_item.worksite else None,
+                target_job_number=r.target_job_item.worksite.job_number
+                if r.target_job_item and r.target_job_item.worksite
+                else None,
+                target_job_name=r.target_job_item.worksite.job_name
+                if r.target_job_item and r.target_job_item.worksite
+                else None,
                 hours_per_day=r.hours_per_day,
                 reason_category=r.reason_category,
                 reason=r.reason,
@@ -3872,8 +3948,14 @@ class SchedulingService:
         if not emp:
             raise AppError(code="NOT_FOUND", message="Employee not found", status_code=404)
 
-        target_item = await self.session.get(JobItem, payload.target_job_item_id) if payload.target_job_item_id else None
-        target_hours = payload.hours_per_day or (target_item.hours_per_occurrence_per_staff if target_item else Decimal("8.0"))
+        target_item = (
+            await self.session.get(JobItem, payload.target_job_item_id)
+            if payload.target_job_item_id
+            else None
+        )
+        target_hours = payload.hours_per_day or (
+            target_item.hours_per_occurrence_per_staff if target_item else Decimal("8.0")
+        )
 
         all_warnings: list[str] = []
         previews: list[ReassignmentPreviewDay] = []
@@ -3883,14 +3965,20 @@ class SchedulingService:
             std_hours = await self.get_employee_base_standard_hours(emp.id, cur)
 
             # Sum existing allocated hours for this date
-            sw_stmt = select(func.coalesce(func.sum(ScheduledWork.assigned_hours), Decimal("0.0"))).where(
+            sw_stmt = select(
+                func.coalesce(func.sum(ScheduledWork.assigned_hours), Decimal("0.0"))
+            ).where(
                 ScheduledWork.employee_id == emp.id,
                 ScheduledWork.work_date == cur,
                 ScheduledWork.status == "ACTIVE",
             )
             cur_hours = (await self.session.execute(sw_stmt)).scalar() or Decimal("0.0")
 
-            delta = target_hours if payload.reassignment_type in ("ADD", "REPLACE", "MOVE") else -cur_hours
+            delta = (
+                target_hours
+                if payload.reassignment_type in ("ADD", "REPLACE", "MOVE")
+                else -cur_hours
+            )
 
             preview = preview_reassignment_hours(
                 employee_id=str(emp.id),
@@ -3899,7 +3987,9 @@ class SchedulingService:
                 current_hours=cur_hours,
                 proposed_delta=delta,
                 worker_grade_group=emp.grade_code[:2] if emp.grade_code else None,
-                job_item_grade_group=target_item.planned_grade_code[:2] if target_item and target_item.planned_grade_code else None,
+                job_item_grade_group=target_item.planned_grade_code[:2]
+                if target_item and target_item.planned_grade_code
+                else None,
             )
 
             previews.append(
@@ -3922,7 +4012,9 @@ class SchedulingService:
 
             cur += timedelta(days=1)
 
-        return ReassignmentPreviewResponse(previews=previews, warnings=all_warnings, can_submit=True)
+        return ReassignmentPreviewResponse(
+            previews=previews, warnings=all_warnings, can_submit=True
+        )
 
     async def approve_reassignment_request(
         self,
@@ -3932,18 +4024,32 @@ class SchedulingService:
     ) -> ReassignmentResponse:
         """Approve a reassignment request, creating operational exceptions in scheduled_work."""
         if current_user.role not in ("ADMIN", "ENGINEER"):
-            raise AppError(code="FORBIDDEN", message="Only Engineers or Admin can approve reassignments", status_code=403)
+            raise AppError(
+                code="FORBIDDEN",
+                message="Only Engineers or Admin can approve reassignments",
+                status_code=403,
+            )
 
         req = await self.session.get(ReassignmentRequest, request_id)
         if not req:
-            raise AppError(code="NOT_FOUND", message="Reassignment request not found", status_code=404)
+            raise AppError(
+                code="NOT_FOUND", message="Reassignment request not found", status_code=404
+            )
         if req.status != "PENDING":
-            raise AppError(code="INVALID_STATE", message=f"Cannot approve request in {req.status} status", status_code=400)
+            raise AppError(
+                code="INVALID_STATE",
+                message=f"Cannot approve request in {req.status} status",
+                status_code=400,
+            )
 
         scoped_ids = await ScopeService.get_scoped_employee_ids(self.session, current_user)
         if scoped_ids is not None:
             if req.original_employee_id and req.original_employee_id not in scoped_ids:
-                raise AppError(code="OUT_OF_SCOPE", message="Employee outside your engineering scope", status_code=403)
+                raise AppError(
+                    code="OUT_OF_SCOPE",
+                    message="Employee outside your engineering scope",
+                    status_code=403,
+                )
 
         today = date.today()
         is_late = check_late_approval(req.date_from, today, min_notice_days=3)
@@ -3957,9 +4063,15 @@ class SchedulingService:
         req.updated_at = datetime.now(UTC)
 
         # Target job item & worksite
-        target_item = await self.session.get(JobItem, req.target_job_item_id) if req.target_job_item_id else None
+        target_item = (
+            await self.session.get(JobItem, req.target_job_item_id)
+            if req.target_job_item_id
+            else None
+        )
         worksite_id = target_item.worksite_id if target_item else None
-        assigned_h = req.hours_per_day or (target_item.hours_per_occurrence_per_staff if target_item else Decimal("8.0"))
+        assigned_h = req.hours_per_day or (
+            target_item.hours_per_occurrence_per_staff if target_item else Decimal("8.0")
+        )
 
         # Materialize operational shifts across date range
         cur = req.date_from
@@ -4126,21 +4238,37 @@ class SchedulingService:
     ) -> ReassignmentResponse:
         """Reject a reassignment request with mandatory rejection reason."""
         if current_user.role not in ("ADMIN", "ENGINEER"):
-            raise AppError(code="FORBIDDEN", message="Only Engineers or Admin can reject reassignments", status_code=403)
+            raise AppError(
+                code="FORBIDDEN",
+                message="Only Engineers or Admin can reject reassignments",
+                status_code=403,
+            )
 
         if not reason or not reason.strip():
-            raise AppError(code="REASON_REQUIRED", message="A rejection reason is mandatory", status_code=400)
+            raise AppError(
+                code="REASON_REQUIRED", message="A rejection reason is mandatory", status_code=400
+            )
 
         req = await self.session.get(ReassignmentRequest, request_id)
         if not req:
-            raise AppError(code="NOT_FOUND", message="Reassignment request not found", status_code=404)
+            raise AppError(
+                code="NOT_FOUND", message="Reassignment request not found", status_code=404
+            )
         if req.status != "PENDING":
-            raise AppError(code="INVALID_STATE", message=f"Cannot reject request in {req.status} status", status_code=400)
+            raise AppError(
+                code="INVALID_STATE",
+                message=f"Cannot reject request in {req.status} status",
+                status_code=400,
+            )
 
         scoped_ids = await ScopeService.get_scoped_employee_ids(self.session, current_user)
         if scoped_ids is not None:
             if req.original_employee_id and req.original_employee_id not in scoped_ids:
-                raise AppError(code="OUT_OF_SCOPE", message="Employee outside your engineering scope", status_code=403)
+                raise AppError(
+                    code="OUT_OF_SCOPE",
+                    message="Employee outside your engineering scope",
+                    status_code=403,
+                )
 
         req.status = "REJECTED"
         req.decided_by_user_id = current_user.id
@@ -4169,12 +4297,18 @@ class SchedulingService:
         """Cancel a pending reassignment request."""
         req = await self.session.get(ReassignmentRequest, request_id)
         if not req:
-            raise AppError(code="NOT_FOUND", message="Reassignment request not found", status_code=404)
+            raise AppError(
+                code="NOT_FOUND", message="Reassignment request not found", status_code=404
+            )
 
         is_admin = current_user.role == "ADMIN"
         is_requester = req.requested_by_user_id == current_user.id
         if not (is_admin or is_requester):
-            raise AppError(code="FORBIDDEN", message="Permission denied to cancel this request", status_code=403)
+            raise AppError(
+                code="FORBIDDEN",
+                message="Permission denied to cancel this request",
+                status_code=403,
+            )
 
         req.status = "CANCELLED"
         req.version += 1
@@ -4206,29 +4340,43 @@ class SchedulingService:
 
         if norm_status == "PENDING":
             leaves = await self.list_leave_requests(status="REQUESTED", current_user=current_user)
-            reassigns = await self.list_reassignment_requests(status="PENDING", current_user=current_user)
+            reassigns = await self.list_reassignment_requests(
+                status="PENDING", current_user=current_user
+            )
         elif norm_status == "APPROVED":
             leaves = await self.list_leave_requests(status="APPROVED", current_user=current_user)
-            reassigns = await self.list_reassignment_requests(status="APPROVED", current_user=current_user)
+            reassigns = await self.list_reassignment_requests(
+                status="APPROVED", current_user=current_user
+            )
         elif norm_status == "REJECTED":
             leaves = await self.list_leave_requests(status="REJECTED", current_user=current_user)
-            reassigns = await self.list_reassignment_requests(status="REJECTED", current_user=current_user)
+            reassigns = await self.list_reassignment_requests(
+                status="REJECTED", current_user=current_user
+            )
         elif norm_status == "DECIDED":
             all_leaves = await self.list_leave_requests(status=None, current_user=current_user)
-            all_reassigns = await self.list_reassignment_requests(status=None, current_user=current_user)
+            all_reassigns = await self.list_reassignment_requests(
+                status=None, current_user=current_user
+            )
             leaves = [item for item in all_leaves if item.status in ("APPROVED", "REJECTED")]
             reassigns = [req for req in all_reassigns if req.status in ("APPROVED", "REJECTED")]
         else:  # "ALL"
             leaves = await self.list_leave_requests(status=None, current_user=current_user)
-            reassigns = await self.list_reassignment_requests(status=None, current_user=current_user)
+            reassigns = await self.list_reassignment_requests(
+                status=None, current_user=current_user
+            )
 
         # Always calculate badge counts based on PENDING items
         if norm_status == "PENDING":
             pending_leaves_count = len(leaves)
             pending_reassigns_count = len(reassigns)
         else:
-            pending_l = await self.list_leave_requests(status="REQUESTED", current_user=current_user)
-            pending_r = await self.list_reassignment_requests(status="PENDING", current_user=current_user)
+            pending_l = await self.list_leave_requests(
+                status="REQUESTED", current_user=current_user
+            )
+            pending_r = await self.list_reassignment_requests(
+                status="PENDING", current_user=current_user
+            )
             pending_leaves_count = len(pending_l)
             pending_reassigns_count = len(pending_r)
 
@@ -4312,7 +4460,9 @@ class SchedulingService:
                                 ScheduledWork.job_item_id == t.job_item_id,
                                 ScheduledWork.status == "ACTIVE",
                             )
-                            existing_cover = (await self.session.execute(sw_stmt)).scalar_one_or_none()
+                            existing_cover = (
+                                await self.session.execute(sw_stmt)
+                            ).scalar_one_or_none()
                             if not existing_cover:
                                 days_to_go = (cur - today).days
                                 gaps.append(
@@ -4335,4 +4485,3 @@ class SchedulingService:
 
         gaps.sort(key=lambda g: g.work_date)
         return StaffingGapsResponse(from_date=from_date, to_date=to_date, gaps=gaps)
-

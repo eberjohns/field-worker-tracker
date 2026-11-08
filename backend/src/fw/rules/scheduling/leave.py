@@ -151,8 +151,8 @@ def calculate_leave_taken(
             summary[lt]["calendar_days"] += 1
 
             dow = dow_names[cur.weekday()]
-            is_off_day = (dow == normalized_off)
-            is_holiday = (cur in public_holidays)
+            is_off_day = dow == normalized_off
+            is_holiday = cur in public_holidays
 
             if not is_off_day and not is_holiday:
                 summary[lt]["working_days"] += 1

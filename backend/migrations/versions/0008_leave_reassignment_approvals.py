@@ -73,7 +73,9 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint("to_date >= from_date", name="ck_leave_requests_date_order"),
     )
-    op.create_index("ix_leave_requests_emp_dates", "leave_requests", ["employee_id", "from_date", "to_date"])
+    op.create_index(
+        "ix_leave_requests_emp_dates", "leave_requests", ["employee_id", "from_date", "to_date"]
+    )
     op.create_index("ix_leave_requests_status", "leave_requests", ["status"])
     op.create_index("ix_leave_requests_recorded_by", "leave_requests", ["recorded_by_user_id"])
 
@@ -118,7 +120,9 @@ def upgrade() -> None:
         sa.Column("reason_category", sa.String(50), nullable=False),
         sa.Column("reason", sa.Text(), nullable=False),
         sa.Column("status", sa.String(20), nullable=False, server_default="PENDING"),
-        sa.Column("is_late_approval", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column(
+            "is_late_approval", sa.Boolean(), nullable=False, server_default=sa.text("false")
+        ),
         sa.Column("is_orphaned", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column(
             "requested_by_user_id",
@@ -160,7 +164,9 @@ def upgrade() -> None:
     )
     op.create_index("ix_reassign_requests_dates", "reassignment_requests", ["date_from", "date_to"])
     op.create_index("ix_reassign_requests_status", "reassignment_requests", ["status"])
-    op.create_index("ix_reassign_requests_orig_emp", "reassignment_requests", ["original_employee_id"])
+    op.create_index(
+        "ix_reassign_requests_orig_emp", "reassignment_requests", ["original_employee_id"]
+    )
     op.create_index("ix_reassign_requests_new_emp", "reassignment_requests", ["new_employee_id"])
 
     # 3. Add reassignment_request_id and is_late_approval to scheduled_work
@@ -175,7 +181,9 @@ def upgrade() -> None:
     )
     op.add_column(
         "scheduled_work",
-        sa.Column("is_late_approval", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column(
+            "is_late_approval", sa.Boolean(), nullable=False, server_default=sa.text("false")
+        ),
     )
     op.create_index("ix_scheduled_work_reassign_id", "scheduled_work", ["reassignment_request_id"])
 
@@ -202,7 +210,9 @@ def upgrade() -> None:
         sa.Column("title", sa.String(255), nullable=False),
         sa.Column("message", sa.Text(), nullable=False),
         sa.Column("status", sa.String(20), nullable=False, server_default="OPEN"),
-        sa.Column("details", postgresql.JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")),
+        sa.Column(
+            "details", postgresql.JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")
+        ),
         sa.Column("resolved_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
             "resolved_by_user_id",
@@ -230,4 +240,3 @@ def downgrade() -> None:
     op.drop_column("scheduled_work", "reassignment_request_id")
     op.drop_table("reassignment_requests")
     op.drop_table("leave_requests")
-
