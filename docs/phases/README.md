@@ -12,7 +12,7 @@ The system is built **phase by phase**. Each phase is independent, ends with som
 | [03](PHASE-03-import-and-salary.md) | Import framework, master data import and salary structures | PHASE-02 | done |
 | [04](PHASE-04-sites-boundaries-jobs.md) | Sites, boundaries and job items | PHASE-03 | done |
 | [05](PHASE-05-planner.md) | Planner: yearly plan and weekly roster | PHASE-04 | done |
-| [06](PHASE-06-leave-reassignment-approvals.md) | Leave, temporary reassignment and approvals | PHASE-05 | not started |
+| [06](PHASE-06-leave-reassignment-approvals.md) | Leave, temporary reassignment and approvals | PHASE-05 | done |
 | [07](PHASE-07-mobile-contract-and-sync.md) | Mobile contract, login and sync | PHASE-06 | not started |
 | [08](PHASE-08-events-and-attendance.md) | Events and attendance | PHASE-07 | not started |
 | [09](PHASE-09-live-map-pending-alerts.md) | Live map, pending visits, alerts and documents | PHASE-08 | not started |
