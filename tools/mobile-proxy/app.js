@@ -236,8 +236,21 @@
 
   function toWktPolygon(coords) {
     if (!coords || coords.length === 0) return '';
-    const ring = coords[0] || coords;
-    const pts = ring.map((pt) => `${pt[0].toFixed(6)} ${pt[1].toFixed(6)}`).join(', ');
+    let ring = coords;
+    // Check if coords is 3D (e.g. [[[lng, lat], ...]])
+    if (Array.isArray(coords[0]) && Array.isArray(coords[0][0])) {
+      ring = coords[0];
+    } else if (Array.isArray(coords[0]) && typeof coords[0][0] === 'number') {
+      // 2D: [[lng, lat], [lng, lat], ...]
+      ring = coords;
+    }
+    const validPts = ring.filter(
+      (pt) => Array.isArray(pt) && pt.length >= 2 && !isNaN(Number(pt[0])) && !isNaN(Number(pt[1]))
+    );
+    if (validPts.length === 0) return '';
+    const pts = validPts
+      .map((pt) => `${Number(pt[0]).toFixed(6)} ${Number(pt[1]).toFixed(6)}`)
+      .join(', ');
     return `POLYGON((${pts}))`;
   }
 
@@ -552,8 +565,11 @@
     areaSqM = Math.abs(areaSqM);
     const ha = (areaSqM / 10000).toFixed(2);
 
-    const geoJsonCoordinates = [state.polyPoints];
-    const geoJsonStr = JSON.stringify(geoJsonCoordinates, null, 2);
+    const geoJsonObject = {
+      type: 'Polygon',
+      coordinates: [state.polyPoints],
+    };
+    const geoJsonStr = JSON.stringify(geoJsonObject, null, 2);
     const wktStr = toWktPolygon(state.polyPoints);
 
     state.customPolygonLayer.bindPopup(`
@@ -596,6 +612,57 @@
     document.getElementById('polyVertexCount').textContent = '0 pts';
     togglePolyDrawMode(false);
     showToast('Cancelled polygon drawing.');
+  }
+
+  // Clear Map Canvas & Reset Custom Layers
+  function clearEntireMap() {
+    stopRoutePlayback();
+
+    // 1. Remove custom drawn polygon & tracing markers
+    if (state.customPolygonLayer) {
+      state.map.removeLayer(state.customPolygonLayer);
+      state.customPolygonLayer = null;
+    }
+    state.polyMarkers.forEach((m) => state.map.removeLayer(m));
+    state.polyMarkers = [];
+    if (state.polyLinePreview) {
+      state.map.removeLayer(state.polyLinePreview);
+      state.polyLinePreview = null;
+    }
+    state.polyPoints = [];
+    document.getElementById('polyVertexCount').textContent = '0 pts';
+    togglePolyDrawMode(false);
+
+    // 2. Clear drawn route waypoints & polyline
+    state.drawnWaypoints = [];
+    state.drawnMarkers.forEach((m) => state.map.removeLayer(m));
+    state.drawnMarkers = [];
+    if (state.drawnPolyline) {
+      state.map.removeLayer(state.drawnPolyline);
+      state.drawnPolyline = null;
+    }
+    if (state.isDrawingMode) {
+      document.getElementById('btnToggleDrawMode').click();
+    }
+
+    // 3. Hide all modals
+    document.getElementById('customPolygonModal').classList.add('hidden');
+    document.getElementById('boundaryModal').classList.add('hidden');
+
+    // 4. Reset timeline slider & analytics
+    state.route.progress = 0;
+    const slider = document.getElementById('routeTimelineSlider');
+    if (slider) slider.value = '0';
+    applyRouteProgress(0);
+
+    // 5. Reset route to standard preset
+    document.getElementById('routePresetSelect').value = 'standard';
+    loadRoute(PRESET_ROUTES.standard.waypoints);
+
+    // 6. Refresh server layers
+    updateMapLayers();
+
+    showToast('✓ Map canvas cleared & reset.');
   }
 
   // Render Map Features ONLY from Synced Server Data (NO Hardcoded Fallback)
@@ -1310,6 +1377,9 @@
       a.click();
       a.remove();
     });
+
+    // Clear Entire Map Canvas & Reset
+    document.getElementById('btnClearMapAll')?.addEventListener('click', clearEntireMap);
 
     // Export Network Log (JSON)
     document.getElementById('btnExportNetworkLog').addEventListener('click', () => {
