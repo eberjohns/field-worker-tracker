@@ -764,7 +764,7 @@ class SyncService:
                         acc_end = r.accommodation_end.strftime("%H:%M")
                     break
 
-                alarm_time = _subtract_minutes_from_time_str(acc_start, 30)
+                alarm_time = _subtract_minutes_from_time_str(acc_start, alarm_lead_minutes)
                 day_payload = DayPlanPayload(
                     work_date=day_str,
                     status="WORKING",

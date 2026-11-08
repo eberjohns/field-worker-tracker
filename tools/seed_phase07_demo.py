@@ -23,7 +23,7 @@ from fw.core.db import async_session_factory
 from fw.modules.identity import hash_password
 from fw.modules.identity.models import User
 from fw.modules.jobs.models import JobItem, Worksite
-from fw.modules.org.models import Accommodation, Employee, Group, Zone
+from fw.modules.org.models import Accommodation, Employee, EmployeeReportingLine, Group, Zone
 from fw.modules.scheduling.models import ScheduledWork
 from fw.modules.settings.models import CompanySettingValue, ConsentPolicy
 from fw.modules.sync.service import SyncService
@@ -104,7 +104,7 @@ async def seed():
         )
         accom = res.scalar_one_or_none()
         warsan_poly_wkt = (
-            "POLYGON((55.4110 25.1570, 55.4135 25.1570, 55.4135 25.1595, 55.4110 25.1595, 55.4110 25.1570))"
+            "POLYGON((55.4100 25.1560, 55.4145 25.1560, 55.4145 25.1605, 55.4100 25.1605, 55.4100 25.1560))"
         )
         if not accom:
             accom = Accommodation(
@@ -119,42 +119,45 @@ async def seed():
             session.add(accom)
             await session.flush()
         else:
+            accom.name = "Warsan Staff Accommodation Camp"
+            accom.address = "Al Warsan 3, Dubai, UAE"
             accom.boundary = WKTElement(warsan_poly_wkt, srid=4326)
             accom.rep_latitude = Decimal("25.158250")
             accom.rep_longitude = Decimal("55.412250")
             await session.flush()
         print(f"  ✓ Accommodation '{accom.name}' ready")
 
-        # 5. Worksite with Polygon Boundary (Dubai Marina)
+        # 5. Worksite with Polygon Boundary (Dubai Silicon Oasis, ~4.1 km from Warsan)
         res = await session.execute(
             select(Worksite).where(Worksite.job_number == "12A14301")
         )
         worksite = res.scalar_one_or_none()
-        marina_poly_wkt = (
-            "POLYGON((55.1440 25.0790, 55.1465 25.0790, 55.1465 25.0815, 55.1440 25.0815, 55.1440 25.0790))"
+        silicon_poly_wkt = (
+            "POLYGON((55.3800 25.1280, 55.3880 25.1280, 55.3880 25.1340, 55.3800 25.1340, 55.3800 25.1280))"
         )
         if not worksite:
             worksite = Worksite(
                 job_number="12A14301",
-                job_name="Dubai Marina Towers Landscape",
+                job_name="Dubai Silicon Oasis Landscape Maintenance",
                 group_id=group.id,
                 zone_id=zone.id,
                 customer_type="COMMERCIAL",
                 is_outdoor=True,
                 country="AE",
-                boundary=WKTElement(marina_poly_wkt, srid=4326),
-                rep_latitude=Decimal("25.080250"),
-                rep_longitude=Decimal("55.145250"),
+                boundary=WKTElement(silicon_poly_wkt, srid=4326),
+                rep_latitude=Decimal("25.131000"),
+                rep_longitude=Decimal("55.384000"),
                 is_active=True,
             )
             session.add(worksite)
             await session.flush()
         else:
-            worksite.boundary = WKTElement(marina_poly_wkt, srid=4326)
-            worksite.rep_latitude = Decimal("25.080250")
-            worksite.rep_longitude = Decimal("55.145250")
+            worksite.job_name = "Dubai Silicon Oasis Landscape Maintenance"
+            worksite.boundary = WKTElement(silicon_poly_wkt, srid=4326)
+            worksite.rep_latitude = Decimal("25.131000")
+            worksite.rep_longitude = Decimal("55.384000")
             await session.flush()
-        print(f"  ✓ Worksite '{worksite.job_name}' ready")
+        print(f"  ✓ Worksite '{worksite.job_name}' ready (~4.1 km commute from camp)")
 
         # 6. Job Item
         res = await session.execute(
@@ -183,7 +186,31 @@ async def seed():
             await session.flush()
         print("  ✓ Job Item ready")
 
-        # 7. Employee 1193 (Shanto Miah)
+        # 7. Supervisor Employee (SUP001 - Shakir Khisham)
+        res = await session.execute(
+            select(Employee).where(Employee.tally_id == "SUP001")
+        )
+        supervisor = res.scalar_one_or_none()
+        if not supervisor:
+            supervisor = Employee(
+                tally_id="SUP001",
+                name="Shakir Khisham",
+                role="SUPERVISOR",
+                staff_grade_description="Field Supervisor",
+                phone="+971501234567",
+                country="AE",
+                is_active=True,
+            )
+            session.add(supervisor)
+            await session.flush()
+        else:
+            supervisor.name = "Shakir Khisham"
+            supervisor.phone = "+971501234567"
+            supervisor.is_active = True
+            await session.flush()
+        print(f"  ✓ Supervisor '{supervisor.name}' (ID: SUP001) ready")
+
+        # 8. Employee 1193 (Shanto Miah)
         res = await session.execute(
             select(Employee).where(Employee.tally_id == "1193")
         )
@@ -194,8 +221,9 @@ async def seed():
                 name="Shanto Miah",
                 role="WORKER",
                 staff_grade_description="Landscape Gardener",
-                phone="+971501234567",
+                phone="+971509876543",
                 accommodation_id=accom.id,
+                weekly_off_day="FRIDAY",
                 country="AE",
                 is_active=True,
             )
@@ -203,11 +231,33 @@ async def seed():
             await session.flush()
         else:
             worker.accommodation_id = accom.id
+            worker.weekly_off_day = "FRIDAY"
             worker.is_active = True
             await session.flush()
         print(f"  ✓ Employee '{worker.name}' (ID: 1193) ready")
 
-        # 8. User for Employee 1193
+        # 9. Reporting line: worker -> supervisor
+        rep_res = await session.execute(
+            select(EmployeeReportingLine).where(
+                EmployeeReportingLine.employee_id == worker.id,
+                EmployeeReportingLine.relationship == "SUPERVISOR",
+            )
+        )
+        rep_line = rep_res.scalar_one_or_none()
+        if not rep_line:
+            rep_line = EmployeeReportingLine(
+                employee_id=worker.id,
+                manager_id=supervisor.id,
+                relationship="SUPERVISOR",
+            )
+            session.add(rep_line)
+            await session.flush()
+        else:
+            rep_line.manager_id = supervisor.id
+            await session.flush()
+        print(f"  ✓ Reporting line linked: {worker.name} reports to {supervisor.name}")
+
+        # 10. User for Employee 1193
         res = await session.execute(
             select(User).where(User.username == "1193")
         )
@@ -218,7 +268,7 @@ async def seed():
                 employee_id=worker.id,
                 role="WORKER",
                 credential_hash=hash_password("Welcome123!"),
-                must_change_password=True,
+                must_change_password=False,
                 is_active=True,
             )
             session.add(user_worker)
@@ -226,10 +276,10 @@ async def seed():
         else:
             user_worker.employee_id = worker.id
             user_worker.credential_hash = hash_password("Welcome123!")
-            user_worker.must_change_password = True
+            user_worker.must_change_password = False
             user_worker.is_active = True
             await session.flush()
-        print("  ✓ Worker user account (1193 / Welcome123!) ready (must_change_password=True)")
+        print("  ✓ Worker user account (1193 / Welcome123!) ready (must_change_password=False)")
 
         # 9. Admin User (ADMIN001)
         res = await session.execute(
@@ -265,10 +315,15 @@ async def seed():
             await session.flush()
         print("  ✓ Admin account (ADMIN001 / Admin123!) ready")
 
-        # 10. Scheduled Work for Today and next 7 days
+        # 11. Scheduled Work for Today and next 30 days (excluding Fridays after today)
         today = date.today()
-        for i in range(8):
+        seeded_count = 0
+        for i in range(30):
             target_date = today + timedelta(days=i)
+            # Ensure today always has a shift; other days skip weekly off (Friday = weekday 4)
+            if i > 0 and target_date.weekday() == 4:
+                continue
+
             res = await session.execute(
                 select(ScheduledWork).where(
                     ScheduledWork.employee_id == worker.id,
@@ -289,8 +344,14 @@ async def seed():
                     source="STANDING",
                 )
                 session.add(sched)
+                seeded_count += 1
+            else:
+                existing_sched.worksite_id = worksite.id
+                existing_sched.job_item_id = job_item.id
+                existing_sched.assigned_hours = Decimal("8.00")
+                seeded_count += 1
         await session.flush()
-        print(f"  ✓ Scheduled Work seeded for {worker.name} from {today} to {today + timedelta(days=7)}")
+        print(f"  ✓ Scheduled Work seeded ({seeded_count} active shifts) for {worker.name} over next 30 days")
 
         await session.commit()
     print("✨ Phase 07 Demo Seeding completed successfully!")
