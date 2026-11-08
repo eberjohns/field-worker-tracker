@@ -40,6 +40,19 @@ All notable changes. Format: Keep a Changelog. Mobile-contract changes are also 
     - CI check in `.github/workflows/ci.yml` verifying OpenAPI schema synchronization.
     - Mobile developer onboarding guide in `docs/18-mobile-integration-guide.md`.
     - Architecture Decision Record `docs/decisions/017-mobile-sync-and-events-architecture.md`.
+    - Phase 07 to Phase 08 & 09 Handoff and Architecture Documentation in `docs/phases/PHASE-07-HANDOFF.md`.
+  - Base Planner Blueprint Integration:
+    - Integrated `base_roster_templates` and `base_roster_entries` into `SyncService.build_snapshot` and delta change listeners, ensuring recurring blueprint schedules sync shifts, worksites, and polygon boundaries to mobile workers without requiring single-day operational records.
+    - Updated `save_base_template` to publish `ScheduledWorkChanged` domain events to invalidate and update mobile sync logs.
+  - Mobile Tester Proxy & Web Dashboard Enhancements:
+    - Dynamic Auto-Route generation connecting accommodation camp and assigned worksite with realistic shift timing.
+    - Automatic map viewport bounding box auto-fit for accommodation and worksite polygons.
+    - Interactive custom polygon drawing tool with real-time area calculation and WKT / GeoJSON clipboard export.
+    - Dashboard polygon editor bridge: "Paste Polygon" modal in `PolygonEditor.tsx` accepting GeoJSON and WKT.
+    - Audio shift alarm synthesizer and Network Inspector with exportable JSON traffic logs.
+    - "Clear Map" reset button for scratch layers.
+    - Full upstream reporting chain traversal in employee detail view.
+    - Explicit PostGIS `ST_AsGeoJSON` loading in event listeners to eliminate `MissingGreenlet` errors.
 - PHASE-06 (Leave Management, Temporary Reassignment & Approvals Inbox):
   - Pure domain rules in `backend/src/fw/rules/scheduling/`:
     - `leave.py`: Date order validation, overlapping leave checks against requested/approved leaves, notice period checking (3+ days ahead for non-admin, past leaves allowed for Admin), and leave taken counting (working days excluding worker's weekly off day and public holidays vs calendar days).
