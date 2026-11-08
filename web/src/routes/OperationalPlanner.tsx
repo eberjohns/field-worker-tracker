@@ -94,8 +94,29 @@ export const OperationalPlanner: React.FC = () => {
   const { token, user } = useAuth();
 
   // Navigation & Lens
-  const [activeLens, setActiveLens] = useState<"COVERAGE" | "ROSTER">("COVERAGE");
+  const [activeLens, setActiveLens] = useState<"COVERAGE" | "ROSTER">(() => {
+    try {
+      return new URLSearchParams(window.location.search).get("lens") === "ROSTER" ? "ROSTER" : "COVERAGE";
+    } catch {
+      return "COVERAGE";
+    }
+  });
   const [weekStartDate, setWeekStartDate] = useState<string>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const dateParam = params.get("date");
+      if (dateParam) {
+        const parts = dateParam.split("-").map(Number);
+        const d = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+        const day = d.getUTCDay();
+        const diff = d.getUTCDate() - day + (day === 0 ? -6 : 1);
+        const monday = new Date(d);
+        monday.setUTCDate(diff);
+        return monday.toISOString().split("T")[0];
+      }
+    } catch (e) {
+      console.error("Failed to parse initial date query param", e);
+    }
     const now = new Date();
     const day = now.getDay();
     const diff = now.getDate() - day + (day === 0 ? -6 : 1);
@@ -130,7 +151,13 @@ export const OperationalPlanner: React.FC = () => {
   const [reassignSuccess, setReassignSuccess] = useState<string | null>(null);
   const [reassignPreview, setReassignPreview] = useState<any | null>(null);
   const [previewLoading, setPreviewLoading] = useState<boolean>(false);
-  const [highlightedJobItemId, setHighlightedJobItemId] = useState<string | null>(null);
+  const [highlightedJobItemId, setHighlightedJobItemId] = useState<string | null>(() => {
+    try {
+      return new URLSearchParams(window.location.search).get("job_item_id") || null;
+    } catch {
+      return null;
+    }
+  });
   const [recentReassignments, setRecentReassignments] = useState<any[]>([]);
   const [showReassignmentsHistory, setShowReassignmentsHistory] = useState<boolean>(false);
 
@@ -224,9 +251,12 @@ export const OperationalPlanner: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
   const scrollPosRef = useRef<number>(0);
+  const activeWeekRef = useRef<string>(weekStartDate);
+  activeWeekRef.current = weekStartDate;
 
   // Fetch Operational Data
   const fetchOperationalData = async (silent: boolean = false) => {
+    const requestedWeek = weekStartDate;
     const hasExistingData = activeLens === "COVERAGE" ? !!coverageData : !!rosterData;
     const shouldSilent = silent || hasExistingData;
     if (!shouldSilent) setLoading(true);
@@ -237,26 +267,32 @@ export const OperationalPlanner: React.FC = () => {
     try {
       if (activeLens === "COVERAGE") {
         const res = await fetch(
-          `/api/v1/operational-planner/coverage?week_start=${weekStartDate}`,
+          `/api/v1/operational-planner/coverage?week_start=${requestedWeek}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         if (!res.ok) throw new Error("Failed to load Operational Coverage");
         const data: OperationalCoverageResponse = await res.json();
+        if (activeWeekRef.current !== requestedWeek) return;
         setCoverageData(data);
       } else {
         const res = await fetch(
-          `/api/v1/operational-planner/roster?week_start=${weekStartDate}`,
+          `/api/v1/operational-planner/roster?week_start=${requestedWeek}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         if (!res.ok) throw new Error("Failed to load Operational Roster");
         const data: OperationalRosterResponse = await res.json();
+        if (activeWeekRef.current !== requestedWeek) return;
         setRosterData(data);
       }
     } catch (err: any) {
-      setError(err.message || "An error occurred");
+      if (activeWeekRef.current === requestedWeek) {
+        setError(err.message || "An error occurred");
+      }
     } finally {
-      if (!shouldSilent) setLoading(false);
-      else setIsRefreshing(false);
+      if (activeWeekRef.current === requestedWeek) {
+        if (!shouldSilent) setLoading(false);
+        else setIsRefreshing(false);
+      }
       requestAnimationFrame(() => {
         if (scrollPosRef.current > 0) {
           window.scrollTo({ top: scrollPosRef.current, behavior: "instant" });
@@ -350,7 +386,8 @@ export const OperationalPlanner: React.FC = () => {
         const diff = d.getUTCDate() - day + (day === 0 ? -6 : 1);
         const monday = new Date(d);
         monday.setUTCDate(diff);
-        setWeekStartDate(monday.toISOString().split("T")[0]);
+        const targetWeek = monday.toISOString().split("T")[0];
+        setWeekStartDate((prev) => (prev !== targetWeek ? targetWeek : prev));
       } catch (e) {
         console.error("Invalid date query param", e);
       }
