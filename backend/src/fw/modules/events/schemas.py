@@ -59,3 +59,24 @@ class EventBatchResponse(BaseModel):
     server_time_utc: datetime
     latest_cursor: int
     results: list[EventResultItem]
+
+
+class MobileEventResponse(BaseModel):
+    event_id: UUID
+    employee_id: UUID
+    device_id: UUID
+    event_type: str
+    event_timestamp_utc: datetime
+    location_captured_at_utc: datetime | None = None
+    latitude: Decimal | None = None
+    longitude: Decimal | None = None
+    accuracy_meters: float | None = None
+    is_mock_location: bool | None = None
+    sequence_number: int | None = None
+    server_received_at: datetime
+    processing_status: str
+    server_site_id: UUID | None = None
+    server_accommodation_id: UUID | None = None
+    server_verdict: str | None = None
+    distance_to_polygon_m: float | None = None
+    flags: list[str] = Field(default_factory=list)

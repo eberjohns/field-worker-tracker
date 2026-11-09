@@ -55,13 +55,18 @@ is_dev_blank_admin = (
 )
 
 if is_dev_blank_admin:
+    # Prefer default bootstrap ADMIN001 if present, otherwise the first created active ADMIN
     query = (
         select(User)
         .where(User.role == "ADMIN", User.is_active.is_(True))
-        .order_by(User.created_at.asc())
+        .order_by(
+            (User.username == "ADMIN001").desc(),
+            User.created_at.asc(),
+        )
+        .limit(1)
     )
     result = await session.execute(query)
-    user = result.scalar_one_or_none()
+    user = result.scalars().first()
     if not user:
         raise AppError(
             code="UNAUTHENTICATED",

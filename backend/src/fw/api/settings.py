@@ -406,11 +406,20 @@ async def reset_database(
     session: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     """Reset database to clean bootstrap state. Retains only ADMIN001 and company settings."""
-    # 1. Nullify user reference in audit logs
+    # 1. Nullify user reference in audit logs and bypass event immutability for bootstrap reset
     await session.execute(text("UPDATE audit_logs SET actor_user_id = NULL;"))
+    await session.execute(text("SET LOCAL fwt.bypass_immutability = 'on';"))
 
     # 2. Clear transactional and master tables in strict foreign-key dependency order
     tables = [
+        "pending_visits",
+        "attendance_approvals",
+        "attendance_comments",
+        "attendance_calculations",
+        "attendance_records",
+        "tracking_gaps",
+        "site_visits",
+        "employee_last_position",
         "mobile_event_logs",
         "consent_records",
         "sync_changes",

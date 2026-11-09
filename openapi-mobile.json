@@ -1184,6 +1184,779 @@
         ],
         "title": "AssignedWorkerSummary"
       },
+      "AttendanceApprovalResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "attendance_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Attendance Id"
+          },
+          "reviewer_user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Reviewer User Id"
+          },
+          "reviewer_name": {
+            "type": "string",
+            "title": "Reviewer Name"
+          },
+          "decision": {
+            "type": "string",
+            "title": "Decision"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "calculation_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Calculation Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "attendance_id",
+          "reviewer_user_id",
+          "reviewer_name",
+          "decision",
+          "calculation_id",
+          "created_at"
+        ],
+        "title": "AttendanceApprovalResponse"
+      },
+      "AttendanceCalculationSnapshot": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "version_no": {
+            "type": "integer",
+            "title": "Version No"
+          },
+          "input_hash": {
+            "type": "string",
+            "title": "Input Hash"
+          },
+          "calculated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Calculated At"
+          },
+          "engine_version": {
+            "type": "string",
+            "title": "Engine Version"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "planned_accommodation_departure": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned Accommodation Departure"
+          },
+          "planned_first_site_start": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned First Site Start"
+          },
+          "planned_break_minutes": {
+            "type": "integer",
+            "title": "Planned Break Minutes"
+          },
+          "planned_last_site_end": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned Last Site End"
+          },
+          "planned_accommodation_return": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned Accommodation Return"
+          },
+          "planned_total_minutes": {
+            "type": "integer",
+            "title": "Planned Total Minutes"
+          },
+          "planned_worked_minutes": {
+            "type": "integer",
+            "title": "Planned Worked Minutes"
+          },
+          "standard_hours_minutes": {
+            "type": "integer",
+            "title": "Standard Hours Minutes"
+          },
+          "accommodation_departure_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accommodation Departure At"
+          },
+          "first_site_entry_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Site Entry At"
+          },
+          "break_minutes_used": {
+            "type": "integer",
+            "title": "Break Minutes Used"
+          },
+          "break_source": {
+            "type": "string",
+            "title": "Break Source"
+          },
+          "last_site_exit_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Site Exit At"
+          },
+          "accommodation_return_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accommodation Return At"
+          },
+          "elapsed_site_minutes": {
+            "type": "integer",
+            "title": "Elapsed Site Minutes"
+          },
+          "shift_span_minutes": {
+            "type": "integer",
+            "title": "Shift Span Minutes"
+          },
+          "unaccounted_minutes": {
+            "type": "integer",
+            "title": "Unaccounted Minutes"
+          },
+          "worked_minutes": {
+            "type": "integer",
+            "title": "Worked Minutes"
+          },
+          "required_minutes": {
+            "type": "integer",
+            "title": "Required Minutes"
+          },
+          "variation_minutes": {
+            "type": "integer",
+            "title": "Variation Minutes"
+          },
+          "shortfall_minutes": {
+            "type": "integer",
+            "title": "Shortfall Minutes"
+          },
+          "grace_minutes": {
+            "type": "integer",
+            "title": "Grace Minutes"
+          },
+          "grace_applied": {
+            "type": "boolean",
+            "title": "Grace Applied"
+          },
+          "satisfied": {
+            "type": "boolean",
+            "title": "Satisfied"
+          },
+          "productive_minutes": {
+            "type": "integer",
+            "title": "Productive Minutes"
+          },
+          "transit_minutes": {
+            "type": "integer",
+            "title": "Transit Minutes"
+          },
+          "offsite_minutes": {
+            "type": "integer",
+            "title": "Offsite Minutes"
+          },
+          "idle_minutes": {
+            "type": "integer",
+            "title": "Idle Minutes"
+          },
+          "ot1_minutes": {
+            "type": "integer",
+            "title": "Ot1 Minutes"
+          },
+          "ot2_minutes": {
+            "type": "integer",
+            "title": "Ot2 Minutes"
+          },
+          "ot_threshold_minutes": {
+            "type": "integer",
+            "title": "Ot Threshold Minutes"
+          },
+          "day_type": {
+            "type": "string",
+            "title": "Day Type"
+          },
+          "assigned_count": {
+            "type": "integer",
+            "title": "Assigned Count"
+          },
+          "completed_count": {
+            "type": "integer",
+            "title": "Completed Count"
+          },
+          "business_status": {
+            "type": "string",
+            "title": "Business Status"
+          },
+          "flags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Flags"
+          },
+          "review_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Review Reasons"
+          },
+          "visits_snapshot": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Visits Snapshot"
+          },
+          "gaps_snapshot": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Gaps Snapshot"
+          },
+          "inputs_snapshot": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Inputs Snapshot"
+          },
+          "source_event_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Source Event Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "version_no",
+          "input_hash",
+          "calculated_at",
+          "engine_version",
+          "reason",
+          "planned_break_minutes",
+          "planned_total_minutes",
+          "planned_worked_minutes",
+          "standard_hours_minutes",
+          "break_minutes_used",
+          "break_source",
+          "elapsed_site_minutes",
+          "shift_span_minutes",
+          "unaccounted_minutes",
+          "worked_minutes",
+          "required_minutes",
+          "variation_minutes",
+          "shortfall_minutes",
+          "grace_minutes",
+          "grace_applied",
+          "satisfied",
+          "productive_minutes",
+          "transit_minutes",
+          "offsite_minutes",
+          "idle_minutes",
+          "ot1_minutes",
+          "ot2_minutes",
+          "ot_threshold_minutes",
+          "day_type",
+          "assigned_count",
+          "completed_count",
+          "business_status"
+        ],
+        "title": "AttendanceCalculationSnapshot"
+      },
+      "AttendanceCommentCreateRequest": {
+        "properties": {
+          "comment_type": {
+            "type": "string",
+            "title": "Comment Type"
+          },
+          "comment_text": {
+            "type": "string",
+            "title": "Comment Text"
+          },
+          "scheduled_work_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scheduled Work Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "comment_type",
+          "comment_text"
+        ],
+        "title": "AttendanceCommentCreateRequest"
+      },
+      "AttendanceCommentResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "attendance_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Attendance Id"
+          },
+          "author_user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Author User Id"
+          },
+          "author_name": {
+            "type": "string",
+            "title": "Author Name"
+          },
+          "comment_type": {
+            "type": "string",
+            "title": "Comment Type"
+          },
+          "comment_text": {
+            "type": "string",
+            "title": "Comment Text"
+          },
+          "scheduled_work_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scheduled Work Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "attendance_id",
+          "author_user_id",
+          "author_name",
+          "comment_type",
+          "comment_text",
+          "created_at"
+        ],
+        "title": "AttendanceCommentResponse"
+      },
+      "AttendanceDecisionRequest": {
+        "properties": {
+          "decision": {
+            "type": "string",
+            "title": "Decision"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          }
+        },
+        "type": "object",
+        "required": [
+          "decision"
+        ],
+        "title": "AttendanceDecisionRequest"
+      },
+      "AttendanceListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AttendanceRecordResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "AttendanceListResponse"
+      },
+      "AttendanceRecalculateRequest": {
+        "properties": {
+          "employee_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Id"
+          },
+          "from_date": {
+            "type": "string",
+            "format": "date",
+            "title": "From Date"
+          },
+          "to_date": {
+            "type": "string",
+            "format": "date",
+            "title": "To Date"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason",
+            "default": "MANUAL"
+          }
+        },
+        "type": "object",
+        "required": [
+          "from_date",
+          "to_date"
+        ],
+        "title": "AttendanceRecalculateRequest"
+      },
+      "AttendanceRecalculateResponse": {
+        "properties": {
+          "recalculated_count": {
+            "type": "integer",
+            "title": "Recalculated Count"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "recalculated_count",
+          "message"
+        ],
+        "title": "AttendanceRecalculateResponse"
+      },
+      "AttendanceRecordResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "employee_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Employee Id"
+          },
+          "employee_name": {
+            "type": "string",
+            "title": "Employee Name"
+          },
+          "tally_id": {
+            "type": "string",
+            "title": "Tally Id"
+          },
+          "supervisor_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supervisor Name"
+          },
+          "work_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Work Date"
+          },
+          "business_status": {
+            "type": "string",
+            "title": "Business Status"
+          },
+          "review_status": {
+            "type": "string",
+            "title": "Review Status"
+          },
+          "locked": {
+            "type": "boolean",
+            "title": "Locked"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "current_calculation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AttendanceCalculationSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "comments": {
+            "items": {
+              "$ref": "#/components/schemas/AttendanceCommentResponse"
+            },
+            "type": "array",
+            "title": "Comments"
+          },
+          "approvals": {
+            "items": {
+              "$ref": "#/components/schemas/AttendanceApprovalResponse"
+            },
+            "type": "array",
+            "title": "Approvals"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "employee_id",
+          "employee_name",
+          "tally_id",
+          "work_date",
+          "business_status",
+          "review_status",
+          "locked",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "AttendanceRecordResponse"
+      },
+      "AttendanceTimelineItem": {
+        "properties": {
+          "item_id": {
+            "type": "string",
+            "title": "Item Id"
+          },
+          "item_type": {
+            "type": "string",
+            "title": "Item Type"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "place_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Place Name"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Started At"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "duration_minutes": {
+            "type": "integer",
+            "title": "Duration Minutes"
+          },
+          "is_inferred": {
+            "type": "boolean",
+            "title": "Is Inferred"
+          },
+          "flags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Flags"
+          },
+          "details": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Details"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_id",
+          "item_type",
+          "label",
+          "started_at",
+          "duration_minutes",
+          "is_inferred"
+        ],
+        "title": "AttendanceTimelineItem"
+      },
+      "AttendanceTimelineResponse": {
+        "properties": {
+          "attendance_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Attendance Id"
+          },
+          "employee_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Employee Id"
+          },
+          "employee_name": {
+            "type": "string",
+            "title": "Employee Name"
+          },
+          "work_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Work Date"
+          },
+          "timeline_items": {
+            "items": {
+              "$ref": "#/components/schemas/AttendanceTimelineItem"
+            },
+            "type": "array",
+            "title": "Timeline Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "attendance_id",
+          "employee_id",
+          "employee_name",
+          "work_date",
+          "timeline_items"
+        ],
+        "title": "AttendanceTimelineResponse"
+      },
       "AuditLogRead": {
         "properties": {
           "id": {
@@ -1213,6 +1986,17 @@
             ],
             "title": "Actor Role"
           },
+          "actor_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Name"
+          },
           "action": {
             "type": "string",
             "title": "Action"
@@ -1225,10 +2009,28 @@
             "type": "string",
             "title": "Entity Id"
           },
+          "entity_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Label"
+          },
           "diff": {
             "additionalProperties": true,
             "type": "object",
             "title": "Diff"
+          },
+          "diff_labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Diff Labels"
           },
           "reason": {
             "anyOf": [
@@ -5429,6 +6231,174 @@
         ],
         "title": "MobileEventItem"
       },
+      "MobileEventResponse": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Event Id"
+          },
+          "employee_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Employee Id"
+          },
+          "device_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Device Id"
+          },
+          "event_type": {
+            "type": "string",
+            "title": "Event Type"
+          },
+          "event_timestamp_utc": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Event Timestamp Utc"
+          },
+          "location_captured_at_utc": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Captured At Utc"
+          },
+          "latitude": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitude"
+          },
+          "longitude": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitude"
+          },
+          "accuracy_meters": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accuracy Meters"
+          },
+          "is_mock_location": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Mock Location"
+          },
+          "sequence_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sequence Number"
+          },
+          "server_received_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Server Received At"
+          },
+          "processing_status": {
+            "type": "string",
+            "title": "Processing Status"
+          },
+          "server_site_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Server Site Id"
+          },
+          "server_accommodation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Server Accommodation Id"
+          },
+          "server_verdict": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Server Verdict"
+          },
+          "distance_to_polygon_m": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distance To Polygon M"
+          },
+          "flags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Flags"
+          }
+        },
+        "type": "object",
+        "required": [
+          "event_id",
+          "employee_id",
+          "device_id",
+          "event_type",
+          "event_timestamp_utc",
+          "server_received_at",
+          "processing_status"
+        ],
+        "title": "MobileEventResponse"
+      },
       "MobileHeartbeatRequest": {
         "properties": {
           "app_version": {
@@ -7054,6 +8024,28 @@
             "format": "uuid",
             "title": "Manager Id"
           },
+          "manager_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manager Name"
+          },
+          "manager_tally_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manager Tally Id"
+          },
           "relationship": {
             "type": "string",
             "title": "Relationship"
@@ -7073,6 +8065,22 @@
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "is_direct": {
+            "type": "boolean",
+            "title": "Is Direct",
+            "default": true
+          },
+          "via_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Via Name"
           }
         },
         "type": "object",

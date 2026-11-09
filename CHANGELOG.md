@@ -3,7 +3,38 @@ All notable changes. Format: Keep a Changelog. Mobile-contract changes are also 
 
 ## [Unreleased]
 ### Added
-- PHASE-07 (Mobile Contract, Login and Change Synchronization):
+- PHASE-08 (Events Ingestion, Enrichment, and Attendance Engine):
+  - Database migration `0010_events_and_attendance.py`:
+    - Enrichment columns on `mobile_event_logs`: `server_verdict`, `server_site_id`, `server_accommodation_id`, `distance_to_polygon_m`, `flags`, `processing_status`, `error_reason`, `device_clock_skew_s`, and `batch_id`.
+    - PostgreSQL append-only trigger `trg_mobile_event_logs_append_only` with `trg_mobile_event_logs_immutability()` function blocking DELETE operations and modifications to device-reported columns (`event_timestamp_utc`, latitude, longitude, accuracy, mock location, sequence number, device clock), with session-local bypass (`fwt.bypass_immutability`) for admin reset operations.
+    - Tables: `employee_last_position` (live map positions with latest timestamp upsert guarantee), `site_visits` (reconstructed polygon visits with entry/exit times, durations, and observed/inferred tags), `tracking_gaps` (interrupted location tracking intervals with distance and unaccounted minutes), `attendance_records` (per-worker/date tracking state and current calculation pointer), `attendance_calculations` (immutable calculation versions with SHA-256 `input_hash`), `attendance_comments` (operational comment threads), `attendance_approvals` (audited decisions), and `pending_visits` (day-close unvisited assignment tracking).
+  - Pure Python Business Rules (`fw.rules.attendance`):
+    - `verdicts.py`: Spatial containment evaluation (`INSIDE`, `BORDERLINE`, `OUTSIDE`, `NO_POLYGON`), distance to assigned polygon, clock skew detection, and accuracy threshold checks.
+    - `visits.py`: Deterministic state machine for time-ordered events; visit opening, confirmation polling, duplicate entry suppression, inferred exit on departure/day close, and minimum duration thresholding.
+    - `gaps.py`: Reconstruction of location interruptions (`LOCATION_DISABLED` to `LOCATION_ENABLED`), tracking unaccounted minutes (`gap_minutes - break_used`), and `TRACKING_GAP` flag evaluation.
+    - `engine.py`: 5-point planned schedule resolution from effective-dated time rules, job-item break override priority, signed variations (`worked_minutes - required_minutes`), grace period application, business status classification (`PRESENT`, `PARTIAL`, `ABSENT`), overtime engine (OT1 beyond standard hours / rest days; 100% OT2 for public holidays and Sundays per DEC-01), movement split (productive, transit, offsite, idle), review routing, and deterministic `input_hash`.
+  - Backend Services & Architecture:
+    - Decoupled `EventsIngested` domain event bus publishing in `EventsService.ingest_batch`.
+    - Synchronous attendance listener in `fw.modules.attendance.listeners` running PostGIS spatial enrichment and daily attendance calculation within the transaction.
+    - `EventEnrichmentService` PostGIS spatial enrichment (`ST_Covers`, `ST_Distance`).
+    - `AttendanceWatchdogs`: Scheduled alert runners for `NO_ACTIVITY` (assigned workers with no events past alarm time) and `STALE_DEVICE` (inactive devices past threshold).
+    - FastAPI endpoints under `/api/v1/attendance`: `/attendance` list with role/scope filtering and pagination, `/attendance/exceptions` review queue, `/attendance/{id}` details with current calculation and comment threads, `/attendance/{id}/calculations` version history, `/attendance/{id}/timeline` derived event timeline, `/attendance/{id}/comments` supervisor explanations, `/attendance/{id}/decisions` engineer approval/rejection with mandatory comment on rejection, `/attendance/recalculate` manual recompute with audit reasons, and `/attendance/events` raw event audit table.
+    - Approvals inbox integration: Connected `AttendanceService.get_attendance_approvals` to `/api/v1/approvals` endpoint, providing unified badge counts and action rows across leave, reassignments, and attendance.
+    - Employee API & Org service: Added accommodation filtering (`has_accommodation`, `accommodation_id`) to `GET /api/v1/employees`.
+    - Audit Trail enrichment: Added human-readable entity descriptions, actor names, and readable diff mappings resolving raw UUIDs into employee names, job items, and accommodation names.
+  - Web UI Features:
+    - Client-specified Attendance table layout matching contract: Planned (7 columns), Actual (7 columns), Variations, Review chips, and Approval status. Non-accommodation workers render `n/a` for camp commute columns.
+    - Slide-over Attendance Detail Drawer: KPI summary cards, Overtime & Day Classification, Movement breakdown, Chronological timeline with Observed / Inferred badges, Version history with diff inspection, Supervisor comment thread, and Engineer Approve/Reject action form with required rejection justification.
+    - Recalculate Modal: Admin dialog to re-trigger calculations across date ranges with audit reason tracking.
+    - Approvals Inbox: Added Attendance tab with live badge count, exception summary cards, and one-click review drawer.
+    - Employee Creation Modal: Dialog for adding operational staff with immediate multi-tier leadership assignment (Supervisor, Superintendent, Project Engineer) and accommodation assignment.
+    - Employee Directory Accommodation Filter: Quick filters for "With Camp", "Without Camp / Self", and specific camp selections.
+    - Mobile Tester Proxy Simulator: Added simulation date picker with 1-7 day backdated testing support.
+  - Testing & Verification:
+    - Test suites: `test_attendance_scenarios.py` (covering all worked examples A through H), `test_attendance_verdicts.py` (spatial verdict classification and flags), `test_attendance_immutability.py` (database trigger immutability), `test_attendance_api.py` (end-to-end API lifecycle), and `test_attendance_watchdogs.py` (alert generation). 144 passing tests across backend.
+    - Demo script `tools/seed_phase08_demo.py` demonstrating end-to-end event ingestion, enrichment, attendance calculation, supervisor explanation, and engineer approval.
+    - Architecture Decision Record `docs/decisions/018-attendance-engine-and-review-workflow.md`.
+
   - Database migration `0009_mobile_sync.py`:
     - `sync_changes`: Per-worker append-only change log with monotonic cursor (`id BIGINT IDENTITY`), `employee_id`, `entity_type`, `entity_id`, `op`, `payload` JSONB, `priority`, and `created_at`.
     - `consent_records`: Workers' accepted privacy and location tracking consent history.

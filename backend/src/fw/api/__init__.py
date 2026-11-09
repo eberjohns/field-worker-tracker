@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter
 
+from fw.api.attendance import router as attendance_router
 from fw.api.audit import router as audit_router
 from fw.api.auth import router as auth_router
 from fw.api.employees import router as employees_router
@@ -28,6 +29,7 @@ api_v1_router.include_router(imports_router)
 api_v1_router.include_router(salary_router)
 api_v1_router.include_router(jobs_router)
 api_v1_router.include_router(scheduling_router)
+api_v1_router.include_router(attendance_router)
 api_v1_router.include_router(alert_router)
 
 __all__ = ["api_v1_router"]

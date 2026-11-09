@@ -13,6 +13,7 @@ import {
   Users,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { formatMinutes, formatSignedMinutes, formatDate } from "../features/attendance/formatters";
 
 interface LeaveRequestItem {
   id: string;
@@ -59,6 +60,17 @@ interface ReassignmentItem {
   decision_note: string | null;
 }
 
+interface AttendanceInboxRow {
+  id: string;
+  employee_id: string;
+  employee_name: string;
+  work_date: string;
+  review_status: string;
+  review_reasons: string[];
+  worked_minutes: number;
+  variation_minutes: number;
+}
+
 interface ApprovalsCounts {
   leaves: number;
   reassignments: number;
@@ -72,13 +84,14 @@ export const Approvals: React.FC = () => {
   const [counts, setCounts] = useState<ApprovalsCounts>({ leaves: 0, reassignments: 0, attendance: 0, total: 0 });
   const [leaves, setLeaves] = useState<LeaveRequestItem[]>([]);
   const [reassignments, setReassignments] = useState<ReassignmentItem[]>([]);
+  const [attendanceRows, setAttendanceRows] = useState<AttendanceInboxRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>("PENDING");
 
   // Decision Modal State
   const [decisionModal, setDecisionModal] = useState<{
     open: boolean;
-    type: "LEAVE" | "REASSIGNMENT";
+    type: "LEAVE" | "REASSIGNMENT" | "ATTENDANCE";
     action: "APPROVE" | "REJECT";
     item: any | null;
     note: string;
@@ -105,6 +118,7 @@ export const Approvals: React.FC = () => {
         setCounts(data.counts || { leaves: 0, reassignments: 0, attendance: 0, total: 0 });
         setLeaves(data.leave_requests || []);
         setReassignments(data.reassignment_requests || []);
+        setAttendanceRows(data.attendance_rows || []);
       }
     } catch (err) {
       console.error("Failed to load approvals inbox", err);
@@ -117,7 +131,7 @@ export const Approvals: React.FC = () => {
     fetchInbox();
   }, [token, statusFilter]);
 
-  const handleOpenDecision = (type: "LEAVE" | "REASSIGNMENT", action: "APPROVE" | "REJECT", item: any) => {
+  const handleOpenDecision = (type: "LEAVE" | "REASSIGNMENT" | "ATTENDANCE", action: "APPROVE" | "REJECT", item: any) => {
     setDecisionModal({
       open: true,
       type,
@@ -149,10 +163,16 @@ export const Approvals: React.FC = () => {
         const actionPath = decisionModal.action === "APPROVE" ? "approve" : "reject";
         url = `/api/v1/leave-requests/${decisionModal.item.id}/${actionPath}`;
         body = { reason: decisionModal.note.trim() };
-      } else {
+      } else if (decisionModal.type === "REASSIGNMENT") {
         const actionPath = decisionModal.action === "APPROVE" ? "approve" : "reject";
         url = `/api/v1/reassignment-requests/${decisionModal.item.id}/${actionPath}`;
         body = { decision_note: decisionModal.note.trim() };
+      } else if (decisionModal.type === "ATTENDANCE") {
+        url = `/api/v1/attendance/${decisionModal.item.id}/decisions`;
+        body = {
+          decision: decisionModal.action === "APPROVE" ? "APPROVED" : "REJECTED",
+          comment: decisionModal.note.trim() || undefined,
+        };
       }
 
       const res = await fetch(url, {
@@ -278,9 +298,11 @@ export const Approvals: React.FC = () => {
         >
           <AlertCircle className="h-4 w-4" />
           Attendance Exceptions
-          <span className="bg-slate-100 text-slate-500 text-xs px-2 py-0.5 rounded-full">
-            Phase 08
-          </span>
+          {counts.attendance > 0 && (
+            <span className="bg-amber-100 text-amber-800 text-xs font-bold px-2 py-0.5 rounded-full">
+              {counts.attendance}
+            </span>
+          )}
         </button>
       </div>
 
@@ -552,14 +574,100 @@ export const Approvals: React.FC = () => {
         </div>
       )}
 
-      {/* Tab Content: Attendance Placeholder */}
+      {/* Tab Content: Attendance Exceptions */}
       {activeTab === "attendance" && (
-        <div className="p-12 text-center bg-white rounded-xl border border-slate-200 shadow-xs space-y-3">
-          <Clock className="h-10 w-10 text-indigo-400 mx-auto" />
-          <h3 className="text-base font-semibold text-slate-800">Attendance Review & Dispute Approvals</h3>
-          <p className="text-xs text-slate-500 max-w-md mx-auto">
-            Reviewing manual punches, site exit disputes, and attendance approvals will be delivered in Phase 08 (Daily Attendance Calculation & Review).
-          </p>
+        <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+          {loading ? (
+            <div className="p-12 text-center text-slate-500 text-sm">
+              <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2 text-indigo-600" />
+              Loading attendance exceptions...
+            </div>
+          ) : attendanceRows.length === 0 ? (
+            <div className="p-12 text-center text-slate-500 text-sm">
+              <CheckCircle2 className="h-8 w-8 text-emerald-500 mx-auto mb-2" />
+              No pending attendance exceptions requiring approval.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-500 border-b border-slate-200 text-xs font-semibold uppercase tracking-wider">
+                    <th className="py-3 px-4">Worker</th>
+                    <th className="py-3 px-4">Date</th>
+                    <th className="py-3 px-4 text-center">Worked</th>
+                    <th className="py-3 px-4 text-center">Variation</th>
+                    <th className="py-3 px-4">Review Reasons</th>
+                    <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {attendanceRows.map((att) => {
+                    const isPending = att.review_status === "PENDING_REVIEW";
+                    return (
+                      <tr key={att.id} className="hover:bg-slate-50/80 transition text-xs">
+                        <td className="py-3.5 px-4">
+                          <span className="font-semibold text-slate-900">{att.employee_name}</span>
+                        </td>
+                        <td className="py-3.5 px-4 font-medium text-slate-700">
+                          {formatDate(att.work_date)}
+                        </td>
+                        <td className="py-3.5 px-4 text-center font-mono font-medium text-slate-800">
+                          {formatMinutes(att.worked_minutes)}
+                        </td>
+                        <td
+                          className={`py-3.5 px-4 text-center font-mono font-semibold ${
+                            att.variation_minutes < 0
+                              ? "text-rose-600"
+                              : att.variation_minutes > 0
+                              ? "text-emerald-600"
+                              : "text-slate-600"
+                          }`}
+                        >
+                          {formatSignedMinutes(att.variation_minutes)}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <div className="flex flex-wrap gap-1">
+                            {att.review_reasons?.map((reason, idx) => (
+                              <span
+                                key={idx}
+                                className="px-2 py-0.5 text-[10px] font-semibold rounded bg-amber-50 text-amber-800 border border-amber-200"
+                              >
+                                {reason}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4 font-semibold text-slate-600">
+                          {att.review_status}
+                        </td>
+                        <td className="py-3.5 px-4 text-right">
+                          {isPending ? (
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => handleOpenDecision("ATTENDANCE", "APPROVE", att)}
+                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-md shadow-2xs transition"
+                              >
+                                Approve
+                              </button>
+                              <button
+                                onClick={() => handleOpenDecision("ATTENDANCE", "REJECT", att)}
+                                className="px-3 py-1 bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 font-semibold rounded-md transition"
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 font-medium">Decided</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 

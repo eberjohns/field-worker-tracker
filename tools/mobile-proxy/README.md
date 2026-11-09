@@ -14,6 +14,13 @@ It provides:
 2. **Interactive Waypoint Route Player**:
    - Play/Pause/Reset timeline playback with speed multiplier (`1x`, `10x`, `60x`, `300x`).
    - Scrub through the simulated day using the timeline slider.
+   - **Work Date Selector (1–7 Day Window)**:
+     - Select any work date within the valid ingestion window (today or past 1–7 days).
+     - **Backend Constraints**:
+       - Events older than 7 days are rejected with `TIMESTAMP_TOO_OLD`.
+       - Events in the future (>5 minutes ahead of server clock) are rejected with `TIMESTAMP_IN_FUTURE`.
+       - Transmission batches preserve current `device_clock_utc` to accurately emulate real-world offline batch synchronization without triggering false clock skew errors.
+     - Automatically updates today's shift preview and highlights the simulated date across the 30-day forward roster.
    - Realistic geographic placement: Warsan Staff Accommodation Camp and Dubai Silicon Oasis Landscape Maintenance worksite are ~4.1 km apart, providing an authentic 10-15 minute commute.
    - Preset route templates:
      - **Standard Workday**: 05:00 Camp -> 05:35 Leave Camp -> 05:48 Transit -> 05:58 Geofence Buffer -> 06:02 Site Entry -> 06:07 Confirmation Ping -> 09:00/12:00/14:00 Work -> 15:31 Site Exit -> 16:00 Back at Camp.

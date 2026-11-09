@@ -11,6 +11,8 @@ import {
   ChevronDown,
   ChevronRight,
   Shield,
+  UserPlus,
+  Home,
   X,
 } from "lucide-react";
 
@@ -24,6 +26,7 @@ interface Employee {
   weekly_off_day: string | null;
   is_driver: boolean;
   country: string;
+  accommodation_id?: string | null;
   is_active: boolean;
   version: number;
 }
@@ -53,11 +56,13 @@ export const Employees: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("");
+  const [accommodationFilter, setAccommodationFilter] = useState<string>("");
   const [groupBySupervisor, setGroupBySupervisor] = useState(true);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   // Hierarchy grouping state
   const [supervisorGroups, setSupervisorGroups] = useState<SupervisorGroup[]>([]);
+  const [allSupervisors, setAllSupervisors] = useState<Employee[]>([]);
   const [superintendentsList, setSuperintendentsList] = useState<LeaderWithStats[]>([]);
   const [engineersList, setEngineersList] = useState<LeaderWithStats[]>([]);
   const [directMembers, setDirectMembers] = useState<Employee[]>([]);
@@ -75,6 +80,33 @@ export const Employees: React.FC = () => {
   const [bulkBreak, setBulkBreak] = useState<number | "">("");
   const [bulkLoading, setBulkLoading] = useState(false);
 
+  // Create employee dialog state
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [accommodations, setAccommodations] = useState<
+    Array<{ id: string; name: string; code: string }>
+  >([]);
+  const [createFormData, setCreateFormData] = useState({
+    tally_id: "",
+    name: "",
+    role: "WORKER",
+    country: "AE",
+    staff_grade_description: "Landscape Gardener",
+    grade_code: "",
+    weekly_off_day: "FRIDAY",
+    is_driver: false,
+    break_override_minutes: "" as number | "",
+    phone: "",
+    email: "",
+    accommodation_id: "",
+    join_date: "",
+    supervisor_id: "",
+    superintendent_id: "",
+    engineer_id: "",
+  });
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [successToast, setSuccessToast] = useState<string | null>(null);
+
   const fetchEmployees = async () => {
     setLoading(true);
     try {
@@ -82,6 +114,9 @@ export const Employees: React.FC = () => {
       params.set("limit", "1000");
       if (search) params.set("q", search);
       if (roleFilter) params.set("role", roleFilter);
+      if (accommodationFilter === "assigned") params.set("has_accommodation", "true");
+      else if (accommodationFilter === "unassigned") params.set("has_accommodation", "false");
+      else if (accommodationFilter) params.set("accommodation_id", accommodationFilter);
 
       const res = await fetch(`/api/v1/employees?${params.toString()}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -206,6 +241,7 @@ export const Employees: React.FC = () => {
         // Sort groups by supervisor name
         groups.sort((a, b) => a.supervisor.name.localeCompare(b.supervisor.name));
         setSupervisorGroups(groups);
+        setAllSupervisors(groups.map((g) => g.supervisor));
 
         // Collect leadership with stats
         const suptsWithStats: LeaderWithStats[] = Array.from(allSuptsMap.values()).map((supt) => {
@@ -256,10 +292,156 @@ export const Employees: React.FC = () => {
     }
   };
 
+  const fetchAccommodations = async () => {
+    try {
+      const res = await fetch("/api/v1/accommodations", {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) setAccommodations(await res.json());
+    } catch (err) {
+      console.error("Failed to load accommodations:", err);
+    }
+  };
+
   useEffect(() => {
     fetchEmployees();
     fetchHierarchy();
-  }, [search, roleFilter]);
+    fetchAccommodations();
+  }, [search, roleFilter, accommodationFilter]);
+
+  const handleCreateEmployee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreateLoading(true);
+    setCreateError(null);
+
+    const trimmedTallyId = createFormData.tally_id.trim();
+    const trimmedName = createFormData.name.trim();
+
+    if (!trimmedTallyId || !trimmedName) {
+      setCreateError("Tally ID and Full Name are required.");
+      setCreateLoading(false);
+      return;
+    }
+
+    try {
+      const payload: any = {
+        tally_id: trimmedTallyId,
+        name: trimmedName,
+        role: createFormData.role,
+        country: createFormData.country,
+        staff_grade_description: createFormData.staff_grade_description.trim() || null,
+        grade_code: createFormData.grade_code.trim() || null,
+        weekly_off_day: createFormData.weekly_off_day || null,
+        is_driver: createFormData.is_driver,
+        phone: createFormData.phone.trim() || null,
+        email: createFormData.email.trim() || null,
+        accommodation_id: createFormData.accommodation_id || null,
+        break_override_minutes:
+          createFormData.break_override_minutes !== ""
+            ? Number(createFormData.break_override_minutes)
+            : null,
+        join_date: createFormData.join_date || null,
+      };
+
+      const res = await fetch("/api/v1/employees", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || errData.message || `Creation failed (${res.status})`);
+      }
+
+      const created = await res.json();
+
+      // Assign reporting lines if selected
+      const reportingPromises = [];
+      if (createFormData.supervisor_id && createFormData.role === "WORKER") {
+        reportingPromises.push(
+          fetch(`/api/v1/employees/${created.id}/reporting-lines`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              manager_id: createFormData.supervisor_id,
+              relationship: "SUPERVISOR",
+            }),
+          })
+        );
+      }
+      if (createFormData.superintendent_id) {
+        reportingPromises.push(
+          fetch(`/api/v1/employees/${created.id}/reporting-lines`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              manager_id: createFormData.superintendent_id,
+              relationship: "SUPERINTENDENT",
+            }),
+          })
+        );
+      }
+      if (createFormData.engineer_id) {
+        reportingPromises.push(
+          fetch(`/api/v1/employees/${created.id}/reporting-lines`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              manager_id: createFormData.engineer_id,
+              relationship: "ENGINEER",
+            }),
+          })
+        );
+      }
+      if (reportingPromises.length > 0) {
+        await Promise.all(reportingPromises);
+      }
+
+      setCreateModalOpen(false);
+      setSuccessToast(`Employee ${created.name} (${created.tally_id}) created successfully!`);
+      setTimeout(() => setSuccessToast(null), 5000);
+
+      // Reset form
+      setCreateFormData({
+        tally_id: "",
+        name: "",
+        role: "WORKER",
+        country: "AE",
+        staff_grade_description: "Landscape Gardener",
+        grade_code: "",
+        weekly_off_day: "FRIDAY",
+        is_driver: false,
+        break_override_minutes: "",
+        phone: "",
+        email: "",
+        accommodation_id: "",
+        join_date: "",
+        supervisor_id: "",
+        superintendent_id: "",
+        engineer_id: "",
+      });
+
+      await fetchEmployees();
+      await fetchHierarchy();
+    } catch (err: any) {
+      setCreateError(err.message || "Failed to create employee.");
+    } finally {
+      setCreateLoading(false);
+    }
+  };
 
   const toggleGroupCollapse = (managerId: string) => {
     setCollapsedGroups((prev) => ({
@@ -337,6 +519,20 @@ export const Employees: React.FC = () => {
   const supsCount = employees.filter((e) => e.role === "SUPERVISOR").length;
   const workersCount = employees.filter((e) => e.role === "WORKER").length;
 
+  const accMap = new Map(accommodations.map((a) => [a.id, a]));
+  const availableSupervisors =
+    allSupervisors.length > 0 ? allSupervisors : employees.filter((e) => e.role === "SUPERVISOR");
+  const availableSuperintendents =
+    superintendentsList.length > 0
+      ? superintendentsList.map((s) => s.employee)
+      : employees.filter((e) => e.role === "SUPERINTENDENT");
+  const availableEngineers =
+    engineersList.length > 0
+      ? engineersList.map((e) => e.employee)
+      : employees.filter((e) => e.role === "ENGINEER");
+  const withAccommodationCount = employees.filter((e) => !!e.accommodation_id).length;
+  const withoutAccommodationCount = employees.filter((e) => !e.accommodation_id).length;
+
   return (
     <div className="space-y-6">
       {/* Header & Controls */}
@@ -352,9 +548,22 @@ export const Employees: React.FC = () => {
           {selectedIds.length > 0 && (user?.role === "ADMIN" || user?.role === "ENGINEER") && (
             <button
               onClick={() => setBulkModalOpen(true)}
-              className="px-3.5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition shadow-sm"
+              className="px-3.5 py-2 bg-slate-800 text-white rounded-lg text-sm font-medium hover:bg-slate-700 transition shadow-xs"
             >
               Bulk Update ({selectedIds.length})
+            </button>
+          )}
+
+          {(user?.role === "ADMIN" || !user?.role) && (
+            <button
+              onClick={() => {
+                setCreateError(null);
+                setCreateModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition shadow-xs"
+            >
+              <UserPlus className="h-4 w-4" />
+              Add Employee
             </button>
           )}
 
@@ -371,6 +580,19 @@ export const Employees: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Success Toast */}
+      {successToast && (
+        <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-center justify-between shadow-xs">
+          <span className="font-medium">{successToast}</span>
+          <button
+            onClick={() => setSuccessToast(null)}
+            className="text-emerald-600 hover:text-emerald-800 p-1"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {/* High-Level Organization Metrics */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
@@ -600,6 +822,29 @@ export const Employees: React.FC = () => {
           </select>
         </div>
 
+        {/* Accommodation Filter */}
+        <div className="flex items-center gap-2">
+          <Home className="h-4 w-4 text-slate-400" />
+          <select
+            value={accommodationFilter}
+            onChange={(e) => setAccommodationFilter(e.target.value)}
+            className="border border-slate-200 rounded-lg text-sm px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="">All Accommodations ({employees.length})</option>
+            <option value="assigned">With Camp ({withAccommodationCount})</option>
+            <option value="unassigned">Without Camp / Self ({withoutAccommodationCount})</option>
+            {accommodations.length > 0 && (
+              <optgroup label="Specific Camps">
+                {accommodations.map((acc) => (
+                  <option key={acc.id} value={acc.id}>
+                    {acc.name} ({acc.code})
+                  </option>
+                ))}
+              </optgroup>
+            )}
+          </select>
+        </div>
+
         <button
           onClick={() => {
             fetchEmployees();
@@ -631,6 +876,7 @@ export const Employees: React.FC = () => {
                 <th className="p-4">Staff Grade (SGD)</th>
                 <th className="p-4">Grade Code</th>
                 <th className="p-4">Weekly Off</th>
+                <th className="p-4">Accommodation</th>
                 <th className="p-4">Country</th>
                 <th className="p-4">Status</th>
               </tr>
@@ -644,11 +890,21 @@ export const Employees: React.FC = () => {
                     const filteredMembers = group.members.filter((m) => {
                       if (search) {
                         const q = search.toLowerCase();
-                        return (
-                          m.name.toLowerCase().includes(q) || m.tally_id.toLowerCase().includes(q)
-                        );
+                        if (!m.name.toLowerCase().includes(q) && !m.tally_id.toLowerCase().includes(q)) {
+                          return false;
+                        }
                       }
                       if (roleFilter && m.role !== roleFilter) return false;
+                      if (accommodationFilter === "assigned" && !m.accommodation_id) return false;
+                      if (accommodationFilter === "unassigned" && m.accommodation_id) return false;
+                      if (
+                        accommodationFilter &&
+                        accommodationFilter !== "assigned" &&
+                        accommodationFilter !== "unassigned" &&
+                        m.accommodation_id !== accommodationFilter
+                      ) {
+                        return false;
+                      }
                       return true;
                     });
 
@@ -659,7 +915,7 @@ export const Employees: React.FC = () => {
                           onClick={() => toggleGroupCollapse(group.supervisor.id)}
                           className="bg-slate-100/90 hover:bg-slate-200/80 cursor-pointer font-semibold text-xs text-slate-800 transition select-none"
                         >
-                          <td colSpan={9} className="px-4 py-3">
+                          <td colSpan={10} className="px-4 py-3">
                             <div className="flex flex-wrap items-center justify-between gap-3">
                               {/* Left: Supervisor Information */}
                               <div className="flex items-center gap-2.5">
@@ -758,7 +1014,7 @@ export const Employees: React.FC = () => {
                         {!isCollapsed &&
                           (filteredMembers.length === 0 ? (
                             <tr>
-                              <td colSpan={9} className="px-8 py-3 text-xs text-slate-400 italic">
+                              <td colSpan={10} className="px-8 py-3 text-xs text-slate-400 italic">
                                 No matching team members in this supervisor group.
                               </td>
                             </tr>
@@ -800,6 +1056,16 @@ export const Employees: React.FC = () => {
                                   <td className="p-4">{m.staff_grade_description || "—"}</td>
                                   <td className="p-4 font-mono text-xs">{m.grade_code || "—"}</td>
                                   <td className="p-4">{m.weekly_off_day || "SUNDAY"}</td>
+                                  <td className="p-4 text-xs">
+                                    {m.accommodation_id && accMap.has(m.accommodation_id) ? (
+                                      <span className="inline-flex items-center gap-1 font-medium text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                        <Home className="h-3 w-3 text-emerald-600" />
+                                        {accMap.get(m.accommodation_id)?.name}
+                                      </span>
+                                    ) : (
+                                      <span className="text-slate-400 italic">Self / None</span>
+                                    )}
+                                  </td>
                                   <td className="p-4">
                                     <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100">
                                       {m.country}
@@ -831,7 +1097,7 @@ export const Employees: React.FC = () => {
                         onClick={() => toggleGroupCollapse("unassigned")}
                         className="bg-slate-50 hover:bg-slate-100 cursor-pointer font-semibold text-xs text-slate-700 transition select-none"
                       >
-                        <td colSpan={9} className="px-4 py-2.5">
+                        <td colSpan={10} className="px-4 py-2.5">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                               {collapsedGroups["unassigned"] ? (
@@ -858,12 +1124,21 @@ export const Employees: React.FC = () => {
                           .filter((m) => {
                             if (search) {
                               const q = search.toLowerCase();
-                              return (
-                                m.name.toLowerCase().includes(q) ||
-                                m.tally_id.toLowerCase().includes(q)
-                              );
+                              if (!m.name.toLowerCase().includes(q) && !m.tally_id.toLowerCase().includes(q)) {
+                                return false;
+                              }
                             }
                             if (roleFilter && m.role !== roleFilter) return false;
+                            if (accommodationFilter === "assigned" && !m.accommodation_id) return false;
+                            if (accommodationFilter === "unassigned" && m.accommodation_id) return false;
+                            if (
+                              accommodationFilter &&
+                              accommodationFilter !== "assigned" &&
+                              accommodationFilter !== "unassigned" &&
+                              m.accommodation_id !== accommodationFilter
+                            ) {
+                              return false;
+                            }
                             return true;
                           })
                           .map((m) => {
@@ -903,6 +1178,16 @@ export const Employees: React.FC = () => {
                                 <td className="p-4">{m.staff_grade_description || "—"}</td>
                                 <td className="p-4 font-mono text-xs">{m.grade_code || "—"}</td>
                                 <td className="p-4">{m.weekly_off_day || "SUNDAY"}</td>
+                                <td className="p-4 text-xs">
+                                  {m.accommodation_id && accMap.has(m.accommodation_id) ? (
+                                    <span className="inline-flex items-center gap-1 font-medium text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                      <Home className="h-3 w-3 text-emerald-600" />
+                                      {accMap.get(m.accommodation_id)?.name}
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-400 italic">Self / None</span>
+                                  )}
+                                </td>
                                 <td className="p-4">
                                   <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100">
                                     {m.country}
@@ -961,6 +1246,16 @@ export const Employees: React.FC = () => {
                       <td className="p-4">{emp.staff_grade_description || "—"}</td>
                       <td className="p-4 font-mono text-xs">{emp.grade_code || "—"}</td>
                       <td className="p-4">{emp.weekly_off_day || "SUNDAY"}</td>
+                      <td className="p-4 text-xs">
+                        {emp.accommodation_id && accMap.has(emp.accommodation_id) ? (
+                          <span className="inline-flex items-center gap-1 font-medium text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                            <Home className="h-3 w-3 text-emerald-600" />
+                            {accMap.get(emp.accommodation_id)?.name}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 italic">Self / None</span>
+                        )}
+                      </td>
                       <td className="p-4">
                         <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100">
                           {emp.country}
@@ -1043,6 +1338,343 @@ export const Employees: React.FC = () => {
                   className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50"
                 >
                   {bulkLoading ? "Saving..." : "Apply Updates"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Employee Modal */}
+      {createModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-lg w-full p-6 space-y-4 my-8">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                  <UserPlus className="h-5 w-5 text-indigo-600" />
+                  Add New Employee
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Creates employee profile and linked user account with default password.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCreateModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {createError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-lg">
+                {createError}
+              </div>
+            )}
+
+            <form onSubmit={handleCreateEmployee} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Tally / Employee ID <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. 1205 or W_101"
+                    value={createFormData.tally_id}
+                    onChange={(e) =>
+                      setCreateFormData({ ...createFormData, tally_id: e.target.value })
+                    }
+                    className="w-full border border-slate-300 rounded-lg p-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Full Name <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Mohammad Ali"
+                    value={createFormData.name}
+                    onChange={(e) =>
+                      setCreateFormData({ ...createFormData, name: e.target.value })
+                    }
+                    className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Role</label>
+                  <select
+                    value={createFormData.role}
+                    onChange={(e) =>
+                      setCreateFormData({ ...createFormData, role: e.target.value })
+                    }
+                    className="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="WORKER">Field Worker (Mobile)</option>
+                    <option value="SUPERVISOR">Supervisor</option>
+                    <option value="SUPERINTENDENT">Superintendent</option>
+                    <option value="ENGINEER">Engineer</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Country</label>
+                  <select
+                    value={createFormData.country}
+                    onChange={(e) =>
+                      setCreateFormData({ ...createFormData, country: e.target.value })
+                    }
+                    className="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="AE">United Arab Emirates (AE)</option>
+                    <option value="SA">Saudi Arabia (SA)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                    Trade / Designation
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Landscape Gardener"
+                    value={createFormData.staff_grade_description}
+                    onChange={(e) =>
+                      setCreateFormData({
+                        ...createFormData,
+                        staff_grade_description: e.target.value,
+                      })
+                    }
+                    className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Grade Code</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. SGD_12"
+                    value={createFormData.grade_code}
+                    onChange={(e) =>
+                      setCreateFormData({ ...createFormData, grade_code: e.target.value })
+                    }
+                    className="w-full border border-slate-300 rounded-lg p-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                    Weekly Off Day
+                  </label>
+                  <select
+                    value={createFormData.weekly_off_day}
+                    onChange={(e) =>
+                      setCreateFormData({ ...createFormData, weekly_off_day: e.target.value })
+                    }
+                    className="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="FRIDAY">Friday (Standard UAE)</option>
+                    <option value="SATURDAY">Saturday</option>
+                    <option value="SUNDAY">Sunday</option>
+                    <option value="MONDAY">Monday</option>
+                    <option value="TUESDAY">Tuesday</option>
+                    <option value="WEDNESDAY">Wednesday</option>
+                    <option value="THURSDAY">Thursday</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                    Assigned Accommodation
+                  </label>
+                  <select
+                    value={createFormData.accommodation_id}
+                    onChange={(e) =>
+                      setCreateFormData({ ...createFormData, accommodation_id: e.target.value })
+                    }
+                    className="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="">None / Self Accommodation</option>
+                    {accommodations.map((acc) => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.name} ({acc.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Phone</label>
+                  <input
+                    type="tel"
+                    placeholder="+971 50 123 4567"
+                    value={createFormData.phone}
+                    onChange={(e) =>
+                      setCreateFormData({ ...createFormData, phone: e.target.value })
+                    }
+                    className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Email</label>
+                  <input
+                    type="email"
+                    placeholder="worker@company.com"
+                    value={createFormData.email}
+                    onChange={(e) =>
+                      setCreateFormData({ ...createFormData, email: e.target.value })
+                    }
+                    className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Join Date</label>
+                  <input
+                    type="date"
+                    value={createFormData.join_date}
+                    onChange={(e) =>
+                      setCreateFormData({ ...createFormData, join_date: e.target.value })
+                    }
+                    className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                    Break Override (Minutes)
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 60"
+                    value={createFormData.break_override_minutes}
+                    onChange={(e) =>
+                      setCreateFormData({
+                        ...createFormData,
+                        break_override_minutes: e.target.value ? Number(e.target.value) : "",
+                      })
+                    }
+                    className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              {/* Reporting & Leadership Oversight Section */}
+              <div className="border-t border-slate-100 pt-3 space-y-3">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-800">
+                  <Shield className="h-4 w-4 text-indigo-600" />
+                  <span>Reporting Lines & Leadership Oversight (Optional)</span>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Assign reporting lines directly upon creation. These relationships can also be viewed and edited later in the employee profile.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {createFormData.role === "WORKER" && (
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700 mb-1">
+                        Supervisor (Crew Lead)
+                      </label>
+                      <select
+                        value={createFormData.supervisor_id}
+                        onChange={(e) =>
+                          setCreateFormData({ ...createFormData, supervisor_id: e.target.value })
+                        }
+                        className="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      >
+                        <option value="">None / Direct</option>
+                        {availableSupervisors.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name} ({s.tally_id})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {createFormData.role !== "ENGINEER" && (
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700 mb-1">
+                        Superintendent
+                      </label>
+                      <select
+                        value={createFormData.superintendent_id}
+                        onChange={(e) =>
+                          setCreateFormData({
+                            ...createFormData,
+                            superintendent_id: e.target.value,
+                          })
+                        }
+                        className="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      >
+                        <option value="">None</option>
+                        {availableSuperintendents.map((supt) => (
+                          <option key={supt.id} value={supt.id}>
+                            {supt.name} ({supt.tally_id})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">
+                      Project Engineer
+                    </label>
+                    <select
+                      value={createFormData.engineer_id}
+                      onChange={(e) =>
+                        setCreateFormData({ ...createFormData, engineer_id: e.target.value })
+                      }
+                      className="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value="">None</option>
+                      {availableEngineers.map((eng) => (
+                        <option key={eng.id} value={eng.id}>
+                          {eng.name} ({eng.tally_id})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-1">
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={createFormData.is_driver}
+                    onChange={(e) =>
+                      setCreateFormData({ ...createFormData, is_driver: e.target.checked })
+                    }
+                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span>Designated Driver (eligible for site transport runs)</span>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setCreateModalOpen(false)}
+                  className="px-4 py-2 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-50 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={createLoading}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50 transition shadow-xs"
+                >
+                  {createLoading ? "Creating Employee..." : "Create Employee"}
                 </button>
               </div>
             </form>
