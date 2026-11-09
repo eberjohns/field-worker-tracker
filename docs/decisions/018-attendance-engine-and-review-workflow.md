@@ -35,3 +35,4 @@ Key requirements and client decisions:
 - Raw events cannot be deleted in production; test fixtures and admin resets must set `fwt.bypass_immutability = 'on'`.
 - Module layering contract is strictly kept: `events` publishes domain events without importing `attendance`.
 - Related docs updated: `docs/05-attendance-engine.md`, `docs/07-data-model.md`, `docs/08-api-spec.md`.
+

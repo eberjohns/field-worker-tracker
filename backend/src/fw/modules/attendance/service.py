@@ -24,8 +24,8 @@ from fw.modules.attendance.schemas import (
 )
 from fw.modules.events import MobileEventLog
 from fw.modules.identity.models import User
-from fw.modules.jobs.models import JobItem
-from fw.modules.org.models import Employee, EmployeeReportingLine
+from fw.modules.jobs.models import JobItem, Worksite
+from fw.modules.org.models import Accommodation, Employee, EmployeeReportingLine
 from fw.modules.scheduling.models import LeaveRequest, ScheduledWork
 from fw.modules.settings.models import PublicHoliday, TimeRule
 from fw.rules.attendance import (
@@ -624,17 +624,64 @@ class AttendanceService:
         g_res = await session.execute(g_q)
         gaps = list(g_res.scalars().all())
 
+        # Resolve worksite and accommodation names
+        worksite_ids = [v.worksite_id for v in visits if v.worksite_id]
+        worksite_map: dict[UUID, str] = {}
+        if worksite_ids:
+            ws_res = await session.execute(
+                select(Worksite.id, Worksite.job_name, Worksite.job_number).where(
+                    Worksite.id.in_(worksite_ids)
+                )
+            )
+            for w_id, w_name, w_code in ws_res.all():
+                worksite_map[w_id] = (
+                    f"{w_name} ({w_code})"
+                    if w_name and w_code
+                    else (w_name or w_code or "Worksite")
+                )
+
+        accom_ids = [v.accommodation_id for v in visits if v.accommodation_id]
+        accom_map: dict[UUID, str] = {}
+        if accom_ids:
+            ac_res = await session.execute(
+                select(Accommodation.id, Accommodation.name).where(Accommodation.id.in_(accom_ids))
+            )
+            for a_id, a_name in ac_res.all():
+                accom_map[a_id] = a_name or "Worker Accommodation"
+
+        # Resolve coordinates for entry events
+        event_ids = [v.entry_event_id for v in visits if v.entry_event_id]
+        event_coords: dict[UUID, tuple[float | None, float | None]] = {}
+        if event_ids:
+            ev_res = await session.execute(
+                select(
+                    MobileEventLog.event_id, MobileEventLog.latitude, MobileEventLog.longitude
+                ).where(MobileEventLog.event_id.in_(event_ids))
+            )
+            for e_id, lat, lng in ev_res.all():
+                event_coords[e_id] = (
+                    float(lat) if lat is not None else None,
+                    float(lng) if lng is not None else None,
+                )
+
         timeline_items: list[AttendanceTimelineItem] = []
 
         # Visits as timeline items
         for v in visits:
-            label = "Worksite Visit" if v.place_type == "SITE" else "Accommodation Stay"
+            if v.place_type == "SITE":
+                label = "Worksite Visit"
+                place = worksite_map.get(v.worksite_id) or "Assigned Worksite"
+            else:
+                label = "Accommodation Stay"
+                place = accom_map.get(v.accommodation_id) or "Worker Accommodation"
+
+            lat, lng = event_coords.get(v.entry_event_id, (None, None))
             timeline_items.append(
                 AttendanceTimelineItem(
                     item_id=str(v.id),
                     item_type=f"{v.place_type}_VISIT",
                     label=label,
-                    place_name=f"Site {v.worksite_id}" if v.place_type == "SITE" else "Camp",
+                    place_name=place,
                     started_at=v.entry_at,
                     ended_at=v.exit_at or v.last_inside_at,
                     duration_minutes=v.duration_minutes,
@@ -644,6 +691,8 @@ class AttendanceService:
                         "counts_as_completed": v.counts_as_completed,
                         "entry_event_id": str(v.entry_event_id),
                         "exit_event_id": str(v.exit_event_id) if v.exit_event_id else None,
+                        "latitude": lat,
+                        "longitude": lng,
                     },
                 )
             )
@@ -666,6 +715,45 @@ class AttendanceService:
                     },
                 )
             )
+
+        # Fallback to raw events if no visits or gaps yet
+        if not timeline_items:
+            start_utc = datetime.combine(record.work_date, time.min, tzinfo=UTC) - timedelta(
+                hours=4
+            )
+            end_utc = datetime.combine(record.work_date, time.max, tzinfo=UTC) + timedelta(hours=4)
+            raw_q = (
+                select(MobileEventLog)
+                .where(
+                    MobileEventLog.employee_id == record.employee_id,
+                    MobileEventLog.event_timestamp_utc >= start_utc,
+                    MobileEventLog.event_timestamp_utc <= end_utc,
+                )
+                .order_by(MobileEventLog.event_timestamp_utc.asc())
+            )
+            raw_res = await session.execute(raw_q)
+            for ev in raw_res.scalars().all():
+                lat = float(ev.latitude) if ev.latitude is not None else None
+                lng = float(ev.longitude) if ev.longitude is not None else None
+                timeline_items.append(
+                    AttendanceTimelineItem(
+                        item_id=str(ev.event_id),
+                        item_type=f"EVENT_{ev.event_type}",
+                        label=f"Location {ev.event_type}",
+                        place_name=f"Verdict: {ev.server_verdict or 'RECORDED'}",
+                        started_at=ev.event_timestamp_utc,
+                        ended_at=None,
+                        duration_minutes=0,
+                        is_inferred=False,
+                        flags=ev.flags or [],
+                        details={
+                            "latitude": lat,
+                            "longitude": lng,
+                            "accuracy": ev.accuracy_meters,
+                            "verdict": ev.server_verdict,
+                        },
+                    )
+                )
 
         timeline_items.sort(key=lambda x: x.started_at)
 

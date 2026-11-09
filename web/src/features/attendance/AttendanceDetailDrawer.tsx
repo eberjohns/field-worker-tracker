@@ -390,28 +390,58 @@ export const AttendanceDetailDrawer: React.FC<AttendanceDetailDrawerProps> = ({
               <div className="p-8 text-center text-slate-400">No events or visits recorded for this day.</div>
             ) : (
               <div className="relative pl-6 space-y-4 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
-                {timelineItems.map((item) => (
-                  <div key={item.id} className="relative">
-                    <div className="absolute -left-6 top-1 h-3 w-3 rounded-full bg-emerald-600 border-2 border-white ring-2 ring-slate-100" />
-                    <div className="p-3 rounded-lg border border-slate-200 bg-white space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold text-slate-900">{item.title}</span>
-                        <span className="font-mono text-slate-500">{formatTime(item.timestamp)}</span>
-                      </div>
-                      <p className="text-slate-600">{item.description}</p>
-                      {item.is_inferred && (
-                        <span className="inline-block px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 text-amber-800">
-                          Inferred Exit
-                        </span>
-                      )}
-                      {item.latitude && item.longitude && (
-                        <div className="text-[10px] text-slate-400 font-mono">
-                          Coordinates: {Number(item.latitude).toFixed(5)}, {Number(item.longitude).toFixed(5)}
+                {timelineItems.map((item, idx) => {
+                  const itemId = item.item_id || item.id || `timeline-${idx}`;
+                  const title = item.label || item.title || item.item_type || "Timeline Item";
+                  const place = item.place_name || item.description || "";
+                  const startTime = item.started_at || item.timestamp;
+                  const endTime = item.ended_at;
+                  const lat = item.details?.latitude ?? item.latitude;
+                  const lng = item.details?.longitude ?? item.longitude;
+
+                  return (
+                    <div key={itemId} className="relative">
+                      <div className="absolute -left-6 top-1 h-3 w-3 rounded-full bg-emerald-600 border-2 border-white ring-2 ring-slate-100" />
+                      <div className="p-3 rounded-lg border border-slate-200 bg-white space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-slate-900">{title}</span>
+                          <span className="font-mono text-slate-500">
+                            {formatTime(startTime)}
+                            {endTime && endTime !== startTime ? ` - ${formatTime(endTime)}` : ""}
+                          </span>
                         </div>
-                      )}
+                        {place && <p className="text-slate-600 text-xs">{place}</p>}
+                        <div className="flex items-center gap-2 pt-1 text-xs text-slate-500">
+                          {item.duration_minutes > 0 && (
+                            <span>Duration: {formatMinutes(item.duration_minutes)}</span>
+                          )}
+                          {item.is_inferred && (
+                            <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 text-amber-800">
+                              Inferred Exit
+                            </span>
+                          )}
+                        </div>
+                        {lat != null && lng != null && (
+                          <div className="text-[10px] text-slate-400 font-mono">
+                            Coordinates: {Number(lat).toFixed(5)}, {Number(lng).toFixed(5)}
+                          </div>
+                        )}
+                        {item.flags && item.flags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 pt-1">
+                            {item.flags.map((f, fIdx) => (
+                              <span
+                                key={fIdx}
+                                className="px-1.5 py-0.5 text-[10px] font-mono rounded bg-slate-100 text-slate-600 border border-slate-200"
+                              >
+                                {f}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

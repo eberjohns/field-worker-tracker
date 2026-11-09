@@ -98,16 +98,31 @@ export interface AttendanceListResponse {
 }
 
 export interface TimelineItem {
-  id: string;
-  item_type: "EVENT" | "VISIT" | "GAP";
-  timestamp: string;
-  title: string;
-  description: string;
-  place_type?: string;
-  verdict?: string;
-  is_inferred?: boolean;
+  item_id: string;
+  item_type: string;
+  label: string;
+  place_name: string | null;
+  started_at: string;
+  ended_at: string | null;
+  duration_minutes: number;
+  is_inferred: boolean;
+  flags: string[];
+  details?: {
+    counts_as_completed?: boolean;
+    entry_event_id?: string;
+    exit_event_id?: string | null;
+    distance_between_m?: number;
+    latitude?: number | null;
+    longitude?: number | null;
+    accuracy?: number | null;
+    verdict?: string | null;
+    [key: string]: any;
+  };
+  id?: string;
+  title?: string;
+  timestamp?: string;
+  description?: string;
   latitude?: number | null;
   longitude?: number | null;
-  flags: string[];
 }
 
