@@ -1,3 +1,4 @@
+import socket
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
@@ -14,12 +15,27 @@ from fw.modules.org.models import Employee, Group, RegisteredDevice, Zone
 from fw.modules.scheduling.models import ScheduledWork
 
 
+def is_db_available() -> bool:
+    try:
+        with socket.create_connection(("127.0.0.1", 5432), timeout=0.5):
+            return True
+    except OSError:
+        return False
+
+
+db_required = pytest.mark.skipif(
+    not is_db_available(),
+    reason="Database integration tests require PostgreSQL running on localhost:5432",
+)
+
+
 @pytest.fixture(autouse=True)
 async def cleanup_db_engine():
     yield
     await engine.dispose()
 
 
+@db_required
 @pytest.mark.asyncio
 async def test_attendance_watchdogs():
     async with async_session_factory() as session:
