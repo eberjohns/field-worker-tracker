@@ -11,6 +11,7 @@ import {
   ChevronDown,
   ChevronRight,
   Shield,
+  UserPlus,
   X,
 } from "lucide-react";
 
@@ -74,6 +75,30 @@ export const Employees: React.FC = () => {
   const [bulkWeeklyOff, setBulkWeeklyOff] = useState("");
   const [bulkBreak, setBulkBreak] = useState<number | "">("");
   const [bulkLoading, setBulkLoading] = useState(false);
+
+  // Create employee dialog state
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [accommodations, setAccommodations] = useState<
+    Array<{ id: string; name: string; code: string }>
+  >([]);
+  const [createFormData, setCreateFormData] = useState({
+    tally_id: "",
+    name: "",
+    role: "WORKER",
+    country: "AE",
+    staff_grade_description: "Landscape Gardener",
+    grade_code: "",
+    weekly_off_day: "FRIDAY",
+    is_driver: false,
+    break_override_minutes: "" as number | "",
+    phone: "",
+    email: "",
+    accommodation_id: "",
+    join_date: "",
+  });
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [successToast, setSuccessToast] = useState<string | null>(null);
 
   const fetchEmployees = async () => {
     setLoading(true);
@@ -256,10 +281,101 @@ export const Employees: React.FC = () => {
     }
   };
 
+  const fetchAccommodations = async () => {
+    try {
+      const res = await fetch("/api/v1/accommodations", {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) setAccommodations(await res.json());
+    } catch (err) {
+      console.error("Failed to load accommodations:", err);
+    }
+  };
+
   useEffect(() => {
     fetchEmployees();
     fetchHierarchy();
+    fetchAccommodations();
   }, [search, roleFilter]);
+
+  const handleCreateEmployee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreateLoading(true);
+    setCreateError(null);
+
+    const trimmedTallyId = createFormData.tally_id.trim();
+    const trimmedName = createFormData.name.trim();
+
+    if (!trimmedTallyId || !trimmedName) {
+      setCreateError("Tally ID and Full Name are required.");
+      setCreateLoading(false);
+      return;
+    }
+
+    try {
+      const payload: any = {
+        tally_id: trimmedTallyId,
+        name: trimmedName,
+        role: createFormData.role,
+        country: createFormData.country,
+        staff_grade_description: createFormData.staff_grade_description.trim() || null,
+        grade_code: createFormData.grade_code.trim() || null,
+        weekly_off_day: createFormData.weekly_off_day || null,
+        is_driver: createFormData.is_driver,
+        phone: createFormData.phone.trim() || null,
+        email: createFormData.email.trim() || null,
+        accommodation_id: createFormData.accommodation_id || null,
+        break_override_minutes:
+          createFormData.break_override_minutes !== ""
+            ? Number(createFormData.break_override_minutes)
+            : null,
+        join_date: createFormData.join_date || null,
+      };
+
+      const res = await fetch("/api/v1/employees", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || errData.message || `Creation failed (${res.status})`);
+      }
+
+      const created = await res.json();
+      setCreateModalOpen(false);
+      setSuccessToast(`Employee ${created.name} (${created.tally_id}) created successfully!`);
+      setTimeout(() => setSuccessToast(null), 5000);
+
+      // Reset form
+      setCreateFormData({
+        tally_id: "",
+        name: "",
+        role: "WORKER",
+        country: "AE",
+        staff_grade_description: "Landscape Gardener",
+        grade_code: "",
+        weekly_off_day: "FRIDAY",
+        is_driver: false,
+        break_override_minutes: "",
+        phone: "",
+        email: "",
+        accommodation_id: "",
+        join_date: "",
+      });
+
+      await fetchEmployees();
+      await fetchHierarchy();
+    } catch (err: any) {
+      setCreateError(err.message || "Failed to create employee.");
+    } finally {
+      setCreateLoading(false);
+    }
+  };
 
   const toggleGroupCollapse = (managerId: string) => {
     setCollapsedGroups((prev) => ({
@@ -352,9 +468,22 @@ export const Employees: React.FC = () => {
           {selectedIds.length > 0 && (user?.role === "ADMIN" || user?.role === "ENGINEER") && (
             <button
               onClick={() => setBulkModalOpen(true)}
-              className="px-3.5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition shadow-sm"
+              className="px-3.5 py-2 bg-slate-800 text-white rounded-lg text-sm font-medium hover:bg-slate-700 transition shadow-xs"
             >
               Bulk Update ({selectedIds.length})
+            </button>
+          )}
+
+          {(user?.role === "ADMIN" || !user?.role) && (
+            <button
+              onClick={() => {
+                setCreateError(null);
+                setCreateModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition shadow-xs"
+            >
+              <UserPlus className="h-4 w-4" />
+              Add Employee
             </button>
           )}
 
@@ -371,6 +500,19 @@ export const Employees: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Success Toast */}
+      {successToast && (
+        <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-center justify-between shadow-xs">
+          <span className="font-medium">{successToast}</span>
+          <button
+            onClick={() => setSuccessToast(null)}
+            className="text-emerald-600 hover:text-emerald-800 p-1"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {/* High-Level Organization Metrics */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
@@ -1043,6 +1185,263 @@ export const Employees: React.FC = () => {
                   className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50"
                 >
                   {bulkLoading ? "Saving..." : "Apply Updates"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Employee Modal */}
+      {createModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-lg w-full p-6 space-y-4 my-8">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                  <UserPlus className="h-5 w-5 text-indigo-600" />
+                  Add New Employee
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Creates employee profile and linked user account with default password.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCreateModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {createError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-lg">
+                {createError}
+              </div>
+            )}
+
+            <form onSubmit={handleCreateEmployee} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Tally / Employee ID <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. 1205 or W_101"
+                    value={createFormData.tally_id}
+                    onChange={(e) =>
+                      setCreateFormData({ ...createFormData, tally_id: e.target.value })
+                    }
+                    className="w-full border border-slate-300 rounded-lg p-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Full Name <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Mohammad Ali"
+                    value={createFormData.name}
+                    onChange={(e) =>
+                      setCreateFormData({ ...createFormData, name: e.target.value })
+                    }
+                    className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Role</label>
+                  <select
+                    value={createFormData.role}
+                    onChange={(e) =>
+                      setCreateFormData({ ...createFormData, role: e.target.value })
+                    }
+                    className="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="WORKER">Field Worker (Mobile)</option>
+                    <option value="SUPERVISOR">Supervisor</option>
+                    <option value="SUPERINTENDENT">Superintendent</option>
+                    <option value="ENGINEER">Engineer</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Country</label>
+                  <select
+                    value={createFormData.country}
+                    onChange={(e) =>
+                      setCreateFormData({ ...createFormData, country: e.target.value })
+                    }
+                    className="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="AE">United Arab Emirates (AE)</option>
+                    <option value="SA">Saudi Arabia (SA)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                    Trade / Designation
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Landscape Gardener"
+                    value={createFormData.staff_grade_description}
+                    onChange={(e) =>
+                      setCreateFormData({
+                        ...createFormData,
+                        staff_grade_description: e.target.value,
+                      })
+                    }
+                    className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Grade Code</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. SGD_12"
+                    value={createFormData.grade_code}
+                    onChange={(e) =>
+                      setCreateFormData({ ...createFormData, grade_code: e.target.value })
+                    }
+                    className="w-full border border-slate-300 rounded-lg p-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                    Weekly Off Day
+                  </label>
+                  <select
+                    value={createFormData.weekly_off_day}
+                    onChange={(e) =>
+                      setCreateFormData({ ...createFormData, weekly_off_day: e.target.value })
+                    }
+                    className="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="FRIDAY">Friday (Standard UAE)</option>
+                    <option value="SATURDAY">Saturday</option>
+                    <option value="SUNDAY">Sunday</option>
+                    <option value="MONDAY">Monday</option>
+                    <option value="TUESDAY">Tuesday</option>
+                    <option value="WEDNESDAY">Wednesday</option>
+                    <option value="THURSDAY">Thursday</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                    Assigned Accommodation
+                  </label>
+                  <select
+                    value={createFormData.accommodation_id}
+                    onChange={(e) =>
+                      setCreateFormData({ ...createFormData, accommodation_id: e.target.value })
+                    }
+                    className="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="">None / Self Accommodation</option>
+                    {accommodations.map((acc) => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.name} ({acc.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Phone</label>
+                  <input
+                    type="tel"
+                    placeholder="+971 50 123 4567"
+                    value={createFormData.phone}
+                    onChange={(e) =>
+                      setCreateFormData({ ...createFormData, phone: e.target.value })
+                    }
+                    className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Email</label>
+                  <input
+                    type="email"
+                    placeholder="worker@company.com"
+                    value={createFormData.email}
+                    onChange={(e) =>
+                      setCreateFormData({ ...createFormData, email: e.target.value })
+                    }
+                    className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Join Date</label>
+                  <input
+                    type="date"
+                    value={createFormData.join_date}
+                    onChange={(e) =>
+                      setCreateFormData({ ...createFormData, join_date: e.target.value })
+                    }
+                    className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                    Break Override (Minutes)
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 60"
+                    value={createFormData.break_override_minutes}
+                    onChange={(e) =>
+                      setCreateFormData({
+                        ...createFormData,
+                        break_override_minutes: e.target.value ? Number(e.target.value) : "",
+                      })
+                    }
+                    className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-1">
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={createFormData.is_driver}
+                    onChange={(e) =>
+                      setCreateFormData({ ...createFormData, is_driver: e.target.checked })
+                    }
+                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span>Designated Driver (eligible for site transport runs)</span>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setCreateModalOpen(false)}
+                  className="px-4 py-2 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-50 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={createLoading}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50 transition shadow-xs"
+                >
+                  {createLoading ? "Creating Employee..." : "Create Employee"}
                 </button>
               </div>
             </form>
