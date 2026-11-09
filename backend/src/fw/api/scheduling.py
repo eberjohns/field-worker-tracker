@@ -663,9 +663,18 @@ async def get_approvals_inbox(
     current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
     session: AsyncSession = Depends(get_db),
 ) -> ApprovalsInboxResponse:
-    """Get approvals inbox items (leave requests, reassignments) in scope with badge counts."""
+    """Get approvals inbox items (leave requests, reassignments, attendance) in scope with badge counts."""
+    from fw.modules.attendance import AttendanceService
+
     service = SchedulingService(session)
-    return await service.get_approvals_inbox(current_user=current_user, status=status)
+    res = await service.get_approvals_inbox(current_user=current_user, status=status)
+    att_rows, att_pending_count = await AttendanceService.get_attendance_approvals(
+        session=session, current_user=current_user, status=status
+    )
+    res.attendance_rows = att_rows
+    res.counts.attendance = att_pending_count
+    res.counts.total = res.counts.leave + res.counts.reassignments + att_pending_count
+    return res
 
 
 @router.get("/staffing-gaps", response_model=StaffingGapsResponse)

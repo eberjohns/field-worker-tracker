@@ -1,5 +1,6 @@
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 import structlog
 from sqlalchemy import select
@@ -12,12 +13,13 @@ from fw.modules.events.schemas import (
     EventStatus,
     RejectReason,
 )
+from fw.modules.org.models import Employee
 
 logger = structlog.get_logger(__name__)
 
 
 class EventsService:
-    """Ingestion and validation service for raw mobile location events."""
+    """Ingestion, validation, and synchronous enrichment pipeline for mobile location events."""
 
     @staticmethod
     async def ingest_batch(
@@ -28,6 +30,13 @@ class EventsService:
     ) -> list[EventResultItem]:
         now = datetime.now(UTC)
         results: list[EventResultItem] = []
+        accepted_event_ids: list[UUID] = []
+
+        # Find employee country for work_date timezone resolution
+        emp_q = select(Employee.country).where(Employee.id == employee_id)
+        emp_res = await session.execute(emp_q)
+        country = emp_res.scalar_one_or_none() or "AE"
+        tz = ZoneInfo("Asia/Dubai" if country.upper() == "AE" else "Asia/Riyadh")
 
         # Find existing event IDs in database for duplicate detection
         incoming_ids = [e.event_id for e in batch.events]
@@ -37,8 +46,10 @@ class EventsService:
         res = await session.execute(existing_query)
         existing_ids = set(res.scalars().all())
 
+        affected_work_dates: set = set()
+
         for item in batch.events:
-            # 1. Duplicate check
+            # 1. Duplicate check (Idempotent replay)
             if item.event_id in existing_ids:
                 results.append(
                     EventResultItem(
@@ -111,9 +122,17 @@ class EventsService:
                 server_received_at=now,
                 is_processed=False,
                 raw_payload=item.model_dump(mode="json"),
+                batch_id=batch.batch_id,
+                processing_status="ACCEPTED",
+                flags=[],
             )
             session.add(log_entry)
             existing_ids.add(item.event_id)
+            accepted_event_ids.append(item.event_id)
+
+            # Determine work_date in site local time zone
+            local_date = item.event_timestamp_utc.astimezone(tz).date()
+            affected_work_dates.add(local_date)
 
             results.append(
                 EventResultItem(
@@ -123,4 +142,18 @@ class EventsService:
             )
 
         await session.flush()
+
+        # Publish EventsIngested domain event for attendance enrichment & calculation
+        if accepted_event_ids:
+            from fw.core.events import EventsIngested, event_bus
+
+            await event_bus.publish(
+                EventsIngested(
+                    employee_id=employee_id,
+                    event_ids=accepted_event_ids,
+                    affected_work_dates=list(affected_work_dates),
+                ),
+                session=session,
+            )
+
         return results

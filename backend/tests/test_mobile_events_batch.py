@@ -7,7 +7,7 @@ from uuid import uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import delete
+from sqlalchemy import delete, text
 
 from fw.core.db import async_session_factory, engine
 from fw.main import app
@@ -175,6 +175,11 @@ async def test_mobile_events_batch_validation_and_ingestion():
 
     finally:
         async with async_session_factory() as session:
+            await session.execute(text("SET LOCAL fwt.bypass_immutability = 'on';"))
+            await session.execute(
+                text("DELETE FROM employee_last_position WHERE employee_id = :emp_id;"),
+                {"emp_id": emp_id},
+            )
             await session.execute(
                 delete(MobileEventLog).where(MobileEventLog.employee_id == emp_id)
             )

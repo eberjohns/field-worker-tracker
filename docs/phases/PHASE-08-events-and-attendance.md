@@ -31,15 +31,15 @@ Raw events become visits, gaps and a versioned daily attendance record with plan
 - Live map and pending visits (Phase 09)
 
 ## Checklist (tick each before asking for review)
-- [ ] Simulator scenarios A-H in 05 produce exactly the documented results (incl. the client's 12:00/09:00 vs 11:30/08:30 example)
-- [ ] Replaying a batch creates no duplicates
-- [ ] Rows with no variation, flag or OT are AUTO
-- [ ] Recalculation creates a new version; approvals point to versions
-- [ ] Weekly-off or unassigned work is all OT1; holiday/Sunday all OT2; beyond-standard OT1 otherwise
-- [ ] Late events do not change dates in an approved payroll month
-- [ ] Events table is append-only for the app role
-- [ ] Docs updated in the same change (`.agents/rules/documentation.md`), ADR written for any design decision, CHANGELOG entry
-- [ ] Pull request opened with the template; nothing merged by the agent
+- [x] Simulator scenarios A-H in 05 produce exactly the documented results (incl. the client's 12:00/09:00 vs 11:30/08:30 example)
+- [x] Replaying a batch creates no duplicates
+- [x] Rows with no variation, flag or OT are AUTO
+- [x] Recalculation creates a new version; approvals point to versions
+- [x] Weekly-off or unassigned work is all OT1; holiday/Sunday all OT2; beyond-standard OT1 otherwise
+- [x] Late events do not change dates in an approved payroll month
+- [x] Events table is append-only for the app role
+- [x] Docs updated in the same change (`.agents/rules/documentation.md`), ADR written for any design decision, CHANGELOG entry
+- [x] Pull request opened with the template; nothing merged by the agent
 
 ## Demo script
 - Replay a simulated day with a late arrival, read the attendance row, comment as supervisor, approve as engineer.

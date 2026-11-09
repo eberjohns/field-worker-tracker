@@ -60,6 +60,13 @@ class SyncChangesCommitted(DomainEvent):
     priority: int = 0
 
 
+@dataclass
+class EventsIngested(DomainEvent):
+    employee_id: UUID | None = None
+    event_ids: list[UUID] = field(default_factory=list)
+    affected_work_dates: list[Any] = field(default_factory=list)
+
+
 SyncHandler = Callable[[Any, Any], Awaitable[None]]
 PostCommitHandler = Callable[[Any], Awaitable[None]]
 

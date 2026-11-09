@@ -7,6 +7,7 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+import fw.modules.attendance.models  # noqa: F401
 import fw.modules.audit.models  # noqa: F401
 import fw.modules.events.models  # noqa: F401
 import fw.modules.identity.models  # noqa: F401
