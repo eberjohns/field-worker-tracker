@@ -20,13 +20,18 @@ All notable changes. Format: Keep a Changelog. Mobile-contract changes are also 
     - `AttendanceWatchdogs`: Scheduled alert runners for `NO_ACTIVITY` (assigned workers with no events past alarm time) and `STALE_DEVICE` (inactive devices past threshold).
     - FastAPI endpoints under `/api/v1/attendance`: `/attendance` list with role/scope filtering and pagination, `/attendance/exceptions` review queue, `/attendance/{id}` details with current calculation and comment threads, `/attendance/{id}/calculations` version history, `/attendance/{id}/timeline` derived event timeline, `/attendance/{id}/comments` supervisor explanations, `/attendance/{id}/decisions` engineer approval/rejection with mandatory comment on rejection, `/attendance/recalculate` manual recompute with audit reasons, and `/attendance/events` raw event audit table.
     - Approvals inbox integration: Connected `AttendanceService.get_attendance_approvals` to `/api/v1/approvals` endpoint, providing unified badge counts and action rows across leave, reassignments, and attendance.
+    - Employee API & Org service: Added accommodation filtering (`has_accommodation`, `accommodation_id`) to `GET /api/v1/employees`.
+    - Audit Trail enrichment: Added human-readable entity descriptions, actor names, and readable diff mappings resolving raw UUIDs into employee names, job items, and accommodation names.
   - Web UI Features:
     - Client-specified Attendance table layout matching contract: Planned (7 columns), Actual (7 columns), Variations, Review chips, and Approval status. Non-accommodation workers render `n/a` for camp commute columns.
     - Slide-over Attendance Detail Drawer: KPI summary cards, Overtime & Day Classification, Movement breakdown, Chronological timeline with Observed / Inferred badges, Version history with diff inspection, Supervisor comment thread, and Engineer Approve/Reject action form with required rejection justification.
     - Recalculate Modal: Admin dialog to re-trigger calculations across date ranges with audit reason tracking.
     - Approvals Inbox: Added Attendance tab with live badge count, exception summary cards, and one-click review drawer.
+    - Employee Creation Modal: Dialog for adding operational staff with immediate multi-tier leadership assignment (Supervisor, Superintendent, Project Engineer) and accommodation assignment.
+    - Employee Directory Accommodation Filter: Quick filters for "With Camp", "Without Camp / Self", and specific camp selections.
+    - Mobile Tester Proxy Simulator: Added simulation date picker with 1-7 day backdated testing support.
   - Testing & Verification:
-    - Test suites: `test_attendance_scenarios.py` (covering all worked examples A through H), `test_attendance_verdicts.py` (spatial verdict classification and flags), `test_attendance_immutability.py` (database trigger immutability), `test_attendance_api.py` (end-to-end API lifecycle), and `test_attendance_watchdogs.py` (alert generation). 143 passing tests across backend.
+    - Test suites: `test_attendance_scenarios.py` (covering all worked examples A through H), `test_attendance_verdicts.py` (spatial verdict classification and flags), `test_attendance_immutability.py` (database trigger immutability), `test_attendance_api.py` (end-to-end API lifecycle), and `test_attendance_watchdogs.py` (alert generation). 144 passing tests across backend.
     - Demo script `tools/seed_phase08_demo.py` demonstrating end-to-end event ingestion, enrichment, attendance calculation, supervisor explanation, and engineer approval.
     - Architecture Decision Record `docs/decisions/018-attendance-engine-and-review-workflow.md`.
 
