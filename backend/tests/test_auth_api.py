@@ -140,6 +140,7 @@ async def test_auth_service_blank_credentials_logs_in_admin_in_local_env() -> No
 
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = admin_user
+    mock_result.scalars.return_value.first.return_value = admin_user
     session.execute.return_value = mock_result
 
     req = LoginRequest(username="", password="")
