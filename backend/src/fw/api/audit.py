@@ -14,9 +14,7 @@ from fw.modules.org import Accommodation, Employee
 router = APIRouter(prefix="/audit-logs", tags=["audit"])
 
 
-async def enrich_audit_logs(
-    logs: list[AuditLog], session: AsyncSession
-) -> list[AuditLogRead]:
+async def enrich_audit_logs(logs: list[AuditLog], session: AsyncSession) -> list[AuditLogRead]:
     """Enrich audit log records with human-readable names for UUID entities and diff fields."""
     emp_ids: set[UUID] = set()
     ws_ids: set[UUID] = set()
@@ -97,17 +95,15 @@ async def enrich_audit_logs(
 
     acc_map: dict[str, str] = {}
     if acc_ids:
-        q_acc = select(Accommodation.id, Accommodation.name, Accommodation.code).where(
-            Accommodation.id.in_(acc_ids)
-        )
+        q_acc = select(
+            Accommodation.id, Accommodation.name, Accommodation.accommodation_code
+        ).where(Accommodation.id.in_(acc_ids))
         for r in (await session.execute(q_acc)).all():
-            acc_map[str(r.id)] = f"{r.name} ({r.code})"
+            acc_map[str(r.id)] = f"{r.name} ({r.accommodation_code})"
 
     user_map: dict[str, str] = {}
     if user_ids:
-        q_usr = select(User.id, User.username, User.role).where(
-            User.id.in_(user_ids)
-        )
+        q_usr = select(User.id, User.username, User.role).where(User.id.in_(user_ids))
         for r in (await session.execute(q_usr)).all():
             user_map[str(r.id)] = f"{r.username} ({r.role})"
 

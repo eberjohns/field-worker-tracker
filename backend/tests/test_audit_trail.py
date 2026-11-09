@@ -101,11 +101,5 @@ async def test_enrich_audit_logs_resolves_friendly_labels() -> None:
     enriched = await enrich_audit_logs([mock_log], session)
     assert len(enriched) == 1
     assert enriched[0].diff_labels["employee_id"] == "Shanto Miah (1193)"
-    assert (
-        enriched[0].diff_labels["job_item_id"]
-        == "Silicon Oasis (12A14301) - Gardener"
-    )
-    assert (
-        enriched[0].entity_label
-        == "Shanto Miah (1193) @ Silicon Oasis (12A14301) - Gardener"
-    )
+    assert enriched[0].diff_labels["job_item_id"] == "Silicon Oasis (12A14301) - Gardener"
+    assert enriched[0].entity_label == "Shanto Miah (1193) @ Silicon Oasis (12A14301) - Gardener"

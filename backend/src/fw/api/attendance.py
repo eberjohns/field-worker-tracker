@@ -1,4 +1,5 @@
 from datetime import UTC, date, datetime, time, timedelta
+from typing import Any, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
@@ -81,8 +82,8 @@ def _to_calc_snapshot(calc: AttendanceCalculation | None) -> AttendanceCalculati
         business_status=calc.business_status,
         flags=calc.flags or [],
         review_reasons=calc.review_reasons or [],
-        visits_snapshot=calc.visits_snapshot or [],
-        gaps_snapshot=calc.gaps_snapshot or [],
+        visits_snapshot=cast(list[dict[str, Any]], calc.visits_snapshot or []),
+        gaps_snapshot=cast(list[dict[str, Any]], calc.gaps_snapshot or []),
         inputs_snapshot=calc.inputs_snapshot or {},
         source_event_ids=calc.source_event_ids or [],
     )
@@ -183,7 +184,7 @@ async def list_attendance(
     if business_status:
         q = q.where(AttendanceRecord.business_status == business_status.upper())
     if flag:
-        q = q.where(AttendanceCalculation.flags.any(flag.upper()))
+        q = q.where(AttendanceCalculation.flags.contains([flag.upper()]))
 
     # Total count
     count_q = select(func.count()).select_from(q.subquery())
@@ -280,7 +281,12 @@ async def list_attendance_calculations(
     )
     calcs_res = await session.execute(calcs_q)
     calcs = calcs_res.scalars().all()
-    return [_to_calc_snapshot(c) for c in calcs if c is not None]
+    snapshots: list[AttendanceCalculationSnapshot] = []
+    for c in calcs:
+        s = _to_calc_snapshot(c)
+        if s is not None:
+            snapshots.append(s)
+    return snapshots
 
 
 @router.get("/attendance/{attendance_id}/timeline", response_model=AttendanceTimelineResponse)
@@ -438,7 +444,7 @@ async def list_events(
     if event_type:
         q = q.where(MobileEventLog.event_type == event_type.upper())
     if flag:
-        q = q.where(MobileEventLog.flags.any(flag.upper()))
+        q = q.where(MobileEventLog.flags.contains([flag.upper()]))
     if event_date:
         start_utc = datetime.combine(event_date, time.min, tzinfo=UTC)
         end_utc = datetime.combine(event_date, time.max, tzinfo=UTC)

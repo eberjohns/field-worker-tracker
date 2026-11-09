@@ -101,6 +101,8 @@ async def test_mobile_event_logs_append_only_trigger():
                 MobileEventLog.event_id == event_id
             )
         )
-        verdict, status = check_res.first()
+        row = check_res.first()
+        assert row is not None
+        verdict, status = row
         assert verdict == "INSIDE"
         assert status == "ENRICHED"

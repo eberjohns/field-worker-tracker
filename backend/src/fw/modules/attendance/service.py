@@ -670,10 +670,14 @@ class AttendanceService:
         for v in visits:
             if v.place_type == "SITE":
                 label = "Worksite Visit"
-                place = worksite_map.get(v.worksite_id) or "Assigned Worksite"
+                place = (
+                    worksite_map.get(v.worksite_id) if v.worksite_id else None
+                ) or "Assigned Worksite"
             else:
                 label = "Accommodation Stay"
-                place = accom_map.get(v.accommodation_id) or "Worker Accommodation"
+                place = (
+                    accom_map.get(v.accommodation_id) if v.accommodation_id else None
+                ) or "Worker Accommodation"
 
             lat, lng = event_coords.get(v.entry_event_id, (None, None))
             timeline_items.append(
