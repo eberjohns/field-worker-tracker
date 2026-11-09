@@ -81,6 +81,8 @@ class OrgService:
         sgd: str | None = None,
         grade_code: str | None = None,
         manager_id: UUID | None = None,
+        accommodation_id: UUID | None = None,
+        has_accommodation: bool | None = None,
         country: str | None = None,
         is_active: bool | None = None,
         q: str | None = None,
@@ -102,6 +104,12 @@ class OrgService:
             query = query.where(Employee.grade_code == grade_code)
         if country:
             query = query.where(Employee.country == country)
+        if accommodation_id is not None:
+            query = query.where(Employee.accommodation_id == accommodation_id)
+        elif has_accommodation is True:
+            query = query.where(Employee.accommodation_id.isnot(None))
+        elif has_accommodation is False:
+            query = query.where(Employee.accommodation_id.is_(None))
         if is_active is not None:
             query = query.where(Employee.is_active == is_active)
         if q:

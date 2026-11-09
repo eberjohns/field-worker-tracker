@@ -12,6 +12,7 @@ import {
   ChevronRight,
   Shield,
   UserPlus,
+  Home,
   X,
 } from "lucide-react";
 
@@ -25,6 +26,7 @@ interface Employee {
   weekly_off_day: string | null;
   is_driver: boolean;
   country: string;
+  accommodation_id?: string | null;
   is_active: boolean;
   version: number;
 }
@@ -54,11 +56,13 @@ export const Employees: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("");
+  const [accommodationFilter, setAccommodationFilter] = useState<string>("");
   const [groupBySupervisor, setGroupBySupervisor] = useState(true);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   // Hierarchy grouping state
   const [supervisorGroups, setSupervisorGroups] = useState<SupervisorGroup[]>([]);
+  const [allSupervisors, setAllSupervisors] = useState<Employee[]>([]);
   const [superintendentsList, setSuperintendentsList] = useState<LeaderWithStats[]>([]);
   const [engineersList, setEngineersList] = useState<LeaderWithStats[]>([]);
   const [directMembers, setDirectMembers] = useState<Employee[]>([]);
@@ -95,6 +99,9 @@ export const Employees: React.FC = () => {
     email: "",
     accommodation_id: "",
     join_date: "",
+    supervisor_id: "",
+    superintendent_id: "",
+    engineer_id: "",
   });
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -107,6 +114,9 @@ export const Employees: React.FC = () => {
       params.set("limit", "1000");
       if (search) params.set("q", search);
       if (roleFilter) params.set("role", roleFilter);
+      if (accommodationFilter === "assigned") params.set("has_accommodation", "true");
+      else if (accommodationFilter === "unassigned") params.set("has_accommodation", "false");
+      else if (accommodationFilter) params.set("accommodation_id", accommodationFilter);
 
       const res = await fetch(`/api/v1/employees?${params.toString()}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -231,6 +241,7 @@ export const Employees: React.FC = () => {
         // Sort groups by supervisor name
         groups.sort((a, b) => a.supervisor.name.localeCompare(b.supervisor.name));
         setSupervisorGroups(groups);
+        setAllSupervisors(groups.map((g) => g.supervisor));
 
         // Collect leadership with stats
         const suptsWithStats: LeaderWithStats[] = Array.from(allSuptsMap.values()).map((supt) => {
@@ -296,7 +307,7 @@ export const Employees: React.FC = () => {
     fetchEmployees();
     fetchHierarchy();
     fetchAccommodations();
-  }, [search, roleFilter]);
+  }, [search, roleFilter, accommodationFilter]);
 
   const handleCreateEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -347,6 +358,58 @@ export const Employees: React.FC = () => {
       }
 
       const created = await res.json();
+
+      // Assign reporting lines if selected
+      const reportingPromises = [];
+      if (createFormData.supervisor_id && createFormData.role === "WORKER") {
+        reportingPromises.push(
+          fetch(`/api/v1/employees/${created.id}/reporting-lines`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              manager_id: createFormData.supervisor_id,
+              relationship: "SUPERVISOR",
+            }),
+          })
+        );
+      }
+      if (createFormData.superintendent_id) {
+        reportingPromises.push(
+          fetch(`/api/v1/employees/${created.id}/reporting-lines`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              manager_id: createFormData.superintendent_id,
+              relationship: "SUPERINTENDENT",
+            }),
+          })
+        );
+      }
+      if (createFormData.engineer_id) {
+        reportingPromises.push(
+          fetch(`/api/v1/employees/${created.id}/reporting-lines`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              manager_id: createFormData.engineer_id,
+              relationship: "ENGINEER",
+            }),
+          })
+        );
+      }
+      if (reportingPromises.length > 0) {
+        await Promise.all(reportingPromises);
+      }
+
       setCreateModalOpen(false);
       setSuccessToast(`Employee ${created.name} (${created.tally_id}) created successfully!`);
       setTimeout(() => setSuccessToast(null), 5000);
@@ -366,6 +429,9 @@ export const Employees: React.FC = () => {
         email: "",
         accommodation_id: "",
         join_date: "",
+        supervisor_id: "",
+        superintendent_id: "",
+        engineer_id: "",
       });
 
       await fetchEmployees();
@@ -452,6 +518,20 @@ export const Employees: React.FC = () => {
   const engsCount = employees.filter((e) => e.role === "ENGINEER").length;
   const supsCount = employees.filter((e) => e.role === "SUPERVISOR").length;
   const workersCount = employees.filter((e) => e.role === "WORKER").length;
+
+  const accMap = new Map(accommodations.map((a) => [a.id, a]));
+  const availableSupervisors =
+    allSupervisors.length > 0 ? allSupervisors : employees.filter((e) => e.role === "SUPERVISOR");
+  const availableSuperintendents =
+    superintendentsList.length > 0
+      ? superintendentsList.map((s) => s.employee)
+      : employees.filter((e) => e.role === "SUPERINTENDENT");
+  const availableEngineers =
+    engineersList.length > 0
+      ? engineersList.map((e) => e.employee)
+      : employees.filter((e) => e.role === "ENGINEER");
+  const withAccommodationCount = employees.filter((e) => !!e.accommodation_id).length;
+  const withoutAccommodationCount = employees.filter((e) => !e.accommodation_id).length;
 
   return (
     <div className="space-y-6">
@@ -742,6 +822,29 @@ export const Employees: React.FC = () => {
           </select>
         </div>
 
+        {/* Accommodation Filter */}
+        <div className="flex items-center gap-2">
+          <Home className="h-4 w-4 text-slate-400" />
+          <select
+            value={accommodationFilter}
+            onChange={(e) => setAccommodationFilter(e.target.value)}
+            className="border border-slate-200 rounded-lg text-sm px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="">All Accommodations ({employees.length})</option>
+            <option value="assigned">With Camp ({withAccommodationCount})</option>
+            <option value="unassigned">Without Camp / Self ({withoutAccommodationCount})</option>
+            {accommodations.length > 0 && (
+              <optgroup label="Specific Camps">
+                {accommodations.map((acc) => (
+                  <option key={acc.id} value={acc.id}>
+                    {acc.name} ({acc.code})
+                  </option>
+                ))}
+              </optgroup>
+            )}
+          </select>
+        </div>
+
         <button
           onClick={() => {
             fetchEmployees();
@@ -773,6 +876,7 @@ export const Employees: React.FC = () => {
                 <th className="p-4">Staff Grade (SGD)</th>
                 <th className="p-4">Grade Code</th>
                 <th className="p-4">Weekly Off</th>
+                <th className="p-4">Accommodation</th>
                 <th className="p-4">Country</th>
                 <th className="p-4">Status</th>
               </tr>
@@ -786,11 +890,21 @@ export const Employees: React.FC = () => {
                     const filteredMembers = group.members.filter((m) => {
                       if (search) {
                         const q = search.toLowerCase();
-                        return (
-                          m.name.toLowerCase().includes(q) || m.tally_id.toLowerCase().includes(q)
-                        );
+                        if (!m.name.toLowerCase().includes(q) && !m.tally_id.toLowerCase().includes(q)) {
+                          return false;
+                        }
                       }
                       if (roleFilter && m.role !== roleFilter) return false;
+                      if (accommodationFilter === "assigned" && !m.accommodation_id) return false;
+                      if (accommodationFilter === "unassigned" && m.accommodation_id) return false;
+                      if (
+                        accommodationFilter &&
+                        accommodationFilter !== "assigned" &&
+                        accommodationFilter !== "unassigned" &&
+                        m.accommodation_id !== accommodationFilter
+                      ) {
+                        return false;
+                      }
                       return true;
                     });
 
@@ -801,7 +915,7 @@ export const Employees: React.FC = () => {
                           onClick={() => toggleGroupCollapse(group.supervisor.id)}
                           className="bg-slate-100/90 hover:bg-slate-200/80 cursor-pointer font-semibold text-xs text-slate-800 transition select-none"
                         >
-                          <td colSpan={9} className="px-4 py-3">
+                          <td colSpan={10} className="px-4 py-3">
                             <div className="flex flex-wrap items-center justify-between gap-3">
                               {/* Left: Supervisor Information */}
                               <div className="flex items-center gap-2.5">
@@ -900,7 +1014,7 @@ export const Employees: React.FC = () => {
                         {!isCollapsed &&
                           (filteredMembers.length === 0 ? (
                             <tr>
-                              <td colSpan={9} className="px-8 py-3 text-xs text-slate-400 italic">
+                              <td colSpan={10} className="px-8 py-3 text-xs text-slate-400 italic">
                                 No matching team members in this supervisor group.
                               </td>
                             </tr>
@@ -942,6 +1056,16 @@ export const Employees: React.FC = () => {
                                   <td className="p-4">{m.staff_grade_description || "—"}</td>
                                   <td className="p-4 font-mono text-xs">{m.grade_code || "—"}</td>
                                   <td className="p-4">{m.weekly_off_day || "SUNDAY"}</td>
+                                  <td className="p-4 text-xs">
+                                    {m.accommodation_id && accMap.has(m.accommodation_id) ? (
+                                      <span className="inline-flex items-center gap-1 font-medium text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                        <Home className="h-3 w-3 text-emerald-600" />
+                                        {accMap.get(m.accommodation_id)?.name}
+                                      </span>
+                                    ) : (
+                                      <span className="text-slate-400 italic">Self / None</span>
+                                    )}
+                                  </td>
                                   <td className="p-4">
                                     <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100">
                                       {m.country}
@@ -973,7 +1097,7 @@ export const Employees: React.FC = () => {
                         onClick={() => toggleGroupCollapse("unassigned")}
                         className="bg-slate-50 hover:bg-slate-100 cursor-pointer font-semibold text-xs text-slate-700 transition select-none"
                       >
-                        <td colSpan={9} className="px-4 py-2.5">
+                        <td colSpan={10} className="px-4 py-2.5">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                               {collapsedGroups["unassigned"] ? (
@@ -1000,12 +1124,21 @@ export const Employees: React.FC = () => {
                           .filter((m) => {
                             if (search) {
                               const q = search.toLowerCase();
-                              return (
-                                m.name.toLowerCase().includes(q) ||
-                                m.tally_id.toLowerCase().includes(q)
-                              );
+                              if (!m.name.toLowerCase().includes(q) && !m.tally_id.toLowerCase().includes(q)) {
+                                return false;
+                              }
                             }
                             if (roleFilter && m.role !== roleFilter) return false;
+                            if (accommodationFilter === "assigned" && !m.accommodation_id) return false;
+                            if (accommodationFilter === "unassigned" && m.accommodation_id) return false;
+                            if (
+                              accommodationFilter &&
+                              accommodationFilter !== "assigned" &&
+                              accommodationFilter !== "unassigned" &&
+                              m.accommodation_id !== accommodationFilter
+                            ) {
+                              return false;
+                            }
                             return true;
                           })
                           .map((m) => {
@@ -1045,6 +1178,16 @@ export const Employees: React.FC = () => {
                                 <td className="p-4">{m.staff_grade_description || "—"}</td>
                                 <td className="p-4 font-mono text-xs">{m.grade_code || "—"}</td>
                                 <td className="p-4">{m.weekly_off_day || "SUNDAY"}</td>
+                                <td className="p-4 text-xs">
+                                  {m.accommodation_id && accMap.has(m.accommodation_id) ? (
+                                    <span className="inline-flex items-center gap-1 font-medium text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                      <Home className="h-3 w-3 text-emerald-600" />
+                                      {accMap.get(m.accommodation_id)?.name}
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-400 italic">Self / None</span>
+                                  )}
+                                </td>
                                 <td className="p-4">
                                   <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100">
                                     {m.country}
@@ -1103,6 +1246,16 @@ export const Employees: React.FC = () => {
                       <td className="p-4">{emp.staff_grade_description || "—"}</td>
                       <td className="p-4 font-mono text-xs">{emp.grade_code || "—"}</td>
                       <td className="p-4">{emp.weekly_off_day || "SUNDAY"}</td>
+                      <td className="p-4 text-xs">
+                        {emp.accommodation_id && accMap.has(emp.accommodation_id) ? (
+                          <span className="inline-flex items-center gap-1 font-medium text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                            <Home className="h-3 w-3 text-emerald-600" />
+                            {accMap.get(emp.accommodation_id)?.name}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 italic">Self / None</span>
+                        )}
+                      </td>
                       <td className="p-4">
                         <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100">
                           {emp.country}
@@ -1411,6 +1564,86 @@ export const Employees: React.FC = () => {
                     }
                     className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
+                </div>
+              </div>
+
+              {/* Reporting & Leadership Oversight Section */}
+              <div className="border-t border-slate-100 pt-3 space-y-3">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-800">
+                  <Shield className="h-4 w-4 text-indigo-600" />
+                  <span>Reporting Lines & Leadership Oversight (Optional)</span>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Assign reporting lines directly upon creation. These relationships can also be viewed and edited later in the employee profile.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {createFormData.role === "WORKER" && (
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700 mb-1">
+                        Supervisor (Crew Lead)
+                      </label>
+                      <select
+                        value={createFormData.supervisor_id}
+                        onChange={(e) =>
+                          setCreateFormData({ ...createFormData, supervisor_id: e.target.value })
+                        }
+                        className="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      >
+                        <option value="">None / Direct</option>
+                        {availableSupervisors.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name} ({s.tally_id})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {createFormData.role !== "ENGINEER" && (
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700 mb-1">
+                        Superintendent
+                      </label>
+                      <select
+                        value={createFormData.superintendent_id}
+                        onChange={(e) =>
+                          setCreateFormData({
+                            ...createFormData,
+                            superintendent_id: e.target.value,
+                          })
+                        }
+                        className="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      >
+                        <option value="">None</option>
+                        {availableSuperintendents.map((supt) => (
+                          <option key={supt.id} value={supt.id}>
+                            {supt.name} ({supt.tally_id})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">
+                      Project Engineer
+                    </label>
+                    <select
+                      value={createFormData.engineer_id}
+                      onChange={(e) =>
+                        setCreateFormData({ ...createFormData, engineer_id: e.target.value })
+                      }
+                      className="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value="">None</option>
+                      {availableEngineers.map((eng) => (
+                        <option key={eng.id} value={eng.id}>
+                          {eng.name} ({eng.tally_id})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
 
