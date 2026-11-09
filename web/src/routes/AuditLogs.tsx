@@ -6,10 +6,13 @@ interface AuditLogEntry {
   id: number;
   actor_user_id: string | null;
   actor_role: string | null;
+  actor_name: string | null;
   action: string;
   entity_type: string;
   entity_id: string;
+  entity_label: string | null;
   diff: Record<string, any>;
+  diff_labels: Record<string, string>;
   reason: string | null;
   ip: string | null;
   created_at: string;
@@ -50,6 +53,49 @@ export const AuditLogs: React.FC = () => {
     return <div className="p-8 text-center text-red-600">Access Restricted to Administrators.</div>;
   }
 
+  const renderDiff = (diff: Record<string, any>, labels: Record<string, string> = {}) => {
+    const entries = Object.entries(diff || {});
+    if (entries.length === 0) return <span className="text-slate-400 text-xs">—</span>;
+
+    return (
+      <div className="space-y-1.5 text-xs max-w-md">
+        <div className="space-y-1">
+          {entries.map(([key, val]) => {
+            const friendlyLabel = labels[key];
+            const displayKey = key
+              .replace(/_/g, " ")
+              .replace(/\bid\b/i, "ID")
+              .replace(/\b\w/g, (c) => c.toUpperCase());
+
+            return (
+              <div key={key} className="flex flex-col sm:flex-row sm:items-baseline gap-1.5 text-[11px] leading-tight">
+                <span className="font-semibold text-slate-600 shrink-0">{displayKey}:</span>
+                {friendlyLabel ? (
+                  <span
+                    className="font-medium text-indigo-800 bg-indigo-50/90 px-1.5 py-0.5 rounded border border-indigo-200/80 break-words"
+                    title={String(val)}
+                  >
+                    {friendlyLabel}
+                  </span>
+                ) : (
+                  <span className="font-mono text-slate-800 break-words">
+                    {typeof val === "object" ? JSON.stringify(val) : String(val)}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <details className="text-[10px] text-slate-400 cursor-pointer pt-1 border-t border-slate-100">
+          <summary className="hover:text-slate-600 font-mono select-none">Raw JSON</summary>
+          <pre className="mt-1 p-2 bg-slate-900 text-slate-200 rounded text-[10px] font-mono overflow-x-auto max-h-36">
+            {JSON.stringify(diff, null, 2)}
+          </pre>
+        </details>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -78,10 +124,14 @@ export const AuditLogs: React.FC = () => {
           <option value="">All Entity Types</option>
           <option value="employee">Employee</option>
           <option value="user">User</option>
+          <option value="StandingAssignment">Standing Assignment</option>
+          <option value="ScheduledWork">Scheduled Work</option>
           <option value="employee_reporting_line">Reporting Line</option>
           <option value="employee_document">Document</option>
           <option value="registered_device">Registered Device</option>
           <option value="accommodation">Accommodation</option>
+          <option value="worksite">Worksite</option>
+          <option value="job_item">Job Item</option>
           <option value="group">Group</option>
           <option value="zone">Zone</option>
         </select>
@@ -110,23 +160,42 @@ export const AuditLogs: React.FC = () => {
                   <td className="p-4 text-xs font-mono text-slate-500 whitespace-nowrap">
                     {new Date(log.created_at).toLocaleString()}
                   </td>
-                  <td className="p-4 font-semibold text-slate-800 text-xs">{log.action}</td>
-                  <td className="p-4 text-xs">
-                    <span className="font-medium text-slate-900">{log.entity_type}</span>
-                    <div className="font-mono text-[11px] text-slate-400 truncate max-w-[150px]">
+                  <td className="p-4">
+                    <span className="font-bold text-xs uppercase px-2 py-0.5 rounded bg-slate-100 text-slate-800 border border-slate-200">
+                      {log.action}
+                    </span>
+                  </td>
+                  <td className="p-4 text-xs max-w-xs">
+                    <span className="font-semibold text-slate-900 text-xs">
+                      {log.entity_type}
+                    </span>
+                    {log.entity_label && (
+                      <div className="font-medium text-indigo-700 text-xs mt-0.5 leading-snug" title={log.entity_label}>
+                        {log.entity_label}
+                      </div>
+                    )}
+                    <div className="font-mono text-[10px] text-slate-400 truncate max-w-[170px] mt-0.5" title={log.entity_id}>
                       {log.entity_id}
                     </div>
                   </td>
                   <td className="p-4 text-xs">
-                    <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-700">
+                    <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
                       {log.actor_role || "SYSTEM"}
                     </span>
+                    {log.actor_name && (
+                      <div className="font-medium text-slate-800 text-xs mt-1" title={log.actor_name}>
+                        {log.actor_name}
+                      </div>
+                    )}
+                    {log.ip && (
+                      <div className="font-mono text-[10px] text-slate-400 mt-0.5">
+                        {log.ip}
+                      </div>
+                    )}
                   </td>
                   <td className="p-4 text-xs text-slate-500">{log.reason || "—"}</td>
                   <td className="p-4">
-                    <pre className="p-2 bg-slate-50 border border-slate-200 rounded text-[11px] font-mono text-slate-700 max-h-24 overflow-y-auto">
-                      {JSON.stringify(log.diff, null, 2)}
-                    </pre>
+                    {renderDiff(log.diff, log.diff_labels)}
                   </td>
                 </tr>
               ))}

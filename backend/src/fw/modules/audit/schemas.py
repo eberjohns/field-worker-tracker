@@ -22,10 +22,13 @@ class AuditLogRead(BaseModel):
     id: int
     actor_user_id: UUID | None = None
     actor_role: str | None = None
+    actor_name: str | None = None
     action: str
     entity_type: str
     entity_id: str
+    entity_label: str | None = None
     diff: dict[str, Any]
+    diff_labels: dict[str, str] = Field(default_factory=dict)
     reason: str | None = None
     ip: str | None = None
     created_at: datetime
