@@ -299,7 +299,13 @@
 
                 <!-- Manual Event Trigger Buttons -->
                 <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs space-y-2">
-                  <span class="text-3xs font-bold uppercase text-slate-400 block">Manual Event Triggers</span>
+                  <div class="flex justify-between items-center">
+                    <span class="text-3xs font-bold uppercase text-slate-400 block">Manual Event Triggers</span>
+                    <span id="phoneSimDateBadge" class="text-3xs font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded">--</span>
+                  </div>
+                  <div class="text-3xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-1.5 leading-snug">
+                    <span class="font-bold">Backend 1–7 Day Window:</span> Events are accepted for today and past 1–7 days. Events &gt;7 days old are rejected (<code>TIMESTAMP_TOO_OLD</code>); future timestamps are rejected (<code>TIMESTAMP_IN_FUTURE</code>).
+                  </div>
                   <div class="grid grid-cols-3 gap-1.5 text-2xs">
                     <button id="phoneBtnEntry" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1.5 rounded">ENTRY</button>
                     <button id="phoneBtnPing" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1.5 rounded">PING</button>
@@ -479,6 +485,15 @@
                 <option value="midday_gap">Midday Gap (Leaves 11:30, Returns 13:00)</option>
                 <option value="custom">Custom Marked Route</option>
               </select>
+            </div>
+
+            <!-- Simulated Work Date Selector (1-7 Days Ingestion Window) -->
+            <div class="flex items-center space-x-1.5 text-2xs bg-slate-900 border border-slate-700 px-2.5 py-1 rounded">
+              <span class="text-slate-400 flex items-center gap-1 font-medium"><span>📅</span> Work Date:</span>
+              <input type="date" id="simulatedDatePicker" class="bg-slate-950 text-indigo-300 font-mono text-2xs border border-slate-700 rounded px-2 py-0.5 focus:outline-none focus:border-indigo-500">
+              <span class="text-3xs text-amber-400/90 font-medium hidden lg:inline" title="Backend constraints: events >7 days old are rejected as TIMESTAMP_TOO_OLD; future timestamps are rejected as TIMESTAMP_IN_FUTURE.">
+                (Past 1–7 days)
+              </span>
             </div>
 
             <!-- Manual Route Recording Mode Toggle -->

@@ -23,6 +23,7 @@
       dayPlans: [],
       scheduleItems: [],
     },
+    simulatedDate: new Date().toISOString().split('T')[0], // Active simulation work date (constrained to past 1-7 days)
     activeTab: 'today', // 'today', 'gps', 'roster', 'profile', 'sync'
     currentZone: 'UNKNOWN',
     currentWorksiteId: null,
@@ -957,12 +958,32 @@
     state.currentWorksiteId = activeWorksiteId;
   }
 
+  // Get active timestamp for simulation conforming to selected simulatedDate (or real now)
+  function getSimulatedTimestamp(timeOverride = null) {
+    const baseDate = state.simulatedDate || new Date().toISOString().split('T')[0];
+    if (timeOverride) {
+      if (timeOverride.includes('T')) {
+        const timePart = timeOverride.split('T')[1];
+        return `${baseDate}T${timePart}`;
+      }
+      return `${baseDate}T${timeOverride}Z`;
+    }
+    const nowIso = new Date().toISOString();
+    const today = nowIso.split('T')[0];
+    if (baseDate === today) {
+      return nowIso;
+    }
+    const timePart = state.route.currentTimeStr || nowIso.split('T')[1].slice(0, 8);
+    return `${baseDate}T${timePart}Z`;
+  }
+
   // Queue Event (Conforming strictly to EventBatchRequest & MobileEventItem schemas)
   function queueEvent(type, worksiteId = null, recordedAt = null) {
+    const timestamp = getSimulatedTimestamp(recordedAt);
     const evt = {
       event_id: crypto.randomUUID(),
       event_type: type,
-      event_timestamp_utc: recordedAt || new Date().toISOString(),
+      event_timestamp_utc: timestamp,
       latitude: Number(state.workerLocation.lat.toFixed(6)),
       longitude: Number(state.workerLocation.lng.toFixed(6)),
       accuracy_meters: 4.5,
@@ -992,7 +1013,7 @@
           <span class="font-bold ${
             e.event_type === 'ENTRY' ? 'text-emerald-700' : e.event_type === 'EXIT' ? 'text-rose-700' : 'text-indigo-700'
           }">${e.event_type}</span>
-          <span class="text-slate-500 font-mono">${e.event_timestamp_utc.split('T')[1].slice(0, 8)}</span>
+          <span class="text-slate-500 font-mono">${e.event_timestamp_utc.split('T')[0].slice(5)} ${e.event_timestamp_utc.split('T')[1].slice(0, 8)}</span>
         </div>
       `
       )
@@ -1089,7 +1110,8 @@
     const currentLng = p1.lng + (p2.lng - p1.lng) * segT;
 
     state.workerMarker.setLatLng([currentLat, currentLng]);
-    const simulatedIso = `${new Date().toISOString().split('T')[0]}T${timeStr}Z`;
+    const baseDate = state.simulatedDate || new Date().toISOString().split('T')[0];
+    const simulatedIso = `${baseDate}T${timeStr}Z`;
     updateWorkerPosition(currentLat, currentLng, simulatedIso);
   }
 
@@ -1221,8 +1243,12 @@
     }
 
     // 5. Today's Day Plan Resolution
+    const activeDateStr = state.simulatedDate || new Date().toISOString().split('T')[0];
     const todayStr = new Date().toISOString().split('T')[0];
-    const todayPlan = state.synced.dayPlans.find((dp) => dp.work_date === todayStr) || state.synced.dayPlans[0];
+    const todayPlan = state.synced.dayPlans.find((dp) => dp.work_date === activeDateStr) || state.synced.dayPlans[0];
+
+    const simBadge = document.getElementById('phoneSimDateBadge');
+    if (simBadge) simBadge.innerText = activeDateStr;
 
     if (todayPlan) {
       const isWorking = todayPlan.status === 'WORKING';
@@ -1255,17 +1281,19 @@
     const schedEl = document.getElementById('phoneScheduleList');
     schedEl.innerHTML = state.synced.dayPlans
       .map((p) => {
-        const isToday = p.work_date === todayStr;
+        const isSimDate = p.work_date === activeDateStr;
+        const isRealToday = p.work_date === todayStr;
         const isWork = p.status === 'WORKING';
         const badgeColor = isWork ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200';
         const jobName = state.synced.jobs[0]?.job_name || 'Landscape Maintenance';
 
         return `
-          <div class="p-2.5 bg-white rounded-xl border ${isToday ? 'border-indigo-400 shadow-xs' : 'border-slate-200'} text-3xs space-y-1">
+          <div class="p-2.5 bg-white rounded-xl border ${isSimDate ? 'border-indigo-500 ring-1 ring-indigo-500 shadow-xs' : 'border-slate-200'} text-3xs space-y-1 cursor-pointer hover:border-indigo-300 transition-colors" data-roster-date="${p.work_date}" title="Click to set simulation date">
             <div class="flex justify-between items-center font-bold">
               <span class="text-slate-900 font-mono flex items-center gap-1">
                 ${p.work_date}
-                ${isToday ? '<span class="bg-indigo-600 text-white px-1.5 py-0.2 rounded text-3xs font-semibold">TODAY</span>' : ''}
+                ${isRealToday ? '<span class="bg-slate-700 text-white px-1.5 py-0.2 rounded text-3xs font-semibold">TODAY</span>' : ''}
+                ${isSimDate ? '<span class="bg-indigo-600 text-white px-1.5 py-0.2 rounded text-3xs font-semibold">SIMULATING</span>' : ''}
               </span>
               <span class="px-2 py-0.5 rounded-full border text-3xs font-semibold ${badgeColor}">
                 ${p.status === 'OFF' ? 'REST DAY' : p.status}
@@ -1288,6 +1316,28 @@
         `;
       })
       .join('');
+
+    // Attach click handlers to roster items to quickly switch simulated date
+    const sevenDaysAgoStr = new Date(Date.now() - 7 * 86400 * 1000).toISOString().split('T')[0];
+    schedEl.querySelectorAll('[data-roster-date]').forEach((card) => {
+      card.addEventListener('click', () => {
+        const targetDate = card.getAttribute('data-roster-date');
+        if (!targetDate) return;
+        if (targetDate > todayStr) {
+          alert(`Cannot simulate future date (${targetDate}): Backend rejects events >5 minutes in the future with TIMESTAMP_IN_FUTURE.`);
+          return;
+        }
+        if (targetDate < sevenDaysAgoStr) {
+          alert(`Date ${targetDate} is older than 7 days: Backend rejects events with TIMESTAMP_TOO_OLD.`);
+          return;
+        }
+        state.simulatedDate = targetDate;
+        const picker = document.getElementById('simulatedDatePicker');
+        if (picker) picker.value = targetDate;
+        renderSyncedState();
+        showToast(`📅 Simulated date switched to ${targetDate}`);
+      });
+    });
 
     // Update map features & refresh ground truth
     updateMapLayers();
@@ -1344,6 +1394,37 @@
         if (preset) loadRoute(preset.waypoints);
       }
     });
+
+    // Simulated Work Date Picker (Enforcing 1-7 Day Backend Window)
+    const datePicker = document.getElementById('simulatedDatePicker');
+    const todayStr = new Date().toISOString().split('T')[0];
+    const sevenDaysAgoStr = new Date(Date.now() - 7 * 86400 * 1000).toISOString().split('T')[0];
+
+    if (datePicker) {
+      datePicker.value = state.simulatedDate || todayStr;
+      datePicker.max = todayStr;
+      datePicker.min = sevenDaysAgoStr;
+
+      datePicker.addEventListener('change', (e) => {
+        const chosen = e.target.value;
+        if (!chosen) return;
+        if (chosen > todayStr) {
+          alert('Cannot select future dates: The backend rejects events >5 minutes ahead of server clock with TIMESTAMP_IN_FUTURE.');
+          e.target.value = state.simulatedDate;
+          return;
+        }
+        if (chosen < sevenDaysAgoStr) {
+          alert('Date exceeds 7-day ingestion limit: The backend rejects events older than 7 days with TIMESTAMP_TOO_OLD.');
+          e.target.value = state.simulatedDate;
+          return;
+        }
+        state.simulatedDate = chosen;
+        const badge = document.getElementById('phoneSimDateBadge');
+        if (badge) badge.innerText = state.simulatedDate;
+        renderSyncedState();
+        showToast(`📅 Simulated work date set to ${state.simulatedDate}. Any generated events will use this date.`);
+      });
+    }
 
     // Manual Route Drawing Toggle
     const btnDrawMode = document.getElementById('btnToggleDrawMode');
@@ -1711,7 +1792,12 @@
         const rejected = res.results.filter((r) => r.status === 'REJECTED').length;
         state.eventsQueue = [];
         renderQueue();
-        showToast(`Batch sent! Accepted: ${accepted}, Rejected: ${rejected}. Cursor: ${res.latest_cursor}`);
+        let toastMsg = `Batch sent! Accepted: ${accepted}, Rejected: ${rejected}. Cursor: ${res.latest_cursor}`;
+        if (rejected > 0) {
+          const reasons = [...new Set(res.results.filter((r) => r.reason).map((r) => r.reason))].join(', ');
+          toastMsg += ` (Reason: ${reasons})`;
+        }
+        showToast(toastMsg);
       } catch (err) {
         alert(`Batch failed: ${err.message}`);
       }
