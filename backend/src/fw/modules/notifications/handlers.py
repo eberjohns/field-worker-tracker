@@ -129,8 +129,16 @@ async def handle_location_enabled(event: DomainEvent, session: AsyncSession) -> 
         await session.flush()
 
 
+_HANDLERS_REGISTERED = False
+
+
 def register_notification_handlers() -> None:
     """Register all synchronous event handlers for notifications."""
+    global _HANDLERS_REGISTERED
+    if _HANDLERS_REGISTERED:
+        return
+    _HANDLERS_REGISTERED = True
+
     event_bus.subscribe_sync(LeaveApprovedEvent, handle_leave_approved)  # type: ignore
     event_bus.subscribe_sync(LeaveCancelledEvent, handle_leave_cancelled)  # type: ignore
     event_bus.subscribe_sync(ReassignmentApprovedEvent, handle_reassignment_approved)  # type: ignore

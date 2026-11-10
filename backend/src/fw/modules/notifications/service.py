@@ -31,7 +31,20 @@ class NotificationService:
         target_role: str | None = None,
         details: dict[str, Any] | None = None,
     ) -> Alert:
-        """Create a new open alert."""
+        """Create a new open alert (deduplicates against existing open alert with same type and ref)."""
+        if ref_type and ref_id:
+            existing = await session.execute(
+                select(Alert).where(
+                    Alert.alert_type == alert_type,
+                    Alert.ref_type == ref_type,
+                    Alert.ref_id == ref_id,
+                    Alert.status == "OPEN",
+                )
+            )
+            existing_alert = existing.scalars().first()
+            if existing_alert:
+                return existing_alert
+
         alert = Alert(
             alert_type=alert_type,
             title=title,

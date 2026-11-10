@@ -673,3 +673,80 @@ async def test_approvals_inbox_filtering_and_recorded_at():
         assert inbox_all.status_code == 200
         all_ids = [item["id"] for item in inbox_all.json()["leave_requests"]]
         assert leave_id in all_ids
+
+
+@db_required
+async def test_operational_shift_cover_resolves_alert_and_deduplicates():
+    """Verify that approving leave creates exactly 1 alert, and assigning cover via operational planner resolves it."""
+    data = await get_test_data()
+    admin_token = AuthService.create_access_token(data["admin"])
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        # 1. Create a 1-day leave request
+        from_dt = date.today() + timedelta(days=30)
+        leave_res = await ac.post(
+            "/api/v1/leave-requests",
+            json={
+                "employee_id": str(data["w1"].id),
+                "leave_type": "ANNUAL",
+                "from_date": from_dt.isoformat(),
+                "to_date": from_dt.isoformat(),
+                "reason": "Personal rest",
+            },
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert leave_res.status_code == 201
+        leave_id = leave_res.json()["id"]
+
+        # 2. Approve leave
+        app_res = await ac.post(
+            f"/api/v1/leave-requests/{leave_id}/approve",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert app_res.status_code == 200
+
+        # 3. Check alerts table: must have exactly 1 OPEN COVER_NEEDED alert
+        async with async_session_factory() as session:
+            stmt = select(Alert).where(
+                Alert.alert_type == "COVER_NEEDED",
+                Alert.ref_id == UUID(leave_id),
+                Alert.status == "OPEN",
+            )
+            alerts = (await session.execute(stmt)).scalars().all()
+            assert len(alerts) == 1, f"Expected 1 open alert, got {len(alerts)}"
+
+        # 4. Assign cover replacement in operational planner
+        cover_res = await ac.post(
+            "/api/v1/operational-planner/shifts",
+            json={
+                "job_item_id": str(data["job_item"].id),
+                "work_date": from_dt.isoformat(),
+                "employee_id": str(data["w2"].id),
+                "original_employee_id": str(data["w1"].id),
+                "assigned_hours": 8.0,
+                "source": "OVERRIDE",
+                "override_reason": "Cover for Worker 1",
+                "status": "ACTIVE",
+            },
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert cover_res.status_code == 201
+
+        # 5. Alert should now be automatically resolved
+        async with async_session_factory() as session:
+            stmt_open = select(Alert).where(
+                Alert.alert_type == "COVER_NEEDED",
+                Alert.ref_id == UUID(leave_id),
+                Alert.status == "OPEN",
+            )
+            open_alerts = (await session.execute(stmt_open)).scalars().all()
+            assert len(open_alerts) == 0, "Expected alert to be resolved after assigning cover"
+
+            stmt_resolved = select(Alert).where(
+                Alert.alert_type == "COVER_NEEDED",
+                Alert.ref_id == UUID(leave_id),
+                Alert.status == "RESOLVED",
+            )
+            resolved_alerts = (await session.execute(stmt_resolved)).scalars().all()
+            assert len(resolved_alerts) == 1, "Expected exactly 1 resolved alert"

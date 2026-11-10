@@ -99,12 +99,14 @@ class EventBus:
         )
 
     def subscribe_sync(self, event_type: type[DomainEvent], handler: SyncHandler) -> None:
-        self._sync_handlers[event_type].append(handler)
+        if handler not in self._sync_handlers[event_type]:
+            self._sync_handlers[event_type].append(handler)
 
     def subscribe_post_commit(
         self, event_type: type[DomainEvent], handler: PostCommitHandler
     ) -> None:
-        self._post_commit_handlers[event_type].append(handler)
+        if handler not in self._post_commit_handlers[event_type]:
+            self._post_commit_handlers[event_type].append(handler)
 
     async def publish(self, event: DomainEvent, session: Any = None) -> None:
         """Publish an event to all synchronous handlers."""
