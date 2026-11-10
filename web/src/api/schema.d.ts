@@ -5274,10 +5274,16 @@ export interface components {
             worksite_id: string;
             /** Worksite Name */
             worksite_name: string;
+            /** Job Number */
+            job_number?: string | null;
             /** Job Item Id */
             job_item_id?: string | null;
             /** Job Item Name */
             job_item_name?: string | null;
+            /** Sub Item Code */
+            sub_item_code?: string | null;
+            /** Item Description */
+            item_description?: string | null;
             /**
              * Employee Id
              * Format: uuid
@@ -5296,6 +5302,8 @@ export interface components {
              * Format: date
              */
             due_date: string;
+            /** Work Date */
+            work_date?: string | null;
             /**
              * Detected On
              * Format: date

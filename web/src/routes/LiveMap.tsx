@@ -609,9 +609,9 @@ export const LiveMap: React.FC = () => {
   );
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] bg-slate-50">
+    <div className="flex flex-col h-full w-full bg-slate-50 overflow-hidden">
       {/* Top Banner / Summary Counters */}
-      <div className="bg-white border-b border-slate-200 px-6 py-3 flex flex-wrap items-center justify-between gap-4">
+      <div className="bg-white border-b border-slate-200 px-6 py-3 flex flex-wrap items-center justify-between gap-4 shrink-0">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
             <Radio className="h-5 w-5 animate-pulse" />
@@ -663,11 +663,11 @@ export const LiveMap: React.FC = () => {
       </div>
 
       {/* Main Content Area: Map + Side Panel */}
-      <div className="flex-1 flex overflow-hidden relative">
+      <div className="flex-1 flex overflow-hidden relative min-h-0">
         {/* Map Container */}
-        <div className="flex-1 h-full w-full">
+        <div className="flex-1 h-full w-full relative">
           <MapContainer
-            className="w-full h-full"
+            className="w-full h-full rounded-none border-0"
             initialZoom={12}
             onMapReady={(map) => setMapInstance(map)}
             onMapUnmount={() => setMapInstance(null)}
@@ -675,7 +675,7 @@ export const LiveMap: React.FC = () => {
         </div>
 
         {/* Side Panel for Worker List & Details */}
-        <div className="w-96 bg-white border-l border-slate-200 flex flex-col z-10 shadow-lg">
+        <div className="w-96 bg-white border-l border-slate-200 flex flex-col z-10 shadow-lg min-h-0 overflow-hidden">
           {/* Search & Filters */}
           <div className="p-4 border-b border-slate-200 space-y-3 bg-white">
             <div className="relative">

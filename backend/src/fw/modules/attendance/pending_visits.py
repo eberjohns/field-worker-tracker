@@ -320,7 +320,9 @@ class PendingVisitsService:
                 Employee.name,
                 Employee.tally_id,
                 Worksite.job_name.label("worksite_name"),
-                JobItem.name.label("job_item_name"),
+                Worksite.job_number.label("job_number"),
+                JobItem.staff_grade_description.label("item_description"),
+                JobItem.sub_item_code.label("sub_item_code"),
                 AttendanceComment.comment_text.label("latest_explanation"),
                 User.username.label("closed_by_name"),
                 ScheduledWork.job_item_id,
@@ -384,7 +386,7 @@ class PendingVisitsService:
         closed_count = 0
         escalated_count = 0
 
-        for pv, emp_name, tally, site_name, ji_name, explanation, closed_by_user_name, ji_id in rows:
+        for pv, emp_name, tally, site_name, job_num, item_desc, sub_code, explanation, closed_by_user_name, ji_id in rows:
             sup_info = sup_lookup.get(pv.employee_id)
             sup_id = sup_info[0] if sup_info else None
             sup_name = sup_info[1] if sup_info else None
@@ -416,14 +418,18 @@ class PendingVisitsService:
                     occurrence_id=pv.occurrence_id,
                     worksite_id=pv.worksite_id,
                     worksite_name=site_name,
+                    job_number=job_num,
                     job_item_id=ji_id,
-                    job_item_name=ji_name,
+                    job_item_name=item_desc,
+                    sub_item_code=sub_code or "01",
+                    item_description=item_desc or "Field Service",
                     employee_id=pv.employee_id,
                     employee_name=emp_name,
                     tally_id=tally,
                     supervisor_id=sup_id,
                     supervisor_name=sup_name,
                     due_date=pv.due_date,
+                    work_date=pv.due_date,
                     detected_on=pv.detected_on,
                     age_days=age_days,
                     status=pv.status,

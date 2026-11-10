@@ -176,14 +176,18 @@ class PendingVisitResponse(BaseModel):
     occurrence_id: UUID | None = None
     worksite_id: UUID
     worksite_name: str
+    job_number: str | None = None
     job_item_id: UUID | None = None
     job_item_name: str | None = None
+    sub_item_code: str | None = None
+    item_description: str | None = None
     employee_id: UUID
     employee_name: str
     tally_id: str | None = None
     supervisor_id: UUID | None = None
     supervisor_name: str | None = None
     due_date: date
+    work_date: date | None = None
     detected_on: date
     age_days: int
     status: str  # OPEN | EXPLAINED | RESCHEDULED | CLOSED

@@ -37,3 +37,4 @@ This architecture guarantees worker privacy auditability without polluting finan
 - Live location access is fully accountable and compliant.
 - `audit_logs` remains clean and performant.
 - `GET /api/v1/live/stream` automatically falls back to 30s polling if SSE is interrupted.
+

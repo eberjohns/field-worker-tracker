@@ -17862,6 +17862,17 @@
             "type": "string",
             "title": "Worksite Name"
           },
+          "job_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Number"
+          },
           "job_item_id": {
             "anyOf": [
               {
@@ -17884,6 +17895,28 @@
               }
             ],
             "title": "Job Item Name"
+          },
+          "sub_item_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sub Item Code"
+          },
+          "item_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Description"
           },
           "employee_id": {
             "type": "string",
@@ -17932,6 +17965,18 @@
             "type": "string",
             "format": "date",
             "title": "Due Date"
+          },
+          "work_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Work Date"
           },
           "detected_on": {
             "type": "string",

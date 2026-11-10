@@ -11,16 +11,17 @@ interface PendingVisitItem {
   id: string;
   scheduled_work_id: string;
   worksite_id: string;
-  worksite_name: string;
-  job_number: string;
-  job_item_id: string;
-  sub_item_code: string;
-  item_description: string;
+  worksite_name?: string | null;
+  job_number?: string | null;
+  job_item_id?: string | null;
+  sub_item_code?: string | null;
+  item_description?: string | null;
   employee_id: string;
-  employee_name: string;
-  tally_id: string;
+  employee_name?: string | null;
+  tally_id?: string | null;
   supervisor_name?: string | null;
-  work_date: string;
+  due_date?: string | null;
+  work_date?: string | null;
   age_days: number;
   status: "OPEN" | "EXPLAINED" | "RESCHEDULED" | "CLOSED";
   latest_explanation?: string | null;
@@ -221,11 +222,12 @@ export const PendingVisits: React.FC = () => {
     if (!search.trim()) return true;
     const q = search.toLowerCase();
     return (
-      item.worksite_name.toLowerCase().includes(q) ||
-      item.job_number.toLowerCase().includes(q) ||
-      item.employee_name.toLowerCase().includes(q) ||
-      item.tally_id.toLowerCase().includes(q) ||
-      (item.item_description && item.item_description.toLowerCase().includes(q))
+      (item.worksite_name && item.worksite_name.toLowerCase().includes(q)) ||
+      (item.job_number && item.job_number.toLowerCase().includes(q)) ||
+      (item.employee_name && item.employee_name.toLowerCase().includes(q)) ||
+      (item.tally_id && item.tally_id.toLowerCase().includes(q)) ||
+      (item.item_description && item.item_description.toLowerCase().includes(q)) ||
+      (item.sub_item_code && item.sub_item_code.toLowerCase().includes(q))
     );
   });
 
@@ -244,12 +246,12 @@ export const PendingVisits: React.FC = () => {
       "Latest Explanation",
     ];
     const rows = filteredItems.map((i) => [
-      `"${i.job_number}"`,
-      `"${i.worksite_name}"`,
-      `"${i.sub_item_code}"`,
-      `"${i.employee_name}"`,
-      `"${i.tally_id}"`,
-      i.work_date,
+      `"${i.job_number || ""}"`,
+      `"${i.worksite_name || ""}"`,
+      `"${i.sub_item_code || ""}"`,
+      `"${i.employee_name || ""}"`,
+      `"${i.tally_id || ""}"`,
+      i.work_date || i.due_date || "",
       i.age_days,
       i.status,
       i.is_escalated ? "YES" : "NO",
@@ -387,19 +389,19 @@ export const PendingVisits: React.FC = () => {
                 filteredItems.map((item) => (
                   <tr key={item.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-6 py-4">
-                      <div className="font-semibold text-slate-900">{item.worksite_name}</div>
-                      <div className="text-xs text-slate-400 font-mono">{item.job_number}</div>
+                      <div className="font-semibold text-slate-900">{item.worksite_name || "Unknown Worksite"}</div>
+                      <div className="text-xs text-slate-400 font-mono">{item.job_number || "—"}</div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-slate-800 font-medium">{item.sub_item_code}</div>
-                      <div className="text-xs text-slate-500">{item.item_description}</div>
+                      <div className="text-slate-800 font-medium">{item.sub_item_code || "—"}</div>
+                      <div className="text-xs text-slate-500">{item.item_description || "—"}</div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="font-medium text-slate-900">{item.employee_name}</div>
-                      <div className="text-xs text-slate-400">Tally: {item.tally_id}</div>
+                      <div className="font-medium text-slate-900">{item.employee_name || "Unknown Worker"}</div>
+                      <div className="text-xs text-slate-400">{item.tally_id ? `Tally: ${item.tally_id}` : ""}</div>
                     </td>
                     <td className="px-6 py-4 text-slate-600 font-mono text-xs">
-                      {item.work_date}
+                      {item.work_date || item.due_date || "—"}
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-1.5">
@@ -494,9 +496,9 @@ export const PendingVisits: React.FC = () => {
             </div>
 
             <div className="text-xs text-slate-600 space-y-1 bg-slate-50 p-3 rounded-lg border border-slate-200">
-              <div><strong>Worksite:</strong> {explainingItem.worksite_name} ({explainingItem.job_number})</div>
-              <div><strong>Worker:</strong> {explainingItem.employee_name} ({explainingItem.tally_id})</div>
-              <div><strong>Work Date:</strong> {explainingItem.work_date}</div>
+              <div><strong>Worksite:</strong> {explainingItem.worksite_name || "—"} ({explainingItem.job_number || "—"})</div>
+              <div><strong>Worker:</strong> {explainingItem.employee_name || "—"} ({explainingItem.tally_id || "—"})</div>
+              <div><strong>Work Date:</strong> {explainingItem.work_date || explainingItem.due_date || "—"}</div>
             </div>
 
             <div>
@@ -543,9 +545,9 @@ export const PendingVisits: React.FC = () => {
             </div>
 
             <div className="text-xs text-slate-600 space-y-1 bg-slate-50 p-3 rounded-lg border border-slate-200">
-              <div><strong>Worksite:</strong> {reschedulingItem.worksite_name}</div>
-              <div><strong>Original Date:</strong> {reschedulingItem.work_date}</div>
-              <div><strong>Item:</strong> {reschedulingItem.sub_item_code} - {reschedulingItem.item_description}</div>
+              <div><strong>Worksite:</strong> {reschedulingItem.worksite_name || "—"}</div>
+              <div><strong>Original Date:</strong> {reschedulingItem.work_date || reschedulingItem.due_date || "—"}</div>
+              <div><strong>Item:</strong> {reschedulingItem.sub_item_code || "—"} {reschedulingItem.item_description ? `- ${reschedulingItem.item_description}` : ""}</div>
             </div>
 
             <div>
