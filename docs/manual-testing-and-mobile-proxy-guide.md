@@ -203,3 +203,4 @@ Attendance and live GPS containment require geofence polygons:
 - [ ] Attendance calculations accurately compute site entry, exit, worked minutes, and overtime.
 - [ ] Every user role (Admin, Engineer, Superintendent, Supervisor) can change their own password in `/system`.
 - [ ] Dashboard is clean, displaying only operational statistics, action alerts, and pending requests.
+

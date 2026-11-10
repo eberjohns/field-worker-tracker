@@ -1,7 +1,7 @@
 """Service layer for pending visits detection and follow-up lifecycle."""
 
 from datetime import UTC, date, datetime
-from typing import Any
+from typing import cast
 from uuid import UUID
 
 import structlog
@@ -255,8 +255,6 @@ class PendingVisitsService:
 
         for pv, worker_name, worksite_name in rows:
             # Check if alert already open
-            alert_stmt = select(NotificationService).where() if False else None
-            # Use NotificationService to check existing open alert
             from fw.modules.notifications.models import Alert
             existing = await session.execute(
                 select(Alert.id).where(
@@ -386,7 +384,18 @@ class PendingVisitsService:
         closed_count = 0
         escalated_count = 0
 
-        for pv, emp_name, tally, site_name, job_num, item_desc, sub_code, explanation, closed_by_user_name, ji_id in rows:
+        for row in rows:
+            pv: PendingVisit = row[0]
+            emp_name: str | None = row[1]
+            tally: str | None = row[2]
+            site_name: str | None = row[3]
+            job_num: str | None = row[4]
+            item_desc: str | None = row[5]
+            sub_code: str | None = row[6]
+            explanation: str | None = row[7]
+            closed_by_user_name: str | None = row[8]
+            ji_id: UUID | None = row[9]
+
             sup_info = sup_lookup.get(pv.employee_id)
             sup_id = sup_info[0] if sup_info else None
             sup_name = sup_info[1] if sup_info else None
@@ -395,8 +404,9 @@ class PendingVisitsService:
             if supervisor_id and sup_id != supervisor_id:
                 continue
 
-            age_days = max(0, (today - pv.due_date).days)
-            is_escalated = (pv.status == "OPEN" and age_days >= esc_days)
+            pv_due_date = cast(date, pv.due_date)
+            age_days = max(0, (today - pv_due_date).days)
+            is_escalated = bool(pv.status == "OPEN" and age_days >= esc_days)
 
             # Tallies
             if pv.status == "OPEN":
@@ -417,22 +427,22 @@ class PendingVisitsService:
                     scheduled_work_id=pv.scheduled_work_id,
                     occurrence_id=pv.occurrence_id,
                     worksite_id=pv.worksite_id,
-                    worksite_name=site_name,
+                    worksite_name=site_name or "Unknown Worksite",
                     job_number=job_num,
                     job_item_id=ji_id,
                     job_item_name=item_desc,
                     sub_item_code=sub_code or "01",
                     item_description=item_desc or "Field Service",
                     employee_id=pv.employee_id,
-                    employee_name=emp_name,
+                    employee_name=emp_name or "Unknown Worker",
                     tally_id=tally,
                     supervisor_id=sup_id,
                     supervisor_name=sup_name,
-                    due_date=pv.due_date,
-                    work_date=pv.due_date,
+                    due_date=pv_due_date,
+                    work_date=pv_due_date,
                     detected_on=pv.detected_on,
                     age_days=age_days,
-                    status=pv.status,
+                    status=str(pv.status),
                     is_escalated=is_escalated,
                     explanation_comment_id=pv.explanation_comment_id,
                     latest_explanation=explanation,

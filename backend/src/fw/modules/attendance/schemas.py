@@ -175,14 +175,14 @@ class PendingVisitResponse(BaseModel):
     scheduled_work_id: UUID
     occurrence_id: UUID | None = None
     worksite_id: UUID
-    worksite_name: str
+    worksite_name: str | None = None
     job_number: str | None = None
     job_item_id: UUID | None = None
     job_item_name: str | None = None
     sub_item_code: str | None = None
     item_description: str | None = None
     employee_id: UUID
-    employee_name: str
+    employee_name: str | None = None
     tally_id: str | None = None
     supervisor_id: UUID | None = None
     supervisor_name: str | None = None
