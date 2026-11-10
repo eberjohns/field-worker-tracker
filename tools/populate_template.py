@@ -88,6 +88,18 @@ employees_data = [
 ]
 
 for idx, (tid, name, role, gr_code, sgd, ctry, off_day, is_drv, acc_c, join_d, phone, email) in enumerate(employees_data, start=5):
+    # Create realistic variation in document expiry dates for testing Phase 09 document monitoring:
+    # 1007: Visa expiring soon (Nov 20, 2026 - within 10 days)
+    # 1010: Passport expiring soon (Dec 5, 2026 - within 25 days)
+    # 1013: Emirates ID expired (Oct 15, 2026 - already expired)
+    # 1017: Labour Card expiring soon (Nov 28, 2026 - within 18 days)
+    # 1024: Driver's License expiring soon (Dec 2, 2026 - within 22 days)
+    visa_exp = "2026-11-20" if tid == "1007" else "2027-12-31"
+    passport_exp = "2026-12-05" if tid == "1010" else "2029-12-31"
+    eid_exp = "2026-10-15" if tid == "1013" else "2027-12-31"
+    labour_exp = "2026-11-28" if tid == "1017" else "2027-12-31"
+    dl_exp = "2026-12-02" if tid == "1024" else ("2028-12-31" if is_drv == "Y" else None)
+
     ws_emp.cell(row=idx, column=1, value=None)
     ws_emp.cell(row=idx, column=2, value=tid)
     ws_emp.cell(row=idx, column=3, value=name)
@@ -100,11 +112,11 @@ for idx, (tid, name, role, gr_code, sgd, ctry, off_day, is_drv, acc_c, join_d, p
     ws_emp.cell(row=idx, column=10, value=acc_c)
     ws_emp.cell(row=idx, column=11, value=join_d)
     ws_emp.cell(row=idx, column=12, value=None) # end date
-    ws_emp.cell(row=idx, column=13, value="2027-12-31") # visa
-    ws_emp.cell(row=idx, column=14, value="2029-12-31") # passport
-    ws_emp.cell(row=idx, column=15, value="2027-12-31") # eid
-    ws_emp.cell(row=idx, column=16, value="2027-12-31") # labour card
-    ws_emp.cell(row=idx, column=17, value="2028-12-31" if is_drv == "Y" else None) # dl
+    ws_emp.cell(row=idx, column=13, value=visa_exp) # visa
+    ws_emp.cell(row=idx, column=14, value=passport_exp) # passport
+    ws_emp.cell(row=idx, column=15, value=eid_exp) # eid
+    ws_emp.cell(row=idx, column=16, value=labour_exp) # labour card
+    ws_emp.cell(row=idx, column=17, value=dl_exp) # dl
     ws_emp.cell(row=idx, column=18, value=phone)
     ws_emp.cell(row=idx, column=19, value=email)
     ws_emp.cell(row=idx, column=20, value="Active personnel")
@@ -332,6 +344,15 @@ settings_data = [
     ("geofence_circle_radius_m", "300", "METERS", "AE", "2026-01-01", "GIVEN_BY_CLIENT", "Hardware geofence perimeter radius buffer"),
     ("approach_polling_interval_s", "60", "SECONDS", "AE", "2026-01-01", "GIVEN_BY_CLIENT", "Approach polling interval inside perimeter"),
     ("confirmation_polling_interval_s", "300", "SECONDS", "AE", "2026-01-01", "GIVEN_BY_CLIENT", "Confirmation polling interval inside polygon"),
+    ("live_active_window_minutes", "15", "MINUTES", "AE", "2026-01-01", "GIVEN_BY_CLIENT", "Active threshold window for live map tracking"),
+    ("pending_visit_escalation_days", "3", "DAYS", "AE", "2026-01-01", "GIVEN_BY_CLIENT", "Threshold days before open pending visit escalates"),
+    ("doc_expiry_lead_days", "30", "DAYS", "AE", "2026-01-01", "GIVEN_BY_CLIENT", "Lead days before document expiration to raise alert"),
+    ("attendance_grace_minutes", "15", "MINUTES", "AE", "2026-01-01", "GIVEN_BY_CLIENT", "Grace window for late arrival without penalty"),
+    ("attendance_break_minutes_default", "60", "MINUTES", "AE", "2026-01-01", "GIVEN_BY_CLIENT", "Default midday break duration"),
+    ("overtime_daily_threshold_hours", "8.0", "HOURS", "AE", "2026-01-01", "GIVEN_BY_CLIENT", "Daily standard hours before OT1 overtime accumulates"),
+    ("overtime_daily_cap_hours", "2.0", "HOURS", "AE", "2026-01-01", "GIVEN_BY_CLIENT", "Maximum daily overtime cap"),
+    ("travel_speed_min_kmh", "10.0", "KMH", "AE", "2026-01-01", "GIVEN_BY_CLIENT", "Minimum speed threshold to classify as transit"),
+    ("travel_speed_max_kmh", "130.0", "KMH", "AE", "2026-01-01", "GIVEN_BY_CLIENT", "Maximum valid road travel speed"),
 ]
 for idx, (key, val, unit, ctry, eff_from, status, desc) in enumerate(settings_data, start=5):
     ws_set.cell(row=idx, column=1, value=None)
@@ -361,6 +382,62 @@ ws_time.cell(row=5, column=13, value="17:00")
 ws_time.cell(row=5, column=14, value=0)
 ws_time.cell(row=5, column=15, value="Standard company schedule and break window")
 
+# 12. Leave Sheet
+ws_leave = clear_data_rows("Leave")
+leave_data = [
+    ("1010", "ANNUAL", "2026-12-10", "2026-12-20", "Annual vacation travel"),
+    ("1013", "SICK", "2026-11-20", "2026-11-22", "Medical sick leave with doctor certificate"),
+    ("1017", "EMERGENCY", "2026-11-25", "2026-11-27", "Family emergency leave"),
+]
+for idx, (tid, l_type, f_date, t_date, reason) in enumerate(leave_data, start=5):
+    ws_leave.cell(row=idx, column=1, value=None)
+    ws_leave.cell(row=idx, column=2, value=tid)
+    ws_leave.cell(row=idx, column=3, value=l_type)
+    ws_leave.cell(row=idx, column=4, value=f_date)
+    ws_leave.cell(row=idx, column=5, value=t_date)
+    ws_leave.cell(row=idx, column=6, value=reason)
+
+# 13. Salary_Revisions Sheet
+ws_srev = clear_data_rows("Salary_Revisions")
+revisions_data = [
+    ("REV-2026", "2026 Budget Standard", "AE", "2026-01-01", "APPROVED", "Approved budget pricing structure"),
+]
+for idx, (code, name, ctry, eff_from, status, notes) in enumerate(revisions_data, start=5):
+    ws_srev.cell(row=idx, column=1, value=None)
+    ws_srev.cell(row=idx, column=2, value=code)
+    ws_srev.cell(row=idx, column=3, value=name)
+    ws_srev.cell(row=idx, column=4, value=ctry)
+    ws_srev.cell(row=idx, column=5, value=eff_from)
+    ws_srev.cell(row=idx, column=6, value=status)
+    ws_srev.cell(row=idx, column=7, value=notes)
+
+# 14. Salary_Revision_Lines Sheet
+ws_srev_lines = clear_data_rows("Salary_Revision_Lines")
+rev_lines = [
+    ("REV-2026", "G1B", "Gardener - Hand Watering", 1300.0, 150.0, 0.0, 0.0, 250.0, 150.0, 50.0, 120.0, 300.0, 200.0, "Standard G1B"),
+    ("REV-2026", "G1C", "Gardener Helper", 1200.0, 150.0, 0.0, 0.0, 250.0, 150.0, 50.0, 120.0, 300.0, 200.0, "Standard G1C"),
+    ("REV-2026", "G2B", "Gardener Expert", 1800.0, 200.0, 0.0, 0.0, 250.0, 150.0, 50.0, 120.0, 300.0, 200.0, "Standard G2B"),
+    ("REV-2026", "G3B", "Team Leader / Supervisor", 2200.0, 250.0, 0.0, 0.0, 250.0, 150.0, 50.0, 120.0, 300.0, 200.0, "Standard G3B"),
+    ("REV-2026", "G4B", "Superintendent", 4800.0, 700.0, 0.0, 500.0, 250.0, 150.0, 50.0, 120.0, 300.0, 200.0, "Standard G4B"),
+    ("REV-2026", "G5A", "HSE Engineer", 6500.0, 1000.0, 0.0, 800.0, 250.0, 150.0, 50.0, 120.0, 300.0, 200.0, "Standard G5A"),
+]
+for idx, (rcode, gcode, gtitle, basic, special, fixed_ot, bonus, visa, ticket, uniform, medical, acc, trans, notes) in enumerate(rev_lines, start=5):
+    ws_srev_lines.cell(row=idx, column=1, value=None)
+    ws_srev_lines.cell(row=idx, column=2, value=rcode)
+    ws_srev_lines.cell(row=idx, column=3, value=gcode)
+    ws_srev_lines.cell(row=idx, column=4, value=gtitle)
+    ws_srev_lines.cell(row=idx, column=5, value=basic)
+    ws_srev_lines.cell(row=idx, column=6, value=special)
+    ws_srev_lines.cell(row=idx, column=7, value=fixed_ot)
+    ws_srev_lines.cell(row=idx, column=8, value=bonus)
+    ws_srev_lines.cell(row=idx, column=9, value=visa)
+    ws_srev_lines.cell(row=idx, column=10, value=ticket)
+    ws_srev_lines.cell(row=idx, column=11, value=uniform)
+    ws_srev_lines.cell(row=idx, column=12, value=medical)
+    ws_srev_lines.cell(row=idx, column=13, value=acc)
+    ws_srev_lines.cell(row=idx, column=14, value=trans)
+    ws_srev_lines.cell(row=idx, column=15, value=notes)
+
 wb.save(TEMPLATE_PATH)
 print("Successfully populated all sheets in template:")
 print(f"  - Groups: {len(groups_data)}")
@@ -371,6 +448,9 @@ print(f"  - Employee_Reporting: {len(reporting_data)}")
 print(f"  - Employee_Salary: {len(salary_map)}")
 print(f"  - Worksites: {len(worksites_raw)}")
 print(f"  - Job_Items: {current_item_row - 5}")
+print(f"  - Leave: {len(leave_data)}")
 print(f"  - Public_Holidays: {len(holidays_data)}")
+print(f"  - Salary_Revisions: {len(revisions_data)}")
+print(f"  - Salary_Revision_Lines: {len(rev_lines)}")
 print(f"  - Company_Settings: {len(settings_data)}")
 print(f"  - Time_Rules: 1")

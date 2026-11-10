@@ -24,6 +24,7 @@ import {
   PanelLeftOpen,
   Smartphone,
   AlertTriangle,
+  Server,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { Login } from "../../routes/Login";
@@ -56,6 +57,7 @@ const navItems: NavItem[] = [
   { label: "Users & Security", to: "/users", icon: UserCheck, roles: ["ADMIN"] },
   { label: "Audit Logs", to: "/audit-logs", icon: History, roles: ["ADMIN"] },
   { label: "Settings", to: "/settings", icon: SettingsIcon, roles: ["ADMIN", "ENGINEER"] },
+  { label: "System", to: "/system", icon: Server },
 ];
 
 export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => {

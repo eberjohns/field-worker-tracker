@@ -28,6 +28,7 @@ import { LeaveManagement } from "./routes/LeaveManagement";
 import { Devices } from "./routes/Devices";
 import { PendingVisits } from "./routes/PendingVisits";
 import { Documents } from "./routes/Documents";
+import { System } from "./routes/System";
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -181,6 +182,12 @@ const documentsRoute = createRoute({
   component: Documents,
 });
 
+const systemRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/system",
+  component: System,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
@@ -194,6 +201,7 @@ const routeTree = rootRoute.addChildren([
   devicesRoute,
   pendingVisitsRoute,
   documentsRoute,
+  systemRoute,
   usersRoute,
   auditLogsRoute,
   liveRoute,
