@@ -1,10 +1,10 @@
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from geoalchemy2 import Geometry
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, Numeric, String
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, Numeric, String, text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -125,3 +125,34 @@ class EmployeeLastPosition(Base):
     )
     tracking_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     last_contact_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class LiveLocationAccessLog(Base):
+    """Access log for live location stream and polling views (privacy audit trail)."""
+
+    __tablename__ = "live_location_access_logs"
+    __table_args__ = (
+        Index("ix_live_location_access_logs_user", "user_id"),
+        Index("ix_live_location_access_logs_created_at", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    access_type: Mapped[str] = mapped_column(String(20), nullable=False)  # 'STREAM' | 'POLL'
+    filters: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+        nullable=False,
+    )
+    client_ip: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        nullable=False,
+    )

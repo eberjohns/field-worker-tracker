@@ -213,6 +213,29 @@ class EmployeeDocumentRead(BaseModel):
     is_active: bool
 
 
+class ExpiringDocumentItem(BaseModel):
+    document_id: UUID
+    employee_id: UUID
+    employee_name: str
+    tally_id: str | None = None
+    supervisor_id: UUID | None = None
+    supervisor_name: str | None = None
+    document_type: str
+    expiry_date: date
+    days_remaining: int
+    status: str  # OK | EXPIRING | EXPIRED
+    is_active: bool = True
+
+
+class ExpiringDocumentsResponse(BaseModel):
+    items: list[ExpiringDocumentItem]
+    expiring_count: int
+    expired_count: int
+    ok_count: int
+    total_count: int
+
+
+
 class RegisteredDeviceRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

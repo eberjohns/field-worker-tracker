@@ -247,6 +247,9 @@ Never updated after insert.
 ### employee_last_position (live map)
 `employee_id` PK/FK, `last_event_id`, `event_type`, `latitude`, `longitude`, `accuracy_meters`, `event_timestamp_utc`, `received_at_utc`, `server_verdict`, `server_site_id`, `tracking_enabled` bool (false after LOCATION_DISABLED until LOCATION_ENABLED). One row per employee, upserted when an event is enriched **only if the event's `event_timestamp_utc` is newer than the stored one** (a late upload never overwrites a newer position). Also stores `last_contact_at` (the device's `last_seen_at`) so the map can show both the age of the position and the last contact. The live state (ACTIVE/OFFLINE/NOT_SCHEDULED) is **computed at read time** from `received_at_utc`, today's schedule and `live_active_window_minutes`; it is not stored. Rebuildable from `mobile_event_logs`.
 
+### live_location_access_logs (surveillance audit trail)
+`id` UUID PK, `user_id` FK (users.id), `access_type` (`POLL` | `STREAM`), `filters` jsonb, `client_ip` string nullable, `user_agent` string nullable, `created_at` timestamp with time zone (default now UTC). Dedicated audit table keeping real-time location views accountable without flooding the general business audit log. Indexes on `(user_id, created_at)` and `(created_at)`. See ADR-019.
+
 ### alerts
 `alert_type`, `employee_id` nullable, `target_user_id` nullable, `ref_type`, `ref_id`, `status` (OPEN/RESOLVED), `details` jsonb, `resolved_at`. Index (status, alert_type).
 

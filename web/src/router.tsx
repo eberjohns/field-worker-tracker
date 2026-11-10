@@ -26,6 +26,8 @@ import { Boundaries } from "./routes/Boundaries";
 import { Approvals } from "./routes/Approvals";
 import { LeaveManagement } from "./routes/LeaveManagement";
 import { Devices } from "./routes/Devices";
+import { PendingVisits } from "./routes/PendingVisits";
+import { Documents } from "./routes/Documents";
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -167,6 +169,18 @@ const devicesRoute = createRoute({
   component: Devices,
 });
 
+const pendingVisitsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/pending-visits",
+  component: PendingVisits,
+});
+
+const documentsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/documents",
+  component: Documents,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
@@ -178,6 +192,8 @@ const routeTree = rootRoute.addChildren([
   approvalsRoute,
   leaveRoute,
   devicesRoute,
+  pendingVisitsRoute,
+  documentsRoute,
   usersRoute,
   auditLogsRoute,
   liveRoute,

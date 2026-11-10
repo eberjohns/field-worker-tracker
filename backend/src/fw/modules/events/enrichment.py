@@ -2,12 +2,18 @@ from datetime import UTC, date, datetime
 from uuid import UUID
 
 from geoalchemy2 import Geography
-from sqlalchemy import cast, func, select
+from sqlalchemy import cast, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fw.core.events import (
+    LocationDisabledRecorded,
+    LocationEnabledRecorded,
+    event_bus,
+)
+from fw.modules.events.live_publisher import live_position_broadcaster
 from fw.modules.events.models import EmployeeLastPosition, MobileEventLog
-from fw.modules.jobs.models import Worksite
-from fw.modules.org.models import Accommodation
+from fw.modules.jobs import Worksite
+from fw.modules.org import Accommodation
 from fw.rules.attendance.verdicts import EventVerdictInput, evaluate_event_verdict
 
 
@@ -36,7 +42,27 @@ class EventEnrichmentService:
         events = list(events_res.scalars().all())
 
         for ev in events:
-            if ev.latitude is None or ev.longitude is None or ev.geom is None:
+            # Publish tracking state events for alert management
+            if ev.event_type.upper() == "LOCATION_DISABLED":
+                await event_bus.publish(
+                    LocationDisabledRecorded(
+                        employee_id=ev.employee_id,
+                        event_id=ev.event_id,
+                        captured_at=ev.event_timestamp_utc,
+                    ),
+                    session=session,
+                )
+            elif ev.event_type.upper() == "LOCATION_ENABLED":
+                await event_bus.publish(
+                    LocationEnabledRecorded(
+                        employee_id=ev.employee_id,
+                        event_id=ev.event_id,
+                        captured_at=ev.event_timestamp_utc,
+                    ),
+                    session=session,
+                )
+
+            if ev.latitude is None or ev.longitude is None:
                 # No fix available (e.g. initial LOCATION_DISABLED)
                 verdict_res = evaluate_event_verdict(
                     EventVerdictInput(
@@ -218,8 +244,13 @@ class EventEnrichmentService:
 
         # Upsert employee_last_position using the latest event in the batch
         if events:
-            latest_event = max(events, key=lambda e: e.event_timestamp_utc)
-            await EventEnrichmentService._update_last_position(session, latest_event)
+            # Group by employee_id to find latest event per employee
+            by_emp: dict[UUID, MobileEventLog] = {}
+            for e in events:
+                if e.employee_id not in by_emp or e.event_timestamp_utc > by_emp[e.employee_id].event_timestamp_utc:
+                    by_emp[e.employee_id] = e
+            for latest_e in by_emp.values():
+                await EventEnrichmentService._update_last_position(session, latest_e)
 
         await session.flush()
         return events
@@ -233,6 +264,7 @@ class EventEnrichmentService:
         pos = pos_res.scalar_one_or_none()
 
         tracking_enabled = event.event_type.upper() != "LOCATION_DISABLED"
+        is_newer = False
 
         if pos is None:
             pos = EmployeeLastPosition(
@@ -250,8 +282,9 @@ class EventEnrichmentService:
                 last_contact_at=datetime.now(UTC),
             )
             session.add(pos)
+            is_newer = True
         else:
-            # Upsert ONLY if newer timestamp
+            # Upsert position details ONLY if newer timestamp
             if event.event_timestamp_utc >= pos.event_timestamp_utc:
                 pos.last_event_id = event.event_id
                 pos.event_type = event.event_type
@@ -264,3 +297,31 @@ class EventEnrichmentService:
                 pos.server_site_id = event.server_site_id
                 pos.tracking_enabled = tracking_enabled
                 pos.last_contact_at = datetime.now(UTC)
+                is_newer = True
+            else:
+                # Late upload: older location event does not overwrite coordinates, but confirms device contact
+                pos.last_contact_at = datetime.now(UTC)
+
+        # Broadcast update to connected live map streams and PostgreSQL NOTIFY
+        if is_newer:
+            payload = {
+                "employee_id": str(pos.employee_id),
+                "latitude": float(pos.latitude) if pos.latitude is not None else None,
+                "longitude": float(pos.longitude) if pos.longitude is not None else None,
+                "accuracy_meters": pos.accuracy_meters,
+                "event_type": pos.event_type,
+                "event_timestamp_utc": pos.event_timestamp_utc.isoformat(),
+                "server_verdict": pos.server_verdict,
+                "server_site_id": str(pos.server_site_id) if pos.server_site_id else None,
+                "tracking_enabled": pos.tracking_enabled,
+                "last_contact_at": pos.last_contact_at.isoformat(),
+            }
+            await live_position_broadcaster.broadcast_position_update(pos.employee_id, payload)
+            try:
+                # PostgreSQL NOTIFY (no-op if unsupported by engine in SQLite tests)
+                await session.execute(
+                    text(f"NOTIFY live_positions, '{pos.employee_id}'")
+                )
+            except Exception:
+                pass
+

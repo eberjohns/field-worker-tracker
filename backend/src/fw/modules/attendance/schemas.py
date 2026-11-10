@@ -155,3 +155,55 @@ class AttendanceRecalculateRequest(BaseModel):
 class AttendanceRecalculateResponse(BaseModel):
     recalculated_count: int
     message: str
+
+
+class PendingVisitExplainRequest(BaseModel):
+    explanation: str
+
+
+class PendingVisitRescheduleRequest(BaseModel):
+    work_date: date
+    employee_ids: list[UUID]
+
+
+class PendingVisitCloseRequest(BaseModel):
+    reason: str
+
+
+class PendingVisitResponse(BaseModel):
+    id: UUID
+    scheduled_work_id: UUID
+    occurrence_id: UUID | None = None
+    worksite_id: UUID
+    worksite_name: str
+    job_item_id: UUID | None = None
+    job_item_name: str | None = None
+    employee_id: UUID
+    employee_name: str
+    tally_id: str | None = None
+    supervisor_id: UUID | None = None
+    supervisor_name: str | None = None
+    due_date: date
+    detected_on: date
+    age_days: int
+    status: str  # OPEN | EXPLAINED | RESCHEDULED | CLOSED
+    is_escalated: bool
+    explanation_comment_id: UUID | None = None
+    latest_explanation: str | None = None
+    rescheduled_to_scheduled_work_id: UUID | None = None
+    closed_by_user_id: UUID | None = None
+    closed_by_name: str | None = None
+    closed_reason: str | None = None
+    closed_at: datetime | None = None
+    created_at: datetime
+
+
+class PendingVisitListResponse(BaseModel):
+    items: list[PendingVisitResponse]
+    open_count: int
+    explained_count: int
+    rescheduled_count: int
+    closed_count: int
+    escalated_count: int
+    total_count: int
+

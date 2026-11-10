@@ -436,6 +436,26 @@ export interface paths {
         patch: operations["update_accommodation_api_v1_accommodations__acc_id__patch"];
         trace?: never;
     };
+    "/api/v1/devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Devices
+         * @description List all registered devices with their sync lag and client versions.
+         */
+        get: operations["list_devices_api_v1_devices_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/devices/{device_id}/revoke": {
         parameters: {
             query?: never;
@@ -445,8 +465,238 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Revoke Device */
-        post: operations["revoke_device_api_v1_devices__device_id__revoke_post"];
+        /**
+         * Reset Device Binding
+         * @description Admin resets or revokes a device binding so a worker can bind a new device on next login.
+         */
+        post: operations["reset_device_binding_api_v1_devices__device_id__revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/devices/{device_id}/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset Device Binding
+         * @description Admin resets or revokes a device binding so a worker can bind a new device on next login.
+         */
+        post: operations["reset_device_binding_api_v1_devices__device_id__reset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mobile/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mobile Login */
+        post: operations["mobile_login_api_v1_mobile_auth_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mobile/auth/change-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mobile Change Password */
+        post: operations["mobile_change_password_api_v1_mobile_auth_change_password_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mobile/auth/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mobile Refresh */
+        post: operations["mobile_refresh_api_v1_mobile_auth_refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mobile/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mobile Logout */
+        post: operations["mobile_logout_api_v1_mobile_auth_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mobile/consent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mobile Record Consent */
+        post: operations["mobile_record_consent_api_v1_mobile_consent_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mobile/policy/location": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Mobile Location Policy */
+        get: operations["get_mobile_location_policy_api_v1_mobile_policy_location_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mobile/device": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Mobile Device */
+        put: operations["update_mobile_device_api_v1_mobile_device_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mobile/heartbeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mobile Heartbeat */
+        post: operations["mobile_heartbeat_api_v1_mobile_heartbeat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mobile/sync/snapshot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Sync Snapshot */
+        get: operations["get_sync_snapshot_api_v1_mobile_sync_snapshot_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mobile/sync/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Sync Changes */
+        get: operations["get_sync_changes_api_v1_mobile_sync_changes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mobile/sync/ack": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post Sync Ack */
+        post: operations["post_sync_ack_api_v1_mobile_sync_ack_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mobile/events/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ingest Event Batch
+         * @description Ingest a batch of up to 200 raw location events from a mobile device.
+         */
+        post: operations["ingest_event_batch_api_v1_mobile_events_batch_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -624,6 +874,26 @@ export interface paths {
         put?: never;
         /** Create Consent Policy */
         post: operations["create_consent_policy_api_v1_consent_policies_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/reset-database": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset Database
+         * @description Reset database to clean bootstrap state. Retains only ADMIN001 and company settings.
+         */
+        post: operations["reset_database_api_v1_settings_reset_database_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1066,6 +1336,1182 @@ export interface paths {
         patch: operations["update_occurrence_api_v1_occurrences__occurrence_id__patch"];
         trace?: never;
     };
+    "/api/v1/roster": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Weekly Roster
+         * @description Fetch weekly roster grid (Workers x Days) or export Excel spreadsheet.
+         */
+        get: operations["get_weekly_roster_api_v1_roster_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/schedule/coverage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Schedule Coverage
+         * @description Job-centred coverage view: worksites > items > daily staffing and TO_BE_COVERED slots.
+         */
+        get: operations["get_schedule_coverage_api_v1_schedule_coverage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workers/{id}/allocation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Worker Allocation
+         * @description Allocated hours per day/week/month against standard hours (feeds the side panel).
+         */
+        get: operations["get_worker_allocation_api_v1_workers__id__allocation_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/occurrences/{id}/recommendations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Occurrence Recommendations
+         * @description Ranked worker candidates for an occurrence by grade group, exact staff type first.
+         */
+        get: operations["get_occurrence_recommendations_api_v1_occurrences__id__recommendations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/job-items/{id}/recommendations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Job Item Recommendations
+         * @description Ranked worker candidates for a job item by grade group, exact staff type first.
+         */
+        get: operations["get_job_item_recommendations_api_v1_job_items__id__recommendations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/standing-assignments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Standing Assignments
+         * @description List active standing team assignments.
+         */
+        get: operations["list_standing_assignments_api_v1_standing_assignments_get"];
+        put?: never;
+        /**
+         * Create Standing Assignment
+         * @description Create standing assignment and materialize daily ScheduledWork for 13 months.
+         */
+        post: operations["create_standing_assignment_api_v1_standing_assignments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/standing-assignments/{id}/end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * End Standing Assignment
+         * @description End a standing assignment from a date and cancel future unstarted scheduled work.
+         */
+        post: operations["end_standing_assignment_api_v1_standing_assignments__id__end_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scheduled-work/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Validate Scheduled Work
+         * @description Dry-run validation for a proposed assignment (returns errors and warnings).
+         */
+        post: operations["validate_scheduled_work_api_v1_scheduled_work_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scheduled-work": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Scheduled Work
+         * @description Create direct scheduled work assignment (with warnings check).
+         */
+        post: operations["create_scheduled_work_api_v1_scheduled_work_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scheduled-work/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Scheduled Work Batch
+         * @description Batch assign multiple workers to a job item on a work date.
+         */
+        post: operations["create_scheduled_work_batch_api_v1_scheduled_work_batch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scheduled-work/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Cancel Scheduled Work
+         * @description Cancel / unassign a scheduled work assignment.
+         */
+        delete: operations["cancel_scheduled_work_api_v1_scheduled_work__id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Scheduled Work
+         * @description Update assigned hours, sequence, or cancel scheduled work.
+         */
+        patch: operations["update_scheduled_work_api_v1_scheduled_work__id__patch"];
+        trace?: never;
+    };
+    "/api/v1/scheduled-work/reorder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reorder Scheduled Work
+         * @description Reorder multiple daily visits for an employee on a work date.
+         */
+        post: operations["reorder_scheduled_work_api_v1_scheduled_work_reorder_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/base-planner/worksites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Base Planner Worksites
+         * @description Fetch worksites and items with base roster templates for Base Planner.
+         */
+        get: operations["get_base_planner_worksites_api_v1_base_planner_worksites_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/base-planner/templates/{job_item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Base Template
+         * @description Fetch active Base Roster Template for a job item.
+         */
+        get: operations["get_base_template_api_v1_base_planner_templates__job_item_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/base-planner/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Save Base Template
+         * @description Create or update active Base Roster Template for a job item.
+         */
+        post: operations["save_base_template_api_v1_base_planner_templates_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operational-planner/coverage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Operational Coverage
+         * @description Fetch weekly operational coverage matrix (job items x 7 days) with base blueprint & overrides.
+         */
+        get: operations["get_operational_coverage_api_v1_operational_planner_coverage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operational-planner/roster": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Operational Roster
+         * @description Fetch weekly operational worker roster (workers x 7 days).
+         */
+        get: operations["get_operational_roster_api_v1_operational_planner_roster_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operational-planner/shifts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Operational Shift
+         * @description Create a single-day operational shift or cover replacement.
+         */
+        post: operations["create_operational_shift_api_v1_operational_planner_shifts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operational-planner/shifts/{shift_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Operational Shift
+         * @description Cancel an operational shift.
+         */
+        delete: operations["delete_operational_shift_api_v1_operational_planner_shifts__shift_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/leave-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Leave Requests
+         * @description List leave requests in user's reporting scope.
+         */
+        get: operations["list_leave_requests_api_v1_leave_requests_get"];
+        put?: never;
+        /**
+         * Create Leave Request
+         * @description Record a new leave request (>= 3 days notice for supervisors).
+         */
+        post: operations["create_leave_request_api_v1_leave_requests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/leave-requests/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Leave Taken Summary
+         * @description Get leave taken summary per worker, leave type, and calendar year (working vs calendar days).
+         */
+        get: operations["get_leave_taken_summary_api_v1_leave_requests_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/leave-requests/template.xlsx": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Leave Template
+         * @description Download sample Leave import template Excel file (Admin only).
+         */
+        get: operations["download_leave_template_api_v1_leave_requests_template_xlsx_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/leave-requests/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Leaves Excel
+         * @description Import leaves from Excel spreadsheet (Admin only).
+         */
+        post: operations["import_leaves_excel_api_v1_leave_requests_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/leave-requests/{leave_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Leave Request
+         * @description Fetch single leave request by ID.
+         */
+        get: operations["get_leave_request_api_v1_leave_requests__leave_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/leave-requests/{leave_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Leave Request
+         * @description Approve a leave request (Engineer or Admin).
+         */
+        post: operations["approve_leave_request_api_v1_leave_requests__leave_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/leave-requests/{leave_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject Leave Request
+         * @description Reject a leave request with mandatory reason.
+         */
+        post: operations["reject_leave_request_api_v1_leave_requests__leave_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/leave-requests/{leave_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Leave Request
+         * @description Cancel an approved or requested leave.
+         */
+        post: operations["cancel_leave_request_api_v1_leave_requests__leave_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reassignment-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Reassignment Requests
+         * @description List reassignment requests in user scope.
+         */
+        get: operations["list_reassignment_requests_api_v1_reassignment_requests_get"];
+        put?: never;
+        /**
+         * Create Reassignment Request
+         * @description Create a temporary reassignment request (strictly >= 3 days notice).
+         */
+        post: operations["create_reassignment_request_api_v1_reassignment_requests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reassignment-requests/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Reassignment
+         * @description Preview worker hours impact and constraint warnings.
+         */
+        post: operations["preview_reassignment_api_v1_reassignment_requests_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reassignment-requests/{request_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Reassignment Request
+         * @description Fetch reassignment request by ID.
+         */
+        get: operations["get_reassignment_request_api_v1_reassignment_requests__request_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reassignment-requests/{request_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Reassignment Request
+         * @description Approve a reassignment request (Engineer or Admin).
+         */
+        post: operations["approve_reassignment_request_api_v1_reassignment_requests__request_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reassignment-requests/{request_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject Reassignment Request
+         * @description Reject a reassignment request with mandatory reason.
+         */
+        post: operations["reject_reassignment_request_api_v1_reassignment_requests__request_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reassignment-requests/{request_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Reassignment Request
+         * @description Cancel a pending reassignment request.
+         */
+        post: operations["cancel_reassignment_request_api_v1_reassignment_requests__request_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Approvals Inbox
+         * @description Get approvals inbox items (leave requests, reassignments, attendance) in scope with badge counts.
+         */
+        get: operations["get_approvals_inbox_api_v1_approvals_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staffing-gaps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Staffing Gaps
+         * @description Get staffing gaps (TO_BE_COVERED slots from leave) needing cover in scope.
+         */
+        get: operations["get_staffing_gaps_api_v1_staffing_gaps_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/attendance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Attendance
+         * @description List attendance records with filtering and scope restrictions.
+         */
+        get: operations["list_attendance_api_v1_attendance_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/attendance/exceptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Attendance Exceptions
+         * @description List attendance records requiring review (exceptions queue).
+         */
+        get: operations["list_attendance_exceptions_api_v1_attendance_exceptions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/attendance/{attendance_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Attendance Detail
+         * @description Get complete attendance record details, calculations, comments, and approvals.
+         */
+        get: operations["get_attendance_detail_api_v1_attendance__attendance_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/attendance/{attendance_id}/calculations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Attendance Calculations
+         * @description Get all calculation versions of an attendance record.
+         */
+        get: operations["list_attendance_calculations_api_v1_attendance__attendance_id__calculations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/attendance/{attendance_id}/timeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Attendance Timeline
+         * @description Get derived timeline with observed and inferred items.
+         */
+        get: operations["get_attendance_timeline_api_v1_attendance__attendance_id__timeline_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/attendance/{attendance_id}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Attendance Comment
+         * @description Add a supervisor or engineer comment on an attendance record.
+         */
+        post: operations["add_attendance_comment_api_v1_attendance__attendance_id__comments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/attendance/{attendance_id}/decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record Attendance Decision
+         * @description Record an Engineer or Admin approval/rejection decision on an attendance record.
+         */
+        post: operations["record_attendance_decision_api_v1_attendance__attendance_id__decisions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/attendance/recalculate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Recalculate Attendance
+         * @description Admin manual trigger to recalculate attendance for an employee or date range.
+         */
+        post: operations["recalculate_attendance_api_v1_attendance_recalculate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Events
+         * @description Query verified raw event logs in scope (read-only audit).
+         */
+        get: operations["list_events_api_v1_events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/live/stream-ticket": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate Stream Ticket
+         * @description Generate a 30-second one-time ticket to authenticate an EventSource connection.
+         */
+        post: operations["generate_stream_ticket_api_v1_live_stream_ticket_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/live/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Live Position Stream
+         * @description Server-Sent Events endpoint streaming real-time position updates and state changes.
+         */
+        get: operations["live_position_stream_api_v1_live_stream_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/live/positions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Live Positions
+         * @description Get last known verified positions of in-scope workers with calculated live state.
+         */
+        get: operations["get_live_positions_api_v1_live_positions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/live/trail/{employee_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Worker Day Trail
+         * @description Retrieve chronological event trail for a worker on a given date (for route drawing).
+         */
+        get: operations["get_worker_day_trail_api_v1_live_trail__employee_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pending-visits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Pending Visits
+         * @description List pending visits with filtering and escalation status.
+         */
+        get: operations["list_pending_visits_api_v1_pending_visits_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pending-visits/{id}/explain": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Explain Pending Visit
+         * @description Supervisor/Engineer adds a pending visit explanation comment; moves status to EXPLAINED.
+         */
+        post: operations["explain_pending_visit_api_v1_pending_visits__id__explain_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pending-visits/{id}/reschedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reschedule Pending Visit
+         * @description Engineer reschedules pending visit, creating Scheduled Work with source FOLLOW_UP.
+         */
+        post: operations["reschedule_pending_visit_api_v1_pending_visits__id__reschedule_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pending-visits/{id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Close Pending Visit
+         * @description Engineer closes pending visit with a required explanation reason.
+         */
+        post: operations["close_pending_visit_api_v1_pending_visits__id__close_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pending-visits/detect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trigger Detect Pending Visits
+         * @description Trigger day-close pending visit detection job on demand.
+         */
+        post: operations["trigger_detect_pending_visits_api_v1_pending_visits_detect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/expiring": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Expiring Documents
+         * @description Retrieve expiring and expired documents with validity indicators.
+         */
+        get: operations["list_expiring_documents_api_v1_documents_expiring_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/check-alerts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trigger Document Expiry Alerts
+         * @description Admin-triggered job to scan documents and raise DOC_EXPIRY alerts.
+         */
+        post: operations["trigger_document_expiry_alerts_api_v1_documents_check_alerts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dashboard/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Dashboard Summary
+         * @description Get role-aware overview statistics: today's attendance, live workers, pending visits, late arrivals, OT.
+         */
+        get: operations["get_dashboard_summary_api_v1_dashboard_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Alerts
+         * @description List open alerts visible to current user (scoped).
+         */
+        get: operations["list_alerts_api_v1_alerts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts/{alert_id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve Alert
+         * @description Resolve an open alert.
+         */
+        post: operations["resolve_alert_api_v1_alerts__alert_id__resolve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1100,6 +2546,15 @@ export interface components {
             rep_latitude?: string | null;
             /** Rep Longitude */
             rep_longitude?: string | null;
+            /**
+             * Has Boundary
+             * @default false
+             */
+            has_boundary: boolean;
+            /** Boundary Geojson */
+            boundary_geojson?: {
+                [key: string]: unknown;
+            } | null;
             /** Is Active */
             is_active: boolean;
             /** Version */
@@ -1120,6 +2575,465 @@ export interface components {
             /** Version */
             version: number;
         };
+        /**
+         * AlertResolveRequest
+         * @description Optional payload when resolving an alert.
+         */
+        AlertResolveRequest: {
+            /** Note */
+            note?: string | null;
+        };
+        /**
+         * AlertResponse
+         * @description API representation of an alert.
+         */
+        AlertResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Alert Type */
+            alert_type: string;
+            /** Employee Id */
+            employee_id?: string | null;
+            /** Target User Id */
+            target_user_id?: string | null;
+            /** Target Role */
+            target_role?: string | null;
+            /** Ref Type */
+            ref_type: string;
+            /** Ref Id */
+            ref_id?: string | null;
+            /** Title */
+            title: string;
+            /** Message */
+            message: string;
+            /** Status */
+            status: string;
+            /**
+             * Details
+             * @default {}
+             */
+            details: {
+                [key: string]: unknown;
+            };
+            /** Resolved At */
+            resolved_at?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** ApprovalsCounts */
+        ApprovalsCounts: {
+            /**
+             * Leave
+             * @default 0
+             */
+            leave: number;
+            /**
+             * Reassignments
+             * @default 0
+             */
+            reassignments: number;
+            /**
+             * Attendance
+             * @default 0
+             */
+            attendance: number;
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+        };
+        /** ApprovalsInboxResponse */
+        ApprovalsInboxResponse: {
+            counts: components["schemas"]["ApprovalsCounts"];
+            /** Leave Requests */
+            leave_requests?: components["schemas"]["LeaveRequestResponse"][];
+            /** Reassignment Requests */
+            reassignment_requests?: components["schemas"]["ReassignmentResponse"][];
+            /** Attendance Rows */
+            attendance_rows?: {
+                [key: string]: unknown;
+            }[];
+        };
+        /** AssignedWorkerSummary */
+        AssignedWorkerSummary: {
+            /**
+             * Employee Id
+             * Format: uuid
+             */
+            employee_id: string;
+            /** Name */
+            name: string;
+            /** Tally Id */
+            tally_id: string;
+            /**
+             * Scheduled Work Id
+             * Format: uuid
+             */
+            scheduled_work_id: string;
+            /**
+             * Source
+             * @default DIRECT
+             */
+            source: string;
+            /** Standing Assignment Id */
+            standing_assignment_id?: string | null;
+            /** Standing Assignment Version */
+            standing_assignment_version?: number | null;
+        };
+        /** AttendanceApprovalResponse */
+        AttendanceApprovalResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Attendance Id
+             * Format: uuid
+             */
+            attendance_id: string;
+            /**
+             * Reviewer User Id
+             * Format: uuid
+             */
+            reviewer_user_id: string;
+            /** Reviewer Name */
+            reviewer_name: string;
+            /** Decision */
+            decision: string;
+            /** Comment */
+            comment?: string | null;
+            /**
+             * Calculation Id
+             * Format: uuid
+             */
+            calculation_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** AttendanceCalculationSnapshot */
+        AttendanceCalculationSnapshot: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Version No */
+            version_no: number;
+            /** Input Hash */
+            input_hash: string;
+            /**
+             * Calculated At
+             * Format: date-time
+             */
+            calculated_at: string;
+            /** Engine Version */
+            engine_version: string;
+            /** Reason */
+            reason: string;
+            /** Planned Accommodation Departure */
+            planned_accommodation_departure?: string | null;
+            /** Planned First Site Start */
+            planned_first_site_start?: string | null;
+            /** Planned Break Minutes */
+            planned_break_minutes: number;
+            /** Planned Last Site End */
+            planned_last_site_end?: string | null;
+            /** Planned Accommodation Return */
+            planned_accommodation_return?: string | null;
+            /** Planned Total Minutes */
+            planned_total_minutes: number;
+            /** Planned Worked Minutes */
+            planned_worked_minutes: number;
+            /** Standard Hours Minutes */
+            standard_hours_minutes: number;
+            /** Accommodation Departure At */
+            accommodation_departure_at?: string | null;
+            /** First Site Entry At */
+            first_site_entry_at?: string | null;
+            /** Break Minutes Used */
+            break_minutes_used: number;
+            /** Break Source */
+            break_source: string;
+            /** Last Site Exit At */
+            last_site_exit_at?: string | null;
+            /** Accommodation Return At */
+            accommodation_return_at?: string | null;
+            /** Elapsed Site Minutes */
+            elapsed_site_minutes: number;
+            /** Shift Span Minutes */
+            shift_span_minutes: number;
+            /** Unaccounted Minutes */
+            unaccounted_minutes: number;
+            /** Worked Minutes */
+            worked_minutes: number;
+            /** Required Minutes */
+            required_minutes: number;
+            /** Variation Minutes */
+            variation_minutes: number;
+            /** Shortfall Minutes */
+            shortfall_minutes: number;
+            /** Grace Minutes */
+            grace_minutes: number;
+            /** Grace Applied */
+            grace_applied: boolean;
+            /** Satisfied */
+            satisfied: boolean;
+            /** Productive Minutes */
+            productive_minutes: number;
+            /** Transit Minutes */
+            transit_minutes: number;
+            /** Offsite Minutes */
+            offsite_minutes: number;
+            /** Idle Minutes */
+            idle_minutes: number;
+            /** Ot1 Minutes */
+            ot1_minutes: number;
+            /** Ot2 Minutes */
+            ot2_minutes: number;
+            /** Ot Threshold Minutes */
+            ot_threshold_minutes: number;
+            /** Day Type */
+            day_type: string;
+            /** Assigned Count */
+            assigned_count: number;
+            /** Completed Count */
+            completed_count: number;
+            /** Business Status */
+            business_status: string;
+            /** Flags */
+            flags?: string[];
+            /** Review Reasons */
+            review_reasons?: string[];
+            /** Visits Snapshot */
+            visits_snapshot?: {
+                [key: string]: unknown;
+            }[];
+            /** Gaps Snapshot */
+            gaps_snapshot?: {
+                [key: string]: unknown;
+            }[];
+            /** Inputs Snapshot */
+            inputs_snapshot?: {
+                [key: string]: unknown;
+            };
+            /** Source Event Ids */
+            source_event_ids?: string[];
+        };
+        /** AttendanceCommentCreateRequest */
+        AttendanceCommentCreateRequest: {
+            /** Comment Type */
+            comment_type: string;
+            /** Comment Text */
+            comment_text: string;
+            /** Scheduled Work Id */
+            scheduled_work_id?: string | null;
+        };
+        /** AttendanceCommentResponse */
+        AttendanceCommentResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Attendance Id
+             * Format: uuid
+             */
+            attendance_id: string;
+            /**
+             * Author User Id
+             * Format: uuid
+             */
+            author_user_id: string;
+            /** Author Name */
+            author_name: string;
+            /** Comment Type */
+            comment_type: string;
+            /** Comment Text */
+            comment_text: string;
+            /** Scheduled Work Id */
+            scheduled_work_id?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** AttendanceDecisionRequest */
+        AttendanceDecisionRequest: {
+            /** Decision */
+            decision: string;
+            /** Comment */
+            comment?: string | null;
+        };
+        /** AttendanceListResponse */
+        AttendanceListResponse: {
+            /** Items */
+            items: components["schemas"]["AttendanceRecordResponse"][];
+            /** Total */
+            total: number;
+        };
+        /** AttendanceRecalculateRequest */
+        AttendanceRecalculateRequest: {
+            /** Employee Id */
+            employee_id?: string | null;
+            /**
+             * From Date
+             * Format: date
+             */
+            from_date: string;
+            /**
+             * To Date
+             * Format: date
+             */
+            to_date: string;
+            /**
+             * Reason
+             * @default MANUAL
+             */
+            reason: string;
+        };
+        /** AttendanceRecalculateResponse */
+        AttendanceRecalculateResponse: {
+            /** Recalculated Count */
+            recalculated_count: number;
+            /** Message */
+            message: string;
+        };
+        /** AttendanceRecordResponse */
+        AttendanceRecordResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Employee Id
+             * Format: uuid
+             */
+            employee_id: string;
+            /** Employee Name */
+            employee_name: string;
+            /** Tally Id */
+            tally_id: string;
+            /** Supervisor Name */
+            supervisor_name?: string | null;
+            /**
+             * Work Date
+             * Format: date
+             */
+            work_date: string;
+            /** Business Status */
+            business_status: string;
+            /** Review Status */
+            review_status: string;
+            /** Locked */
+            locked: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            current_calculation?: components["schemas"]["AttendanceCalculationSnapshot"] | null;
+            /** Comments */
+            comments?: components["schemas"]["AttendanceCommentResponse"][];
+            /** Approvals */
+            approvals?: components["schemas"]["AttendanceApprovalResponse"][];
+        };
+        /** AttendanceSummaryItem */
+        AttendanceSummaryItem: {
+            /**
+             * Present
+             * @default 0
+             */
+            present: number;
+            /**
+             * Partial
+             * @default 0
+             */
+            partial: number;
+            /**
+             * Absent
+             * @default 0
+             */
+            absent: number;
+            /**
+             * Not Started
+             * @default 0
+             */
+            not_started: number;
+            /**
+             * Total Scheduled
+             * @default 0
+             */
+            total_scheduled: number;
+        };
+        /** AttendanceTimelineItem */
+        AttendanceTimelineItem: {
+            /** Item Id */
+            item_id: string;
+            /** Item Type */
+            item_type: string;
+            /** Label */
+            label: string;
+            /** Place Name */
+            place_name?: string | null;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Ended At */
+            ended_at?: string | null;
+            /** Duration Minutes */
+            duration_minutes: number;
+            /** Is Inferred */
+            is_inferred: boolean;
+            /** Flags */
+            flags?: string[];
+            /** Details */
+            details?: {
+                [key: string]: unknown;
+            };
+        };
+        /** AttendanceTimelineResponse */
+        AttendanceTimelineResponse: {
+            /**
+             * Attendance Id
+             * Format: uuid
+             */
+            attendance_id: string;
+            /**
+             * Employee Id
+             * Format: uuid
+             */
+            employee_id: string;
+            /** Employee Name */
+            employee_name: string;
+            /**
+             * Work Date
+             * Format: date
+             */
+            work_date: string;
+            /** Timeline Items */
+            timeline_items: components["schemas"]["AttendanceTimelineItem"][];
+        };
         /** AuditLogRead */
         AuditLogRead: {
             /** Id */
@@ -1128,15 +3042,23 @@ export interface components {
             actor_user_id?: string | null;
             /** Actor Role */
             actor_role?: string | null;
+            /** Actor Name */
+            actor_name?: string | null;
             /** Action */
             action: string;
             /** Entity Type */
             entity_type: string;
             /** Entity Id */
             entity_id: string;
+            /** Entity Label */
+            entity_label?: string | null;
             /** Diff */
             diff: {
                 [key: string]: unknown;
+            };
+            /** Diff Labels */
+            diff_labels?: {
+                [key: string]: string;
             };
             /** Reason */
             reason?: string | null;
@@ -1147,6 +3069,169 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** BasePlannerItemRow */
+        BasePlannerItemRow: {
+            /**
+             * Job Item Id
+             * Format: uuid
+             */
+            job_item_id: string;
+            /** Sub Item Code */
+            sub_item_code: string;
+            /** Staff Grade Description */
+            staff_grade_description: string;
+            /** Planned Grade Code */
+            planned_grade_code: string;
+            /** Deployment Type */
+            deployment_type: string;
+            /** Required Staff Count */
+            required_staff_count: number;
+            /** Hours Per Occurrence */
+            hours_per_occurrence: string;
+            /** Frequency Unit */
+            frequency_unit: string;
+            /** Occurrences Per Period */
+            occurrences_per_period: string;
+            /** Weekday Pattern */
+            weekday_pattern?: string[] | null;
+            /** Start Date */
+            start_date?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            template?: components["schemas"]["BaseRosterTemplateRead"] | null;
+        };
+        /** BasePlannerResponse */
+        BasePlannerResponse: {
+            /** Worksites */
+            worksites: components["schemas"]["BasePlannerWorksiteRow"][];
+        };
+        /** BasePlannerWorksiteRow */
+        BasePlannerWorksiteRow: {
+            /**
+             * Worksite Id
+             * Format: uuid
+             */
+            worksite_id: string;
+            /** Job Number */
+            job_number: string;
+            /** Job Name */
+            job_name: string;
+            /** Customer Type */
+            customer_type?: string | null;
+            /**
+             * Is Outdoor
+             * @default true
+             */
+            is_outdoor: boolean;
+            /** Start Date */
+            start_date?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            /** Budget Amount */
+            budget_amount?: string | null;
+            /** Items */
+            items: components["schemas"]["BasePlannerItemRow"][];
+        };
+        /** BaseRosterEntryCreate */
+        BaseRosterEntryCreate: {
+            /**
+             * Employee Id
+             * Format: uuid
+             */
+            employee_id: string;
+            /**
+             * Weekday Mask
+             * @default ALL
+             */
+            weekday_mask: string;
+            /** Assigned Hours */
+            assigned_hours: number | string;
+            /**
+             * Sequence
+             * @default 1
+             */
+            sequence: number;
+        };
+        /** BaseRosterEntryRead */
+        BaseRosterEntryRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Template Id
+             * Format: uuid
+             */
+            template_id: string;
+            /**
+             * Employee Id
+             * Format: uuid
+             */
+            employee_id: string;
+            /** Employee Name */
+            employee_name?: string | null;
+            /** Tally Id */
+            tally_id?: string | null;
+            /** Weekly Off Day */
+            weekly_off_day?: string | null;
+            /** Weekday Mask */
+            weekday_mask: string;
+            /** Assigned Hours */
+            assigned_hours: string;
+            /** Sequence */
+            sequence: number;
+        };
+        /** BaseRosterTemplateCreate */
+        BaseRosterTemplateCreate: {
+            /**
+             * Job Item Id
+             * Format: uuid
+             */
+            job_item_id: string;
+            /**
+             * Allocation Mode
+             * @default UNIFORM
+             */
+            allocation_mode: string;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /** End Date */
+            end_date?: string | null;
+            /** Entries */
+            entries: components["schemas"]["BaseRosterEntryCreate"][];
+        };
+        /** BaseRosterTemplateRead */
+        BaseRosterTemplateRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Job Item Id
+             * Format: uuid
+             */
+            job_item_id: string;
+            /** Allocation Mode */
+            allocation_mode: string;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /** End Date */
+            end_date?: string | null;
+            /** Is Active */
+            is_active: boolean;
+            /** Version */
+            version: number;
+            /** Entries */
+            entries?: components["schemas"]["BaseRosterEntryRead"][];
         };
         /** BoundaryCopyRequest */
         BoundaryCopyRequest: {
@@ -1183,6 +3268,14 @@ export interface components {
             country: string;
             /** Has Boundary */
             has_boundary: boolean;
+            /** Rep Latitude */
+            rep_latitude?: string | null;
+            /** Rep Longitude */
+            rep_longitude?: string | null;
+            /** Boundary Geojson */
+            boundary_geojson?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** BoundaryQueueResponse */
         BoundaryQueueResponse: {
@@ -1192,6 +3285,36 @@ export interface components {
             done_count: number;
             /** Unset Count */
             unset_count: number;
+            /**
+             * Worksites Total Count
+             * @default 0
+             */
+            worksites_total_count: number;
+            /**
+             * Worksites Done Count
+             * @default 0
+             */
+            worksites_done_count: number;
+            /**
+             * Worksites Unset Count
+             * @default 0
+             */
+            worksites_unset_count: number;
+            /**
+             * Accommodations Total Count
+             * @default 0
+             */
+            accommodations_total_count: number;
+            /**
+             * Accommodations Done Count
+             * @default 0
+             */
+            accommodations_done_count: number;
+            /**
+             * Accommodations Unset Count
+             * @default 0
+             */
+            accommodations_unset_count: number;
             /** Items */
             items: components["schemas"]["BoundaryQueueItemResponse"][];
         };
@@ -1204,6 +3327,56 @@ export interface components {
             boundary: {
                 [key: string]: unknown;
             };
+        };
+        /** CandidateRecommendationRead */
+        CandidateRecommendationRead: {
+            /**
+             * Employee Id
+             * Format: uuid
+             */
+            employee_id: string;
+            /** Name */
+            name: string;
+            /** Tally Id */
+            tally_id: string;
+            /** Grade Code */
+            grade_code?: string | null;
+            /** Staff Grade Description */
+            staff_grade_description?: string | null;
+            /** Weekly Off Day */
+            weekly_off_day?: string | null;
+            /** Standard Hours */
+            standard_hours: string;
+            /** Exact Staff Type Match */
+            exact_staff_type_match: boolean;
+            /** Ranking Score */
+            ranking_score: number;
+            /** Reasons */
+            reasons: string[];
+            /** Warnings */
+            warnings: string[];
+            /** Today Allocated Hours */
+            today_allocated_hours: string;
+            /** Weekly Allocated Hours */
+            weekly_allocated_hours: string;
+            /** Monthly Allocated Hours */
+            monthly_allocated_hours: string;
+            /** Supervisor Id */
+            supervisor_id?: string | null;
+            /** Supervisor Name */
+            supervisor_name?: string | null;
+            /**
+             * Shares Site Group
+             * @default false
+             */
+            shares_site_group: boolean;
+            /**
+             * Is Blocked
+             * @default false
+             */
+            is_blocked: boolean;
+            /** Blocked Reason */
+            blocked_reason?: string | null;
         };
         /** CompanySettingRead */
         CompanySettingRead: {
@@ -1280,6 +3453,169 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** CoverageDayCell */
+        CoverageDayCell: {
+            /**
+             * Work Date
+             * Format: date
+             */
+            work_date: string;
+            /** Weekday */
+            weekday: string;
+            /** Required Staff Count */
+            required_staff_count: number;
+            /** Assigned Staff Count */
+            assigned_staff_count: number;
+            /** Is To Be Covered */
+            is_to_be_covered: boolean;
+            /**
+             * Is Excess
+             * @default false
+             */
+            is_excess: boolean;
+            /**
+             * Is Quota Met
+             * @default false
+             */
+            is_quota_met: boolean;
+            /**
+             * Is Holiday
+             * @default false
+             */
+            is_holiday: boolean;
+            /** Holiday Name */
+            holiday_name?: string | null;
+            /** Assigned Workers */
+            assigned_workers: string[];
+            /** Assigned Details */
+            assigned_details?: components["schemas"]["AssignedWorkerSummary"][];
+        };
+        /** CoverageItemRow */
+        CoverageItemRow: {
+            /**
+             * Job Item Id
+             * Format: uuid
+             */
+            job_item_id: string;
+            /** Sub Item Code */
+            sub_item_code: string;
+            /** Staff Grade Description */
+            staff_grade_description: string;
+            /** Planned Grade Code */
+            planned_grade_code: string;
+            /** Deployment Type */
+            deployment_type: string;
+            /** Required Staff Count */
+            required_staff_count: number;
+            /** Hours Per Occurrence */
+            hours_per_occurrence: string;
+            /**
+             * Frequency Unit
+             * @default WEEK
+             */
+            frequency_unit: string;
+            /**
+             * Occurrences Per Period
+             * @default 6.0
+             */
+            occurrences_per_period: string;
+            /** Days */
+            days: components["schemas"]["CoverageDayCell"][];
+        };
+        /** CoverageResponse */
+        CoverageResponse: {
+            /**
+             * Week Start
+             * Format: date
+             */
+            week_start: string;
+            /**
+             * Week End
+             * Format: date
+             */
+            week_end: string;
+            /** Worksites */
+            worksites: components["schemas"]["CoverageWorksiteRow"][];
+        };
+        /** CoverageWorksiteRow */
+        CoverageWorksiteRow: {
+            /**
+             * Worksite Id
+             * Format: uuid
+             */
+            worksite_id: string;
+            /** Job Number */
+            job_number: string;
+            /** Job Name */
+            job_name: string;
+            /** Customer Type */
+            customer_type?: string | null;
+            /**
+             * Is Outdoor
+             * @default true
+             */
+            is_outdoor: boolean;
+            /** Items */
+            items: components["schemas"]["CoverageItemRow"][];
+        };
+        /** DashboardSummaryResponse */
+        DashboardSummaryResponse: {
+            /** Today Date */
+            today_date: string;
+            attendance: components["schemas"]["AttendanceSummaryItem"];
+            live_workers: components["schemas"]["LiveWorkersSummaryItem"];
+            /** Pending Visits Count */
+            pending_visits_count: number;
+            /** Late Arrivals Count */
+            late_arrivals_count: number;
+            /** Overtime Hours Today */
+            overtime_hours_today: number;
+            /** Open Alerts Count */
+            open_alerts_count: number;
+            /** Expiring Documents Count */
+            expiring_documents_count: number;
+            /** Pending Approvals Count */
+            pending_approvals_count: number;
+        };
+        /** DeviceStatusRead */
+        DeviceStatusRead: {
+            /**
+             * Device Id
+             * Format: uuid
+             */
+            device_id: string;
+            /**
+             * Employee Id
+             * Format: uuid
+             */
+            employee_id: string;
+            /** Tally Id */
+            tally_id: string;
+            /** Employee Name */
+            employee_name: string;
+            /** Platform */
+            platform: string;
+            /** Device Model */
+            device_model?: string | null;
+            /** App Version */
+            app_version?: string | null;
+            /** Os Version */
+            os_version?: string | null;
+            /** Last Seen At */
+            last_seen_at?: string | null;
+            /** Last Acked Cursor */
+            last_acked_cursor: number;
+            /** Current Cursor */
+            current_cursor: number;
+            /** Sync Lag */
+            sync_lag: number;
+            /** Location Permission State */
+            location_permission_state?: string | null;
+            /** Is Active */
+            is_active: boolean;
+            /** Revoked At */
+            revoked_at?: string | null;
         };
         /** EmployeeBulkUpdateItem */
         EmployeeBulkUpdateItem: {
@@ -1555,6 +3891,108 @@ export interface components {
             is_active?: boolean | null;
             /** Version */
             version: number;
+        };
+        /** EventBatchRequest */
+        EventBatchRequest: {
+            /**
+             * Batch Id
+             * Format: uuid
+             */
+            batch_id: string;
+            /**
+             * Device Clock Utc
+             * Format: date-time
+             */
+            device_clock_utc: string;
+            /** Events */
+            events: components["schemas"]["MobileEventItem"][];
+        };
+        /** EventBatchResponse */
+        EventBatchResponse: {
+            /**
+             * Batch Id
+             * Format: uuid
+             */
+            batch_id: string;
+            /**
+             * Server Time Utc
+             * Format: date-time
+             */
+            server_time_utc: string;
+            /** Latest Cursor */
+            latest_cursor: number;
+            /** Results */
+            results: components["schemas"]["EventResultItem"][];
+        };
+        /** EventResultItem */
+        EventResultItem: {
+            /**
+             * Event Id
+             * Format: uuid
+             */
+            event_id: string;
+            status: components["schemas"]["EventStatus"];
+            reason?: components["schemas"]["RejectReason"] | null;
+        };
+        /**
+         * EventStatus
+         * @enum {string}
+         */
+        EventStatus: "ACCEPTED" | "DUPLICATE" | "REJECTED";
+        /**
+         * EventType
+         * @enum {string}
+         */
+        EventType: "ENTRY" | "EXIT" | "PING" | "LOCATION_DISABLED" | "LOCATION_ENABLED";
+        /** ExpiringDocumentItem */
+        ExpiringDocumentItem: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /**
+             * Employee Id
+             * Format: uuid
+             */
+            employee_id: string;
+            /** Employee Name */
+            employee_name: string;
+            /** Tally Id */
+            tally_id?: string | null;
+            /** Supervisor Id */
+            supervisor_id?: string | null;
+            /** Supervisor Name */
+            supervisor_name?: string | null;
+            /** Document Type */
+            document_type: string;
+            /**
+             * Expiry Date
+             * Format: date
+             */
+            expiry_date: string;
+            /** Days Remaining */
+            days_remaining: number;
+            /** Status */
+            status: string;
+            /**
+             * Is Active
+             * @default true
+             */
+            is_active: boolean;
+        };
+        /** ExpiringDocumentsResponse */
+        ExpiringDocumentsResponse: {
+            /** Items */
+            items: components["schemas"]["ExpiringDocumentItem"][];
+            /** Expiring Count */
+            expiring_count: number;
+            /** Expired Count */
+            expired_count: number;
+            /** Ok Count */
+            ok_count: number;
+            /** Total Count */
+            total_count: number;
         };
         /** GenerateOccurrencesRequest */
         GenerateOccurrencesRequest: {
@@ -1945,6 +4383,12 @@ export interface components {
              * Format: uuid
              */
             job_item_id: string;
+            /** Sub Item Code */
+            sub_item_code?: string | null;
+            /** Staff Grade Description */
+            staff_grade_description?: string | null;
+            /** Planned Grade Code */
+            planned_grade_code?: string | null;
             /**
              * Window Start
              * Format: date
@@ -1982,6 +4426,272 @@ export interface components {
             /** Status */
             status?: string | null;
         };
+        /**
+         * LeaveDecisionRequest
+         * @description Payload to approve or reject a leave request.
+         */
+        LeaveDecisionRequest: {
+            /** Reason */
+            reason?: string | null;
+        };
+        /**
+         * LeaveRequestCreate
+         * @description Payload to record a leave request.
+         */
+        LeaveRequestCreate: {
+            /**
+             * Employee Id
+             * Format: uuid
+             */
+            employee_id: string;
+            /**
+             * Leave Type
+             * @description ANNUAL | SICK | UNPAID | EMERGENCY | OTHER
+             */
+            leave_type: string;
+            /**
+             * From Date
+             * Format: date
+             */
+            from_date: string;
+            /**
+             * To Date
+             * Format: date
+             */
+            to_date: string;
+            /** Reason */
+            reason: string;
+        };
+        /**
+         * LeaveRequestResponse
+         * @description API representation of a leave request.
+         */
+        LeaveRequestResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Employee Id
+             * Format: uuid
+             */
+            employee_id: string;
+            /** Employee Name */
+            employee_name?: string | null;
+            /** Tally Id */
+            tally_id?: string | null;
+            /** Leave Type */
+            leave_type: string;
+            /**
+             * From Date
+             * Format: date
+             */
+            from_date: string;
+            /**
+             * To Date
+             * Format: date
+             */
+            to_date: string;
+            /** Status */
+            status: string;
+            /** Reason */
+            reason: string;
+            /**
+             * Recorded By User Id
+             * Format: uuid
+             */
+            recorded_by_user_id: string;
+            /** Recorded By Name */
+            recorded_by_name?: string | null;
+            /** Approved By User Id */
+            approved_by_user_id?: string | null;
+            /** Approved By Name */
+            approved_by_name?: string | null;
+            /** Approved At */
+            approved_at?: string | null;
+            /** Decision Note */
+            decision_note?: string | null;
+            /**
+             * Is Active
+             * @default true
+             */
+            is_active: boolean;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Recorded At */
+            recorded_at?: string | null;
+        };
+        /** LeaveTakenTypeSummary */
+        LeaveTakenTypeSummary: {
+            /** Working Days */
+            working_days: number;
+            /** Calendar Days */
+            calendar_days: number;
+        };
+        /** LeaveTakenWorkerSummary */
+        LeaveTakenWorkerSummary: {
+            /**
+             * Employee Id
+             * Format: uuid
+             */
+            employee_id: string;
+            /** Employee Name */
+            employee_name: string;
+            /** Tally Id */
+            tally_id: string;
+            /** Year */
+            year: number;
+            /** By Type */
+            by_type: {
+                [key: string]: components["schemas"]["LeaveTakenTypeSummary"];
+            };
+            /** Total Working Days */
+            total_working_days: number;
+            /** Total Calendar Days */
+            total_calendar_days: number;
+        };
+        /** LivePositionItem */
+        LivePositionItem: {
+            /**
+             * Employee Id
+             * Format: uuid
+             */
+            employee_id: string;
+            /** Tally Id */
+            tally_id?: string | null;
+            /** Name */
+            name: string;
+            /** Role */
+            role?: string | null;
+            /** Supervisor Id */
+            supervisor_id?: string | null;
+            /** Supervisor Name */
+            supervisor_name?: string | null;
+            /** Group Id */
+            group_id?: string | null;
+            /** Group Name */
+            group_name?: string | null;
+            /** Zone Id */
+            zone_id?: string | null;
+            /** Zone Name */
+            zone_name?: string | null;
+            /** Latitude */
+            latitude?: number | null;
+            /** Longitude */
+            longitude?: number | null;
+            /** Accuracy Meters */
+            accuracy_meters?: number | null;
+            /** Event Type */
+            event_type: string;
+            /**
+             * Event Timestamp Utc
+             * Format: date-time
+             */
+            event_timestamp_utc: string;
+            /**
+             * Received At Utc
+             * Format: date-time
+             */
+            received_at_utc: string;
+            /**
+             * Last Contact At
+             * Format: date-time
+             */
+            last_contact_at: string;
+            /** Age Seconds */
+            age_seconds: number;
+            /** Contact Age Seconds */
+            contact_age_seconds: number;
+            /**
+             * Tracking Enabled
+             * @default true
+             */
+            tracking_enabled: boolean;
+            /** Server Verdict */
+            server_verdict?: string | null;
+            /** Server Site Id */
+            server_site_id?: string | null;
+            /** Server Site Name */
+            server_site_name?: string | null;
+            /** Live State */
+            live_state: string;
+            /**
+             * Has Schedule Today
+             * @default false
+             */
+            has_schedule_today: boolean;
+            /** Today Assignments */
+            today_assignments?: {
+                [key: string]: unknown;
+            }[];
+        };
+        /** LivePositionsResponse */
+        LivePositionsResponse: {
+            /** Items */
+            items: components["schemas"]["LivePositionItem"][];
+            /** Active Count */
+            active_count: number;
+            /** Offline Count */
+            offline_count: number;
+            /** Disabled Count */
+            disabled_count: number;
+            /** Not Scheduled Count */
+            not_scheduled_count: number;
+            /** Total Count */
+            total_count: number;
+            /**
+             * As Of
+             * Format: date-time
+             */
+            as_of: string;
+        };
+        /** LiveWorkersSummaryItem */
+        LiveWorkersSummaryItem: {
+            /**
+             * Active
+             * @default 0
+             */
+            active: number;
+            /**
+             * No Recent Signal
+             * @default 0
+             */
+            no_recent_signal: number;
+            /**
+             * Location Disabled
+             * @default 0
+             */
+            location_disabled: number;
+            /**
+             * Not Scheduled
+             * @default 0
+             */
+            not_scheduled: number;
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+        };
+        /**
+         * LocationPermissionState
+         * @enum {string}
+         */
+        LocationPermissionState: "ALWAYS" | "WHILE_IN_USE" | "DENIED" | "RESTRICTED";
         /** LoginRequest */
         LoginRequest: {
             /**
@@ -2011,6 +4721,494 @@ export interface components {
             /** Reasons */
             reasons?: string[];
         };
+        /** MobileChangePasswordRequest */
+        MobileChangePasswordRequest: {
+            /** Old Password */
+            old_password: string;
+            /** New Password */
+            new_password: string;
+        };
+        /** MobileConsentRequest */
+        MobileConsentRequest: {
+            /** Policy Version */
+            policy_version: number;
+            /**
+             * Consented At Utc
+             * Format: date-time
+             */
+            consented_at_utc: string;
+        };
+        /** MobileDeviceRegistration */
+        MobileDeviceRegistration: {
+            /** Device Identifier */
+            device_identifier: string;
+            platform: components["schemas"]["PlatformEnum"];
+            /** Device Model */
+            device_model?: string | null;
+            /** App Version */
+            app_version?: string | null;
+            /** Os Version */
+            os_version?: string | null;
+            /** Push Token */
+            push_token?: string | null;
+        };
+        /** MobileDeviceUpdateRequest */
+        MobileDeviceUpdateRequest: {
+            /** Push Token */
+            push_token?: string | null;
+            /** App Version */
+            app_version?: string | null;
+            /** Os Version */
+            os_version?: string | null;
+            location_permission_state?: components["schemas"]["LocationPermissionState"] | null;
+        };
+        /** MobileEmployeeInfo */
+        MobileEmployeeInfo: {
+            /**
+             * Employee Id
+             * Format: uuid
+             */
+            employee_id: string;
+            /** Tally Id */
+            tally_id: string;
+            /** Name */
+            name: string;
+            /** Role */
+            role: string;
+        };
+        /** MobileEventItem */
+        MobileEventItem: {
+            /**
+             * Event Id
+             * Format: uuid
+             */
+            event_id: string;
+            event_type: components["schemas"]["EventType"];
+            /**
+             * Event Timestamp Utc
+             * Format: date-time
+             */
+            event_timestamp_utc: string;
+            /** Location Captured At Utc */
+            location_captured_at_utc?: string | null;
+            /** Latitude */
+            latitude?: number | string | null;
+            /** Longitude */
+            longitude?: number | string | null;
+            /** Accuracy Meters */
+            accuracy_meters?: number | null;
+            /** Is Mock Location */
+            is_mock_location?: boolean | null;
+            /** Sequence Number */
+            sequence_number?: number | null;
+            /** Job Id */
+            job_id?: string | null;
+            /** Job Item Id */
+            job_item_id?: string | null;
+            /** Accommodation Id */
+            accommodation_id?: string | null;
+        };
+        /** MobileEventResponse */
+        MobileEventResponse: {
+            /**
+             * Event Id
+             * Format: uuid
+             */
+            event_id: string;
+            /**
+             * Employee Id
+             * Format: uuid
+             */
+            employee_id: string;
+            /**
+             * Device Id
+             * Format: uuid
+             */
+            device_id: string;
+            /** Event Type */
+            event_type: string;
+            /**
+             * Event Timestamp Utc
+             * Format: date-time
+             */
+            event_timestamp_utc: string;
+            /** Location Captured At Utc */
+            location_captured_at_utc?: string | null;
+            /** Latitude */
+            latitude?: string | null;
+            /** Longitude */
+            longitude?: string | null;
+            /** Accuracy Meters */
+            accuracy_meters?: number | null;
+            /** Is Mock Location */
+            is_mock_location?: boolean | null;
+            /** Sequence Number */
+            sequence_number?: number | null;
+            /**
+             * Server Received At
+             * Format: date-time
+             */
+            server_received_at: string;
+            /** Processing Status */
+            processing_status: string;
+            /** Server Site Id */
+            server_site_id?: string | null;
+            /** Server Accommodation Id */
+            server_accommodation_id?: string | null;
+            /** Server Verdict */
+            server_verdict?: string | null;
+            /** Distance To Polygon M */
+            distance_to_polygon_m?: number | null;
+            /** Flags */
+            flags?: string[];
+        };
+        /** MobileHeartbeatRequest */
+        MobileHeartbeatRequest: {
+            /** App Version */
+            app_version: string;
+            /** Cursor */
+            cursor: number;
+            location_permission_state?: components["schemas"]["LocationPermissionState"] | null;
+        };
+        /** MobileHeartbeatResponse */
+        MobileHeartbeatResponse: {
+            /**
+             * Server Time Utc
+             * Format: date-time
+             */
+            server_time_utc: string;
+            /** Latest Cursor */
+            latest_cursor: number;
+            /**
+             * Min App Version
+             * @default 1.0.0
+             */
+            min_app_version: string;
+            /** Has Pending Changes */
+            has_pending_changes: boolean;
+        };
+        /** MobileLoginRequest */
+        MobileLoginRequest: {
+            /** Tally Id */
+            tally_id: string;
+            /** Password */
+            password: string;
+            device: components["schemas"]["MobileDeviceRegistration"];
+        };
+        /** MobileLoginResponse */
+        MobileLoginResponse: {
+            /** Access Token */
+            access_token: string;
+            /** Refresh Token */
+            refresh_token: string;
+            /**
+             * Expires In
+             * @default 900
+             */
+            expires_in: number;
+            /**
+             * Server Time Utc
+             * Format: date-time
+             */
+            server_time_utc: string;
+            /** Must Change Password */
+            must_change_password: boolean;
+            employee: components["schemas"]["MobileEmployeeInfo"];
+        };
+        /** MobilePolicyResponse */
+        MobilePolicyResponse: {
+            /** Version */
+            version: number;
+            /** Language */
+            language: string;
+            /** Title */
+            title: string;
+            /** Body */
+            body: string;
+            /**
+             * Published At
+             * Format: date-time
+             */
+            published_at: string;
+        };
+        /** MobileRefreshRequest */
+        MobileRefreshRequest: {
+            /** Refresh Token */
+            refresh_token: string;
+        };
+        /** OperationalCellWorker */
+        OperationalCellWorker: {
+            /**
+             * Employee Id
+             * Format: uuid
+             */
+            employee_id: string;
+            /** Employee Name */
+            employee_name: string;
+            /** Tally Id */
+            tally_id?: string | null;
+            /** Assigned Hours */
+            assigned_hours: string;
+            /** Display Type */
+            display_type: string;
+            /** Opacity Class */
+            opacity_class: string;
+            /** Original Employee Id */
+            original_employee_id?: string | null;
+            /** Original Employee Name */
+            original_employee_name?: string | null;
+            /** Shift Id */
+            shift_id?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /**
+             * Is Public Holiday
+             * @default false
+             */
+            is_public_holiday: boolean;
+            /**
+             * Is Rest Day
+             * @default false
+             */
+            is_rest_day: boolean;
+            /** Tags */
+            tags?: string[];
+        };
+        /** OperationalCoverageResponse */
+        OperationalCoverageResponse: {
+            /**
+             * Week Start
+             * Format: date
+             */
+            week_start: string;
+            /**
+             * Week End
+             * Format: date
+             */
+            week_end: string;
+            /** Worksites */
+            worksites: components["schemas"]["OperationalWorksiteRow"][];
+        };
+        /** OperationalDayCell */
+        OperationalDayCell: {
+            /**
+             * Work Date
+             * Format: date
+             */
+            work_date: string;
+            /** Weekday */
+            weekday: string;
+            /** Required Staff Count */
+            required_staff_count: number;
+            /** Assigned Staff Count */
+            assigned_staff_count: number;
+            /**
+             * Is Public Holiday
+             * @default false
+             */
+            is_public_holiday: boolean;
+            /** Holiday Name */
+            holiday_name?: string | null;
+            /**
+             * Is Recommended Target
+             * @default false
+             */
+            is_recommended_target: boolean;
+            /**
+             * Is Quota Met
+             * @default false
+             */
+            is_quota_met: boolean;
+            /**
+             * Is Excess
+             * @default false
+             */
+            is_excess: boolean;
+            /**
+             * Is To Be Covered
+             * @default false
+             */
+            is_to_be_covered: boolean;
+            /** Workers */
+            workers?: components["schemas"]["OperationalCellWorker"][];
+        };
+        /** OperationalJobItemRow */
+        OperationalJobItemRow: {
+            /**
+             * Job Item Id
+             * Format: uuid
+             */
+            job_item_id: string;
+            /** Sub Item Code */
+            sub_item_code: string;
+            /** Staff Grade Description */
+            staff_grade_description: string;
+            /** Planned Grade Code */
+            planned_grade_code: string;
+            /** Deployment Type */
+            deployment_type: string;
+            /** Required Staff Count */
+            required_staff_count: number;
+            /** Hours Per Occurrence */
+            hours_per_occurrence: string;
+            /** Frequency Unit */
+            frequency_unit: string;
+            /** Occurrences Per Period */
+            occurrences_per_period: string;
+            /** Quota Target */
+            quota_target: number;
+            /** Quota Assigned */
+            quota_assigned: number;
+            /** Quota Satisfied */
+            quota_satisfied: boolean;
+            /** Days */
+            days: components["schemas"]["OperationalDayCell"][];
+        };
+        /** OperationalRosterDayCell */
+        OperationalRosterDayCell: {
+            /**
+             * Work Date
+             * Format: date
+             */
+            work_date: string;
+            /** Weekday */
+            weekday: string;
+            /**
+             * Is Working Day
+             * @default true
+             */
+            is_working_day: boolean;
+            /**
+             * Is Weekly Off
+             * @default false
+             */
+            is_weekly_off: boolean;
+            /**
+             * Is Public Holiday
+             * @default false
+             */
+            is_public_holiday: boolean;
+            /** Holiday Name */
+            holiday_name?: string | null;
+            /** Leave Type */
+            leave_type?: string | null;
+            /**
+             * Allocated Hours
+             * @default 0.0
+             */
+            allocated_hours: string;
+            /** Shifts */
+            shifts?: components["schemas"]["OperationalCellWorker"][];
+        };
+        /** OperationalRosterResponse */
+        OperationalRosterResponse: {
+            /**
+             * Week Start
+             * Format: date
+             */
+            week_start: string;
+            /**
+             * Week End
+             * Format: date
+             */
+            week_end: string;
+            /** Workers */
+            workers: components["schemas"]["OperationalRosterWorkerRow"][];
+        };
+        /** OperationalRosterWorkerRow */
+        OperationalRosterWorkerRow: {
+            /**
+             * Employee Id
+             * Format: uuid
+             */
+            employee_id: string;
+            /** Tally Id */
+            tally_id: string;
+            /** Name */
+            name: string;
+            /** Staff Grade Description */
+            staff_grade_description?: string | null;
+            /** Weekly Off Day */
+            weekly_off_day?: string | null;
+            /** Supervisor Id */
+            supervisor_id?: string | null;
+            /** Supervisor Name */
+            supervisor_name?: string | null;
+            /** Assigned Job Numbers */
+            assigned_job_numbers?: string[];
+            /** Total Week Hours */
+            total_week_hours: string;
+            /** Standard Week Hours */
+            standard_week_hours: string;
+            /** Days */
+            days: components["schemas"]["OperationalRosterDayCell"][];
+        };
+        /** OperationalShiftCreate */
+        OperationalShiftCreate: {
+            /**
+             * Job Item Id
+             * Format: uuid
+             */
+            job_item_id: string;
+            /**
+             * Work Date
+             * Format: date
+             */
+            work_date: string;
+            /**
+             * Employee Id
+             * Format: uuid
+             */
+            employee_id: string;
+            /** Original Employee Id */
+            original_employee_id?: string | null;
+            /** Assigned Hours */
+            assigned_hours?: number | string | null;
+            /** Override Reason */
+            override_reason?: string | null;
+            /**
+             * Source
+             * @default DIRECT
+             */
+            source: string;
+            /**
+             * Status
+             * @default ACTIVE
+             */
+            status: string;
+            /**
+             * Acknowledge Warnings
+             * @default false
+             */
+            acknowledge_warnings: boolean;
+        };
+        /** OperationalWorksiteRow */
+        OperationalWorksiteRow: {
+            /**
+             * Worksite Id
+             * Format: uuid
+             */
+            worksite_id: string;
+            /** Job Number */
+            job_number: string;
+            /** Job Name */
+            job_name: string;
+            /** Customer Type */
+            customer_type?: string | null;
+            /**
+             * Is Outdoor
+             * @default true
+             */
+            is_outdoor: boolean;
+            /** Start Date */
+            start_date?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            /** Budget Amount */
+            budget_amount?: string | null;
+            /** Items */
+            items: components["schemas"]["OperationalJobItemRow"][];
+        };
         /** PasswordChangeRequest */
         PasswordChangeRequest: {
             /** Current Password */
@@ -2018,6 +5216,122 @@ export interface components {
             /** New Password */
             new_password: string;
         };
+        /** PendingVisitCloseRequest */
+        PendingVisitCloseRequest: {
+            /** Reason */
+            reason: string;
+        };
+        /** PendingVisitExplainRequest */
+        PendingVisitExplainRequest: {
+            /** Explanation */
+            explanation: string;
+        };
+        /** PendingVisitListResponse */
+        PendingVisitListResponse: {
+            /** Items */
+            items: components["schemas"]["PendingVisitResponse"][];
+            /** Open Count */
+            open_count: number;
+            /** Explained Count */
+            explained_count: number;
+            /** Rescheduled Count */
+            rescheduled_count: number;
+            /** Closed Count */
+            closed_count: number;
+            /** Escalated Count */
+            escalated_count: number;
+            /** Total Count */
+            total_count: number;
+        };
+        /** PendingVisitRescheduleRequest */
+        PendingVisitRescheduleRequest: {
+            /**
+             * Work Date
+             * Format: date
+             */
+            work_date: string;
+            /** Employee Ids */
+            employee_ids: string[];
+        };
+        /** PendingVisitResponse */
+        PendingVisitResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Scheduled Work Id
+             * Format: uuid
+             */
+            scheduled_work_id: string;
+            /** Occurrence Id */
+            occurrence_id?: string | null;
+            /**
+             * Worksite Id
+             * Format: uuid
+             */
+            worksite_id: string;
+            /** Worksite Name */
+            worksite_name: string;
+            /** Job Item Id */
+            job_item_id?: string | null;
+            /** Job Item Name */
+            job_item_name?: string | null;
+            /**
+             * Employee Id
+             * Format: uuid
+             */
+            employee_id: string;
+            /** Employee Name */
+            employee_name: string;
+            /** Tally Id */
+            tally_id?: string | null;
+            /** Supervisor Id */
+            supervisor_id?: string | null;
+            /** Supervisor Name */
+            supervisor_name?: string | null;
+            /**
+             * Due Date
+             * Format: date
+             */
+            due_date: string;
+            /**
+             * Detected On
+             * Format: date
+             */
+            detected_on: string;
+            /** Age Days */
+            age_days: number;
+            /** Status */
+            status: string;
+            /** Is Escalated */
+            is_escalated: boolean;
+            /** Explanation Comment Id */
+            explanation_comment_id?: string | null;
+            /** Latest Explanation */
+            latest_explanation?: string | null;
+            /** Rescheduled To Scheduled Work Id */
+            rescheduled_to_scheduled_work_id?: string | null;
+            /** Closed By User Id */
+            closed_by_user_id?: string | null;
+            /** Closed By Name */
+            closed_by_name?: string | null;
+            /** Closed Reason */
+            closed_reason?: string | null;
+            /** Closed At */
+            closed_at?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * PlatformEnum
+         * @enum {string}
+         */
+        PlatformEnum: "ANDROID" | "IOS";
         /** PublicHolidayCreate */
         PublicHolidayCreate: {
             /**
@@ -2059,6 +5373,205 @@ export interface components {
             /** Database */
             database: string;
         };
+        /**
+         * ReassignmentDecisionRequest
+         * @description Payload to approve or reject a reassignment request.
+         */
+        ReassignmentDecisionRequest: {
+            /** Decision Note */
+            decision_note?: string | null;
+        };
+        /** ReassignmentPreviewDay */
+        ReassignmentPreviewDay: {
+            /**
+             * Work Date
+             * Format: date
+             */
+            work_date: string;
+            /**
+             * Employee Id
+             * Format: uuid
+             */
+            employee_id: string;
+            /** Employee Name */
+            employee_name: string;
+            /** Standard Hours */
+            standard_hours: string;
+            /** Current Hours */
+            current_hours: string;
+            /** Proposed Delta */
+            proposed_delta: string;
+            /** Resulting Hours */
+            resulting_hours: string;
+            /** Free Hours */
+            free_hours: string;
+            /** Planned Overtime Hours */
+            planned_overtime_hours: string;
+            /** Warnings */
+            warnings: string[];
+        };
+        /**
+         * ReassignmentPreviewRequest
+         * @description Dry run payload to preview worker capacity and warnings.
+         */
+        ReassignmentPreviewRequest: {
+            /** Reassignment Type */
+            reassignment_type: string;
+            /**
+             * Date From
+             * Format: date
+             */
+            date_from: string;
+            /**
+             * Date To
+             * Format: date
+             */
+            date_to: string;
+            /** Original Employee Id */
+            original_employee_id?: string | null;
+            /** New Employee Id */
+            new_employee_id?: string | null;
+            /** Target Job Item Id */
+            target_job_item_id?: string | null;
+            /** Hours Per Day */
+            hours_per_day?: number | string | null;
+        };
+        /** ReassignmentPreviewResponse */
+        ReassignmentPreviewResponse: {
+            /** Previews */
+            previews: components["schemas"]["ReassignmentPreviewDay"][];
+            /** Warnings */
+            warnings: string[];
+            /** Can Submit */
+            can_submit: boolean;
+        };
+        /**
+         * ReassignmentRequestCreate
+         * @description Payload to request a temporary operational reassignment.
+         */
+        ReassignmentRequestCreate: {
+            /**
+             * Reassignment Type
+             * @description REPLACE | MOVE | ADD | CANCEL
+             */
+            reassignment_type: string;
+            /**
+             * Date From
+             * Format: date
+             */
+            date_from: string;
+            /**
+             * Date To
+             * Format: date
+             */
+            date_to: string;
+            /** Original Employee Id */
+            original_employee_id?: string | null;
+            /** New Employee Id */
+            new_employee_id?: string | null;
+            /** Original Scheduled Work Id */
+            original_scheduled_work_id?: string | null;
+            /** Standing Assignment Id */
+            standing_assignment_id?: string | null;
+            /** Target Job Item Id */
+            target_job_item_id?: string | null;
+            /** Hours Per Day */
+            hours_per_day?: number | string | null;
+            /**
+             * Reason Category
+             * @description LEAVE_COVER | CAPACITY | WEATHER | PRIORITY | OTHER
+             */
+            reason_category: string;
+            /** Reason */
+            reason: string;
+        };
+        /**
+         * ReassignmentResponse
+         * @description API representation of a reassignment request.
+         */
+        ReassignmentResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Reassignment Type */
+            reassignment_type: string;
+            /**
+             * Date From
+             * Format: date
+             */
+            date_from: string;
+            /**
+             * Date To
+             * Format: date
+             */
+            date_to: string;
+            /** Original Employee Id */
+            original_employee_id?: string | null;
+            /** Original Employee Name */
+            original_employee_name?: string | null;
+            /** New Employee Id */
+            new_employee_id?: string | null;
+            /** New Employee Name */
+            new_employee_name?: string | null;
+            /** Target Job Item Id */
+            target_job_item_id?: string | null;
+            /** Target Job Number */
+            target_job_number?: string | null;
+            /** Target Job Name */
+            target_job_name?: string | null;
+            /** Hours Per Day */
+            hours_per_day?: string | null;
+            /** Reason Category */
+            reason_category: string;
+            /** Reason */
+            reason: string;
+            /** Status */
+            status: string;
+            /**
+             * Is Late Approval
+             * @default false
+             */
+            is_late_approval: boolean;
+            /**
+             * Is Orphaned
+             * @default false
+             */
+            is_orphaned: boolean;
+            /**
+             * Requested By User Id
+             * Format: uuid
+             */
+            requested_by_user_id: string;
+            /** Requested By Name */
+            requested_by_name?: string | null;
+            /** Decided By User Id */
+            decided_by_user_id?: string | null;
+            /** Decided By Name */
+            decided_by_name?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
+            /** Decision Note */
+            decision_note?: string | null;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Recorded At */
+            recorded_at?: string | null;
+        };
         /** RegisteredDeviceRead */
         RegisteredDeviceRead: {
             /**
@@ -2099,6 +5612,11 @@ export interface components {
             /** Is Active */
             is_active: boolean;
         };
+        /**
+         * RejectReason
+         * @enum {string}
+         */
+        RejectReason: "INVALID_SCHEMA" | "INVALID_COORDINATES" | "TIMESTAMP_IN_FUTURE" | "TIMESTAMP_TOO_OLD";
         /** ReportingLineCreate */
         ReportingLineCreate: {
             /**
@@ -2131,6 +5649,10 @@ export interface components {
              * Format: uuid
              */
             manager_id: string;
+            /** Manager Name */
+            manager_name?: string | null;
+            /** Manager Tally Id */
+            manager_tally_id?: string | null;
             /** Relationship */
             relationship: string;
             /** Notes */
@@ -2140,6 +5662,13 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Is Direct
+             * @default true
+             */
+            is_direct: boolean;
+            /** Via Name */
+            via_name?: string | null;
         };
         /** ResetPasswordResponse */
         ResetPasswordResponse: {
@@ -2184,6 +5713,413 @@ export interface components {
              * @default 0.00
              */
             difference: string;
+        };
+        /** ScheduledWorkBatchCreate */
+        ScheduledWorkBatchCreate: {
+            /** Employee Ids */
+            employee_ids: string[];
+            /**
+             * Job Item Id
+             * Format: uuid
+             */
+            job_item_id: string;
+            /**
+             * Work Date
+             * Format: date
+             */
+            work_date: string;
+            /** Occurrence Id */
+            occurrence_id?: string | null;
+            /** Assigned Hours */
+            assigned_hours?: number | string | null;
+            /**
+             * As Standing Assignment
+             * @default false
+             */
+            as_standing_assignment: boolean;
+            /**
+             * Acknowledge Warnings
+             * @default false
+             */
+            acknowledge_warnings: boolean;
+        };
+        /** ScheduledWorkCreate */
+        ScheduledWorkCreate: {
+            /**
+             * Employee Id
+             * Format: uuid
+             */
+            employee_id: string;
+            /**
+             * Job Item Id
+             * Format: uuid
+             */
+            job_item_id: string;
+            /**
+             * Work Date
+             * Format: date
+             */
+            work_date: string;
+            /** Occurrence Id */
+            occurrence_id?: string | null;
+            /** Assigned Hours */
+            assigned_hours: number | string;
+            /** Sequence */
+            sequence?: number | null;
+            /**
+             * Source
+             * @default DIRECT
+             */
+            source: string;
+            /**
+             * Acknowledge Warnings
+             * @default false
+             */
+            acknowledge_warnings: boolean;
+        };
+        /** ScheduledWorkRead */
+        ScheduledWorkRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Employee Id
+             * Format: uuid
+             */
+            employee_id: string;
+            /** Employee Name */
+            employee_name?: string | null;
+            /**
+             * Work Date
+             * Format: date
+             */
+            work_date: string;
+            /** Occurrence Id */
+            occurrence_id?: string | null;
+            /**
+             * Job Item Id
+             * Format: uuid
+             */
+            job_item_id: string;
+            /**
+             * Worksite Id
+             * Format: uuid
+             */
+            worksite_id: string;
+            /** Job Number */
+            job_number?: string | null;
+            /** Sub Item Code */
+            sub_item_code?: string | null;
+            /** Assigned Hours */
+            assigned_hours: string;
+            /** Sequence */
+            sequence: number;
+            /** Status */
+            status: string;
+            /** Source */
+            source: string;
+            /** Version */
+            version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** ScheduledWorkReorderRequest */
+        ScheduledWorkReorderRequest: {
+            /**
+             * Employee Id
+             * Format: uuid
+             */
+            employee_id: string;
+            /**
+             * Work Date
+             * Format: date
+             */
+            work_date: string;
+            /** Ordered Ids */
+            ordered_ids: string[];
+        };
+        /** ScheduledWorkUpdate */
+        ScheduledWorkUpdate: {
+            /** Assigned Hours */
+            assigned_hours?: number | string | null;
+            /** Sequence */
+            sequence?: number | null;
+            /** Status */
+            status?: string | null;
+            /** Version */
+            version: number;
+            /**
+             * Acknowledge Warnings
+             * @default false
+             */
+            acknowledge_warnings: boolean;
+        };
+        /** ScheduledWorkValidateRequest */
+        ScheduledWorkValidateRequest: {
+            /**
+             * Employee Id
+             * Format: uuid
+             */
+            employee_id: string;
+            /**
+             * Job Item Id
+             * Format: uuid
+             */
+            job_item_id: string;
+            /**
+             * Work Date
+             * Format: date
+             */
+            work_date: string;
+            /** Assigned Hours */
+            assigned_hours: number | string;
+            /** Sequence */
+            sequence?: number | null;
+            /** Occurrence Id */
+            occurrence_id?: string | null;
+            /** Exclude Scheduled Work Id */
+            exclude_scheduled_work_id?: string | null;
+        };
+        /** SnapshotEntity */
+        SnapshotEntity: {
+            /** Entity Type */
+            entity_type: string;
+            /** Entity Id */
+            entity_id: string;
+            /** Entity Version */
+            entity_version: number;
+            /** Payload */
+            payload?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** StaffingGapSlot */
+        StaffingGapSlot: {
+            /**
+             * Work Date
+             * Format: date
+             */
+            work_date: string;
+            /**
+             * Job Item Id
+             * Format: uuid
+             */
+            job_item_id: string;
+            /**
+             * Worksite Id
+             * Format: uuid
+             */
+            worksite_id: string;
+            /** Job Number */
+            job_number: string;
+            /** Job Name */
+            job_name: string;
+            /** Staff Grade Description */
+            staff_grade_description: string;
+            /** Required Hours */
+            required_hours: string;
+            /**
+             * Original Employee Id
+             * Format: uuid
+             */
+            original_employee_id: string;
+            /** Original Employee Name */
+            original_employee_name: string;
+            /** Reason */
+            reason: string;
+            /**
+             * Gap Type
+             * @default LEAVE
+             */
+            gap_type: string;
+            /** Days To Go */
+            days_to_go: number;
+        };
+        /** StaffingGapsResponse */
+        StaffingGapsResponse: {
+            /**
+             * From Date
+             * Format: date
+             */
+            from_date: string;
+            /**
+             * To Date
+             * Format: date
+             */
+            to_date: string;
+            /** Gaps */
+            gaps: components["schemas"]["StaffingGapSlot"][];
+        };
+        /** StandingAssignmentCreate */
+        StandingAssignmentCreate: {
+            /**
+             * Employee Id
+             * Format: uuid
+             */
+            employee_id: string;
+            /**
+             * Job Item Id
+             * Format: uuid
+             */
+            job_item_id: string;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /** End Date */
+            end_date?: string | null;
+            /** Weekday Pattern */
+            weekday_pattern?: string[] | null;
+            /** Hours Per Day */
+            hours_per_day?: number | string | null;
+        };
+        /** StandingAssignmentEndRequest */
+        StandingAssignmentEndRequest: {
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /** Version */
+            version: number;
+        };
+        /** StandingAssignmentRead */
+        StandingAssignmentRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Employee Id
+             * Format: uuid
+             */
+            employee_id: string;
+            /** Employee Name */
+            employee_name?: string | null;
+            /**
+             * Job Item Id
+             * Format: uuid
+             */
+            job_item_id: string;
+            /** Job Number */
+            job_number?: string | null;
+            /** Sub Item Code */
+            sub_item_code?: string | null;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /** End Date */
+            end_date?: string | null;
+            /** Weekday Pattern */
+            weekday_pattern?: string[] | null;
+            /** Hours Per Day */
+            hours_per_day?: string | null;
+            /** Is Active */
+            is_active: boolean;
+            /** Version */
+            version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** StreamTicketResponse */
+        StreamTicketResponse: {
+            /** Ticket */
+            ticket: string;
+            /**
+             * Expires In Seconds
+             * @default 30
+             */
+            expires_in_seconds: number;
+        };
+        /** SyncAckRequest */
+        SyncAckRequest: {
+            /** Cursor */
+            cursor: number;
+        };
+        /** SyncAckResponse */
+        SyncAckResponse: {
+            /**
+             * Status
+             * @default ACKNOWLEDGED
+             */
+            status: string;
+            /** Last Acked Cursor */
+            last_acked_cursor: number;
+            /**
+             * Server Time Utc
+             * Format: date-time
+             */
+            server_time_utc: string;
+        };
+        /** SyncChangeItem */
+        SyncChangeItem: {
+            /** Cursor */
+            cursor: number;
+            /** Entity Type */
+            entity_type: string;
+            /** Entity Id */
+            entity_id: string;
+            /** Entity Version */
+            entity_version: number;
+            /** Op */
+            op: string;
+            /** Priority */
+            priority: number;
+            /** Payload */
+            payload?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** SyncChangesResponse */
+        SyncChangesResponse: {
+            /** From Cursor */
+            from_cursor: number;
+            /** Next Cursor */
+            next_cursor: number;
+            /** Has More */
+            has_more: boolean;
+            /** Resync Required */
+            resync_required: boolean;
+            /**
+             * Server Time Utc
+             * Format: date-time
+             */
+            server_time_utc: string;
+            /** Changes */
+            changes: components["schemas"]["SyncChangeItem"][];
+        };
+        /** SyncSnapshotResponse */
+        SyncSnapshotResponse: {
+            /** Cursor */
+            cursor: number;
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /**
+             * Server Time Utc
+             * Format: date-time
+             */
+            server_time_utc: string;
+            /** Window */
+            window: {
+                [key: string]: string;
+            };
+            /** Entities */
+            entities: components["schemas"]["SnapshotEntity"][];
         };
         /** TimeRuleCreate */
         TimeRuleCreate: {
@@ -2413,6 +6349,28 @@ export interface components {
             /** Context */
             ctx?: Record<string, never>;
         };
+        /** ValidationIssueRead */
+        ValidationIssueRead: {
+            /** Code */
+            code: string;
+            /** Severity */
+            severity: string;
+            /** Message */
+            message: string;
+        };
+        /** ValidationReportRead */
+        ValidationReportRead: {
+            /** Is Valid */
+            is_valid: boolean;
+            /** Issues */
+            issues: components["schemas"]["ValidationIssueRead"][];
+            /** Errors */
+            errors: components["schemas"]["ValidationIssueRead"][];
+            /** Warnings */
+            warnings: components["schemas"]["ValidationIssueRead"][];
+            /** Infos */
+            infos: components["schemas"]["ValidationIssueRead"][];
+        };
         /** WinningFieldSourceRead */
         WinningFieldSourceRead: {
             /** Rule Id */
@@ -2425,6 +6383,50 @@ export interface components {
             field_name: string;
             /** Value */
             value: unknown;
+        };
+        /** WorkerAllocationResponse */
+        WorkerAllocationResponse: {
+            /**
+             * Employee Id
+             * Format: uuid
+             */
+            employee_id: string;
+            /** Employee Name */
+            employee_name: string;
+            /** Base Standard Hours */
+            base_standard_hours: string;
+            /** Effective Daily Standard Hours */
+            effective_daily_standard_hours: string;
+            /** Today Allocated Hours */
+            today_allocated_hours: string;
+            /** Today Standard Hours */
+            today_standard_hours: string;
+            /** Today Diff */
+            today_diff: string;
+            /** Today Is Over */
+            today_is_over: boolean;
+            /** Today Is Under */
+            today_is_under: boolean;
+            /** Week Allocated Hours */
+            week_allocated_hours: string;
+            /** Week Standard Hours */
+            week_standard_hours: string;
+            /** Week Diff */
+            week_diff: string;
+            /** Week Is Over */
+            week_is_over: boolean;
+            /** Week Is Under */
+            week_is_under: boolean;
+            /** Month Allocated Hours */
+            month_allocated_hours: string;
+            /** Month Standard Hours */
+            month_standard_hours: string;
+            /** Month Diff */
+            month_diff: string;
+            /** Month Is Over */
+            month_is_over: boolean;
+            /** Month Is Under */
+            month_is_under: boolean;
         };
         /** WorksiteCreate */
         WorksiteCreate: {
@@ -2532,6 +6534,11 @@ export interface components {
              * @default []
              */
             items: components["schemas"]["JobItemResponse"][];
+            /**
+             * Job Items
+             * @default []
+             */
+            job_items: components["schemas"]["JobItemResponse"][];
         };
         /** WorksiteResponse */
         WorksiteResponse: {
@@ -2887,6 +6894,8 @@ export interface operations {
                 sgd?: string | null;
                 grade_code?: string | null;
                 manager_id?: string | null;
+                accommodation_id?: string | null;
+                has_accommodation?: boolean | null;
                 country?: string | null;
                 is_active?: boolean | null;
                 q?: string | null;
@@ -3755,7 +7764,38 @@ export interface operations {
             };
         };
     };
-    revoke_device_api_v1_devices__device_id__revoke_post: {
+    list_devices_api_v1_devices_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceStatusRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_device_binding_api_v1_devices__device_id__revoke_post: {
         parameters: {
             query?: never;
             header?: {
@@ -3774,7 +7814,468 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RegisteredDeviceRead"];
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_device_binding_api_v1_devices__device_id__reset_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                device_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mobile_login_api_v1_mobile_auth_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MobileLoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MobileLoginResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mobile_change_password_api_v1_mobile_auth_change_password_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MobileChangePasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mobile_refresh_api_v1_mobile_auth_refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MobileRefreshRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mobile_logout_api_v1_mobile_auth_logout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MobileRefreshRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mobile_record_consent_api_v1_mobile_consent_post: {
+        parameters: {
+            query?: {
+                allow_password_change_pending?: boolean;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MobileConsentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_mobile_location_policy_api_v1_mobile_policy_location_get: {
+        parameters: {
+            query?: {
+                language?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MobilePolicyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_mobile_device_api_v1_mobile_device_put: {
+        parameters: {
+            query?: {
+                allow_password_change_pending?: boolean;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MobileDeviceUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mobile_heartbeat_api_v1_mobile_heartbeat_post: {
+        parameters: {
+            query?: {
+                allow_password_change_pending?: boolean;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MobileHeartbeatRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MobileHeartbeatResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_sync_snapshot_api_v1_mobile_sync_snapshot_get: {
+        parameters: {
+            query?: {
+                allow_password_change_pending?: boolean;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncSnapshotResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_sync_changes_api_v1_mobile_sync_changes_get: {
+        parameters: {
+            query?: {
+                cursor?: number;
+                limit?: number;
+                allow_password_change_pending?: boolean;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncChangesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_sync_ack_api_v1_mobile_sync_ack_post: {
+        parameters: {
+            query?: {
+                allow_password_change_pending?: boolean;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SyncAckRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncAckResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ingest_event_batch_api_v1_mobile_events_batch_post: {
+        parameters: {
+            query?: {
+                allow_password_change_pending?: boolean;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EventBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventBatchResponse"];
                 };
             };
             /** @description Validation Error */
@@ -4275,6 +8776,39 @@ export interface operations {
             };
         };
     };
+    reset_database_api_v1_settings_reset_database_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     download_import_template_api_v1_imports_template_get: {
         parameters: {
             query?: never;
@@ -4762,6 +9296,8 @@ export interface operations {
     get_boundary_queue_api_v1_boundary_queue_get: {
         parameters: {
             query?: {
+                status?: string;
+                entity_type?: string | null;
                 limit?: number;
                 offset?: number;
             };
@@ -5146,6 +9682,2191 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobOccurrenceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_weekly_roster_api_v1_roster_get: {
+        parameters: {
+            query: {
+                /** @description Start date of the week (Monday) */
+                week_start: string;
+                supervisor_id?: string | null;
+                engineer_id?: string | null;
+                group_id?: string | null;
+                staff_type?: string | null;
+                grade_group?: string | null;
+                problems_only?: boolean;
+                /** @description Set to 'xlsx' for Excel export */
+                format?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_schedule_coverage_api_v1_schedule_coverage_get: {
+        parameters: {
+            query: {
+                /** @description Start date of the week (Monday) */
+                week_start: string;
+                group_id?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoverageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_worker_allocation_api_v1_workers__id__allocation_get: {
+        parameters: {
+            query?: {
+                /** @description Target date for allocation (defaults to today) */
+                work_date?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerAllocationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_occurrence_recommendations_api_v1_occurrences__id__recommendations_get: {
+        parameters: {
+            query?: {
+                date?: string | null;
+                weekday?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CandidateRecommendationRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_job_item_recommendations_api_v1_job_items__id__recommendations_get: {
+        parameters: {
+            query?: {
+                date?: string | null;
+                weekday?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CandidateRecommendationRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_standing_assignments_api_v1_standing_assignments_get: {
+        parameters: {
+            query?: {
+                job_item_id?: string | null;
+                employee_id?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StandingAssignmentRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_standing_assignment_api_v1_standing_assignments_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StandingAssignmentCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StandingAssignmentRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    end_standing_assignment_api_v1_standing_assignments__id__end_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StandingAssignmentEndRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StandingAssignmentRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    validate_scheduled_work_api_v1_scheduled_work_validate_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduledWorkValidateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationReportRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_scheduled_work_api_v1_scheduled_work_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduledWorkCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduledWorkRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_scheduled_work_batch_api_v1_scheduled_work_batch_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduledWorkBatchCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduledWorkRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_scheduled_work_api_v1_scheduled_work__id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_scheduled_work_api_v1_scheduled_work__id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduledWorkUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduledWorkRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reorder_scheduled_work_api_v1_scheduled_work_reorder_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduledWorkReorderRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduledWorkRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_base_planner_worksites_api_v1_base_planner_worksites_get: {
+        parameters: {
+            query?: {
+                group_id?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BasePlannerResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_base_template_api_v1_base_planner_templates__job_item_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                job_item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseRosterTemplateRead"] | null;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_base_template_api_v1_base_planner_templates_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BaseRosterTemplateCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseRosterTemplateRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_operational_coverage_api_v1_operational_planner_coverage_get: {
+        parameters: {
+            query: {
+                /** @description Start date of the week (Monday) */
+                week_start: string;
+                group_id?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationalCoverageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_operational_roster_api_v1_operational_planner_roster_get: {
+        parameters: {
+            query: {
+                /** @description Start date of the week (Monday) */
+                week_start: string;
+                group_id?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationalRosterResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_operational_shift_api_v1_operational_planner_shifts_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperationalShiftCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduledWorkRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_operational_shift_api_v1_operational_planner_shifts__shift_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                shift_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_leave_requests_api_v1_leave_requests_get: {
+        parameters: {
+            query?: {
+                employee_id?: string | null;
+                status?: string | null;
+                from_date?: string | null;
+                to_date?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeaveRequestResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_leave_request_api_v1_leave_requests_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LeaveRequestCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeaveRequestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_leave_taken_summary_api_v1_leave_requests_summary_get: {
+        parameters: {
+            query: {
+                /** @description Calendar year for leave taken count */
+                year: number;
+                employee_id?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeaveTakenWorkerSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_leave_template_api_v1_leave_requests_template_xlsx_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_leaves_excel_api_v1_leave_requests_import_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_leave_request_api_v1_leave_requests__leave_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                leave_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeaveRequestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_leave_request_api_v1_leave_requests__leave_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                leave_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeaveRequestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_leave_request_api_v1_leave_requests__leave_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                leave_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LeaveDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeaveRequestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_leave_request_api_v1_leave_requests__leave_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                leave_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeaveRequestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_reassignment_requests_api_v1_reassignment_requests_get: {
+        parameters: {
+            query?: {
+                status?: string | null;
+                date_from?: string | null;
+                date_to?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReassignmentResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_reassignment_request_api_v1_reassignment_requests_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReassignmentRequestCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReassignmentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_reassignment_api_v1_reassignment_requests_preview_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReassignmentPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReassignmentPreviewResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_reassignment_request_api_v1_reassignment_requests__request_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReassignmentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_reassignment_request_api_v1_reassignment_requests__request_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ReassignmentDecisionRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReassignmentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_reassignment_request_api_v1_reassignment_requests__request_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReassignmentDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReassignmentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_reassignment_request_api_v1_reassignment_requests__request_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReassignmentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_approvals_inbox_api_v1_approvals_get: {
+        parameters: {
+            query?: {
+                /** @description Filter status: PENDING, APPROVED, REJECTED, DECIDED, ALL */
+                status?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalsInboxResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_staffing_gaps_api_v1_staffing_gaps_get: {
+        parameters: {
+            query: {
+                /** @description Start of date range */
+                from_date: string;
+                /** @description End of date range */
+                to_date: string;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffingGapsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_attendance_api_v1_attendance_get: {
+        parameters: {
+            query?: {
+                from_date?: string | null;
+                to_date?: string | null;
+                employee_id?: string | null;
+                supervisor_id?: string | null;
+                review_status?: string | null;
+                business_status?: string | null;
+                flag?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttendanceListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_attendance_exceptions_api_v1_attendance_exceptions_get: {
+        parameters: {
+            query?: {
+                from_date?: string | null;
+                to_date?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttendanceListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_attendance_detail_api_v1_attendance__attendance_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                attendance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttendanceRecordResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_attendance_calculations_api_v1_attendance__attendance_id__calculations_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                attendance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttendanceCalculationSnapshot"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_attendance_timeline_api_v1_attendance__attendance_id__timeline_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                attendance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttendanceTimelineResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_attendance_comment_api_v1_attendance__attendance_id__comments_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                attendance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttendanceCommentCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttendanceCommentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    record_attendance_decision_api_v1_attendance__attendance_id__decisions_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                attendance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttendanceDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttendanceApprovalResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    recalculate_attendance_api_v1_attendance_recalculate_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttendanceRecalculateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttendanceRecalculateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_events_api_v1_events_get: {
+        parameters: {
+            query?: {
+                employee_id?: string | null;
+                event_date?: string | null;
+                event_type?: string | null;
+                flag?: string | null;
+                limit?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MobileEventResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_stream_ticket_api_v1_live_stream_ticket_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StreamTicketResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    live_position_stream_api_v1_live_stream_get: {
+        parameters: {
+            query: {
+                /** @description One-time 30s ticket from /live/stream-ticket */
+                ticket: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_live_positions_api_v1_live_positions_get: {
+        parameters: {
+            query?: {
+                /** @description Filter by supervisor */
+                supervisor_id?: string | null;
+                /** @description Filter by group */
+                group_id?: string | null;
+                /** @description Filter by live state (ACTIVE, OFFLINE, NOT_SCHEDULED) */
+                state?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LivePositionsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_worker_day_trail_api_v1_live_trail__employee_id__get: {
+        parameters: {
+            query?: {
+                /** @description Date YYYY-MM-DD (defaults to today) */
+                date?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                employee_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_pending_visits_api_v1_pending_visits_get: {
+        parameters: {
+            query?: {
+                /** @description Filter by status (OPEN, EXPLAINED, RESCHEDULED, CLOSED) */
+                status?: string | null;
+                /** @description Filter due_date >= from_date */
+                from_date?: string | null;
+                /** @description Filter due_date <= to_date */
+                to_date?: string | null;
+                /** @description Filter by worksite */
+                worksite_id?: string | null;
+                /** @description Filter by supervisor */
+                supervisor_id?: string | null;
+                /** @description Filter by employee */
+                employee_id?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PendingVisitListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    explain_pending_visit_api_v1_pending_visits__id__explain_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PendingVisitExplainRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reschedule_pending_visit_api_v1_pending_visits__id__reschedule_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PendingVisitRescheduleRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    close_pending_visit_api_v1_pending_visits__id__close_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PendingVisitCloseRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    trigger_detect_pending_visits_api_v1_pending_visits_detect_post: {
+        parameters: {
+            query?: {
+                /** @description Date to run day-close detection on (defaults to yesterday) */
+                target_date?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_expiring_documents_api_v1_documents_expiring_get: {
+        parameters: {
+            query?: {
+                /** @description Lead days threshold (defaults to company setting) */
+                within_days?: number | null;
+                /** @description Filter by document type (VISA, PASSPORT, EMIRATES_ID, LABOUR_CARD, DRIVING_LICENCE) */
+                document_type?: string | null;
+                /** @description Filter by supervisor */
+                supervisor_id?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpiringDocumentsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    trigger_document_expiry_alerts_api_v1_documents_check_alerts_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: number;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_dashboard_summary_api_v1_dashboard_summary_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardSummaryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_alerts_api_v1_alerts_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_alert_api_v1_alerts__alert_id__resolve_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                alert_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AlertResolveRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertResponse"];
                 };
             };
             /** @description Validation Error */

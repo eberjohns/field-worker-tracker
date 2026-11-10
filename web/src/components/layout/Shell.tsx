@@ -23,6 +23,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Smartphone,
+  AlertTriangle,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { Login } from "../../routes/Login";
@@ -41,6 +42,8 @@ const navItems: NavItem[] = [
   { label: "Worksites & Jobs", to: "/worksites", icon: Building2, roles: ["ADMIN", "ENGINEER", "SUPERINTENDENT", "SUPERVISOR"] },
   { label: "Boundary Queue", to: "/boundaries", icon: Hexagon, roles: ["ADMIN", "ENGINEER"] },
   { label: "Live Map", to: "/live", icon: MapPin },
+  { label: "Pending Visits", to: "/pending-visits", icon: AlertTriangle, roles: ["ADMIN", "ENGINEER", "SUPERINTENDENT", "SUPERVISOR"] },
+  { label: "Documents", to: "/documents", icon: ShieldCheck, roles: ["ADMIN"] },
   { label: "Base Planner", to: "/base-planner", icon: CalendarRange, roles: ["ADMIN", "ENGINEER", "SUPERINTENDENT", "SUPERVISOR"] },
   { label: "Operational Planner", to: "/operational-planner", icon: CalendarDays, roles: ["ADMIN", "ENGINEER", "SUPERINTENDENT", "SUPERVISOR"] },
   { label: "Leave Management", to: "/leave", icon: CalendarCheck, roles: ["ADMIN", "ENGINEER", "SUPERINTENDENT", "SUPERVISOR"] },

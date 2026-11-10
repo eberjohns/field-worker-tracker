@@ -80,3 +80,48 @@ class MobileEventResponse(BaseModel):
     server_verdict: str | None = None
     distance_to_polygon_m: float | None = None
     flags: list[str] = Field(default_factory=list)
+
+
+class StreamTicketResponse(BaseModel):
+    ticket: str
+    expires_in_seconds: int = 30
+
+
+class LivePositionItem(BaseModel):
+    employee_id: UUID
+    tally_id: str | None = None
+    name: str
+    role: str | None = None
+    supervisor_id: UUID | None = None
+    supervisor_name: str | None = None
+    group_id: UUID | None = None
+    group_name: str | None = None
+    zone_id: UUID | None = None
+    zone_name: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    accuracy_meters: float | None = None
+    event_type: str
+    event_timestamp_utc: datetime
+    received_at_utc: datetime
+    last_contact_at: datetime
+    age_seconds: int
+    contact_age_seconds: int
+    tracking_enabled: bool = True
+    server_verdict: str | None = None
+    server_site_id: UUID | None = None
+    server_site_name: str | None = None
+    live_state: str  # ACTIVE | NO_RECENT_SIGNAL | LOCATION_DISABLED | NOT_SCHEDULED
+    has_schedule_today: bool = False
+    today_assignments: list[dict] = Field(default_factory=list)
+
+
+class LivePositionsResponse(BaseModel):
+    items: list[LivePositionItem]
+    active_count: int
+    offline_count: int
+    disabled_count: int
+    not_scheduled_count: int
+    total_count: int
+    as_of: datetime
+

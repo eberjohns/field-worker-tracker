@@ -67,6 +67,20 @@ class EventsIngested(DomainEvent):
     affected_work_dates: list[Any] = field(default_factory=list)
 
 
+@dataclass
+class LocationDisabledRecorded(DomainEvent):
+    employee_id: UUID | None = None
+    event_id: UUID | None = None
+    captured_at: Any = None
+
+
+@dataclass
+class LocationEnabledRecorded(DomainEvent):
+    employee_id: UUID | None = None
+    event_id: UUID | None = None
+    captured_at: Any = None
+
+
 SyncHandler = Callable[[Any, Any], Awaitable[None]]
 PostCommitHandler = Callable[[Any], Awaitable[None]]
 
