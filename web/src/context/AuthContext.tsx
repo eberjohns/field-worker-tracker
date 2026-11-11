@@ -21,11 +21,20 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Global fetch interceptor for 401 Unauthorized responses
+const API_BASE_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+
+// Global fetch interceptor for base URL routing and 401 Unauthorized responses
 if (typeof window !== "undefined" && !(window as any).__fwt_fetch_interceptor_installed) {
   (window as any).__fwt_fetch_interceptor_installed = true;
   const originalFetch = window.fetch;
   window.fetch = async (...args) => {
+    if (API_BASE_URL) {
+      if (typeof args[0] === "string" && args[0].startsWith("/api/")) {
+        args[0] = `${API_BASE_URL}${args[0]}`;
+      } else if (args[0] instanceof Request && args[0].url.startsWith("/api/")) {
+        args[0] = new Request(`${API_BASE_URL}${args[0].url}`, args[0]);
+      }
+    }
     const response = await originalFetch(...args);
     if (response.status === 401) {
       const url = typeof args[0] === "string" ? args[0] : (args[0] as Request).url;

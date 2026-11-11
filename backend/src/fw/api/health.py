@@ -21,7 +21,12 @@ class ReadinessResponse(BaseModel):
     database: str
 
 
-@router.get("/health", response_model=HealthResponse, summary="Liveness check")
+@router.api_route(
+    "/health",
+    methods=["GET", "HEAD"],
+    response_model=HealthResponse,
+    summary="Liveness check",
+)
 async def health(settings: Settings = Depends(get_settings)) -> HealthResponse:
     return HealthResponse(
         status="ok",
@@ -30,8 +35,9 @@ async def health(settings: Settings = Depends(get_settings)) -> HealthResponse:
     )
 
 
-@router.get(
+@router.api_route(
     "/health/ready",
+    methods=["GET", "HEAD"],
     response_model=ReadinessResponse,
     responses={503: {"description": "Service not ready"}},
     summary="Readiness check",
