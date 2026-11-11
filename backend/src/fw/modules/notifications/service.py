@@ -197,4 +197,3 @@ class NotificationService:
 
         await session.flush()
         return created_count
-

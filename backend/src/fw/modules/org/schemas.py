@@ -235,7 +235,6 @@ class ExpiringDocumentsResponse(BaseModel):
     total_count: int
 
 
-
 class RegisteredDeviceRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

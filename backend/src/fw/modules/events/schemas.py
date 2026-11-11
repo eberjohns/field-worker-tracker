@@ -124,4 +124,3 @@ class LivePositionsResponse(BaseModel):
     not_scheduled_count: int
     total_count: int
     as_of: datetime
-

@@ -1171,9 +1171,15 @@ class ImportService:
                         try:
                             parsed_val = json.loads(parsed_val)
                         except Exception:
-                            parsed_val = [x.strip().strip("'\"") for x in parsed_val.strip("[]").split(",") if x.strip()]
+                            parsed_val = [
+                                x.strip().strip("'\"")
+                                for x in parsed_val.strip("[]").split(",")
+                                if x.strip()
+                            ]
                     else:
-                        parsed_val = [x.strip().strip("'\"") for x in parsed_val.split(",") if x.strip()]
+                        parsed_val = [
+                            x.strip().strip("'\"") for x in parsed_val.split(",") if x.strip()
+                        ]
                 elif not isinstance(parsed_val, list):
                     parsed_val = [str(parsed_val)]
 

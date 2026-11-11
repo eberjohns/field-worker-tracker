@@ -932,11 +932,12 @@ class OrgService:
         emp_grades = set((await session.execute(stmt)).scalars().all())
 
         # Also include any currently in budget_only_staff_types setting so none are omitted
-        setting_val = await SettingsService.get_setting(session, "budget_only_staff_types", default=[])
+        setting_val = await SettingsService.get_setting(
+            session, "budget_only_staff_types", default=[]
+        )
         if isinstance(setting_val, list):
             emp_grades.update(str(x) for x in setting_val if x)
         elif isinstance(setting_val, str) and setting_val:
             emp_grades.update(str(x).strip() for x in setting_val.split(",") if x.strip())
 
         return sorted([g for g in emp_grades if g and g.strip()])
-

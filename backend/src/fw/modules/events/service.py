@@ -336,7 +336,10 @@ class EventsService:
                 sf = state_filter.upper()
                 if sf == "ACTIVE" and live_state != "ACTIVE":
                     continue
-                if sf in ("OFFLINE", "NO_RECENT_SIGNAL") and live_state not in ("NO_RECENT_SIGNAL", "OFFLINE"):
+                if sf in ("OFFLINE", "NO_RECENT_SIGNAL") and live_state not in (
+                    "NO_RECENT_SIGNAL",
+                    "OFFLINE",
+                ):
                     continue
                 if sf in ("DISABLED", "LOCATION_DISABLED") and live_state != "LOCATION_DISABLED":
                     continue
@@ -385,4 +388,3 @@ class EventsService:
             total_count=len(items),
             as_of=now,
         )
-

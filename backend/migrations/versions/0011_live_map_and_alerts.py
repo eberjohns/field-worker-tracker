@@ -67,4 +67,3 @@ def downgrade() -> None:
         table_name="live_location_access_logs",
     )
     op.drop_table("live_location_access_logs")
-

@@ -247,7 +247,10 @@ class EventEnrichmentService:
             # Group by employee_id to find latest event per employee
             by_emp: dict[UUID, MobileEventLog] = {}
             for e in events:
-                if e.employee_id not in by_emp or e.event_timestamp_utc > by_emp[e.employee_id].event_timestamp_utc:
+                if (
+                    e.employee_id not in by_emp
+                    or e.event_timestamp_utc > by_emp[e.employee_id].event_timestamp_utc
+                ):
                     by_emp[e.employee_id] = e
             for latest_e in by_emp.values():
                 await EventEnrichmentService._update_last_position(session, latest_e)
@@ -319,9 +322,6 @@ class EventEnrichmentService:
             await live_position_broadcaster.broadcast_position_update(pos.employee_id, payload)
             try:
                 # PostgreSQL NOTIFY (no-op if unsupported by engine in SQLite tests)
-                await session.execute(
-                    text(f"NOTIFY live_positions, '{pos.employee_id}'")
-                )
+                await session.execute(text(f"NOTIFY live_positions, '{pos.employee_id}'"))
             except Exception:
                 pass
-

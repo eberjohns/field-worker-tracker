@@ -123,7 +123,11 @@ class PendingVisitsService:
         if not pv:
             raise AppError(code="NOT_FOUND", message="Pending visit not found", status_code=404)
         if pv.status == "CLOSED":
-            raise AppError(code="INVALID_STATUS", message="Cannot explain a closed pending visit", status_code=400)
+            raise AppError(
+                code="INVALID_STATUS",
+                message="Cannot explain a closed pending visit",
+                status_code=400,
+            )
 
         # Ensure an AttendanceRecord exists for employee and work_date
         rec_stmt = select(AttendanceRecord).where(
@@ -169,11 +173,17 @@ class PendingVisitsService:
         if not pv:
             raise AppError(code="NOT_FOUND", message="Pending visit not found", status_code=404)
         if not employee_ids:
-            raise AppError(code="VALIDATION_ERROR", message="At least one employee must be selected", status_code=400)
+            raise AppError(
+                code="VALIDATION_ERROR",
+                message="At least one employee must be selected",
+                status_code=400,
+            )
 
         orig_sw = await session.get(ScheduledWork, pv.scheduled_work_id)
         if not orig_sw:
-            raise AppError(code="NOT_FOUND", message="Original scheduled work not found", status_code=404)
+            raise AppError(
+                code="NOT_FOUND", message="Original scheduled work not found", status_code=404
+            )
 
         new_items = []
         for emp_id in employee_ids:
@@ -221,7 +231,11 @@ class PendingVisitsService:
         if not pv:
             raise AppError(code="NOT_FOUND", message="Pending visit not found", status_code=404)
         if not reason or not reason.strip():
-            raise AppError(code="VALIDATION_ERROR", message="A reason is required to close a pending visit", status_code=400)
+            raise AppError(
+                code="VALIDATION_ERROR",
+                message="A reason is required to close a pending visit",
+                status_code=400,
+            )
 
         pv.status = "CLOSED"
         pv.closed_reason = reason.strip()
@@ -256,6 +270,7 @@ class PendingVisitsService:
         for pv, worker_name, worksite_name in rows:
             # Check if alert already open
             from fw.modules.notifications.models import Alert
+
             existing = await session.execute(
                 select(Alert.id).where(
                     Alert.alert_type == "PENDING_VISIT",
@@ -329,7 +344,9 @@ class PendingVisitsService:
             .join(Worksite, PendingVisit.worksite_id == Worksite.id)
             .join(ScheduledWork, PendingVisit.scheduled_work_id == ScheduledWork.id)
             .outerjoin(JobItem, ScheduledWork.job_item_id == JobItem.id)
-            .outerjoin(AttendanceComment, PendingVisit.explanation_comment_id == AttendanceComment.id)
+            .outerjoin(
+                AttendanceComment, PendingVisit.explanation_comment_id == AttendanceComment.id
+            )
             .outerjoin(User, PendingVisit.closed_by_user_id == User.id)
             .order_by(PendingVisit.due_date.desc(), PendingVisit.created_at.desc())
         )

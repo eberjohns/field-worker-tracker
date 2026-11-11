@@ -70,14 +70,12 @@ class EventsIngested(DomainEvent):
 @dataclass
 class LocationDisabledRecorded(DomainEvent):
     employee_id: UUID | None = None
-    event_id: UUID | None = None
     captured_at: Any = None
 
 
 @dataclass
 class LocationEnabledRecorded(DomainEvent):
     employee_id: UUID | None = None
-    event_id: UUID | None = None
     captured_at: Any = None
 
 

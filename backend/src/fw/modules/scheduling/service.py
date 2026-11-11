@@ -3270,7 +3270,9 @@ class SchedulingService:
                 date_from=leave.from_date,
                 date_to=leave.to_date,
                 worker_name=emp_name,
-                approved_by_user_id=current_user_id or leave.approved_by_user_id or leave.recorded_by_user_id,
+                approved_by_user_id=current_user_id
+                or leave.approved_by_user_id
+                or leave.recorded_by_user_id,
             ),
             session=self.session,
         )

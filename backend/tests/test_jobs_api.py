@@ -496,4 +496,3 @@ async def test_boundaries_export_and_import(admin_client):
     reasons = [e["reason"] for e in result["errors"]]
     assert any("NON_EXISTENT_999" in r for r in reasons)
     assert any("UNKNOWN_CAMP_XYZ" in r for r in reasons)
-

@@ -217,7 +217,9 @@ async def test_attendance_api_end_to_end():
                 {
                     "event_id": str(uuid4()),
                     "event_type": "EXIT",
-                    "event_timestamp_utc": datetime.combine(work_date, time(5, 20), tzinfo=UTC).isoformat(),
+                    "event_timestamp_utc": datetime.combine(
+                        work_date, time(5, 20), tzinfo=UTC
+                    ).isoformat(),
                     "latitude": 25.145,
                     "longitude": 55.405,
                     "accuracy_meters": 10.0,
@@ -227,7 +229,9 @@ async def test_attendance_api_end_to_end():
                 {
                     "event_id": str(uuid4()),
                     "event_type": "ENTRY",
-                    "event_timestamp_utc": datetime.combine(work_date, time(6, 20), tzinfo=UTC).isoformat(),
+                    "event_timestamp_utc": datetime.combine(
+                        work_date, time(6, 20), tzinfo=UTC
+                    ).isoformat(),
                     "latitude": 25.105,
                     "longitude": 55.205,
                     "accuracy_meters": 10.0,
@@ -237,7 +241,9 @@ async def test_attendance_api_end_to_end():
                 {
                     "event_id": str(uuid4()),
                     "event_type": "EXIT",
-                    "event_timestamp_utc": datetime.combine(work_date, time(15, 20), tzinfo=UTC).isoformat(),
+                    "event_timestamp_utc": datetime.combine(
+                        work_date, time(15, 20), tzinfo=UTC
+                    ).isoformat(),
                     "latitude": 25.095,
                     "longitude": 55.195,
                     "accuracy_meters": 10.0,
@@ -247,7 +253,9 @@ async def test_attendance_api_end_to_end():
                 {
                     "event_id": str(uuid4()),
                     "event_type": "ENTRY",
-                    "event_timestamp_utc": datetime.combine(work_date, time(16, 50), tzinfo=UTC).isoformat(),
+                    "event_timestamp_utc": datetime.combine(
+                        work_date, time(16, 50), tzinfo=UTC
+                    ).isoformat(),
                     "latitude": 25.155,
                     "longitude": 55.405,
                     "accuracy_meters": 10.0,

@@ -150,7 +150,14 @@ async def export_boundaries(
     writer.writerow(["entity_type", "code", "name", "has_boundary", "format", "polygon"])
     for it in items:
         writer.writerow(
-            [it.entity_type, it.code, it.name, str(it.has_boundary).lower(), it.format, it.polygon or ""]
+            [
+                it.entity_type,
+                it.code,
+                it.name,
+                str(it.has_boundary).lower(),
+                it.format,
+                it.polygon or "",
+            ]
         )
 
     return Response(

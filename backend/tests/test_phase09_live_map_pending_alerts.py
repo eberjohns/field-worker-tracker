@@ -1,8 +1,8 @@
 """Tests for Phase 09: Live map, pending visits, alerts, and documents."""
 
-from datetime import UTC, date, datetime, timedelta
-from decimal import Decimal
 import uuid
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 import pytest
 from sqlalchemy import select
@@ -62,8 +62,12 @@ def _make_user(emp: Employee, role: str = "ADMIN") -> User:
 
 
 async def _make_worksite(session) -> Worksite:
-    group = Group(id=uuid.uuid4(), name=f"Group-{uuid.uuid4().hex[:4]}", code=f"G{uuid.uuid4().hex[:3]}")
-    zone = Zone(id=uuid.uuid4(), name=f"Zone-{uuid.uuid4().hex[:4]}", code=f"Z{uuid.uuid4().hex[:3]}")
+    group = Group(
+        id=uuid.uuid4(), name=f"Group-{uuid.uuid4().hex[:4]}", code=f"G{uuid.uuid4().hex[:3]}"
+    )
+    zone = Zone(
+        id=uuid.uuid4(), name=f"Zone-{uuid.uuid4().hex[:4]}", code=f"Z{uuid.uuid4().hex[:3]}"
+    )
     session.add_all([group, zone])
     await session.flush()
 
@@ -297,7 +301,7 @@ async def test_location_disabled_raises_alert_and_enabled_clears_it():
             event_timestamp_utc=now,
             latitude=Decimal("25.200000"),
             longitude=Decimal("55.270000"),
-            geom=f"SRID=4326;POINT(55.270000 25.200000)",
+            geom="SRID=4326;POINT(55.270000 25.200000)",
             accuracy_meters=10.0,
             server_received_at=now,
             processing_status="ACCEPTED",
@@ -331,7 +335,7 @@ async def test_location_disabled_raises_alert_and_enabled_clears_it():
             event_timestamp_utc=now + timedelta(minutes=10),
             latitude=Decimal("25.200000"),
             longitude=Decimal("55.270000"),
-            geom=f"SRID=4326;POINT(55.270000 25.200000)",
+            geom="SRID=4326;POINT(55.270000 25.200000)",
             accuracy_meters=10.0,
             server_received_at=now + timedelta(minutes=10),
             processing_status="ACCEPTED",

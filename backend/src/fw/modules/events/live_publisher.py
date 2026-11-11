@@ -136,4 +136,3 @@ class LivePositionBroadcaster:
 # Global singletons
 stream_ticket_manager = StreamTicketManager(expiry_seconds=30)
 live_position_broadcaster = LivePositionBroadcaster()
-

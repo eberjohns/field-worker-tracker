@@ -210,4 +210,3 @@ class PendingVisitListResponse(BaseModel):
     closed_count: int
     escalated_count: int
     total_count: int
-

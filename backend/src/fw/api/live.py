@@ -131,7 +131,9 @@ async def get_live_positions(
     request: Request,
     supervisor_id: UUID | None = Query(None, description="Filter by supervisor"),
     group_id: UUID | None = Query(None, description="Filter by group"),
-    state: str | None = Query(None, description="Filter by live state (ACTIVE, OFFLINE, NOT_SCHEDULED)"),
+    state: str | None = Query(
+        None, description="Filter by live state (ACTIVE, OFFLINE, NOT_SCHEDULED)"
+    ),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> LivePositionsResponse:
@@ -226,10 +228,18 @@ async def get_worker_day_trail(
     # Scope check
     if current_user.role != "ADMIN":
         scoped_list = await OrgService.get_scoped_employee_ids(session, current_user)
-        if scoped_list and employee_id not in scoped_list and current_user.employee_id != employee_id:
+        if (
+            scoped_list
+            and employee_id not in scoped_list
+            and current_user.employee_id != employee_id
+        ):
             raise AppError(code="FORBIDDEN", message="Worker outside your scope", status_code=403)
 
-    target_date = datetime.strptime(date, "%Y-%m-%d").date() if date else datetime.now(UTC).astimezone(ZoneInfo("Asia/Dubai")).date()
+    target_date = (
+        datetime.strptime(date, "%Y-%m-%d").date()
+        if date
+        else datetime.now(UTC).astimezone(ZoneInfo("Asia/Dubai")).date()
+    )
 
     # Query enriched events for this employee with valid coordinates
     stmt = (

@@ -26,7 +26,9 @@ router = APIRouter(prefix="/pending-visits", tags=["pending-visits"])
 
 @router.get("", response_model=PendingVisitListResponse)
 async def list_pending_visits(
-    status: str | None = Query(None, description="Filter by status (OPEN, EXPLAINED, RESCHEDULED, CLOSED)"),
+    status: str | None = Query(
+        None, description="Filter by status (OPEN, EXPLAINED, RESCHEDULED, CLOSED)"
+    ),
     from_date: date | None = Query(None, description="Filter due_date >= from_date"),
     to_date: date | None = Query(None, description="Filter due_date <= to_date"),
     worksite_id: UUID | None = Query(None, description="Filter by worksite"),
@@ -102,7 +104,9 @@ async def close_pending_visit(
 
 @router.post("/detect")
 async def trigger_detect_pending_visits(
-    target_date: date | None = Query(None, description="Date to run day-close detection on (defaults to yesterday)"),
+    target_date: date | None = Query(
+        None, description="Date to run day-close detection on (defaults to yesterday)"
+    ),
     current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
     session: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
@@ -110,5 +114,7 @@ async def trigger_detect_pending_visits(
     if not target_date:
         today = datetime.now(UTC).astimezone(ZoneInfo("Asia/Dubai")).date()
         target_date = today
-    count = await PendingVisitsService.detect_pending_visits(session=session, target_date=target_date)
+    count = await PendingVisitsService.detect_pending_visits(
+        session=session, target_date=target_date
+    )
     return {"detected_count": count, "target_date": str(target_date)}

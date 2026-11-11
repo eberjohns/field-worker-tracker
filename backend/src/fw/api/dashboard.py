@@ -73,14 +73,18 @@ async def get_dashboard_summary(
         scoped_ids = set(scoped_list) if scoped_list else set()
 
     # 1. Scheduled work today
-    sched_q = select(
-        ScheduledWork.employee_id,
-        ScheduledWork.worksite_id,
-        ScheduledWork.assigned_hours,
-        Worksite.job_name.label("worksite_name"),
-    ).outerjoin(Worksite, ScheduledWork.worksite_id == Worksite.id).where(
-        ScheduledWork.work_date == local_today,
-        ScheduledWork.status == "ACTIVE",
+    sched_q = (
+        select(
+            ScheduledWork.employee_id,
+            ScheduledWork.worksite_id,
+            ScheduledWork.assigned_hours,
+            Worksite.job_name.label("worksite_name"),
+        )
+        .outerjoin(Worksite, ScheduledWork.worksite_id == Worksite.id)
+        .where(
+            ScheduledWork.work_date == local_today,
+            ScheduledWork.status == "ACTIVE",
+        )
     )
     if scoped_ids is not None:
         sched_q = sched_q.where(ScheduledWork.employee_id.in_(scoped_ids))
@@ -138,7 +142,7 @@ async def get_dashboard_summary(
     # 5. Overtime hours today & Late arrivals
     calc_q = (
         select(AttendanceCalculation)
-        .join(AttendanceRecord, AttendanceCalculation.attendance_id == AttendanceRecord.id)
+        .join(AttendanceRecord, AttendanceCalculation.attendance_record_id == AttendanceRecord.id)
         .where(
             AttendanceRecord.work_date == local_today,
             AttendanceRecord.current_calculation_id == AttendanceCalculation.id,
@@ -181,15 +185,25 @@ async def get_dashboard_summary(
     expiring_docs_count = (await session.execute(doc_q)).scalar() or 0
 
     # 8. Pending approvals count
-    pending_leaves = (await session.execute(
-        select(func.count(LeaveRequest.id)).where(LeaveRequest.status == "REQUESTED")
-    )).scalar() or 0
-    pending_reassign = (await session.execute(
-        select(func.count(ReassignmentRequest.id)).where(ReassignmentRequest.status == "REQUESTED")
-    )).scalar() or 0
-    pending_att_reviews = (await session.execute(
-        select(func.count(AttendanceRecord.id)).where(AttendanceRecord.review_status == "PENDING_REVIEW")
-    )).scalar() or 0
+    pending_leaves = (
+        await session.execute(
+            select(func.count(LeaveRequest.id)).where(LeaveRequest.status == "REQUESTED")
+        )
+    ).scalar() or 0
+    pending_reassign = (
+        await session.execute(
+            select(func.count(ReassignmentRequest.id)).where(
+                ReassignmentRequest.status == "REQUESTED"
+            )
+        )
+    ).scalar() or 0
+    pending_att_reviews = (
+        await session.execute(
+            select(func.count(AttendanceRecord.id)).where(
+                AttendanceRecord.review_status == "PENDING_REVIEW"
+            )
+        )
+    ).scalar() or 0
     pending_approvals_count = pending_leaves + pending_reassign + pending_att_reviews
 
     return DashboardSummaryResponse(

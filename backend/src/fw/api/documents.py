@@ -21,8 +21,13 @@ router = APIRouter(prefix="/documents", tags=["documents"])
 
 @router.get("/expiring", response_model=ExpiringDocumentsResponse)
 async def list_expiring_documents(
-    within_days: int | None = Query(None, description="Lead days threshold (defaults to company setting)"),
-    document_type: str | None = Query(None, description="Filter by document type (VISA, PASSPORT, EMIRATES_ID, LABOUR_CARD, DRIVING_LICENCE)"),
+    within_days: int | None = Query(
+        None, description="Lead days threshold (defaults to company setting)"
+    ),
+    document_type: str | None = Query(
+        None,
+        description="Filter by document type (VISA, PASSPORT, EMIRATES_ID, LABOUR_CARD, DRIVING_LICENCE)",
+    ),
     supervisor_id: UUID | None = Query(None, description="Filter by supervisor"),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
