@@ -4,6 +4,11 @@ from fw.modules.jobs.models import JobItem, JobOccurrence, Worksite
 from fw.modules.jobs.schemas import (
     BoundaryCopyRequest,
     BoundaryCopyToRequest,
+    BoundaryExportItem,
+    BoundaryImportError,
+    BoundaryImportItem,
+    BoundaryImportRequest,
+    BoundaryImportResponse,
     BoundaryQueueItemResponse,
     BoundaryQueueResponse,
     BoundaryUpdateRequest,
@@ -24,6 +29,11 @@ from fw.modules.jobs.service import JobsService
 __all__ = [
     "BoundaryCopyRequest",
     "BoundaryCopyToRequest",
+    "BoundaryExportItem",
+    "BoundaryImportError",
+    "BoundaryImportItem",
+    "BoundaryImportRequest",
+    "BoundaryImportResponse",
     "BoundaryQueueItemResponse",
     "BoundaryQueueResponse",
     "BoundaryUpdateRequest",

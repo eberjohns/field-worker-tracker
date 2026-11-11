@@ -441,3 +441,59 @@ async def test_reset_database_endpoint_admin_only(admin_client):
     data = res.json()
     assert data["status"] == "success"
     assert "ADMIN001" in data["message"]
+
+
+@db_required
+async def test_boundaries_export_and_import(admin_client):
+    """Test boundary export (CSV/JSON) and bulk boundary import with graceful skip reporting."""
+    client = admin_client
+
+    # 1. Export as JSON
+    json_res = await client.get("/api/v1/boundaries/export?format=json")
+    assert json_res.status_code == 200, json_res.text
+    exported_list = json_res.json()
+    assert isinstance(exported_list, list)
+
+    # 2. Export as CSV
+    csv_res = await client.get("/api/v1/boundaries/export?format=csv")
+    assert csv_res.status_code == 200, csv_res.text
+    assert "entity_type,code,name,has_boundary,format,polygon" in csv_res.text
+
+    # 3. Import boundaries with valid, invalid, and unknown codes
+    valid_wkt = "POLYGON((55.385000 25.120000, 55.390000 25.120000, 55.390000 25.125000, 55.385000 25.125000, 55.385000 25.120000))"
+    import_payload = {
+        "items": [
+            {
+                "entity_type": "WORKSITE",
+                "code": "12A14301",
+                "polygon": valid_wkt,
+            },
+            {
+                "entity_type": "WORKSITE",
+                "code": "NON_EXISTENT_999",
+                "polygon": valid_wkt,
+            },
+            {
+                "entity_type": "ACCOMMODATION",
+                "code": "WARSAN_01",
+                "polygon": valid_wkt,
+            },
+            {
+                "entity_type": "ACCOMMODATION",
+                "code": "UNKNOWN_CAMP_XYZ",
+                "polygon": valid_wkt,
+            },
+        ]
+    }
+
+    import_res = await client.post("/api/v1/boundaries/import", json=import_payload)
+    assert import_res.status_code == 200, import_res.text
+    result = import_res.json()
+
+    assert result["total_rows"] == 4
+    # Both unknown codes should be skipped with detailed errors
+    assert result["skipped_count"] >= 2
+    reasons = [e["reason"] for e in result["errors"]]
+    assert any("NON_EXISTENT_999" in r for r in reasons)
+    assert any("UNKNOWN_CAMP_XYZ" in r for r in reasons)
+

@@ -114,6 +114,20 @@ export const WorksiteDetail: React.FC = () => {
   // Copy Boundary Modals
   const [copyModalMode, setCopyModalMode] = useState<"COPY_FROM" | "COPY_TO" | null>(null);
 
+  const handleQuickCopy = (format: "GeoJSON" | "WKT") => {
+    if (!worksite?.boundary_geojson) return;
+    if (format === "GeoJSON") {
+      navigator.clipboard.writeText(JSON.stringify(worksite.boundary_geojson, null, 2));
+    } else {
+      let coords = (worksite.boundary_geojson as any).coordinates;
+      if (coords && coords[0]) {
+        const pts = coords[0].map((pt: number[]) => `${pt[0]} ${pt[1]}`).join(", ");
+        navigator.clipboard.writeText(`POLYGON((${pts}))`);
+      }
+    }
+    setStatusMessage(`Copied worksite boundary as ${format} to clipboard.`);
+  };
+
   // Metadata edit form
   const [isEditingMetadata, setIsEditingMetadata] = useState(false);
   const [editName, setEditName] = useState("");
@@ -375,6 +389,28 @@ export const WorksiteDetail: React.FC = () => {
             <Copy className="h-3.5 w-3.5 text-indigo-600" />
             Copy Boundary To...
           </button>
+          {worksite.has_boundary && (
+            <div className="flex items-center gap-1 border-l border-slate-200 pl-2">
+              <button
+                type="button"
+                onClick={() => handleQuickCopy("GeoJSON")}
+                className="px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-1 shadow-xs"
+                title="Copy boundary coordinates as GeoJSON"
+              >
+                <Copy className="h-3 w-3 text-indigo-600" />
+                GeoJSON
+              </button>
+              <button
+                type="button"
+                onClick={() => handleQuickCopy("WKT")}
+                className="px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-1 shadow-xs"
+                title="Copy boundary coordinates as WKT"
+              >
+                <Copy className="h-3 w-3 text-cyan-600" />
+                WKT
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1400,6 +1436,7 @@ export const WorksiteDetail: React.FC = () => {
           onClose={() => setCopyModalMode(null)}
           worksiteId={worksite.id}
           worksiteJobNumber={worksite.job_number}
+          boundaryGeojson={worksite.boundary_geojson}
           mode={copyModalMode}
           onSuccess={() => {
             setStatusMessage("Boundary copied successfully.");

@@ -536,6 +536,9 @@
             <button id="btnOpenBoundaryModal" class="bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-700 text-emerald-300 px-3 py-1.5 rounded font-medium flex items-center gap-1">
               📋 Copy Boundaries
             </button>
+            <button id="btnOpenPastePolyModal" class="bg-indigo-950/70 hover:bg-indigo-900 border border-indigo-700 text-indigo-300 px-3 py-1.5 rounded font-medium flex items-center gap-1" title="Paste WKT or GeoJSON boundary polygon onto map">
+              📥 Paste Polygon
+            </button>
             <input type="file" id="routeJsonInput" accept=".json" class="hidden">
             <button id="btnImportJson" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-3 py-1.5 rounded font-medium flex items-center gap-1">
               📂 Import JSON
@@ -690,6 +693,58 @@
         <button id="btnClearCustomPoly" class="text-rose-400 hover:text-rose-300 text-2xs font-medium">Remove from Map</button>
         <button id="btnDoneCustomPoly" class="bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-2xs px-4 py-1.5 rounded-lg">
           Done
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Paste Polygon Boundary Modal -->
+  <div id="pastePolygonModal" class="hidden fixed inset-0 z-[3000] bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-indigo-800 rounded-2xl w-full max-w-lg p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-lg">📥</span>
+          <h3 class="font-bold text-sm text-indigo-300">Paste Boundary Polygon</h3>
+        </div>
+        <button id="btnClosePastePolyModal" class="text-slate-400 hover:text-white text-base">✕</button>
+      </div>
+
+      <p class="text-2xs text-slate-400">
+        Paste coordinates in standard <strong>GeoJSON</strong> (e.g. <code>{"type":"Polygon", ...}</code>) or <strong>WKT</strong> (e.g. <code>POLYGON((55.38 25.12, ...))</code>).
+      </p>
+
+      <div class="space-y-3">
+        <div class="flex items-center justify-between text-3xs text-slate-400 font-bold uppercase">
+          <span>Boundary Role</span>
+          <div class="flex items-center gap-3 text-2xs normal-case">
+            <label class="flex items-center gap-1 text-blue-400 cursor-pointer">
+              <input type="radio" name="pastedPolyType" value="WORKSITE" checked class="text-blue-600"> Worksite
+            </label>
+            <label class="flex items-center gap-1 text-emerald-400 cursor-pointer">
+              <input type="radio" name="pastedPolyType" value="ACCOMMODATION" class="text-emerald-600"> Accommodation / Camp
+            </label>
+            <label class="flex items-center gap-1 text-cyan-400 cursor-pointer">
+              <input type="radio" name="pastedPolyType" value="CUSTOM" class="text-cyan-600"> Custom
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-3xs uppercase font-bold text-slate-400 mb-1">Label / Job# (optional)</label>
+          <input type="text" id="pastedPolyName" placeholder="e.g. 12A14301 or Custom Site" class="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-2xs text-slate-200 focus:outline-hidden focus:border-indigo-500">
+        </div>
+
+        <div>
+          <label class="block text-3xs uppercase font-bold text-slate-400 mb-1">Polygon String (GeoJSON or WKT)</label>
+          <textarea id="pastePolygonInput" rows="6" placeholder="Paste GeoJSON or WKT here...&#10;e.g. POLYGON((55.385 25.120, 55.388 25.120, 55.388 25.125, 55.385 25.120))" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 font-mono text-3xs text-slate-200 focus:outline-hidden focus:border-indigo-500"></textarea>
+          <div id="pastePolyError" class="hidden mt-1 text-3xs text-rose-400 font-medium"></div>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between pt-2 border-t border-slate-800">
+        <button id="btnCancelPastePoly" class="text-slate-400 hover:text-white text-2xs font-medium">Cancel</button>
+        <button id="btnApplyPastedPoly" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-2xs px-4 py-1.5 rounded-lg shadow-xs">
+          Apply to Map
         </button>
       </div>
     </div>

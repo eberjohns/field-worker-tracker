@@ -14,8 +14,21 @@ interface CopyBoundaryModalProps {
   onClose: () => void;
   worksiteId: string;
   worksiteJobNumber: string;
+  boundaryGeojson?: any;
   mode: "COPY_FROM" | "COPY_TO";
   onSuccess: () => void;
+}
+
+function toWktPolygon(geojson: any): string {
+  if (!geojson) return "";
+  let coords = geojson.coordinates;
+  if (geojson.type === "Feature" && geojson.geometry) {
+    coords = geojson.geometry.coordinates;
+  }
+  if (!coords || !coords[0]) return "";
+  const ring = coords[0];
+  const pts = ring.map((pt: number[]) => `${pt[0]} ${pt[1]}`).join(", ");
+  return `POLYGON((${pts}))`;
 }
 
 export const CopyBoundaryModal: React.FC<CopyBoundaryModalProps> = ({
@@ -23,6 +36,7 @@ export const CopyBoundaryModal: React.FC<CopyBoundaryModalProps> = ({
   onClose,
   worksiteId,
   worksiteJobNumber,
+  boundaryGeojson,
   mode,
   onSuccess,
 }) => {
@@ -34,6 +48,22 @@ export const CopyBoundaryModal: React.FC<CopyBoundaryModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [copiedFormat, setCopiedFormat] = useState<string | null>(null);
+
+  const handleCopyGeoJson = () => {
+    if (!boundaryGeojson) return;
+    navigator.clipboard.writeText(JSON.stringify(boundaryGeojson, null, 2));
+    setCopiedFormat("GeoJSON");
+    setTimeout(() => setCopiedFormat(null), 2500);
+  };
+
+  const handleCopyWkt = () => {
+    if (!boundaryGeojson) return;
+    const wkt = toWktPolygon(boundaryGeojson);
+    navigator.clipboard.writeText(wkt);
+    setCopiedFormat("WKT");
+    setTimeout(() => setCopiedFormat(null), 2500);
+  };
 
   useEffect(() => {
     if (!isOpen) return;
@@ -164,6 +194,44 @@ export const CopyBoundaryModal: React.FC<CopyBoundaryModalProps> = ({
             <div className="p-3 bg-red-50 border border-red-200 rounded text-red-700 flex items-center gap-2">
               <AlertCircle className="h-4 w-4 shrink-0" />
               <span>{errorMsg}</span>
+            </div>
+          )}
+
+          {/* Format Copy Section */}
+          {mode === "COPY_TO" && boundaryGeojson && (
+            <div className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-lg space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
+                  <Copy className="h-3.5 w-3.5 text-indigo-600" />
+                  Copy to Clipboard (GIS / Mobile Proxy)
+                </span>
+                {copiedFormat && (
+                  <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                    ✓ Copied {copiedFormat}!
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-600 leading-tight">
+                Copy this worksite's boundary coordinates directly to your clipboard for testing in the mobile simulator or GIS tools.
+              </p>
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={handleCopyGeoJson}
+                  className="px-3 py-1 bg-white hover:bg-slate-50 border border-indigo-300 rounded text-xs font-semibold text-indigo-700 flex items-center gap-1.5 shadow-2xs transition-colors"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                  Copy GeoJSON
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCopyWkt}
+                  className="px-3 py-1 bg-white hover:bg-slate-50 border border-cyan-300 rounded text-xs font-semibold text-cyan-800 flex items-center gap-1.5 shadow-2xs transition-colors"
+                >
+                  <Copy className="h-3.5 w-3.5 text-cyan-600" />
+                  Copy WKT
+                </button>
+              </div>
             </div>
           )}
 

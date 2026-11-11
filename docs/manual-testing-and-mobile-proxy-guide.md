@@ -175,7 +175,41 @@ Attendance and live GPS containment require geofence polygons:
 
 ---
 
-### Step 8: System & Account Settings (Change Password)
+### Step 8: Geofence Boundaries, Export/Import & Mobile Proxy Paste
+
+#### 1. Copying Boundaries from Worksites
+* Navigate to **Worksites** (`/worksites`) and open any worksite (e.g. `12A14301`).
+* In the header or Boundary tab, 1-click copy options are available:
+  * **`[📋 GeoJSON]`**: Copies standard GeoJSON Polygon `{ "type": "Polygon", "coordinates": [...] }`.
+  * **`[📋 WKT]`**: Copies standard Well-Known Text `POLYGON((lng lat, lng lat, ...))`.
+* In **Copy Boundary To...** modal, you can copy the boundary directly to multiple target worksites or click **Copy GeoJSON / WKT** to clipboard.
+
+#### 2. Pasting Boundaries into Mobile Proxy Simulator
+* Open the mobile proxy at `http://localhost:8085`.
+* On the map toolbar, click **`📥 Paste Polygon`**.
+* Select role: **Worksite** (blue), **Accommodation / Camp** (green), or **Custom** (cyan).
+* Paste your GeoJSON or WKT string into the textarea and click **Apply to Map**.
+* The proxy will parse coordinates, render the boundary, calculate the centroid, and zoom to fit.
+* *(Note: When logging in as a field worker, the proxy automatically syncs and renders assigned worksites and camp polygons without needing manual copy/paste).*
+
+#### 3. Boundary Setup Queue: Export & Bulk Import (`/boundaries`)
+* Navigate to **Boundary Queue** (`/boundaries`).
+* **Export Boundaries**:
+  * Click **`[Export CSV]`** or **`[Export JSON]`** to download the full master list of worksite and accommodation boundaries.
+* **Bulk Import Boundaries**:
+  * Click **`[Import Boundaries]`**.
+  * Paste CSV rows or upload a `.csv` / `.json` file matching:
+    ```csv
+    entity_type, code, polygon
+    WORKSITE, 12A14301, "POLYGON((55.385 25.120, 55.388 25.120, 55.388 25.125, 55.385 25.120))"
+    ACCOMMODATION, WARSAN_01, "POLYGON((...))"
+    ```
+  * Worksite primary key is `job_number`; accommodation primary key is `accommodation_code`.
+  * **Graceful Missing Key Handling**: If a code does not exist in the database, the system skips that row, proceeds with valid rows, and produces an actionable summary report showing the exact skipped row numbers, codes, and reasons.
+
+---
+
+### Step 9: System & Account Settings (Change Password)
 1. In the Web Dashboard, click **System** in the sidebar (`/system`).
 2. **Change Password**:
    - Enter your current password (e.g. `ChangeMe123!`).

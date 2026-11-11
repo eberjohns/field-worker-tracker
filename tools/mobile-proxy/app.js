@@ -43,6 +43,8 @@
     polyMarkers: [],
     polyLinePreview: null,
     customPolygonLayer: null,
+    pastedPolygonLayer: null,
+    pastedPolygonMarker: null,
     layers: {
       worksites: [],
       geofences: [],
@@ -634,6 +636,159 @@
     showToast('Cancelled polygon drawing.');
   }
 
+  // Paste Polygon Tool
+  function openPastePolygonModal() {
+    document.getElementById('pastePolygonInput').value = '';
+    document.getElementById('pastedPolyName').value = '';
+    document.getElementById('pastePolyError').classList.add('hidden');
+    document.getElementById('pastePolygonModal').classList.remove('hidden');
+    document.getElementById('pastePolygonInput').focus();
+  }
+
+  function closePastePolygonModal() {
+    document.getElementById('pastePolygonModal').classList.add('hidden');
+  }
+
+  function parsePolygonCoordinates(rawStr) {
+    const s = (rawStr || '').trim();
+    if (!s) throw new Error('Polygon input string is empty.');
+
+    // 1. Try GeoJSON
+    if (s.startsWith('{')) {
+      try {
+        const obj = JSON.parse(s);
+        let coords = null;
+        if (obj.type === 'Feature' && obj.geometry) {
+          coords = obj.geometry.coordinates;
+        } else if (obj.type === 'Polygon') {
+          coords = obj.coordinates;
+        } else if (obj.type === 'MultiPolygon') {
+          coords = obj.coordinates?.[0];
+        }
+        if (coords && coords[0] && Array.isArray(coords[0])) {
+          // Convert GeoJSON [lng, lat] to Leaflet [lat, lng]
+          const ring = coords[0];
+          return ring.map((pt) => [Number(pt[1]), Number(pt[0])]);
+        }
+      } catch (e) {
+        throw new Error(`Invalid JSON syntax: ${e.message}`);
+      }
+    }
+
+    // 2. Try WKT: POLYGON((lng lat, lng lat, ...))
+    const match = s.match(/POLYGON\s*\(\(\s*(.*?)\s*\)\)/i);
+    if (match && match[1]) {
+      const pts = match[1].split(',');
+      const ring = [];
+      for (const p of pts) {
+        const parts = p.trim().split(/\s+/);
+        if (parts.length >= 2) {
+          const lng = parseFloat(parts[0]);
+          const lat = parseFloat(parts[1]);
+          if (!isNaN(lat) && !isNaN(lng)) {
+            ring.push([lat, lng]);
+          }
+        }
+      }
+      if (ring.length >= 3) {
+        return ring;
+      }
+    }
+
+    throw new Error('Could not parse as GeoJSON or WKT. Expected GeoJSON {"type":"Polygon",...} or WKT POLYGON((lng lat, ...))');
+  }
+
+  function applyPastedPolygon() {
+    const raw = document.getElementById('pastePolygonInput').value;
+    const errEl = document.getElementById('pastePolyError');
+    errEl.classList.add('hidden');
+
+    try {
+      const latlngs = parsePolygonCoordinates(raw);
+      if (latlngs.length < 3) {
+        throw new Error('A polygon requires at least 3 coordinate points.');
+      }
+
+      // Ensure ring is closed
+      const first = latlngs[0];
+      const last = latlngs[latlngs.length - 1];
+      if (first[0] !== last[0] || first[1] !== last[1]) {
+        latlngs.push([first[0], first[1]]);
+      }
+
+      const roleInput = document.querySelector('input[name="pastedPolyType"]:checked');
+      const role = roleInput ? roleInput.value : 'WORKSITE';
+      const customName = document.getElementById('pastedPolyName').value.trim() ||
+        (role === 'WORKSITE' ? 'Pasted Worksite' : role === 'ACCOMMODATION' ? 'Pasted Camp' : 'Custom Pasted Boundary');
+
+      let color = '#3b82f6';
+      let icon = '🏢';
+      if (role === 'ACCOMMODATION') {
+        color = '#10b981';
+        icon = '🏠';
+      } else if (role === 'CUSTOM') {
+        color = '#06b6d4';
+        icon = '📐';
+      }
+
+      // Remove previous pasted polygon layer if present
+      if (state.pastedPolygonLayer) {
+        state.map.removeLayer(state.pastedPolygonLayer);
+        state.pastedPolygonLayer = null;
+      }
+      if (state.pastedPolygonMarker) {
+        state.map.removeLayer(state.pastedPolygonMarker);
+        state.pastedPolygonMarker = null;
+      }
+
+      state.pastedPolygonLayer = L.polygon(latlngs, {
+        color: color,
+        weight: 3,
+        fillColor: color,
+        fillOpacity: 0.25,
+      }).addTo(state.map);
+
+      // Add centroid pin
+      const bounds = state.pastedPolygonLayer.getBounds();
+      const centroid = bounds.getCenter();
+
+      state.pastedPolygonMarker = L.circleMarker(centroid, {
+        radius: 6,
+        color: '#ffffff',
+        fillColor: color,
+        fillOpacity: 1,
+        weight: 2,
+      }).addTo(state.map);
+
+      state.pastedPolygonMarker.bindTooltip(`${icon} ${customName}`, { permanent: true, direction: 'top', className: 'text-3xs font-bold' });
+
+      // GeoJSON & WKT strings for popup copy
+      const geoJsonPoints = latlngs.map((pt) => [pt[1], pt[0]]);
+      const geoJsonStr = JSON.stringify({ type: 'Polygon', coordinates: [geoJsonPoints] }, null, 2);
+      const wktStr = toWktPolygon(geoJsonPoints);
+
+      state.pastedPolygonLayer.bindPopup(`
+        <div class="font-sans text-xs space-y-2 p-1">
+          <div class="font-bold flex items-center gap-1" style="color: ${color};">${icon} ${customName}</div>
+          <div class="text-slate-500 font-mono text-3xs">Center: ${centroid.lat.toFixed(5)}, ${centroid.lng.toFixed(5)}</div>
+          <div class="flex items-center gap-1.5 pt-1">
+            <button class="px-2 py-1 bg-indigo-600 text-white rounded text-3xs font-bold" onclick="window.__fwtCopy('${btoa(geoJsonStr)}', '${customName}', 'GeoJSON')">📋 Copy GeoJSON</button>
+            <button class="px-2 py-1 bg-cyan-600 text-white rounded text-3xs font-bold" onclick="window.__fwtCopy('${btoa(wktStr)}', '${customName}', 'WKT')">📋 Copy WKT</button>
+          </div>
+        </div>
+      `);
+
+      // Zoom to polygon
+      state.map.fitBounds(bounds, { padding: [40, 40] });
+
+      closePastePolygonModal();
+      showToast(`Pasted polygon applied: ${customName}`);
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.classList.remove('hidden');
+    }
+  }
+
   // Clear Map Canvas & Reset Custom Layers
   function clearEntireMap() {
     stopRoutePlayback();
@@ -642,6 +797,14 @@
     if (state.customPolygonLayer) {
       state.map.removeLayer(state.customPolygonLayer);
       state.customPolygonLayer = null;
+    }
+    if (state.pastedPolygonLayer) {
+      state.map.removeLayer(state.pastedPolygonLayer);
+      state.pastedPolygonLayer = null;
+    }
+    if (state.pastedPolygonMarker) {
+      state.map.removeLayer(state.pastedPolygonMarker);
+      state.pastedPolygonMarker = null;
     }
     state.polyMarkers.forEach((m) => state.map.removeLayer(m));
     state.polyMarkers = [];
@@ -1472,6 +1635,12 @@
       document.getElementById('customPolygonModal').classList.add('hidden');
       showToast('Custom polygon removed from map.');
     });
+
+    // Paste Polygon Boundary Controls
+    document.getElementById('btnOpenPastePolyModal')?.addEventListener('click', openPastePolygonModal);
+    document.getElementById('btnClosePastePolyModal')?.addEventListener('click', closePastePolygonModal);
+    document.getElementById('btnCancelPastePoly')?.addEventListener('click', closePastePolygonModal);
+    document.getElementById('btnApplyPastedPoly')?.addEventListener('click', applyPastedPolygon);
 
     // Quick Fill Account Buttons
     document.querySelectorAll('.btn-quick-fill').forEach((btn) => {

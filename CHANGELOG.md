@@ -28,6 +28,11 @@ All notable changes. Format: Keep a Changelog. Mobile-contract changes are also 
     - Connection indicator showing real-time SSE streaming or 30s polling fallback.
     - Pending Visits screen (`/pending-visits`) with search, status filters, 3+ days escalation badges, Explain modal, Reschedule modal with worker assignment, Close modal, and CSV export.
     - Documents Expiry screen (`/documents`) for Admin with lead days filters, status badges (`OK`, `EXPIRING`, `EXPIRED`), alert engine check trigger, and CSV export.
+    - Boundary Tools & Setup Queue (`/boundaries`):
+      - Bulk Boundary Export (`GET /api/v1/boundaries/export`) supporting CSV and GeoJSON downloads.
+      - Bulk Boundary Import (`POST /api/v1/boundaries/import`) supporting CSV and JSON with primary keys (`job_number` for worksites, `accommodation_code` for camps), automatic WKT/GeoJSON format resolution, and graceful skip reporting for unknown keys.
+      - 1-click **Copy GeoJSON** and **Copy WKT** buttons in Worksite detail header and Copy Boundary modal.
+      - **Paste Polygon** tool in Mobile Simulator (`http://localhost:8085`) supporting WKT and GeoJSON string rendering with centroid alignment and zoom-to-fit.
     - Dashboard Overview tiles (`/`) showing Today's Attendance breakdown, Live Workforce status, Pending Visits with escalation alerts, Late Arrivals, and Overtime Hours Today.
   - Architecture & Testing:
     - ADR-019 (`docs/decisions/019-live-location-access-logging-and-streaming.md`).
