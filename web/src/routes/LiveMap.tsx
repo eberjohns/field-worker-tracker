@@ -948,12 +948,12 @@ export const LiveMap: React.FC = () => {
                     Loading trail points...
                   </div>
                 ) : trailPoints.length > 0 ? (
-                  <div className="bg-slate-900 text-white p-3 rounded-xl space-y-2 border border-slate-700 shadow-sm">
+                  <div className="bg-slate-50 p-3 rounded-xl space-y-2.5 border border-slate-200 shadow-2xs">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
-                        <span>▶️</span> Journey Replay
+                      <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                        <span className="text-blue-600">▶️</span> Journey Replay
                       </span>
-                      <span className="text-[11px] font-mono text-slate-300">
+                      <span className="text-[11px] font-mono text-slate-700 font-semibold bg-white px-2 py-0.5 rounded border border-slate-200">
                         {new Date(trailPoints[replayIndex]?.event_timestamp_utc || "").toLocaleTimeString([], {
                           hour: "2-digit",
                           minute: "2-digit",
@@ -973,11 +973,11 @@ export const LiveMap: React.FC = () => {
                           setReplayIndex(Number(e.target.value));
                           if (isReplaying) setIsReplaying(false);
                         }}
-                        className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-400"
+                        className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
                       />
-                      <div className="flex justify-between text-[10px] text-slate-400 font-mono">
+                      <div className="flex justify-between items-center text-[10px] text-slate-500 font-mono">
                         <span>{new Date(trailPoints[0].event_timestamp_utc).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-                        <span className="text-amber-300 font-bold">
+                        <span className="text-blue-700 font-bold bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
                           Step {replayIndex + 1}/{trailPoints.length} ({trailPoints[replayIndex]?.event_type})
                         </span>
                         <span>{new Date(trailPoints[trailPoints.length - 1].event_timestamp_utc).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
@@ -989,7 +989,11 @@ export const LiveMap: React.FC = () => {
                       <div className="flex items-center gap-1.5">
                         <button
                           onClick={() => setIsReplaying(!isReplaying)}
-                          className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded text-xs flex items-center gap-1 transition"
+                          className={`px-3 py-1 rounded text-xs font-semibold flex items-center gap-1 transition shadow-2xs ${
+                            isReplaying
+                              ? "bg-amber-500 hover:bg-amber-600 text-white"
+                              : "bg-blue-600 hover:bg-blue-700 text-white"
+                          }`}
                         >
                           {isReplaying ? "⏸ Pause" : "▶ Replay"}
                         </button>
@@ -998,7 +1002,7 @@ export const LiveMap: React.FC = () => {
                             setIsReplaying(false);
                             setReplayIndex(0);
                           }}
-                          className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs transition"
+                          className="px-2 py-1 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 rounded text-xs transition"
                           title="Reset to beginning"
                         >
                           ↺
@@ -1011,7 +1015,9 @@ export const LiveMap: React.FC = () => {
                             key={s}
                             onClick={() => setReplaySpeed(s)}
                             className={`px-1.5 py-0.5 rounded transition ${
-                              replaySpeed === s ? "bg-amber-500 text-slate-950 font-bold" : "bg-slate-800 text-slate-400 hover:text-white"
+                              replaySpeed === s
+                                ? "bg-blue-600 text-white font-bold"
+                                : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
                             }`}
                           >
                             {s}x
