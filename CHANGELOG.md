@@ -25,7 +25,12 @@ All notable changes. Format: Keep a Changelog. Mobile-contract changes are also 
   - Web UI Features:
     - Interactive Live Map (`/live`) with MapLibre GL GeoJSON clustering (`cluster: true`), worksite polygons, accommodation polygons, state-colored markers, and selected worker route breadcrumb line.
     - Live Map side panel with search, state and supervisor filters, worker cards showing two distinct ages: position fix age and device last-contact age.
+    - Interactive **Journey Replay Player** in Live Map worker slide-out panel featuring date selection, animated path replay, Play/Pause control, timeline scrubber, and speed multipliers (1x–30x) styled to match the light theme.
     - Connection indicator showing real-time SSE streaming or 30s polling fallback.
+    - System Page (`/system`) enhancements: Moved application health and telemetry from Dashboard to System page; added dedicated password change section for users and administrators.
+    - Authentication improvements: First sign-in password change fallback allowing default temporary password verification and dedicated temporary password input in `Login.tsx`.
+    - Dynamic Budget-Only Roles: Endpoint `GET /api/v1/settings/staff-grades` resolving unique staff grades from employees, excel import support, and dynamic checkboxes in Settings.
+    - Mobile Proxy Simulator: Added Live Auto-Upload toggle (`⚡ Live Upload: ON`) transmitting events in real time to the server as the route plays, Clock Mode toggle (`🕒 Clock: Live/Simulated`), and verified transit inference without unnecessary transit pings.
     - Pending Visits screen (`/pending-visits`) with search, status filters, 3+ days escalation badges, Explain modal, Reschedule modal with worker assignment, Close modal, and CSV export.
     - Documents Expiry screen (`/documents`) for Admin with lead days filters, status badges (`OK`, `EXPIRING`, `EXPIRED`), alert engine check trigger, and CSV export.
     - Boundary Tools & Setup Queue (`/boundaries`):
