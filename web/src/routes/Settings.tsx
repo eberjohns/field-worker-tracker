@@ -178,6 +178,10 @@ export const Settings: React.FC = () => {
     country: "AE",
   });
 
+  // Dynamic Staff Grades for Budget-Only Roles
+  const [staffGrades, setStaffGrades] = useState<string[]>([]);
+  const [loadingStaffGrades, setLoadingStaffGrades] = useState(false);
+
   // Consent Policy Modal
   const [showConsentModal, setShowConsentModal] = useState(false);
   const [newConsentPolicy, setNewConsentPolicy] = useState({
@@ -264,6 +268,22 @@ export const Settings: React.FC = () => {
     }
   };
 
+  const fetchStaffGrades = async () => {
+    setLoadingStaffGrades(true);
+    try {
+      const res = await fetch("/api/v1/settings/staff-grades", {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) {
+        setStaffGrades(await res.json());
+      }
+    } catch {
+      // silent
+    } finally {
+      setLoadingStaffGrades(false);
+    }
+  };
+
   useEffect(() => {
     fetchEmployees();
   }, []);
@@ -273,6 +293,9 @@ export const Settings: React.FC = () => {
     setErrorMessage(null);
     if (activeTab === "company" || activeTab === "budget" || activeTab === "password") {
       fetchSettings();
+      if (activeTab === "budget") {
+        fetchStaffGrades();
+      }
     } else if (activeTab === "timerules") {
       fetchTimeRules();
     } else if (activeTab === "holidays") {
@@ -1174,43 +1197,45 @@ export const Settings: React.FC = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-2">
-            {[
-              "Project Manager",
-              "HSE Engineer",
-              "QA/QC Engineer",
-              "Irrigation Engineer",
-              "Landscape Architect",
-              "Surveyor",
-              "Safety Officer",
-            ].map((role) => {
-              const budgetSetting = settings.find((s) => s.setting_key === "budget_only_staff_types");
-              const currentList: string[] = Array.isArray(budgetSetting?.value)
-                ? budgetSetting.value
-                : [];
-              const isChecked = currentList.includes(role);
+          {loadingStaffGrades ? (
+            <div className="py-8 text-center text-slate-400 text-xs">
+              Loading unique staff types from workforce personnel...
+            </div>
+          ) : staffGrades.length === 0 ? (
+            <div className="py-8 text-center text-slate-400 text-xs bg-slate-50 rounded-lg border border-slate-200">
+              No staff grade descriptions found in workforce records. Import employees or add personnel to configure budget-only roles.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-2">
+              {staffGrades.map((role) => {
+                const budgetSetting = settings.find((s) => s.setting_key === "budget_only_staff_types");
+                const currentList: string[] = Array.isArray(budgetSetting?.value)
+                  ? budgetSetting.value
+                  : [];
+                const isChecked = currentList.includes(role);
 
-              return (
-                <label
-                  key={role}
-                  className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition ${
-                    isChecked
-                      ? "bg-indigo-50 border-indigo-200 text-indigo-900"
-                      : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={isChecked}
-                    disabled={user?.role !== "ADMIN"}
-                    onChange={() => handleToggleBudgetRole(role)}
-                    className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
-                  />
-                  <span className="text-xs font-medium">{role}</span>
-                </label>
-              );
-            })}
-          </div>
+                return (
+                  <label
+                    key={role}
+                    className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition ${
+                      isChecked
+                        ? "bg-indigo-50 border-indigo-200 text-indigo-900"
+                        : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      disabled={user?.role !== "ADMIN"}
+                      onChange={() => handleToggleBudgetRole(role)}
+                      className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                    />
+                    <span className="text-xs font-medium">{role}</span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 

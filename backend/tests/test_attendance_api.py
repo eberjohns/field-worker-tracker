@@ -1,5 +1,5 @@
 import socket
-from datetime import UTC, date, datetime, time
+from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
@@ -164,7 +164,10 @@ async def test_attendance_api_end_to_end():
         worker.accommodation_id = acc_id
 
         # Scheduled work today (8h assigned at site)
-        work_date = date(2026, 11, 4)  # Wednesday (non-holiday)
+        today = datetime.now(UTC).date()
+        work_date = today - timedelta(days=1)
+        if work_date.weekday() == 6:  # Sunday is weekly off
+            work_date = work_date - timedelta(days=1)
         sw = ScheduledWork(
             id=uuid4(),
             employee_id=worker_id,
@@ -205,7 +208,7 @@ async def test_attendance_api_end_to_end():
         # 1. Ingest event batch for worker:
         # Camp exit 05:20, Site entry 06:20, Site exit 15:20, Camp entry 16:50 (Client's scenario H: 11:30 total, 08:30 worked, var -30m)
         batch_id = uuid4()
-        now_utc = datetime(2026, 11, 4, 17, 0, tzinfo=UTC)
+        now_utc = datetime.combine(work_date, time(17, 0), tzinfo=UTC)
         events_payload = {
             "batch_id": str(batch_id),
             "device_clock_utc": now_utc.isoformat(),
@@ -214,7 +217,7 @@ async def test_attendance_api_end_to_end():
                 {
                     "event_id": str(uuid4()),
                     "event_type": "EXIT",
-                    "event_timestamp_utc": datetime(2026, 11, 4, 5, 20, tzinfo=UTC).isoformat(),
+                    "event_timestamp_utc": datetime.combine(work_date, time(5, 20), tzinfo=UTC).isoformat(),
                     "latitude": 25.145,
                     "longitude": 55.405,
                     "accuracy_meters": 10.0,
@@ -224,7 +227,7 @@ async def test_attendance_api_end_to_end():
                 {
                     "event_id": str(uuid4()),
                     "event_type": "ENTRY",
-                    "event_timestamp_utc": datetime(2026, 11, 4, 6, 20, tzinfo=UTC).isoformat(),
+                    "event_timestamp_utc": datetime.combine(work_date, time(6, 20), tzinfo=UTC).isoformat(),
                     "latitude": 25.105,
                     "longitude": 55.205,
                     "accuracy_meters": 10.0,
@@ -234,7 +237,7 @@ async def test_attendance_api_end_to_end():
                 {
                     "event_id": str(uuid4()),
                     "event_type": "EXIT",
-                    "event_timestamp_utc": datetime(2026, 11, 4, 15, 20, tzinfo=UTC).isoformat(),
+                    "event_timestamp_utc": datetime.combine(work_date, time(15, 20), tzinfo=UTC).isoformat(),
                     "latitude": 25.095,
                     "longitude": 55.195,
                     "accuracy_meters": 10.0,
@@ -244,7 +247,7 @@ async def test_attendance_api_end_to_end():
                 {
                     "event_id": str(uuid4()),
                     "event_type": "ENTRY",
-                    "event_timestamp_utc": datetime(2026, 11, 4, 16, 50, tzinfo=UTC).isoformat(),
+                    "event_timestamp_utc": datetime.combine(work_date, time(16, 50), tzinfo=UTC).isoformat(),
                     "latitude": 25.155,
                     "longitude": 55.405,
                     "accuracy_meters": 10.0,
@@ -276,7 +279,7 @@ async def test_attendance_api_end_to_end():
 
         # 3. Query attendance list as Admin -> record should be PENDING_REVIEW
         att_res = await client.get(
-            f"/api/v1/attendance?employee_id={worker_id}&from_date=2026-11-04&to_date=2026-11-04",
+            f"/api/v1/attendance?employee_id={worker_id}&from_date={work_date.isoformat()}&to_date={work_date.isoformat()}",
             headers={"Authorization": f"Bearer {admin_token}"},
         )
         assert att_res.status_code == 200, att_res.text

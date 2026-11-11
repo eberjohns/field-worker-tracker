@@ -1,10 +1,8 @@
 """Live position publisher and SSE stream ticket management."""
 
 import asyncio
-from collections.abc import AsyncGenerator
-from datetime import UTC, datetime, timedelta
-import json
 import secrets
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -124,7 +122,7 @@ class LivePositionBroadcaster:
             "timestamp": datetime.now(UTC).isoformat(),
         }
         async with self._lock:
-            for sub_id, sub_info in self._subscribers.items():
+            for sub_info in self._subscribers.values():
                 if sub_info["is_admin"] or (
                     sub_info["scoped_employee_ids"] is not None
                     and employee_id in sub_info["scoped_employee_ids"]

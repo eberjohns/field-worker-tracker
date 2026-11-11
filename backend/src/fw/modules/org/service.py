@@ -1,5 +1,5 @@
 from collections import defaultdict
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -915,4 +915,28 @@ class OrgService:
             ok_count=ok_count,
             total_count=len(items),
         )
+
+    @staticmethod
+    async def get_unique_staff_grades(session: AsyncSession) -> list[str]:
+        """Fetch all unique staff grade descriptions from employees and configured settings."""
+        from fw.modules.settings import SettingsService
+
+        stmt = (
+            select(Employee.staff_grade_description)
+            .where(
+                Employee.staff_grade_description.is_not(None),
+                Employee.staff_grade_description != "",
+            )
+            .distinct()
+        )
+        emp_grades = set((await session.execute(stmt)).scalars().all())
+
+        # Also include any currently in budget_only_staff_types setting so none are omitted
+        setting_val = await SettingsService.get_setting(session, "budget_only_staff_types", default=[])
+        if isinstance(setting_val, list):
+            emp_grades.update(str(x) for x in setting_val if x)
+        elif isinstance(setting_val, str) and setting_val:
+            emp_grades.update(str(x).strip() for x in setting_val.split(",") if x.strip())
+
+        return sorted([g for g in emp_grades if g and g.strip()])
 

@@ -4,7 +4,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import structlog
-from sqlalchemy import and_, or_, outerjoin, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.modules.events.models import EmployeeLastPosition, LiveLocationAccessLog, MobileEventLog
@@ -17,7 +17,7 @@ from fw.modules.events.schemas import (
     RejectReason,
 )
 from fw.modules.jobs import Worksite
-from fw.modules.org import Employee, EmployeeReportingLine, Group, Zone
+from fw.modules.org import Employee, EmployeeReportingLine
 from fw.modules.settings import SettingsService
 
 logger = structlog.get_logger(__name__)

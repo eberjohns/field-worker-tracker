@@ -353,6 +353,7 @@ settings_data = [
     ("overtime_daily_cap_hours", "2.0", "HOURS", "AE", "2026-01-01", "GIVEN_BY_CLIENT", "Maximum daily overtime cap"),
     ("travel_speed_min_kmh", "10.0", "KMH", "AE", "2026-01-01", "GIVEN_BY_CLIENT", "Minimum speed threshold to classify as transit"),
     ("travel_speed_max_kmh", "130.0", "KMH", "AE", "2026-01-01", "GIVEN_BY_CLIENT", "Maximum valid road travel speed"),
+    ("budget_only_staff_types", '["HSE Engineer"]', "LIST", "AE", "2026-01-01", "GIVEN_BY_CLIENT", "Budget-only staff types excluded from phone scheduling"),
 ]
 for idx, (key, val, unit, ctry, eff_from, status, desc) in enumerate(settings_data, start=5):
     ws_set.cell(row=idx, column=1, value=None)

@@ -2,9 +2,9 @@
 
 from uuid import UUID
 
+import structlog
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-import structlog
 
 from fw.core.db import get_db
 from fw.modules.identity import User, get_current_user, require_role

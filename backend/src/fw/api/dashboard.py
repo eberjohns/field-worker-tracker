@@ -5,11 +5,11 @@ from typing import Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
+import structlog
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-import structlog
 
 from fw.core.db import get_db
 from fw.modules.attendance.models import (

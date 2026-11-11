@@ -1165,6 +1165,18 @@ class ImportService:
                     except ValueError:
                         parsed_val = trimmed
 
+            if s_key == "budget_only_staff_types":
+                if isinstance(parsed_val, str):
+                    if parsed_val.startswith("[") and parsed_val.endswith("]"):
+                        try:
+                            parsed_val = json.loads(parsed_val)
+                        except Exception:
+                            parsed_val = [x.strip().strip("'\"") for x in parsed_val.strip("[]").split(",") if x.strip()]
+                    else:
+                        parsed_val = [x.strip().strip("'\"") for x in parsed_val.split(",") if x.strip()]
+                elif not isinstance(parsed_val, list):
+                    parsed_val = [str(parsed_val)]
+
             if s_key and s_eff:
                 await SettingsService.set_setting(
                     session=session,

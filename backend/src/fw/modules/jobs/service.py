@@ -1214,10 +1214,15 @@ class JobsService:
         budget_types = await SettingsService.get_setting(
             session=session,
             key="budget_only_staff_types",
-            default=["HSE Engineer", "Project Manager", "Irrigation Engineer"],
+            default=None,
         )
-        if not isinstance(budget_types, list):
+        if budget_types is None:
             budget_types = ["HSE Engineer", "Project Manager", "Irrigation Engineer"]
+        elif not isinstance(budget_types, list):
+            if isinstance(budget_types, str) and budget_types:
+                budget_types = [x.strip() for x in budget_types.split(",") if x.strip()]
+            else:
+                budget_types = []
 
         # Horizon parameters
         horizon_months = await SettingsService.get_setting(

@@ -46,6 +46,17 @@ async def list_resolved_settings(
     return [CompanySettingRead.model_validate(s) for s in settings]
 
 
+@router.get("/settings/staff-grades", response_model=list[str])
+async def list_staff_grades(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> list[str]:
+    """Return distinct staff grade descriptions across employees and settings."""
+    from fw.modules.org import OrgService
+
+    return await OrgService.get_unique_staff_grades(session)
+
+
 @router.put("/settings/{key}", response_model=CompanySettingRead)
 async def update_setting(
     key: str,

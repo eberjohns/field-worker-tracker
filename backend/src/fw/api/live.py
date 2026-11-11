@@ -1,17 +1,17 @@
 """Live map streaming and position polling API endpoints."""
 
 import asyncio
-from datetime import UTC, datetime
 import json
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
+import structlog
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-import structlog
 
 from fw.core.db import async_session_factory, get_db
 from fw.core.errors import AppError
