@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,6 +19,16 @@ class Settings(BaseSettings):
     DATABASE_MIGRATOR_URL: str = (
         "postgresql+asyncpg://fw_migrator:fw_migrator_secret@localhost:5432/fw_db"
     )
+
+    @field_validator("DATABASE_URL", "DATABASE_MIGRATOR_URL", mode="before")
+    @classmethod
+    def normalize_database_urls(cls, v: str) -> str:
+        if isinstance(v, str):
+            if v.startswith("postgres://"):
+                return v.replace("postgres://", "postgresql+asyncpg://", 1)
+            if v.startswith("postgresql://") and not v.startswith("postgresql+asyncpg://"):
+                return v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return v
 
     JWT_SECRET: str = "insecure-dev-secret-key-change-in-production-min-32-bytes"
     ACCESS_TOKEN_MINUTES: int = 60
