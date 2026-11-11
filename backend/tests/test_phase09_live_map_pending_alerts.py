@@ -1,5 +1,6 @@
 """Tests for Phase 09: Live map, pending visits, alerts, and documents."""
 
+import socket
 import uuid
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -26,6 +27,20 @@ from fw.modules.notifications import NotificationService
 from fw.modules.notifications.models import Alert
 from fw.modules.org import Employee, EmployeeDocument, Group, OrgService, RegisteredDevice, Zone
 from fw.modules.scheduling import LeaveRequest, ScheduledWork
+
+
+def is_db_available() -> bool:
+    try:
+        with socket.create_connection(("127.0.0.1", 5432), timeout=0.5):
+            return True
+    except OSError:
+        return False
+
+
+db_required = pytest.mark.skipif(
+    not is_db_available(),
+    reason="Database integration tests require PostgreSQL running on localhost:5432",
+)
 
 
 def _make_employee(name: str, role: str = "WORKER", country: str = "AE") -> Employee:
@@ -84,6 +99,7 @@ async def _make_worksite(session) -> Worksite:
     return site
 
 
+@db_required
 @pytest.mark.asyncio
 async def test_late_upload_never_overwrites_newer_position():
     """Verify checklist requirement: A late upload never overwrites a newer position."""
@@ -160,6 +176,7 @@ async def test_late_upload_never_overwrites_newer_position():
         assert pos_after.event_type == "PING"
 
 
+@db_required
 @pytest.mark.asyncio
 async def test_active_offline_states_follow_live_active_window_minutes():
     """Verify checklist requirement: Active/offline states follow live_active_window_minutes."""
@@ -279,6 +296,7 @@ async def test_active_offline_states_follow_live_active_window_minutes():
         assert state_by_id[emp_disabled.id] == "LOCATION_DISABLED"
 
 
+@db_required
 @pytest.mark.asyncio
 async def test_location_disabled_raises_alert_and_enabled_clears_it():
     """Verify checklist requirement: LOCATION_DISABLED raises an alert to in-scope supervisors; ENABLED clears it."""
@@ -358,6 +376,7 @@ async def test_location_disabled_raises_alert_and_enabled_clears_it():
         assert alert_after.resolved_at is not None
 
 
+@db_required
 @pytest.mark.asyncio
 async def test_pending_visit_lifecycle_and_reminders():
     """Verify checklist requirement: Pending visit lifecycle works and reminders fire."""
@@ -476,6 +495,7 @@ async def test_pending_visit_lifecycle_and_reminders():
         assert pv.closed_reason == "Work completed under another job"
 
 
+@db_required
 @pytest.mark.asyncio
 async def test_expiring_documents_list_and_alerts():
     """Verify checklist requirement: Expiring documents list and alert at configured lead days."""
@@ -525,6 +545,7 @@ async def test_expiring_documents_list_and_alerts():
         assert doc_item.days_remaining == 15
 
 
+@db_required
 @pytest.mark.asyncio
 async def test_live_location_view_is_audit_logged():
     """Verify checklist requirement: Every view of live location is audit-logged."""
