@@ -496,6 +496,16 @@
               </span>
             </div>
 
+            <!-- Live Auto-Transmission & Clock Mode Toggles -->
+            <div class="flex items-center space-x-1.5 bg-slate-900 border border-slate-700 p-1 rounded text-2xs">
+              <button id="btnToggleAutoFlush" class="px-2 py-0.5 rounded font-bold transition flex items-center gap-1 bg-emerald-600 text-white hover:bg-emerald-500" title="Auto-transmits events directly to server in real time as route plays">
+                <span>⚡</span> <span id="autoFlushText">Live Upload: ON</span>
+              </button>
+              <button id="btnToggleClockMode" class="px-2 py-0.5 rounded font-mono font-bold transition flex items-center gap-1 bg-indigo-600 text-white hover:bg-indigo-500" title="Toggle between real wall-clock time (for Live Map) and simulated time (for Attendance calculation)">
+                <span>🕒</span> <span id="clockModeText">Clock: Live</span>
+              </button>
+            </div>
+
             <!-- Manual Route Recording Mode Toggle -->
             <button id="btnToggleDrawMode" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-amber-300 px-3 py-1.5 rounded text-2xs font-semibold flex items-center gap-1.5">
               <span>✏️</span> <span id="drawModeText">Record / Draw Route</span>

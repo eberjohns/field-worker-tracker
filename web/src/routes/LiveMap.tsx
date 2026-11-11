@@ -81,6 +81,10 @@ export const LiveMap: React.FC = () => {
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
   const [trailPoints, setTrailPoints] = useState<TrailPoint[]>([]);
   const [loadingTrail, setLoadingTrail] = useState(false);
+  const [trailDate, setTrailDate] = useState<string>(new Date().toISOString().split("T")[0]);
+  const [isReplaying, setIsReplaying] = useState(false);
+  const [replayIndex, setReplayIndex] = useState(0);
+  const [replaySpeed, setReplaySpeed] = useState<number>(5);
 
   // Filters
   const [search, setSearch] = useState("");
@@ -488,12 +492,20 @@ export const LiveMap: React.FC = () => {
     }
   }, [mapInstance, workers]);
 
-  // 5. Fetch Trail points when worker is selected
+  // 5. Fetch Trail points when worker or trailDate changes
   useEffect(() => {
     if (!selectedWorkerId) {
       setTrailPoints([]);
+      setIsReplaying(false);
+      setReplayIndex(0);
       if (mapInstance && mapInstance.getSource("worker-trail")) {
         (mapInstance.getSource("worker-trail") as GeoJSONSource).setData({
+          type: "FeatureCollection",
+          features: [],
+        });
+      }
+      if (mapInstance && mapInstance.getSource("replay-marker")) {
+        (mapInstance.getSource("replay-marker") as GeoJSONSource).setData({
           type: "FeatureCollection",
           features: [],
         });
@@ -502,15 +514,18 @@ export const LiveMap: React.FC = () => {
     }
 
     let isMounted = true;
+    setIsReplaying(false);
+    setReplayIndex(0);
+
     const fetchTrail = async () => {
       setLoadingTrail(true);
       try {
         const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-        const res = await fetch(`/api/v1/live/trail/${selectedWorkerId}`, { headers });
+        const res = await fetch(`/api/v1/live/trail/${selectedWorkerId}?date=${trailDate}`, { headers });
         if (res.ok) {
           const data = await res.json();
           if (!isMounted) return;
-          const points: TrailPoint[] = data.points || [];
+          const points: TrailPoint[] = Array.isArray(data) ? data : (data.points || []);
           setTrailPoints(points);
 
           // Update Trail Layer on Map
@@ -569,7 +584,97 @@ export const LiveMap: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [selectedWorkerId, mapInstance, token]);
+  }, [selectedWorkerId, trailDate, mapInstance, token]);
+
+  // 6. Animate replay ticker
+  useEffect(() => {
+    if (!isReplaying || trailPoints.length === 0) return;
+    const intervalMs = Math.max(80, Math.round(1000 / replaySpeed));
+    const timer = setInterval(() => {
+      setReplayIndex((prev) => {
+        if (prev >= trailPoints.length - 1) {
+          setIsReplaying(false);
+          return prev;
+        }
+        return prev + 1;
+      });
+    }, intervalMs);
+    return () => clearInterval(timer);
+  }, [isReplaying, trailPoints.length, replaySpeed]);
+
+  // 7. Update replay marker on map when replayIndex changes
+  useEffect(() => {
+    if (!mapInstance) return;
+    if (!selectedWorkerId || trailPoints.length === 0) {
+      if (mapInstance.getSource("replay-marker")) {
+        (mapInstance.getSource("replay-marker") as GeoJSONSource).setData({
+          type: "FeatureCollection",
+          features: [],
+        });
+      }
+      return;
+    }
+
+    const currentPt = trailPoints[replayIndex];
+    if (!currentPt) return;
+
+    const replayGeoJSON: GeoJSON.FeatureCollection = {
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          properties: {
+            event_type: currentPt.event_type,
+            timestamp: currentPt.event_timestamp_utc,
+          },
+          geometry: {
+            type: "Point",
+            coordinates: [currentPt.longitude, currentPt.latitude],
+          },
+        },
+      ],
+    };
+
+    if (!mapInstance.getSource("replay-marker")) {
+      mapInstance.addSource("replay-marker", {
+        type: "geojson",
+        data: replayGeoJSON,
+      });
+
+      mapInstance.addLayer({
+        id: "replay-marker-glow",
+        type: "circle",
+        source: "replay-marker",
+        paint: {
+          "circle-color": "#f59e0b",
+          "circle-radius": 14,
+          "circle-opacity": 0.45,
+        },
+      });
+
+      mapInstance.addLayer({
+        id: "replay-marker-core",
+        type: "circle",
+        source: "replay-marker",
+        paint: {
+          "circle-color": "#d97706",
+          "circle-radius": 7,
+          "circle-stroke-width": 2.5,
+          "circle-stroke-color": "#ffffff",
+        },
+      });
+    } else {
+      (mapInstance.getSource("replay-marker") as GeoJSONSource).setData(replayGeoJSON);
+    }
+
+    // Auto-pan if replaying
+    if (isReplaying) {
+      mapInstance.easeTo({
+        center: [currentPt.longitude, currentPt.latitude],
+        duration: 250,
+      });
+    }
+  }, [mapInstance, replayIndex, trailPoints, selectedWorkerId, isReplaying]);
 
   // Filtered workers for side panel
   const filteredWorkers = workers.filter((w) => {
@@ -826,10 +931,100 @@ export const LiveMap: React.FC = () => {
                 )}
               </div>
 
-              {/* Day Trail status */}
-              <div className="flex items-center justify-between text-xs text-slate-500">
-                <span>Route Trail ({trailPoints.length} points)</span>
-                {loadingTrail && <span className="text-blue-600 animate-pulse">Loading...</span>}
+              {/* Day Trail & Journey Replay Section */}
+              <div className="space-y-2 pt-1 border-t border-slate-200">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-slate-700">Journey Trail:</span>
+                  <input
+                    type="date"
+                    value={trailDate}
+                    onChange={(e) => setTrailDate(e.target.value)}
+                    className="border border-slate-300 rounded px-2 py-0.5 text-xs text-slate-700 font-mono bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+
+                {loadingTrail ? (
+                  <div className="text-xs text-blue-600 animate-pulse text-center py-2 bg-blue-50/50 rounded">
+                    Loading trail points...
+                  </div>
+                ) : trailPoints.length > 0 ? (
+                  <div className="bg-slate-900 text-white p-3 rounded-xl space-y-2 border border-slate-700 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+                        <span>▶️</span> Journey Replay
+                      </span>
+                      <span className="text-[11px] font-mono text-slate-300">
+                        {new Date(trailPoints[replayIndex]?.event_timestamp_utc || "").toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          second: "2-digit",
+                        })}
+                      </span>
+                    </div>
+
+                    {/* Timeline Slider / Scrubber */}
+                    <div className="space-y-1">
+                      <input
+                        type="range"
+                        min={0}
+                        max={trailPoints.length - 1}
+                        value={replayIndex}
+                        onChange={(e) => {
+                          setReplayIndex(Number(e.target.value));
+                          if (isReplaying) setIsReplaying(false);
+                        }}
+                        className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-400"
+                      />
+                      <div className="flex justify-between text-[10px] text-slate-400 font-mono">
+                        <span>{new Date(trailPoints[0].event_timestamp_utc).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                        <span className="text-amber-300 font-bold">
+                          Step {replayIndex + 1}/{trailPoints.length} ({trailPoints[replayIndex]?.event_type})
+                        </span>
+                        <span>{new Date(trailPoints[trailPoints.length - 1].event_timestamp_utc).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                      </div>
+                    </div>
+
+                    {/* Controls & Speed Selector */}
+                    <div className="flex items-center justify-between pt-1">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => setIsReplaying(!isReplaying)}
+                          className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded text-xs flex items-center gap-1 transition"
+                        >
+                          {isReplaying ? "⏸ Pause" : "▶ Replay"}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setIsReplaying(false);
+                            setReplayIndex(0);
+                          }}
+                          className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs transition"
+                          title="Reset to beginning"
+                        >
+                          ↺
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-1 text-[10px] font-mono">
+                        {[1, 5, 10, 30].map((s) => (
+                          <button
+                            key={s}
+                            onClick={() => setReplaySpeed(s)}
+                            className={`px-1.5 py-0.5 rounded transition ${
+                              replaySpeed === s ? "bg-amber-500 text-slate-950 font-bold" : "bg-slate-800 text-slate-400 hover:text-white"
+                            }`}
+                          >
+                            {s}x
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-400 text-center py-2 bg-slate-50 rounded border border-slate-200">
+                    No trail recorded for {trailDate}
+                  </div>
+                )}
               </div>
 
               {/* Action Buttons */}

@@ -24,6 +24,8 @@
       scheduleItems: [],
     },
     simulatedDate: new Date().toISOString().split('T')[0], // Active simulation work date (constrained to past 1-7 days)
+    isAutoFlush: true, // Auto-upload events immediately when generated (for Live Map real-time tracking)
+    isLiveClock: true, // Use real current wall-clock UTC time for Live Map testing
     activeTab: 'today', // 'today', 'gps', 'roster', 'profile', 'sync'
     currentZone: 'UNKNOWN',
     currentWorksiteId: null,
@@ -1123,6 +1125,9 @@
 
   // Get active timestamp for simulation conforming to selected simulatedDate (or real now)
   function getSimulatedTimestamp(timeOverride = null) {
+    if (state.isLiveClock) {
+      return new Date().toISOString();
+    }
     const baseDate = state.simulatedDate || new Date().toISOString().split('T')[0];
     if (timeOverride) {
       if (timeOverride.includes('T')) {
@@ -1140,8 +1145,58 @@
     return `${baseDate}T${timePart}Z`;
   }
 
+  // Flush Event Batch (Reusable)
+  async function flushEventsBatch(showAlert = true) {
+    if (!state.token) {
+      if (showAlert) alert('Please sign in first.');
+      return;
+    }
+    if (state.eventsQueue.length === 0) {
+      if (showAlert) alert('Event buffer is empty.');
+      return;
+    }
+    const batchItems = [...state.eventsQueue];
+    state.eventsQueue = [];
+    renderQueue();
+
+    try {
+      const res = await api('/mobile/events/batch', {
+        method: 'POST',
+        body: JSON.stringify({
+          batch_id: crypto.randomUUID(),
+          device_clock_utc: new Date().toISOString(),
+          events: batchItems.map((e) => ({
+            event_id: e.event_id,
+            event_type: e.event_type,
+            event_timestamp_utc: e.event_timestamp_utc,
+            latitude: e.latitude,
+            longitude: e.longitude,
+            accuracy_meters: e.accuracy_meters,
+            is_mock_location: false,
+            job_id: e.job_id,
+            accommodation_id: e.accommodation_id,
+          })),
+        }),
+      });
+
+      const accepted = res.results.filter((r) => r.status === 'ACCEPTED').length;
+      const rejected = res.results.filter((r) => r.status === 'REJECTED').length;
+      let toastMsg = `Live Event uploaded: ${accepted} accepted, ${rejected} rejected.`;
+      if (rejected > 0) {
+        const reasons = [...new Set(res.results.filter((r) => r.reason).map((r) => r.reason))].join(', ');
+        toastMsg += ` (${reasons})`;
+      }
+      showToast(toastMsg);
+    } catch (err) {
+      // Restore batch items if upload failed
+      state.eventsQueue = [...batchItems, ...state.eventsQueue];
+      renderQueue();
+      if (showAlert) alert(`Batch upload failed: ${err.message}`);
+    }
+  }
+
   // Queue Event (Conforming strictly to EventBatchRequest & MobileEventItem schemas)
-  function queueEvent(type, worksiteId = null, recordedAt = null) {
+  async function queueEvent(type, worksiteId = null, recordedAt = null) {
     const timestamp = getSimulatedTimestamp(recordedAt);
     const evt = {
       event_id: crypto.randomUUID(),
@@ -1157,6 +1212,10 @@
 
     state.eventsQueue.push(evt);
     renderQueue();
+
+    if (state.isAutoFlush && state.token) {
+      await flushEventsBatch(false);
+    }
   }
 
   function renderQueue() {
@@ -1589,6 +1648,42 @@
       });
     }
 
+    // Live Auto-Transmission Toggle
+    const btnAutoFlush = document.getElementById('btnToggleAutoFlush');
+    const autoFlushText = document.getElementById('autoFlushText');
+    if (btnAutoFlush) {
+      btnAutoFlush.addEventListener('click', () => {
+        state.isAutoFlush = !state.isAutoFlush;
+        if (state.isAutoFlush) {
+          btnAutoFlush.className = 'px-2 py-0.5 rounded font-bold transition flex items-center gap-1 bg-emerald-600 text-white hover:bg-emerald-500';
+          if (autoFlushText) autoFlushText.innerText = 'Live Upload: ON';
+          showToast('⚡ Live Auto-Upload enabled: events are transmitted immediately to the server.');
+        } else {
+          btnAutoFlush.className = 'px-2 py-0.5 rounded font-bold transition flex items-center gap-1 bg-slate-800 text-slate-400 hover:bg-slate-700';
+          if (autoFlushText) autoFlushText.innerText = 'Live Upload: OFF (Buffer)';
+          showToast('📦 Offline Buffer mode: events will accumulate on the phone until flushed.');
+        }
+      });
+    }
+
+    // Clock Mode Toggle (Live Wall-Clock vs Simulated Date/Time)
+    const btnClockMode = document.getElementById('btnToggleClockMode');
+    const clockModeText = document.getElementById('clockModeText');
+    if (btnClockMode) {
+      btnClockMode.addEventListener('click', () => {
+        state.isLiveClock = !state.isLiveClock;
+        if (state.isLiveClock) {
+          btnClockMode.className = 'px-2 py-0.5 rounded font-mono font-bold transition flex items-center gap-1 bg-indigo-600 text-white hover:bg-indigo-500';
+          if (clockModeText) clockModeText.innerText = 'Clock: Live';
+          showToast('🕒 Live Clock active: Events use current real-time UTC for Live Map tracking.');
+        } else {
+          btnClockMode.className = 'px-2 py-0.5 rounded font-mono font-bold transition flex items-center gap-1 bg-amber-600 text-white hover:bg-amber-500';
+          if (clockModeText) clockModeText.innerText = 'Clock: Simulated';
+          showToast('📅 Simulated Clock active: Events use selected date & route timeline.');
+        }
+      });
+    }
+
     // Manual Route Drawing Toggle
     const btnDrawMode = document.getElementById('btnToggleDrawMode');
     const drawModeText = document.getElementById('drawModeText');
@@ -1929,47 +2024,8 @@
     document.getElementById('phoneBtnLocOn').addEventListener('click', () => queueEvent('LOCATION_ENABLED'));
 
     // Flush Batch (POST /api/v1/mobile/events/batch)
-    document.getElementById('phoneBtnFlushBatch').addEventListener('click', async () => {
-      if (!state.token) {
-        alert('Please sign in first.');
-        return;
-      }
-      if (state.eventsQueue.length === 0) return alert('Event buffer is empty.');
-      const batchItems = [...state.eventsQueue];
-
-      try {
-        const res = await api('/mobile/events/batch', {
-          method: 'POST',
-          body: JSON.stringify({
-            batch_id: crypto.randomUUID(),
-            device_clock_utc: new Date().toISOString(),
-            events: batchItems.map((e) => ({
-              event_id: e.event_id,
-              event_type: e.event_type,
-              event_timestamp_utc: e.event_timestamp_utc,
-              latitude: e.latitude,
-              longitude: e.longitude,
-              accuracy_meters: e.accuracy_meters,
-              is_mock_location: false,
-              job_id: e.job_id,
-              accommodation_id: e.accommodation_id,
-            })),
-          }),
-        });
-
-        const accepted = res.results.filter((r) => r.status === 'ACCEPTED').length;
-        const rejected = res.results.filter((r) => r.status === 'REJECTED').length;
-        state.eventsQueue = [];
-        renderQueue();
-        let toastMsg = `Batch sent! Accepted: ${accepted}, Rejected: ${rejected}. Cursor: ${res.latest_cursor}`;
-        if (rejected > 0) {
-          const reasons = [...new Set(res.results.filter((r) => r.reason).map((r) => r.reason))].join(', ');
-          toastMsg += ` (Reason: ${reasons})`;
-        }
-        showToast(toastMsg);
-      } catch (err) {
-        alert(`Batch failed: ${err.message}`);
-      }
+    document.getElementById('phoneBtnFlushBatch').addEventListener('click', () => {
+      flushEventsBatch(true);
     });
 
     // Clear Network Log
