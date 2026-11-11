@@ -11,6 +11,9 @@ import {
   Search,
   RefreshCw,
   X,
+  Download,
+  Upload,
+  FileText,
 } from "lucide-react";
 import { MapContainer, PolygonEditor } from "../features/map";
 import { Map as MapLibreMap } from "maplibre-gl";
@@ -41,6 +44,94 @@ interface BoundaryQueueData {
   items: QueueItem[];
 }
 
+interface BoundaryImportError {
+  row: number;
+  code: string;
+  entity_type: string;
+  reason: string;
+}
+
+interface BoundaryImportResponse {
+  total_rows: number;
+  updated_count: number;
+  skipped_count: number;
+  errors: BoundaryImportError[];
+}
+
+function parseImportText(text: string): { entity_type: string; code: string; polygon: string }[] {
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+
+  // If JSON
+  if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
+    const parsed = JSON.parse(trimmed);
+    const list = Array.isArray(parsed) ? parsed : parsed.items || [parsed];
+    return list.map((item: any) => ({
+      entity_type: item.entity_type || item.type || "WORKSITE",
+      code: String(item.code || item.job_number || item.accommodation_code || ""),
+      polygon: typeof item.polygon === "object" ? JSON.stringify(item.polygon) : String(item.polygon || ""),
+    }));
+  }
+
+  // Parse CSV
+  const lines = trimmed.split(/\r?\n/).filter((l) => l.trim().length > 0);
+  const items: { entity_type: string; code: string; polygon: string }[] = [];
+
+  let startIndex = 0;
+  if (lines.length > 0) {
+    const firstLower = lines[0].toLowerCase();
+    if (firstLower.includes("entity_type") || firstLower.includes("code") || firstLower.includes("job")) {
+      startIndex = 1;
+    }
+  }
+
+  for (let i = startIndex; i < lines.length; i++) {
+    const line = lines[i];
+    const cells: string[] = [];
+    let cur = "";
+    let inQuotes = false;
+    for (let c = 0; c < line.length; c++) {
+      const char = line[c];
+      if (char === '"' || char === "'") {
+        inQuotes = !inQuotes;
+      } else if (char === "," && !inQuotes) {
+        cells.push(cur.trim());
+        cur = "";
+      } else {
+        cur += char;
+      }
+    }
+    cells.push(cur.trim());
+
+    if (cells.length >= 2) {
+      let entity_type = "WORKSITE";
+      let code = "";
+      let polygon = "";
+
+      if (cells.length === 2) {
+        code = cells[0].replace(/^["']|["']$/g, "");
+        polygon = cells[1].replace(/^["']|["']$/g, "");
+      } else if (cells.length === 3) {
+        entity_type = cells[0].toUpperCase();
+        code = cells[1].replace(/^["']|["']$/g, "");
+        polygon = cells[2].replace(/^["']|["']$/g, "");
+      } else {
+        entity_type = cells[0].toUpperCase();
+        code = cells[1].replace(/^["']|["']$/g, "");
+        polygon = cells[cells.length - 1].replace(/^["']|["']$/g, "");
+      }
+
+      items.push({
+        entity_type,
+        code,
+        polygon,
+      });
+    }
+  }
+
+  return items;
+}
+
 export const Boundaries: React.FC = () => {
   const navigate = useNavigate();
   const { token } = useAuth();
@@ -56,6 +147,79 @@ export const Boundaries: React.FC = () => {
   const [savingBoundary, setSavingBoundary] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Import / Export boundaries state
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<BoundaryImportResponse | null>(null);
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async (format: "csv" | "json") => {
+    setExporting(true);
+    setErrorMsg(null);
+    try {
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch(`/api/v1/boundaries/export?format=${format}`, { headers });
+      if (!res.ok) throw new Error("Failed to export boundaries.");
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `fwt_boundaries_export.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      setSuccessMsg(`Exported boundaries as ${format.toUpperCase()}.`);
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to export boundaries.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleProcessImport = async () => {
+    if (!importText.trim()) {
+      setErrorMsg("Please paste or upload boundary data to import.");
+      return;
+    }
+    setImporting(true);
+    setErrorMsg(null);
+    try {
+      const items = parseImportText(importText);
+      if (items.length === 0) {
+        throw new Error("No valid rows could be parsed. Check the format.");
+      }
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
+
+      const res = await fetch("/api/v1/boundaries/import", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ items }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || "Failed to import boundaries.");
+      }
+
+      const dataRes: BoundaryImportResponse = await res.json();
+      setImportResult(dataRes);
+      if (dataRes.updated_count > 0) {
+        fetchData();
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to import boundaries.");
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -139,13 +303,52 @@ export const Boundaries: React.FC = () => {
             Prioritized work queue for sites and accommodations missing geofence polygon boundaries.
           </p>
         </div>
-        <button
-          onClick={fetchData}
-          className="px-3.5 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2 shadow-xs"
-        >
-          <RefreshCw className="h-3.5 w-3.5" />
-          Refresh Queue
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Export Buttons */}
+          <button
+            type="button"
+            onClick={() => handleExport("csv")}
+            disabled={exporting}
+            className="px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 shadow-xs"
+            title="Export boundaries as CSV"
+          >
+            <Download className="h-3.5 w-3.5 text-slate-500" />
+            Export CSV
+          </button>
+          <button
+            type="button"
+            onClick={() => handleExport("json")}
+            disabled={exporting}
+            className="px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 shadow-xs"
+            title="Export boundaries as GeoJSON / JSON"
+          >
+            <Download className="h-3.5 w-3.5 text-indigo-500" />
+            Export JSON
+          </button>
+
+          {/* Import Button */}
+          <button
+            type="button"
+            onClick={() => {
+              setImportText("");
+              setImportResult(null);
+              setShowImportModal(true);
+            }}
+            className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-colors"
+          >
+            <Upload className="h-3.5 w-3.5" />
+            Import Boundaries
+          </button>
+
+          <button
+            type="button"
+            onClick={fetchData}
+            className="px-3.5 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2 shadow-xs"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            Refresh Queue
+          </button>
+        </div>
       </div>
 
       {/* Notifications */}
@@ -432,6 +635,167 @@ export const Boundaries: React.FC = () => {
                 onSave={handleSaveAccommodationBoundary}
                 isSaving={savingBoundary}
               />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import Boundaries Modal */}
+      {showImportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-2xl bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+              <div>
+                <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <Upload className="h-5 w-5 text-indigo-600" />
+                  Import Boundary Polygons
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Bulk import worksite and accommodation boundaries from CSV or GeoJSON.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowImportModal(false);
+                  setImportResult(null);
+                }}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/60"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 flex-1 overflow-y-auto text-xs">
+              {!importResult ? (
+                <>
+                  {/* Format Guidelines */}
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1.5 text-slate-600 text-[11px]">
+                    <div className="font-bold text-slate-800 uppercase tracking-wider text-[10px]">
+                      Supported CSV / Text Formats:
+                    </div>
+                    <div className="font-mono bg-white p-2 rounded border border-slate-200 text-slate-700 select-all">
+                      entity_type, code, polygon<br />
+                      WORKSITE, 12A14301, "POLYGON((55.385 25.120, 55.388 25.120, 55.388 25.125, 55.385 25.120))"<br />
+                      ACCOMMODATION, WARSAN_01, "POLYGON((...))"
+                    </div>
+                    <p className="text-slate-500 text-[10px]">
+                      • Worksite primary key is <strong>job_number</strong>; Accommodation primary key is <strong>accommodation_code</strong>.<br />
+                      • Unmatched codes will be safely skipped and listed in the summary report.
+                    </p>
+                  </div>
+
+                  {/* File Upload Shortcut */}
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-slate-700 text-xs">Upload File or Paste Data:</span>
+                    <label className="cursor-pointer px-3 py-1.5 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 font-medium shadow-2xs">
+                      <FileText className="h-3.5 w-3.5 text-indigo-600" />
+                      Browse CSV / JSON
+                      <input
+                        type="file"
+                        accept=".csv,.json,.txt"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = (ev) => {
+                            setImportText(String(ev.target?.result || ""));
+                          };
+                          reader.readAsText(file);
+                        }}
+                      />
+                    </label>
+                  </div>
+
+                  {/* Paste Textarea */}
+                  <textarea
+                    rows={8}
+                    value={importText}
+                    onChange={(e) => setImportText(e.target.value)}
+                    placeholder="Paste CSV rows or JSON array here..."
+                    className="w-full font-mono text-2xs p-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-slate-50"
+                  />
+                </>
+              ) : (
+                /* Import Results Summary */
+                <div className="space-y-4">
+                  <div className="grid grid-cols-3 gap-3 text-center">
+                    <div className="bg-slate-50 border border-slate-200 p-3 rounded-lg">
+                      <div className="text-xl font-bold text-slate-900">{importResult.total_rows}</div>
+                      <div className="text-[11px] text-slate-500 uppercase font-bold">Total Rows</div>
+                    </div>
+                    <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-lg">
+                      <div className="text-xl font-bold text-emerald-700">{importResult.updated_count}</div>
+                      <div className="text-[11px] text-emerald-600 uppercase font-bold">Updated</div>
+                    </div>
+                    <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg">
+                      <div className="text-xl font-bold text-amber-700">{importResult.skipped_count}</div>
+                      <div className="text-[11px] text-amber-600 uppercase font-bold">Skipped</div>
+                    </div>
+                  </div>
+
+                  {importResult.errors.length > 0 && (
+                    <div className="border border-amber-200 rounded-lg overflow-hidden">
+                      <div className="bg-amber-50 px-3 py-2 font-bold text-amber-800 text-[11px] border-b border-amber-200">
+                        Skipped Rows Details ({importResult.errors.length})
+                      </div>
+                      <div className="max-h-48 overflow-y-auto divide-y divide-slate-100 text-2xs">
+                        {importResult.errors.map((err, idx) => (
+                          <div key={idx} className="p-2 flex items-start justify-between bg-white">
+                            <div>
+                              <span className="font-mono font-bold text-slate-700">Row {err.row}:</span>{" "}
+                              <span className="font-mono text-indigo-700 font-bold">{err.code}</span>{" "}
+                              <span className="text-slate-400">({err.entity_type})</span>
+                            </div>
+                            <span className="text-amber-700 text-[11px]">{err.reason}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {importResult.updated_count > 0 && (
+                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 flex items-center gap-2 text-xs">
+                      <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                      <span>{importResult.updated_count} boundaries were successfully saved to the database.</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+              {!importResult ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setShowImportModal(false)}
+                    className="px-4 py-1.5 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-100 font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={importing || !importText.trim()}
+                    onClick={handleProcessImport}
+                    className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold disabled:opacity-50 flex items-center gap-1.5 transition-colors"
+                  >
+                    {importing ? "Importing..." : "Process Import"}
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowImportModal(false);
+                    setImportResult(null);
+                  }}
+                  className="w-full py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-semibold transition-colors"
+                >
+                  Close & Refresh Queue
+                </button>
+              )}
             </div>
           </div>
         </div>

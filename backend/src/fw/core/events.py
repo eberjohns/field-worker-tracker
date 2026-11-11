@@ -67,6 +67,18 @@ class EventsIngested(DomainEvent):
     affected_work_dates: list[Any] = field(default_factory=list)
 
 
+@dataclass
+class LocationDisabledRecorded(DomainEvent):
+    employee_id: UUID | None = None
+    captured_at: Any = None
+
+
+@dataclass
+class LocationEnabledRecorded(DomainEvent):
+    employee_id: UUID | None = None
+    captured_at: Any = None
+
+
 SyncHandler = Callable[[Any, Any], Awaitable[None]]
 PostCommitHandler = Callable[[Any], Awaitable[None]]
 
@@ -85,12 +97,14 @@ class EventBus:
         )
 
     def subscribe_sync(self, event_type: type[DomainEvent], handler: SyncHandler) -> None:
-        self._sync_handlers[event_type].append(handler)
+        if handler not in self._sync_handlers[event_type]:
+            self._sync_handlers[event_type].append(handler)
 
     def subscribe_post_commit(
         self, event_type: type[DomainEvent], handler: PostCommitHandler
     ) -> None:
-        self._post_commit_handlers[event_type].append(handler)
+        if handler not in self._post_commit_handlers[event_type]:
+            self._post_commit_handlers[event_type].append(handler)
 
     async def publish(self, event: DomainEvent, session: Any = None) -> None:
         """Publish an event to all synchronous handlers."""

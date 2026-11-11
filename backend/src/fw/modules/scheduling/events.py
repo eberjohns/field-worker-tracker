@@ -25,7 +25,7 @@ class LeaveCancelledEvent(DomainEvent):
 
 @dataclass(kw_only=True)
 class ReassignmentApprovedEvent(DomainEvent):
-    reassignment_id: UUID
-    leave_request_id: UUID | None
-    original_employee_id: UUID | None
-    approved_by_user_id: UUID
+    reassignment_id: UUID | None = None
+    leave_request_id: UUID | None = None
+    original_employee_id: UUID | None = None
+    approved_by_user_id: UUID | None = None

@@ -3108,6 +3108,13 @@ class SchedulingService:
         self.session.add(shift)
         await self.session.commit()
 
+        if payload.original_employee_id and shift_status == "ACTIVE":
+            await self._check_and_resolve_leave_cover(
+                original_employee_id=payload.original_employee_id,
+                work_date=payload.work_date,
+                current_user_id=current_user_id,
+            )
+
         await AuditService.log_action(
             session=self.session,
             action="CREATE",
@@ -3151,6 +3158,8 @@ class SchedulingService:
         shift = await self.session.get(ScheduledWork, shift_id)
         if not shift:
             return
+        orig_emp_id = shift.original_employee_id
+        w_date = shift.work_date
         shift.status = "CANCELLED"
         shift.version += 1
         shift.updated_at = datetime.now(UTC)
@@ -3164,6 +3173,110 @@ class SchedulingService:
             actor_user_id=current_user_id,
             diff={"status": "CANCELLED"},
         )
+
+        if orig_emp_id:
+            await self._check_and_reopen_leave_cover(
+                original_employee_id=orig_emp_id,
+                work_date=w_date,
+                current_user_id=current_user_id,
+            )
+
+    async def _check_and_resolve_leave_cover(
+        self,
+        original_employee_id: UUID,
+        work_date: date,
+        current_user_id: UUID | None = None,
+    ) -> None:
+        """If all shifts of an approved leave are covered, resolve the COVER_NEEDED alert."""
+        # Find approved leave for this worker covering work_date
+        stmt = select(LeaveRequest).where(
+            LeaveRequest.employee_id == original_employee_id,
+            LeaveRequest.status == "APPROVED",
+            LeaveRequest.is_active.is_(True),
+            LeaveRequest.from_date <= work_date,
+            LeaveRequest.to_date >= work_date,
+        )
+        leave = (await self.session.execute(stmt)).scalars().first()
+        if not leave:
+            return
+
+        # Fetch templates
+        stmt_tmpl = (
+            select(BaseRosterTemplate)
+            .where(BaseRosterTemplate.is_active.is_(True))
+            .options(selectinload(BaseRosterTemplate.entries))
+        )
+        templates = (await self.session.execute(stmt_tmpl)).scalars().all()
+
+        cur = leave.from_date
+        has_uncovered_gap = False
+        while cur <= leave.to_date:
+            dow = INT_TO_WEEKDAY[cur.weekday()]
+            for t in templates:
+                for e in t.entries:
+                    if e.employee_id == original_employee_id and e.weekday_mask in ("ALL", dow):
+                        sw_stmt = select(ScheduledWork.id).where(
+                            ScheduledWork.original_employee_id == original_employee_id,
+                            ScheduledWork.work_date == cur,
+                            ScheduledWork.job_item_id == t.job_item_id,
+                            ScheduledWork.status == "ACTIVE",
+                        )
+                        cover_exists = (await self.session.execute(sw_stmt)).scalar_one_or_none()
+                        if not cover_exists:
+                            has_uncovered_gap = True
+                            break
+                if has_uncovered_gap:
+                    break
+            if has_uncovered_gap:
+                break
+            cur += timedelta(days=1)
+
+        if not has_uncovered_gap:
+            await event_bus.publish(
+                ReassignmentApprovedEvent(
+                    reassignment_id=None,
+                    leave_request_id=leave.id,
+                    original_employee_id=original_employee_id,
+                    approved_by_user_id=current_user_id,
+                ),
+                session=self.session,
+            )
+            await self.session.commit()
+
+    async def _check_and_reopen_leave_cover(
+        self,
+        original_employee_id: UUID,
+        work_date: date,
+        current_user_id: UUID | None = None,
+    ) -> None:
+        """If a cover shift is removed and gaps reappear for an approved leave, reopen the COVER_NEEDED alert."""
+        stmt = select(LeaveRequest).where(
+            LeaveRequest.employee_id == original_employee_id,
+            LeaveRequest.status == "APPROVED",
+            LeaveRequest.is_active.is_(True),
+            LeaveRequest.from_date <= work_date,
+            LeaveRequest.to_date >= work_date,
+        )
+        leave = (await self.session.execute(stmt)).scalars().first()
+        if not leave:
+            return
+
+        emp = await self.session.get(Employee, original_employee_id)
+        emp_name = emp.name if emp else "Worker"
+        await event_bus.publish(
+            LeaveApprovedEvent(
+                leave_id=leave.id,
+                employee_id=original_employee_id,
+                date_from=leave.from_date,
+                date_to=leave.to_date,
+                worker_name=emp_name,
+                approved_by_user_id=current_user_id
+                or leave.approved_by_user_id
+                or leave.recorded_by_user_id,
+            ),
+            session=self.session,
+        )
+        await self.session.commit()
 
     # -------------------------------------------------------------------------
     # Leave Management (Doc 04 Section 9, D2, BR-SC-05, DEC-46)

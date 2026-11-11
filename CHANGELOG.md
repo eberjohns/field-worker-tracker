@@ -3,6 +3,46 @@ All notable changes. Format: Keep a Changelog. Mobile-contract changes are also 
 
 ## [Unreleased]
 ### Added
+- PHASE-09 (Live Map, Pending Visits, Alerts, and Documents):
+  - Database Migration `0011_live_map_and_alerts.py`:
+    - Created dedicated `live_location_access_logs` table (`id`, `user_id`, `access_type`, `filters`, `client_ip`, `user_agent`, `created_at`) with performance indexes (`ix_live_location_access_logs_user`, `ix_live_location_access_logs_created_at`) for surveillance auditing without polluting business mutation logs.
+  - Live Streaming & Positions:
+    - SSE stream endpoint (`GET /api/v1/live/stream`) with 20s heartbeat and single-use 30s tokens via `POST /api/v1/live/stream-ticket` (`StreamTicketManager`).
+    - Position query endpoint (`GET /api/v1/live/positions`) computing dynamic live states (`ACTIVE`, `NO_RECENT_SIGNAL`, `LOCATION_DISABLED`, `NOT_SCHEDULED`) against `live_active_window_minutes`.
+    - Route trail playback endpoint (`GET /api/v1/live/trail/{employee_id}`) returning chronological GPS breadcrumbs.
+    - Newest-wins update policy for `employee_last_position` ensuring late batch uploads from offline devices never overwrite newer position records.
+    - Privacy audit logging: every view of live locations (polling or SSE streaming) is automatically recorded in `live_location_access_logs`.
+  - Alerts & Incident Management:
+    - Automated `TRACKING_INTERRUPTED` alert creation on `LOCATION_DISABLED` events and resolution on `LOCATION_ENABLED`.
+    - Automated document expiry alert evaluation (`check_document_expiry_alerts`) against configured lead days (e.g. 30 days) raising `DOC_EXPIRY` alerts.
+    - Alert scope resolution: alerts link to `employee_id` and are visible throughout the worker's management hierarchy (Supervisor, Superintendent, Engineer) and Admin.
+  - Pending Visits Workflow:
+    - Day-close detection (`detect_pending_visits`) identifying unvisited scheduled work occurrences (`OPEN`).
+    - Automatic exemption for workers on approved leave.
+    - Follow-up lifecycle: Supervisor explanation modal (`EXPLAINED`), Engineer/Admin reschedule (`RESCHEDULED` with source `FOLLOW_UP`), and closure (`CLOSED`).
+    - Daily reminders runner (`check_pending_visit_reminders`) and escalation badges for visits open 3+ days.
+    - Automatic reconciliation and closure when late batch uploads confirm a visit.
+  - Web UI Features:
+    - Interactive Live Map (`/live`) with MapLibre GL GeoJSON clustering (`cluster: true`), worksite polygons, accommodation polygons, state-colored markers, and selected worker route breadcrumb line.
+    - Live Map side panel with search, state and supervisor filters, worker cards showing two distinct ages: position fix age and device last-contact age.
+    - Interactive **Journey Replay Player** in Live Map worker slide-out panel featuring date selection, animated path replay, Play/Pause control, timeline scrubber, and speed multipliers (1x–30x) styled to match the light theme.
+    - Connection indicator showing real-time SSE streaming or 30s polling fallback.
+    - System Page (`/system`) enhancements: Moved application health and telemetry from Dashboard to System page; added dedicated password change section for users and administrators.
+    - Authentication improvements: First sign-in password change fallback allowing default temporary password verification and dedicated temporary password input in `Login.tsx`.
+    - Dynamic Budget-Only Roles: Endpoint `GET /api/v1/settings/staff-grades` resolving unique staff grades from employees, excel import support, and dynamic checkboxes in Settings.
+    - Mobile Proxy Simulator: Added Live Auto-Upload toggle (`⚡ Live Upload: ON`) transmitting events in real time to the server as the route plays, Clock Mode toggle (`🕒 Clock: Live/Simulated`), and verified transit inference without unnecessary transit pings.
+    - Pending Visits screen (`/pending-visits`) with search, status filters, 3+ days escalation badges, Explain modal, Reschedule modal with worker assignment, Close modal, and CSV export.
+    - Documents Expiry screen (`/documents`) for Admin with lead days filters, status badges (`OK`, `EXPIRING`, `EXPIRED`), alert engine check trigger, and CSV export.
+    - Boundary Tools & Setup Queue (`/boundaries`):
+      - Bulk Boundary Export (`GET /api/v1/boundaries/export`) supporting CSV and GeoJSON downloads.
+      - Bulk Boundary Import (`POST /api/v1/boundaries/import`) supporting CSV and JSON with primary keys (`job_number` for worksites, `accommodation_code` for camps), automatic WKT/GeoJSON format resolution, and graceful skip reporting for unknown keys.
+      - 1-click **Copy GeoJSON** and **Copy WKT** buttons in Worksite detail header and Copy Boundary modal.
+      - **Paste Polygon** tool in Mobile Simulator (`http://localhost:8085`) supporting WKT and GeoJSON string rendering with centroid alignment and zoom-to-fit.
+    - Dashboard Overview tiles (`/`) showing Today's Attendance breakdown, Live Workforce status, Pending Visits with escalation alerts, Late Arrivals, and Overtime Hours Today.
+  - Architecture & Testing:
+    - ADR-019 (`docs/decisions/019-live-location-access-logging-and-streaming.md`).
+    - Complete test suite `test_phase09_live_map_pending_alerts.py` covering all 7 checklist requirements. All 151 backend tests passing; modular monolith import contracts strictly kept (0 violations).
+
 - PHASE-08 (Events Ingestion, Enrichment, and Attendance Engine):
   - Database migration `0010_events_and_attendance.py`:
     - Enrichment columns on `mobile_event_logs`: `server_verdict`, `server_site_id`, `server_accommodation_id`, `distance_to_polygon_m`, `flags`, `processing_status`, `error_reason`, `device_clock_skew_s`, and `batch_id`.

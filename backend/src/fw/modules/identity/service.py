@@ -155,7 +155,22 @@ class AuthService:
         request: PasswordChangeRequest,
         default_password: str = "ChangeMe123!",
     ) -> User:
-        if not verify_password(request.current_password, user.credential_hash):
+        current_valid = verify_password(request.current_password, user.credential_hash)
+
+        # On forced password change (first sign-in or after admin reset):
+        # Also accept default onboarding password if the user's credential hash matches default_password,
+        # or if in local development with blank credentials.
+        if not current_valid and user.must_change_password:
+            if verify_password(default_password, user.credential_hash):
+                current_valid = True
+            elif (
+                (settings := get_settings())
+                and settings.APP_ENV == "local"
+                and request.current_password == ""
+            ):
+                current_valid = True
+
+        if not current_valid:
             raise AppError(
                 code="INVALID_CURRENT_PASSWORD",
                 message="Current password is incorrect.",

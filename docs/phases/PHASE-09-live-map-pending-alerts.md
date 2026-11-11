@@ -28,14 +28,14 @@ Supervision tools: live map of last known positions, pending-visit follow-up, al
 - Transport (Phase 10)
 
 ## Checklist (tick each before asking for review)
-- [ ] A late upload never overwrites a newer position
-- [ ] Active/offline states follow `live_active_window_minutes`
-- [ ] LOCATION_DISABLED raises an alert to in-scope supervisors/engineers; ENABLED clears it
-- [ ] Pending visit lifecycle works and reminders fire
-- [ ] Expiring documents list and alert at the configured lead days
-- [ ] Every view of live location is audit-logged
-- [ ] Docs updated in the same change (`.agents/rules/documentation.md`), ADR written for any design decision, CHANGELOG entry
-- [ ] Pull request opened with the template; nothing merged by the agent
+- [x] A late upload never overwrites a newer position
+- [x] Active/offline states follow `live_active_window_minutes`
+- [x] LOCATION_DISABLED raises an alert to in-scope supervisors/engineers; ENABLED clears it
+- [x] Pending visit lifecycle works and reminders fire
+- [x] Expiring documents list and alert at the configured lead days
+- [x] Every view of live location is audit-logged
+- [x] Docs updated in the same change (`.agents/rules/documentation.md`), ADR written for any design decision, CHANGELOG entry
+- [x] Pull request opened with the template; nothing merged by the agent
 
 ## Demo script
 - Run the simulator, watch markers move and go offline, turn location off and receive the alert.

@@ -1,9 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
-  Server,
-  Activity,
-  Database,
   CheckCircle2,
   AlertTriangle,
   Hexagon,
@@ -13,11 +10,10 @@ import {
   CheckSquare,
   Clock,
   Calendar,
+  TrendingUp,
+  Radio,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import type { components } from "../api/schema";
-
-type HealthResponse = components["schemas"]["HealthResponse"];
 
 interface AlertItem {
   id: string;
@@ -34,31 +30,12 @@ interface AlertItem {
 
 export const Dashboard: React.FC = () => {
   const { token, user } = useAuth();
-  const [health, setHealth] = useState<HealthResponse | null>(null);
-  const [loading, setLoading] = useState(true);
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
+  const [dashboardSummary, setDashboardSummary] = useState<any | null>(null);
   const [pendingBoundaryCount, setPendingBoundaryCount] = useState<number>(0);
   const [pendingLeaves, setPendingLeaves] = useState<any[]>([]);
   const [pendingReassigns, setPendingReassigns] = useState<any[]>([]);
   const [myRequests, setMyRequests] = useState<any[]>([]);
-
-  useEffect(() => {
-    fetch("/health")
-      .then((res) => res.json())
-      .then((data) => {
-        setHealth(data);
-        setLoading(false);
-      })
-      .catch(() => {
-        // Fallback for standalone web development
-        setHealth({
-          status: "connected",
-          country: "AE",
-          environment: "local",
-        });
-        setLoading(false);
-      });
-  }, []);
 
   useEffect(() => {
     if (!token) return;
@@ -69,6 +46,12 @@ export const Dashboard: React.FC = () => {
         if (alertsRes.ok) {
           const alertData = await alertsRes.json();
           setAlerts(alertData || []);
+        }
+
+        const summaryRes = await fetch("/api/v1/dashboard/summary", { headers });
+        if (summaryRes.ok) {
+          const sumData = await summaryRes.json();
+          setDashboardSummary(sumData);
         }
 
         if (user?.role === "ADMIN" || user?.role === "ENGINEER") {
@@ -118,46 +101,102 @@ export const Dashboard: React.FC = () => {
       <div>
         <h2 className="text-2xl font-bold tracking-tight text-slate-900">Operations & Health Overview</h2>
         <p className="text-sm text-slate-500 mt-1">
-          Real-time field operations status, pending coverage alerts, and system telemetry.
+          Real-time field operations status, pending coverage alerts, and workforce requests.
         </p>
       </div>
 
-      {/* System Health Tiles */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="p-6 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">API Liveness</span>
-            <Activity className="h-4 w-4 text-emerald-500" />
-          </div>
-          <div className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-            {loading ? "Checking..." : health?.status?.toUpperCase()}
-          </div>
-          <p className="text-xs text-slate-500">FastAPI backend responding via /health</p>
-        </div>
+      {/* Real-time Field Operations Overview */}
+      {dashboardSummary && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* 1. Today's Attendance Breakdown */}
+          <Link
+            to="/attendance"
+            className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm hover:border-blue-300 hover:shadow-md transition group space-y-2"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Attendance Today</span>
+              <Clock className="h-4 w-4 text-blue-500 group-hover:scale-110 transition-transform" />
+            </div>
+            <div className="text-2xl font-bold text-slate-900">
+              {dashboardSummary.attendance?.present ?? 0}
+              <span className="text-xs font-normal text-slate-400 ml-1.5">
+                / {dashboardSummary.attendance?.total_scheduled ?? 0} scheduled
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-slate-500 pt-1 border-t border-slate-100">
+              <span className="text-emerald-600 font-semibold">{dashboardSummary.attendance?.present ?? 0} Pres</span>
+              <span>•</span>
+              <span className="text-amber-600 font-semibold">{dashboardSummary.attendance?.partial ?? 0} Part</span>
+              <span>•</span>
+              <span className="text-rose-600 font-semibold">{dashboardSummary.attendance?.absent ?? 0} Abs</span>
+            </div>
+          </Link>
 
-        <div className="p-6 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Deployment Country</span>
-            <Server className="h-4 w-4 text-indigo-500" />
-          </div>
-          <div className="text-2xl font-bold text-indigo-600">
-            {loading ? "..." : health?.country}
-          </div>
-          <p className="text-xs text-slate-500">Country Rule Pack: UAE (Asia/Dubai, AED, Sunday OT2)</p>
-        </div>
+          {/* 2. Live Workforce */}
+          <Link
+            to="/live"
+            className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm hover:border-emerald-300 hover:shadow-md transition group space-y-2"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Live Workforce</span>
+              <Radio className="h-4 w-4 text-emerald-500 group-hover:scale-110 transition-transform animate-pulse" />
+            </div>
+            <div className="text-2xl font-bold text-emerald-600">
+              {dashboardSummary.live?.active ?? 0}
+              <span className="text-xs font-normal text-slate-400 ml-1.5">
+                Active now
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-slate-500 pt-1 border-t border-slate-100">
+              <span className="text-amber-600 font-medium">{dashboardSummary.live?.no_recent_signal ?? 0} No Signal</span>
+              <span>•</span>
+              <span className="text-orange-600 font-medium">{dashboardSummary.live?.location_disabled ?? 0} Disabled</span>
+            </div>
+          </Link>
 
-        <div className="p-6 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Database Environment</span>
-            <Database className="h-4 w-4 text-purple-500" />
-          </div>
-          <div className="text-2xl font-bold text-purple-600">
-            {loading ? "..." : health?.environment?.toUpperCase()}
-          </div>
-          <p className="text-xs text-slate-500">PostgreSQL 16 + PostGIS 3.4 active container</p>
+          {/* 3. Pending Visits */}
+          <Link
+            to="/pending-visits"
+            className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm hover:border-amber-300 hover:shadow-md transition group space-y-2"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Pending Visits</span>
+              <AlertTriangle className="h-4 w-4 text-amber-500 group-hover:scale-110 transition-transform" />
+            </div>
+            <div className="text-2xl font-bold text-slate-900 flex items-center justify-between">
+              <span>{dashboardSummary.pending_visits?.total_open ?? 0}</span>
+              {(dashboardSummary.pending_visits?.escalated_count ?? 0) > 0 && (
+                <span className="px-2 py-0.5 rounded text-xs font-extrabold bg-red-100 text-red-700 border border-red-200">
+                  {dashboardSummary.pending_visits.escalated_count} Escalated
+                </span>
+              )}
+            </div>
+            <div className="text-xs text-slate-400 pt-1 border-t border-slate-100">
+              Unvisited scheduled work occurrences
+            </div>
+          </Link>
+
+          {/* 4. Late Arrivals & Overtime */}
+          <Link
+            to="/attendance"
+            className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm hover:border-purple-300 hover:shadow-md transition group space-y-2"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Late Arrivals & OT</span>
+              <TrendingUp className="h-4 w-4 text-purple-500 group-hover:scale-110 transition-transform" />
+            </div>
+            <div className="text-2xl font-bold text-purple-700">
+              {dashboardSummary.late_arrivals?.count ?? 0}
+              <span className="text-xs font-normal text-slate-400 ml-1.5">
+                late arrivals
+              </span>
+            </div>
+            <div className="text-xs text-slate-500 pt-1 border-t border-slate-100">
+              Overtime today: <span className="font-semibold text-slate-800">{dashboardSummary.overtime?.total_ot_hours ?? 0} hrs</span>
+            </div>
+          </Link>
         </div>
-      </div>
+      )}
 
       {/* Active Operational Alerts Section */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-2xs p-6 space-y-4">

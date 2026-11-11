@@ -23,6 +23,8 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Smartphone,
+  AlertTriangle,
+  Server,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { Login } from "../../routes/Login";
@@ -41,6 +43,8 @@ const navItems: NavItem[] = [
   { label: "Worksites & Jobs", to: "/worksites", icon: Building2, roles: ["ADMIN", "ENGINEER", "SUPERINTENDENT", "SUPERVISOR"] },
   { label: "Boundary Queue", to: "/boundaries", icon: Hexagon, roles: ["ADMIN", "ENGINEER"] },
   { label: "Live Map", to: "/live", icon: MapPin },
+  { label: "Pending Visits", to: "/pending-visits", icon: AlertTriangle, roles: ["ADMIN", "ENGINEER", "SUPERINTENDENT", "SUPERVISOR"] },
+  { label: "Documents", to: "/documents", icon: ShieldCheck, roles: ["ADMIN"] },
   { label: "Base Planner", to: "/base-planner", icon: CalendarRange, roles: ["ADMIN", "ENGINEER", "SUPERINTENDENT", "SUPERVISOR"] },
   { label: "Operational Planner", to: "/operational-planner", icon: CalendarDays, roles: ["ADMIN", "ENGINEER", "SUPERINTENDENT", "SUPERVISOR"] },
   { label: "Leave Management", to: "/leave", icon: CalendarCheck, roles: ["ADMIN", "ENGINEER", "SUPERINTENDENT", "SUPERVISOR"] },
@@ -53,6 +57,7 @@ const navItems: NavItem[] = [
   { label: "Users & Security", to: "/users", icon: UserCheck, roles: ["ADMIN"] },
   { label: "Audit Logs", to: "/audit-logs", icon: History, roles: ["ADMIN"] },
   { label: "Settings", to: "/settings", icon: SettingsIcon, roles: ["ADMIN", "ENGINEER"] },
+  { label: "System", to: "/system", icon: Server },
 ];
 
 export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -211,7 +216,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top Header */}
-        <header className="h-16 border-b border-slate-200 bg-white flex items-center justify-between px-8">
+        <header className="h-16 border-b border-slate-200 bg-white flex items-center justify-between px-8 shrink-0">
           <div className="flex items-center gap-3">
             <h1 className="text-lg font-semibold text-slate-800">
               {navItems.find((item) => item.to === currentPath)?.label || "Field Worker Tracker"}
@@ -242,7 +247,11 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto p-8">
+        <main
+          className={`flex-1 flex flex-col min-h-0 ${
+            currentPath === "/live" ? "p-0 overflow-hidden" : "p-8 overflow-y-auto"
+          }`}
+        >
           {children}
         </main>
       </div>

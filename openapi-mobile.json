@@ -1844,6 +1844,37 @@
         ],
         "title": "AttendanceRecordResponse"
       },
+      "AttendanceSummaryItem": {
+        "properties": {
+          "present": {
+            "type": "integer",
+            "title": "Present",
+            "default": 0
+          },
+          "partial": {
+            "type": "integer",
+            "title": "Partial",
+            "default": 0
+          },
+          "absent": {
+            "type": "integer",
+            "title": "Absent",
+            "default": 0
+          },
+          "not_started": {
+            "type": "integer",
+            "title": "Not Started",
+            "default": 0
+          },
+          "total_scheduled": {
+            "type": "integer",
+            "title": "Total Scheduled",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "AttendanceSummaryItem"
+      },
       "AttendanceTimelineItem": {
         "properties": {
           "item_id": {
@@ -2520,6 +2551,106 @@
           "target_worksite_ids"
         ],
         "title": "BoundaryCopyToRequest"
+      },
+      "BoundaryImportError": {
+        "properties": {
+          "row": {
+            "type": "integer",
+            "title": "Row"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "entity_type": {
+            "type": "string",
+            "title": "Entity Type"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "row",
+          "code",
+          "entity_type",
+          "reason"
+        ],
+        "title": "BoundaryImportError"
+      },
+      "BoundaryImportItem": {
+        "properties": {
+          "entity_type": {
+            "type": "string",
+            "title": "Entity Type",
+            "description": "WORKSITE or ACCOMMODATION"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code",
+            "description": "Worksite job number or accommodation code"
+          },
+          "polygon": {
+            "title": "Polygon",
+            "description": "GeoJSON dict/string or WKT string"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entity_type",
+          "code",
+          "polygon"
+        ],
+        "title": "BoundaryImportItem"
+      },
+      "BoundaryImportRequest": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BoundaryImportItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "BoundaryImportRequest"
+      },
+      "BoundaryImportResponse": {
+        "properties": {
+          "total_rows": {
+            "type": "integer",
+            "title": "Total Rows"
+          },
+          "updated_count": {
+            "type": "integer",
+            "title": "Updated Count"
+          },
+          "skipped_count": {
+            "type": "integer",
+            "title": "Skipped Count"
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/BoundaryImportError"
+            },
+            "type": "array",
+            "title": "Errors"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_rows",
+          "updated_count",
+          "skipped_count",
+          "errors"
+        ],
+        "title": "BoundaryImportResponse"
       },
       "BoundaryQueueItemResponse": {
         "properties": {
@@ -3233,6 +3364,57 @@
           "items"
         ],
         "title": "CoverageWorksiteRow"
+      },
+      "DashboardSummaryResponse": {
+        "properties": {
+          "today_date": {
+            "type": "string",
+            "title": "Today Date"
+          },
+          "attendance": {
+            "$ref": "#/components/schemas/AttendanceSummaryItem"
+          },
+          "live_workers": {
+            "$ref": "#/components/schemas/LiveWorkersSummaryItem"
+          },
+          "pending_visits_count": {
+            "type": "integer",
+            "title": "Pending Visits Count"
+          },
+          "late_arrivals_count": {
+            "type": "integer",
+            "title": "Late Arrivals Count"
+          },
+          "overtime_hours_today": {
+            "type": "number",
+            "title": "Overtime Hours Today"
+          },
+          "open_alerts_count": {
+            "type": "integer",
+            "title": "Open Alerts Count"
+          },
+          "expiring_documents_count": {
+            "type": "integer",
+            "title": "Expiring Documents Count"
+          },
+          "pending_approvals_count": {
+            "type": "integer",
+            "title": "Pending Approvals Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "today_date",
+          "attendance",
+          "live_workers",
+          "pending_visits_count",
+          "late_arrivals_count",
+          "overtime_hours_today",
+          "open_alerts_count",
+          "expiring_documents_count",
+          "pending_approvals_count"
+        ],
+        "title": "DashboardSummaryResponse"
       },
       "DeviceStatusRead": {
         "properties": {
@@ -4349,6 +4531,127 @@
           "LOCATION_ENABLED"
         ],
         "title": "EventType"
+      },
+      "ExpiringDocumentItem": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "employee_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Employee Id"
+          },
+          "employee_name": {
+            "type": "string",
+            "title": "Employee Name"
+          },
+          "tally_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tally Id"
+          },
+          "supervisor_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supervisor Id"
+          },
+          "supervisor_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supervisor Name"
+          },
+          "document_type": {
+            "type": "string",
+            "title": "Document Type"
+          },
+          "expiry_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Expiry Date"
+          },
+          "days_remaining": {
+            "type": "integer",
+            "title": "Days Remaining"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "employee_id",
+          "employee_name",
+          "document_type",
+          "expiry_date",
+          "days_remaining",
+          "status"
+        ],
+        "title": "ExpiringDocumentItem"
+      },
+      "ExpiringDocumentsResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ExpiringDocumentItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "expiring_count": {
+            "type": "integer",
+            "title": "Expiring Count"
+          },
+          "expired_count": {
+            "type": "integer",
+            "title": "Expired Count"
+          },
+          "ok_count": {
+            "type": "integer",
+            "title": "Ok Count"
+          },
+          "total_count": {
+            "type": "integer",
+            "title": "Total Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "expiring_count",
+          "expired_count",
+          "ok_count",
+          "total_count"
+        ],
+        "title": "ExpiringDocumentsResponse"
       },
       "GenerateOccurrencesRequest": {
         "properties": {
@@ -5835,6 +6138,317 @@
         ],
         "title": "LeaveTakenWorkerSummary"
       },
+      "LivePositionItem": {
+        "properties": {
+          "employee_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Employee Id"
+          },
+          "tally_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tally Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "supervisor_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supervisor Id"
+          },
+          "supervisor_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supervisor Name"
+          },
+          "group_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Id"
+          },
+          "group_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Name"
+          },
+          "zone_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zone Id"
+          },
+          "zone_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zone Name"
+          },
+          "latitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitude"
+          },
+          "longitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitude"
+          },
+          "accuracy_meters": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accuracy Meters"
+          },
+          "event_type": {
+            "type": "string",
+            "title": "Event Type"
+          },
+          "event_timestamp_utc": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Event Timestamp Utc"
+          },
+          "received_at_utc": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Received At Utc"
+          },
+          "last_contact_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Contact At"
+          },
+          "age_seconds": {
+            "type": "integer",
+            "title": "Age Seconds"
+          },
+          "contact_age_seconds": {
+            "type": "integer",
+            "title": "Contact Age Seconds"
+          },
+          "tracking_enabled": {
+            "type": "boolean",
+            "title": "Tracking Enabled",
+            "default": true
+          },
+          "server_verdict": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Server Verdict"
+          },
+          "server_site_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Server Site Id"
+          },
+          "server_site_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Server Site Name"
+          },
+          "live_state": {
+            "type": "string",
+            "title": "Live State"
+          },
+          "has_schedule_today": {
+            "type": "boolean",
+            "title": "Has Schedule Today",
+            "default": false
+          },
+          "today_assignments": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Today Assignments"
+          }
+        },
+        "type": "object",
+        "required": [
+          "employee_id",
+          "name",
+          "event_type",
+          "event_timestamp_utc",
+          "received_at_utc",
+          "last_contact_at",
+          "age_seconds",
+          "contact_age_seconds",
+          "live_state"
+        ],
+        "title": "LivePositionItem"
+      },
+      "LivePositionsResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/LivePositionItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "active_count": {
+            "type": "integer",
+            "title": "Active Count"
+          },
+          "offline_count": {
+            "type": "integer",
+            "title": "Offline Count"
+          },
+          "disabled_count": {
+            "type": "integer",
+            "title": "Disabled Count"
+          },
+          "not_scheduled_count": {
+            "type": "integer",
+            "title": "Not Scheduled Count"
+          },
+          "total_count": {
+            "type": "integer",
+            "title": "Total Count"
+          },
+          "as_of": {
+            "type": "string",
+            "format": "date-time",
+            "title": "As Of"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "active_count",
+          "offline_count",
+          "disabled_count",
+          "not_scheduled_count",
+          "total_count",
+          "as_of"
+        ],
+        "title": "LivePositionsResponse"
+      },
+      "LiveWorkersSummaryItem": {
+        "properties": {
+          "active": {
+            "type": "integer",
+            "title": "Active",
+            "default": 0
+          },
+          "no_recent_signal": {
+            "type": "integer",
+            "title": "No Recent Signal",
+            "default": 0
+          },
+          "location_disabled": {
+            "type": "integer",
+            "title": "Location Disabled",
+            "default": 0
+          },
+          "not_scheduled": {
+            "type": "integer",
+            "title": "Not Scheduled",
+            "default": 0
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "LiveWorkersSummaryItem"
+      },
       "LocationPermissionState": {
         "type": "string",
         "enum": [
@@ -7216,6 +7830,383 @@
           "new_password"
         ],
         "title": "PasswordChangeRequest"
+      },
+      "PendingVisitCloseRequest": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "PendingVisitCloseRequest"
+      },
+      "PendingVisitExplainRequest": {
+        "properties": {
+          "explanation": {
+            "type": "string",
+            "title": "Explanation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "explanation"
+        ],
+        "title": "PendingVisitExplainRequest"
+      },
+      "PendingVisitListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PendingVisitResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "open_count": {
+            "type": "integer",
+            "title": "Open Count"
+          },
+          "explained_count": {
+            "type": "integer",
+            "title": "Explained Count"
+          },
+          "rescheduled_count": {
+            "type": "integer",
+            "title": "Rescheduled Count"
+          },
+          "closed_count": {
+            "type": "integer",
+            "title": "Closed Count"
+          },
+          "escalated_count": {
+            "type": "integer",
+            "title": "Escalated Count"
+          },
+          "total_count": {
+            "type": "integer",
+            "title": "Total Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "open_count",
+          "explained_count",
+          "rescheduled_count",
+          "closed_count",
+          "escalated_count",
+          "total_count"
+        ],
+        "title": "PendingVisitListResponse"
+      },
+      "PendingVisitRescheduleRequest": {
+        "properties": {
+          "work_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Work Date"
+          },
+          "employee_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Employee Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "work_date",
+          "employee_ids"
+        ],
+        "title": "PendingVisitRescheduleRequest"
+      },
+      "PendingVisitResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "scheduled_work_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Scheduled Work Id"
+          },
+          "occurrence_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurrence Id"
+          },
+          "worksite_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Worksite Id"
+          },
+          "worksite_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Worksite Name"
+          },
+          "job_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Number"
+          },
+          "job_item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Item Id"
+          },
+          "job_item_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Item Name"
+          },
+          "sub_item_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sub Item Code"
+          },
+          "item_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Description"
+          },
+          "employee_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Employee Id"
+          },
+          "employee_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Name"
+          },
+          "tally_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tally Id"
+          },
+          "supervisor_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supervisor Id"
+          },
+          "supervisor_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supervisor Name"
+          },
+          "due_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Due Date"
+          },
+          "work_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Work Date"
+          },
+          "detected_on": {
+            "type": "string",
+            "format": "date",
+            "title": "Detected On"
+          },
+          "age_days": {
+            "type": "integer",
+            "title": "Age Days"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "is_escalated": {
+            "type": "boolean",
+            "title": "Is Escalated"
+          },
+          "explanation_comment_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Explanation Comment Id"
+          },
+          "latest_explanation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Explanation"
+          },
+          "rescheduled_to_scheduled_work_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rescheduled To Scheduled Work Id"
+          },
+          "closed_by_user_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed By User Id"
+          },
+          "closed_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed By Name"
+          },
+          "closed_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed Reason"
+          },
+          "closed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "scheduled_work_id",
+          "worksite_id",
+          "employee_id",
+          "due_date",
+          "detected_on",
+          "age_days",
+          "status",
+          "is_escalated",
+          "created_at"
+        ],
+        "title": "PendingVisitResponse"
       },
       "PlatformEnum": {
         "type": "string",
@@ -8937,6 +9928,24 @@
           "created_at"
         ],
         "title": "StandingAssignmentRead"
+      },
+      "StreamTicketResponse": {
+        "properties": {
+          "ticket": {
+            "type": "string",
+            "title": "Ticket"
+          },
+          "expires_in_seconds": {
+            "type": "integer",
+            "title": "Expires In Seconds",
+            "default": 30
+          }
+        },
+        "type": "object",
+        "required": [
+          "ticket"
+        ],
+        "title": "StreamTicketResponse"
       },
       "SyncAckRequest": {
         "properties": {

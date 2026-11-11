@@ -4,6 +4,7 @@ from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, status
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.core.db import get_db
@@ -11,6 +12,8 @@ from fw.modules.identity import User, get_current_user, require_role
 from fw.modules.jobs import (
     BoundaryCopyRequest,
     BoundaryCopyToRequest,
+    BoundaryImportRequest,
+    BoundaryImportResponse,
     BoundaryQueueResponse,
     BoundaryUpdateRequest,
     GenerateOccurrencesRequest,
@@ -118,6 +121,64 @@ async def get_boundary_queue(
         entity_type=entity_type,
         limit=limit,
         offset=offset,
+    )
+
+
+@router.get("/boundaries/export")
+async def export_boundaries(
+    format: str = Query("csv", pattern="^(csv|json)$"),
+    entity_type: str | None = Query(None, pattern="^(WORKSITE|ACCOMMODATION)$"),
+    polygon_format: str = Query("WKT", pattern="^(WKT|GeoJSON)$"),
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    session: AsyncSession = Depends(get_db),
+):
+    """Export all worksite and accommodation boundaries as CSV or JSON."""
+    items = await JobsService.export_boundaries(
+        session=session,
+        entity_type=entity_type,
+        polygon_format=polygon_format,
+    )
+    if format == "json":
+        return [item.model_dump() for item in items]
+
+    # Generate CSV
+    import csv
+    import io
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["entity_type", "code", "name", "has_boundary", "format", "polygon"])
+    for it in items:
+        writer.writerow(
+            [
+                it.entity_type,
+                it.code,
+                it.name,
+                str(it.has_boundary).lower(),
+                it.format,
+                it.polygon or "",
+            ]
+        )
+
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=fwt_boundaries_export.csv"},
+    )
+
+
+@router.post("/boundaries/import", response_model=BoundaryImportResponse)
+async def import_boundaries(
+    payload: BoundaryImportRequest,
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    session: AsyncSession = Depends(get_db),
+) -> BoundaryImportResponse:
+    """Bulk import boundaries with row-level validation and skip reporting."""
+    return await JobsService.import_boundaries(
+        session=session,
+        items=payload.items,
+        actor_user_id=current_user.id,
+        actor_role=current_user.role,
     )
 
 

@@ -214,6 +214,39 @@ class BoundaryQueueResponse(BaseModel):
     items: list[BoundaryQueueItemResponse]
 
 
+class BoundaryImportItem(BaseModel):
+    entity_type: str = Field(..., description="WORKSITE or ACCOMMODATION")
+    code: str = Field(..., description="Worksite job number or accommodation code")
+    polygon: Any = Field(..., description="GeoJSON dict/string or WKT string")
+
+
+class BoundaryImportRequest(BaseModel):
+    items: list[BoundaryImportItem]
+
+
+class BoundaryImportError(BaseModel):
+    row: int
+    code: str
+    entity_type: str
+    reason: str
+
+
+class BoundaryImportResponse(BaseModel):
+    total_rows: int
+    updated_count: int
+    skipped_count: int
+    errors: list[BoundaryImportError]
+
+
+class BoundaryExportItem(BaseModel):
+    entity_type: str
+    code: str
+    name: str
+    has_boundary: bool
+    format: str
+    polygon: str | None = None
+
+
 class JobItemValidationResponse(BaseModel):
     job_item_id: UUID
     sub_item_code: str

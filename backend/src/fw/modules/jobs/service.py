@@ -1,6 +1,7 @@
 """Business logic and database service for Worksites, Job Items, and Occurrences."""
 
 import json
+import re
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
@@ -25,6 +26,10 @@ from fw.core.events import AccommodationBoundaryChanged, WorksiteBoundaryChanged
 from fw.modules.audit import AuditService
 from fw.modules.jobs.models import JobItem, JobOccurrence, Worksite
 from fw.modules.jobs.schemas import (
+    BoundaryExportItem,
+    BoundaryImportError,
+    BoundaryImportItem,
+    BoundaryImportResponse,
     BoundaryQueueItemResponse,
     BoundaryQueueResponse,
     JobItemCreate,
@@ -378,6 +383,45 @@ class JobsService:
             )
 
     @staticmethod
+    def _parse_polygon_input(raw: Any) -> dict[str, Any]:
+        """Parse raw polygon input from GeoJSON dict, GeoJSON string, or WKT string."""
+        if isinstance(raw, dict):
+            return JobsService._extract_polygon_geojson(raw)
+        if isinstance(raw, str):
+            s = raw.strip()
+            if s.startswith("{"):
+                parsed = json.loads(s)
+                if isinstance(parsed, dict):
+                    return JobsService._extract_polygon_geojson(parsed)
+            # Try WKT
+            match = re.search(r"POLYGON\s*\(\(\s*(.*?)\s*\)\)", s, re.IGNORECASE | re.DOTALL)
+            if match:
+                pts_str = match.group(1).split(",")
+                ring = []
+                for p in pts_str:
+                    parts = p.strip().split()
+                    if len(parts) >= 2:
+                        ring.append([float(parts[0]), float(parts[1])])
+                if len(ring) < 3:
+                    raise ValueError("WKT polygon requires at least 3 points.")
+                if ring[0] != ring[-1]:
+                    ring.append(ring[0])
+                return {"type": "Polygon", "coordinates": [ring]}
+        raise ValueError("Unrecognized polygon format. Expected GeoJSON or WKT POLYGON((...)).")
+
+    @staticmethod
+    def _polygon_geojson_to_wkt(geojson_dict: dict[str, Any] | None) -> str | None:
+        """Convert a GeoJSON Polygon geometry dict to WKT string."""
+        if not geojson_dict:
+            return None
+        coords = geojson_dict.get("coordinates")
+        if not coords or not isinstance(coords, list) or len(coords) == 0:
+            return None
+        ring = coords[0]
+        pts = ", ".join(f"{pt[0]} {pt[1]}" for pt in ring)
+        return f"POLYGON(({pts}))"
+
+    @staticmethod
     async def update_worksite_boundary(
         session: AsyncSession,
         worksite_id: UUID,
@@ -729,6 +773,205 @@ class JobsService:
         )
 
     @staticmethod
+    async def export_boundaries(
+        session: AsyncSession,
+        entity_type: str | None = None,
+        polygon_format: str = "WKT",
+    ) -> list[BoundaryExportItem]:
+        """Export boundaries for worksites and accommodations."""
+        items: list[BoundaryExportItem] = []
+        norm_type = (entity_type or "").upper() if entity_type else None
+
+        if not norm_type or norm_type == "WORKSITE":
+            ws_stmt = (
+                select(
+                    Worksite.job_number,
+                    Worksite.job_name,
+                    func.ST_AsGeoJSON(Worksite.boundary).label("geojson"),
+                )
+                .where(Worksite.is_active.is_(True))
+                .order_by(Worksite.job_number)
+            )
+            ws_rows = (await session.execute(ws_stmt)).all()
+            for job_num, job_name, geojson_str in ws_rows:
+                geojson_dict = json.loads(geojson_str) if geojson_str else None
+                poly_repr = (
+                    JobsService._polygon_geojson_to_wkt(geojson_dict)
+                    if polygon_format == "WKT"
+                    else geojson_str
+                )
+                items.append(
+                    BoundaryExportItem(
+                        entity_type="WORKSITE",
+                        code=job_num,
+                        name=job_name,
+                        has_boundary=geojson_dict is not None,
+                        format=polygon_format if geojson_dict else "NONE",
+                        polygon=poly_repr,
+                    )
+                )
+
+        if not norm_type or norm_type == "ACCOMMODATION":
+            acc_stmt = (
+                select(
+                    Accommodation.accommodation_code,
+                    Accommodation.name,
+                    func.ST_AsGeoJSON(Accommodation.boundary).label("geojson"),
+                )
+                .where(Accommodation.is_active.is_(True))
+                .order_by(Accommodation.accommodation_code)
+            )
+            acc_rows = (await session.execute(acc_stmt)).all()
+            for code, name, geojson_str in acc_rows:
+                geojson_dict = json.loads(geojson_str) if geojson_str else None
+                poly_repr = (
+                    JobsService._polygon_geojson_to_wkt(geojson_dict)
+                    if polygon_format == "WKT"
+                    else geojson_str
+                )
+                items.append(
+                    BoundaryExportItem(
+                        entity_type="ACCOMMODATION",
+                        code=code,
+                        name=name,
+                        has_boundary=geojson_dict is not None,
+                        format=polygon_format if geojson_dict else "NONE",
+                        polygon=poly_repr,
+                    )
+                )
+
+        return items
+
+    @staticmethod
+    async def import_boundaries(
+        session: AsyncSession,
+        items: list[BoundaryImportItem],
+        actor_user_id: UUID | None = None,
+        actor_role: str | None = None,
+    ) -> BoundaryImportResponse:
+        """Bulk import boundaries with graceful row-level error reporting."""
+        updated_count = 0
+        skipped_count = 0
+        errors: list[BoundaryImportError] = []
+
+        for idx, item in enumerate(items, start=1):
+            entity_type = (item.entity_type or "").upper().strip()
+            code = (item.code or "").strip()
+
+            if not code:
+                errors.append(
+                    BoundaryImportError(
+                        row=idx,
+                        code=code,
+                        entity_type=entity_type,
+                        reason="Missing primary key code.",
+                    )
+                )
+                skipped_count += 1
+                continue
+
+            try:
+                geojson_dict = JobsService._parse_polygon_input(item.polygon)
+            except Exception as e:
+                errors.append(
+                    BoundaryImportError(
+                        row=idx,
+                        code=code,
+                        entity_type=entity_type,
+                        reason=f"Invalid polygon geometry: {str(e)}",
+                    )
+                )
+                skipped_count += 1
+                continue
+
+            if entity_type == "WORKSITE":
+                ws_stmt = select(Worksite).where(Worksite.job_number == code)
+                ws = (await session.execute(ws_stmt)).scalar_one_or_none()
+                if not ws:
+                    errors.append(
+                        BoundaryImportError(
+                            row=idx,
+                            code=code,
+                            entity_type="WORKSITE",
+                            reason=f"Worksite job number '{code}' not found in system.",
+                        )
+                    )
+                    skipped_count += 1
+                    continue
+
+                try:
+                    await JobsService.update_worksite_boundary(
+                        session=session,
+                        worksite_id=ws.id,
+                        geojson_dict=geojson_dict,
+                        actor_user_id=actor_user_id,
+                        actor_role=actor_role,
+                    )
+                    updated_count += 1
+                except Exception as e:
+                    errors.append(
+                        BoundaryImportError(
+                            row=idx,
+                            code=code,
+                            entity_type="WORKSITE",
+                            reason=f"Validation failed: {str(e)}",
+                        )
+                    )
+                    skipped_count += 1
+
+            elif entity_type == "ACCOMMODATION":
+                acc_stmt = select(Accommodation).where(Accommodation.accommodation_code == code)
+                acc = (await session.execute(acc_stmt)).scalar_one_or_none()
+                if not acc:
+                    errors.append(
+                        BoundaryImportError(
+                            row=idx,
+                            code=code,
+                            entity_type="ACCOMMODATION",
+                            reason=f"Accommodation code '{code}' not found in system.",
+                        )
+                    )
+                    skipped_count += 1
+                    continue
+
+                try:
+                    await JobsService.update_accommodation_boundary(
+                        session=session,
+                        accommodation_id=acc.id,
+                        geojson_dict=geojson_dict,
+                        actor_user_id=actor_user_id,
+                        actor_role=actor_role,
+                    )
+                    updated_count += 1
+                except Exception as e:
+                    errors.append(
+                        BoundaryImportError(
+                            row=idx,
+                            code=code,
+                            entity_type="ACCOMMODATION",
+                            reason=f"Validation failed: {str(e)}",
+                        )
+                    )
+                    skipped_count += 1
+            else:
+                errors.append(
+                    BoundaryImportError(
+                        row=idx,
+                        code=code,
+                        entity_type=entity_type,
+                        reason=f"Invalid entity_type '{entity_type}'. Must be WORKSITE or ACCOMMODATION.",
+                    )
+                )
+                skipped_count += 1
+
+        return BoundaryImportResponse(
+            total_rows=len(items),
+            updated_count=updated_count,
+            skipped_count=skipped_count,
+            errors=errors,
+        )
+
+    @staticmethod
     async def create_job_item(
         session: AsyncSession,
         worksite_id: UUID,
@@ -971,10 +1214,15 @@ class JobsService:
         budget_types = await SettingsService.get_setting(
             session=session,
             key="budget_only_staff_types",
-            default=["HSE Engineer", "Project Manager", "Irrigation Engineer"],
+            default=None,
         )
-        if not isinstance(budget_types, list):
+        if budget_types is None:
             budget_types = ["HSE Engineer", "Project Manager", "Irrigation Engineer"]
+        elif not isinstance(budget_types, list):
+            if isinstance(budget_types, str) and budget_types:
+                budget_types = [x.strip() for x in budget_types.split(",") if x.strip()]
+            else:
+                budget_types = []
 
         # Horizon parameters
         horizon_months = await SettingsService.get_setting(

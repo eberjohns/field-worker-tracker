@@ -1,4 +1,5 @@
 from collections import defaultdict
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -26,6 +27,8 @@ from fw.modules.org.schemas import (
     EmployeeCreate,
     EmployeeDocumentCreate,
     EmployeeUpdate,
+    ExpiringDocumentItem,
+    ExpiringDocumentsResponse,
     GradeChangeRequest,
     GroupCreate,
     GroupUpdate,
@@ -35,6 +38,7 @@ from fw.modules.org.schemas import (
     ZoneCreate,
     ZoneUpdate,
 )
+from fw.modules.settings import SettingsService
 from fw.rules.hierarchy import (
     HierarchyRuleViolation,
     compute_transitive_scope,
@@ -794,3 +798,146 @@ class OrgService:
             reason="Admin revoked device binding",
         )
         return device
+
+    @staticmethod
+    async def get_expiring_documents(
+        session: AsyncSession,
+        user: User,
+        within_days: int | None = None,
+        document_type: str | None = None,
+        supervisor_id: UUID | None = None,
+    ) -> ExpiringDocumentsResponse:
+        """Fetch expiring and expired documents for Admin/scope."""
+        today = datetime.now(UTC).date()
+
+        # Resolve lead days setting if within_days not passed
+        if within_days is None:
+            lead_days_setting = await SettingsService.get_setting(
+                session=session,
+                key="document_expiry_lead_days",
+                default=30,
+            )
+            try:
+                within_days = int(lead_days_setting) if lead_days_setting else 30
+            except (ValueError, TypeError):
+                within_days = 30
+
+        query = (
+            select(
+                EmployeeDocument,
+                Employee.name,
+                Employee.tally_id,
+            )
+            .join(Employee, EmployeeDocument.employee_id == Employee.id)
+            .where(EmployeeDocument.is_active.is_(True), Employee.is_active.is_(True))
+            .order_by(EmployeeDocument.expiry_date.asc())
+        )
+
+        # Scoping
+        if user.role != "ADMIN":
+            scoped_ids = await ScopeService.get_scoped_employee_ids(session, user)
+            if scoped_ids:
+                query = query.where(EmployeeDocument.employee_id.in_(scoped_ids))
+            elif user.employee_id:
+                query = query.where(EmployeeDocument.employee_id == user.employee_id)
+            else:
+                query = query.where(EmployeeDocument.employee_id.in_([]))
+
+        if document_type:
+            query = query.where(EmployeeDocument.document_type == document_type.upper())
+
+        rows = (await session.execute(query)).all()
+
+        # Build supervisor lookup
+        emp_ids = [r[0].employee_id for r in rows]
+        sup_lookup: dict[UUID, tuple[UUID, str]] = {}
+        if emp_ids:
+            sup_stmt = (
+                select(
+                    EmployeeReportingLine.employee_id,
+                    EmployeeReportingLine.manager_id,
+                    Employee.name,
+                )
+                .join(Employee, EmployeeReportingLine.manager_id == Employee.id)
+                .where(
+                    EmployeeReportingLine.employee_id.in_(emp_ids),
+                    EmployeeReportingLine.relationship == "SUPERVISOR",
+                )
+            )
+            sup_rows = (await session.execute(sup_stmt)).all()
+            for s_emp_id, m_id, m_name in sup_rows:
+                sup_lookup[s_emp_id] = (m_id, m_name)
+
+        items: list[ExpiringDocumentItem] = []
+        expiring_count = 0
+        expired_count = 0
+        ok_count = 0
+
+        for doc, emp_name, tally in rows:
+            sup_info = sup_lookup.get(doc.employee_id)
+            sup_id = sup_info[0] if sup_info else None
+            sup_name = sup_info[1] if sup_info else None
+
+            if supervisor_id and sup_id != supervisor_id:
+                continue
+
+            days_remaining = (doc.expiry_date - today).days
+            if days_remaining < 0:
+                status = "EXPIRED"
+                expired_count += 1
+            elif days_remaining <= within_days:
+                status = "EXPIRING"
+                expiring_count += 1
+            else:
+                status = "OK"
+                ok_count += 1
+
+            items.append(
+                ExpiringDocumentItem(
+                    document_id=doc.id,
+                    employee_id=doc.employee_id,
+                    employee_name=emp_name,
+                    tally_id=tally,
+                    supervisor_id=sup_id,
+                    supervisor_name=sup_name,
+                    document_type=doc.document_type,
+                    expiry_date=doc.expiry_date,
+                    days_remaining=days_remaining,
+                    status=status,
+                    is_active=doc.is_active,
+                )
+            )
+
+        return ExpiringDocumentsResponse(
+            items=items,
+            expiring_count=expiring_count,
+            expired_count=expired_count,
+            ok_count=ok_count,
+            total_count=len(items),
+        )
+
+    @staticmethod
+    async def get_unique_staff_grades(session: AsyncSession) -> list[str]:
+        """Fetch all unique staff grade descriptions from employees and configured settings."""
+        from fw.modules.settings import SettingsService
+
+        stmt = (
+            select(Employee.staff_grade_description)
+            .where(
+                Employee.staff_grade_description.is_not(None),
+                Employee.staff_grade_description != "",
+            )
+            .distinct()
+        )
+        emp_grades = set((await session.execute(stmt)).scalars().all())
+
+        # Also include any currently in budget_only_staff_types setting so none are omitted
+        setting_val = await SettingsService.get_setting(
+            session, "budget_only_staff_types", default=[]
+        )
+        if isinstance(setting_val, list):
+            emp_grades.update(str(x) for x in setting_val if x)
+        elif isinstance(setting_val, str) and setting_val:
+            emp_grades.update(str(x).strip() for x in setting_val.split(",") if x.strip())
+
+        return sorted([g for g in emp_grades if g and g.strip()])

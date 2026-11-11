@@ -160,6 +160,8 @@ Roles: A = Admin, E = Engineer, S = Superintendent, V = Supervisor. "scope" = li
 | GET | /live/positions | A E S V scope | last known verified position per worker with age, `live_state`, tracking state, site; filters `supervisor_id, group_id, state` |
 | POST | /live/stream-ticket | A E S V | returns a one-time, short-lived ticket (30 s) for the stream |
 | GET | /live/stream?ticket= | A E S V scope | Server-Sent Events: `position` and `state` updates for the user's scope; heartbeat every 20 s; client falls back to polling `/live/positions` every 30 s |
+| GET | /live/trail/{employee_id} | A E S V scope | Chronological GPS breadcrumb trail of mobile event logs for day route playback |
+| POST | /documents/check-alerts | A | Evaluates document expiry lead days and creates DOC_EXPIRY alerts |
 | POST | /imports | A | upload workbook (multipart) -> batch |
 | GET | /imports/{id}/preview | A | per-sheet counts, row-level errors/warnings |
 | POST | /imports/{id}/commit | A | commit in one transaction -> job |

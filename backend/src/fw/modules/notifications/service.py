@@ -1,6 +1,6 @@
 """Service layer for Notifications and Alerts."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -10,7 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fw.core.errors import AppError
 from fw.modules.identity.models import User
 from fw.modules.notifications.models import Alert
+from fw.modules.org import Employee, EmployeeDocument
 from fw.modules.org.service import OrgService
+from fw.modules.settings import SettingsService
 
 
 class NotificationService:
@@ -29,7 +31,20 @@ class NotificationService:
         target_role: str | None = None,
         details: dict[str, Any] | None = None,
     ) -> Alert:
-        """Create a new open alert."""
+        """Create a new open alert (deduplicates against existing open alert with same type and ref)."""
+        if ref_type and ref_id:
+            existing = await session.execute(
+                select(Alert).where(
+                    Alert.alert_type == alert_type,
+                    Alert.ref_type == ref_type,
+                    Alert.ref_id == ref_id,
+                    Alert.status == "OPEN",
+                )
+            )
+            existing_alert = existing.scalars().first()
+            if existing_alert:
+                return existing_alert
+
         alert = Alert(
             alert_type=alert_type,
             title=title,
@@ -120,3 +135,65 @@ class NotificationService:
             .order_by(Alert.created_at.desc())
         )
         return list((await session.execute(stmt)).scalars().all())
+
+    @staticmethod
+    async def check_document_expiry_alerts(session: AsyncSession) -> int:
+        """Scan active employee documents and raise DOC_EXPIRY alerts for those within lead days."""
+        lead_days_setting = await SettingsService.get_setting(
+            session=session,
+            key="document_expiry_lead_days",
+            default=30,
+        )
+        try:
+            lead_days = int(lead_days_setting) if lead_days_setting else 30
+        except (ValueError, TypeError):
+            lead_days = 30
+
+        today = datetime.now(UTC).date()
+        cutoff_date = today + timedelta(days=lead_days)
+
+        stmt = (
+            select(EmployeeDocument, Employee.name)
+            .join(Employee, EmployeeDocument.employee_id == Employee.id)
+            .where(
+                EmployeeDocument.is_active.is_(True),
+                EmployeeDocument.expiry_date <= cutoff_date,
+            )
+        )
+        rows = (await session.execute(stmt)).all()
+        created_count = 0
+
+        for doc, emp_name in rows:
+            # Check if alert already exists for this document
+            existing = await session.execute(
+                select(Alert.id).where(
+                    Alert.alert_type == "DOC_EXPIRY",
+                    Alert.ref_id == doc.id,
+                    Alert.status == "OPEN",
+                )
+            )
+            if existing.scalar_one_or_none() is not None:
+                continue
+
+            days_left = (doc.expiry_date - today).days
+
+            await NotificationService.create_alert(
+                session=session,
+                alert_type="DOC_EXPIRY",
+                title=f"Expiring Document: {emp_name} ({doc.document_type})",
+                message=f"{doc.document_type} for {emp_name} expires on {doc.expiry_date} ({days_left} days left).",
+                ref_type="EMPLOYEE_DOCUMENT",
+                ref_id=doc.id,
+                employee_id=doc.employee_id,
+                target_role="ADMIN",
+                details={
+                    "document_id": str(doc.id),
+                    "document_type": doc.document_type,
+                    "expiry_date": str(doc.expiry_date),
+                    "days_left": days_left,
+                },
+            )
+            created_count += 1
+
+        await session.flush()
+        return created_count

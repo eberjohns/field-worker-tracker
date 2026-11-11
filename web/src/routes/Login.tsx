@@ -10,6 +10,7 @@ export const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   // Forced password change state
+  const [currentPasswordInput, setCurrentPasswordInput] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [changeError, setChangeError] = useState<string | null>(null);
@@ -43,7 +44,8 @@ export const Login: React.FC = () => {
 
     setLoading(true);
     try {
-      await changePassword(password, newPassword);
+      const activeCurrentPwd = currentPasswordInput.trim() || password || "ChangeMe123!";
+      await changePassword(activeCurrentPwd, newPassword);
       setChangeSuccess(true);
       setTimeout(() => {
         window.location.href = "/";
@@ -85,6 +87,19 @@ export const Login: React.FC = () => {
             )}
 
             <form onSubmit={handleForceChange} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Current (Temporary) Password
+                </label>
+                <input
+                  type="password"
+                  value={currentPasswordInput}
+                  onChange={(e) => setCurrentPasswordInput(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  placeholder="Defaults to ChangeMe123! if left blank"
+                />
+              </div>
+
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1">New Password</label>
                 <input

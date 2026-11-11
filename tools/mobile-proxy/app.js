@@ -24,6 +24,8 @@
       scheduleItems: [],
     },
     simulatedDate: new Date().toISOString().split('T')[0], // Active simulation work date (constrained to past 1-7 days)
+    isAutoFlush: true, // Auto-upload events immediately when generated (for Live Map real-time tracking)
+    isLiveClock: true, // Use real current wall-clock UTC time for Live Map testing
     activeTab: 'today', // 'today', 'gps', 'roster', 'profile', 'sync'
     currentZone: 'UNKNOWN',
     currentWorksiteId: null,
@@ -43,6 +45,8 @@
     polyMarkers: [],
     polyLinePreview: null,
     customPolygonLayer: null,
+    pastedPolygonLayer: null,
+    pastedPolygonMarker: null,
     layers: {
       worksites: [],
       geofences: [],
@@ -634,6 +638,159 @@
     showToast('Cancelled polygon drawing.');
   }
 
+  // Paste Polygon Tool
+  function openPastePolygonModal() {
+    document.getElementById('pastePolygonInput').value = '';
+    document.getElementById('pastedPolyName').value = '';
+    document.getElementById('pastePolyError').classList.add('hidden');
+    document.getElementById('pastePolygonModal').classList.remove('hidden');
+    document.getElementById('pastePolygonInput').focus();
+  }
+
+  function closePastePolygonModal() {
+    document.getElementById('pastePolygonModal').classList.add('hidden');
+  }
+
+  function parsePolygonCoordinates(rawStr) {
+    const s = (rawStr || '').trim();
+    if (!s) throw new Error('Polygon input string is empty.');
+
+    // 1. Try GeoJSON
+    if (s.startsWith('{')) {
+      try {
+        const obj = JSON.parse(s);
+        let coords = null;
+        if (obj.type === 'Feature' && obj.geometry) {
+          coords = obj.geometry.coordinates;
+        } else if (obj.type === 'Polygon') {
+          coords = obj.coordinates;
+        } else if (obj.type === 'MultiPolygon') {
+          coords = obj.coordinates?.[0];
+        }
+        if (coords && coords[0] && Array.isArray(coords[0])) {
+          // Convert GeoJSON [lng, lat] to Leaflet [lat, lng]
+          const ring = coords[0];
+          return ring.map((pt) => [Number(pt[1]), Number(pt[0])]);
+        }
+      } catch (e) {
+        throw new Error(`Invalid JSON syntax: ${e.message}`);
+      }
+    }
+
+    // 2. Try WKT: POLYGON((lng lat, lng lat, ...))
+    const match = s.match(/POLYGON\s*\(\(\s*(.*?)\s*\)\)/i);
+    if (match && match[1]) {
+      const pts = match[1].split(',');
+      const ring = [];
+      for (const p of pts) {
+        const parts = p.trim().split(/\s+/);
+        if (parts.length >= 2) {
+          const lng = parseFloat(parts[0]);
+          const lat = parseFloat(parts[1]);
+          if (!isNaN(lat) && !isNaN(lng)) {
+            ring.push([lat, lng]);
+          }
+        }
+      }
+      if (ring.length >= 3) {
+        return ring;
+      }
+    }
+
+    throw new Error('Could not parse as GeoJSON or WKT. Expected GeoJSON {"type":"Polygon",...} or WKT POLYGON((lng lat, ...))');
+  }
+
+  function applyPastedPolygon() {
+    const raw = document.getElementById('pastePolygonInput').value;
+    const errEl = document.getElementById('pastePolyError');
+    errEl.classList.add('hidden');
+
+    try {
+      const latlngs = parsePolygonCoordinates(raw);
+      if (latlngs.length < 3) {
+        throw new Error('A polygon requires at least 3 coordinate points.');
+      }
+
+      // Ensure ring is closed
+      const first = latlngs[0];
+      const last = latlngs[latlngs.length - 1];
+      if (first[0] !== last[0] || first[1] !== last[1]) {
+        latlngs.push([first[0], first[1]]);
+      }
+
+      const roleInput = document.querySelector('input[name="pastedPolyType"]:checked');
+      const role = roleInput ? roleInput.value : 'WORKSITE';
+      const customName = document.getElementById('pastedPolyName').value.trim() ||
+        (role === 'WORKSITE' ? 'Pasted Worksite' : role === 'ACCOMMODATION' ? 'Pasted Camp' : 'Custom Pasted Boundary');
+
+      let color = '#3b82f6';
+      let icon = '🏢';
+      if (role === 'ACCOMMODATION') {
+        color = '#10b981';
+        icon = '🏠';
+      } else if (role === 'CUSTOM') {
+        color = '#06b6d4';
+        icon = '📐';
+      }
+
+      // Remove previous pasted polygon layer if present
+      if (state.pastedPolygonLayer) {
+        state.map.removeLayer(state.pastedPolygonLayer);
+        state.pastedPolygonLayer = null;
+      }
+      if (state.pastedPolygonMarker) {
+        state.map.removeLayer(state.pastedPolygonMarker);
+        state.pastedPolygonMarker = null;
+      }
+
+      state.pastedPolygonLayer = L.polygon(latlngs, {
+        color: color,
+        weight: 3,
+        fillColor: color,
+        fillOpacity: 0.25,
+      }).addTo(state.map);
+
+      // Add centroid pin
+      const bounds = state.pastedPolygonLayer.getBounds();
+      const centroid = bounds.getCenter();
+
+      state.pastedPolygonMarker = L.circleMarker(centroid, {
+        radius: 6,
+        color: '#ffffff',
+        fillColor: color,
+        fillOpacity: 1,
+        weight: 2,
+      }).addTo(state.map);
+
+      state.pastedPolygonMarker.bindTooltip(`${icon} ${customName}`, { permanent: true, direction: 'top', className: 'text-3xs font-bold' });
+
+      // GeoJSON & WKT strings for popup copy
+      const geoJsonPoints = latlngs.map((pt) => [pt[1], pt[0]]);
+      const geoJsonStr = JSON.stringify({ type: 'Polygon', coordinates: [geoJsonPoints] }, null, 2);
+      const wktStr = toWktPolygon(geoJsonPoints);
+
+      state.pastedPolygonLayer.bindPopup(`
+        <div class="font-sans text-xs space-y-2 p-1">
+          <div class="font-bold flex items-center gap-1" style="color: ${color};">${icon} ${customName}</div>
+          <div class="text-slate-500 font-mono text-3xs">Center: ${centroid.lat.toFixed(5)}, ${centroid.lng.toFixed(5)}</div>
+          <div class="flex items-center gap-1.5 pt-1">
+            <button class="px-2 py-1 bg-indigo-600 text-white rounded text-3xs font-bold" onclick="window.__fwtCopy('${btoa(geoJsonStr)}', '${customName}', 'GeoJSON')">📋 Copy GeoJSON</button>
+            <button class="px-2 py-1 bg-cyan-600 text-white rounded text-3xs font-bold" onclick="window.__fwtCopy('${btoa(wktStr)}', '${customName}', 'WKT')">📋 Copy WKT</button>
+          </div>
+        </div>
+      `);
+
+      // Zoom to polygon
+      state.map.fitBounds(bounds, { padding: [40, 40] });
+
+      closePastePolygonModal();
+      showToast(`Pasted polygon applied: ${customName}`);
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.classList.remove('hidden');
+    }
+  }
+
   // Clear Map Canvas & Reset Custom Layers
   function clearEntireMap() {
     stopRoutePlayback();
@@ -642,6 +799,14 @@
     if (state.customPolygonLayer) {
       state.map.removeLayer(state.customPolygonLayer);
       state.customPolygonLayer = null;
+    }
+    if (state.pastedPolygonLayer) {
+      state.map.removeLayer(state.pastedPolygonLayer);
+      state.pastedPolygonLayer = null;
+    }
+    if (state.pastedPolygonMarker) {
+      state.map.removeLayer(state.pastedPolygonMarker);
+      state.pastedPolygonMarker = null;
     }
     state.polyMarkers.forEach((m) => state.map.removeLayer(m));
     state.polyMarkers = [];
@@ -960,6 +1125,9 @@
 
   // Get active timestamp for simulation conforming to selected simulatedDate (or real now)
   function getSimulatedTimestamp(timeOverride = null) {
+    if (state.isLiveClock) {
+      return new Date().toISOString();
+    }
     const baseDate = state.simulatedDate || new Date().toISOString().split('T')[0];
     if (timeOverride) {
       if (timeOverride.includes('T')) {
@@ -977,8 +1145,58 @@
     return `${baseDate}T${timePart}Z`;
   }
 
+  // Flush Event Batch (Reusable)
+  async function flushEventsBatch(showAlert = true) {
+    if (!state.token) {
+      if (showAlert) alert('Please sign in first.');
+      return;
+    }
+    if (state.eventsQueue.length === 0) {
+      if (showAlert) alert('Event buffer is empty.');
+      return;
+    }
+    const batchItems = [...state.eventsQueue];
+    state.eventsQueue = [];
+    renderQueue();
+
+    try {
+      const res = await api('/mobile/events/batch', {
+        method: 'POST',
+        body: JSON.stringify({
+          batch_id: crypto.randomUUID(),
+          device_clock_utc: new Date().toISOString(),
+          events: batchItems.map((e) => ({
+            event_id: e.event_id,
+            event_type: e.event_type,
+            event_timestamp_utc: e.event_timestamp_utc,
+            latitude: e.latitude,
+            longitude: e.longitude,
+            accuracy_meters: e.accuracy_meters,
+            is_mock_location: false,
+            job_id: e.job_id,
+            accommodation_id: e.accommodation_id,
+          })),
+        }),
+      });
+
+      const accepted = res.results.filter((r) => r.status === 'ACCEPTED').length;
+      const rejected = res.results.filter((r) => r.status === 'REJECTED').length;
+      let toastMsg = `Live Event uploaded: ${accepted} accepted, ${rejected} rejected.`;
+      if (rejected > 0) {
+        const reasons = [...new Set(res.results.filter((r) => r.reason).map((r) => r.reason))].join(', ');
+        toastMsg += ` (${reasons})`;
+      }
+      showToast(toastMsg);
+    } catch (err) {
+      // Restore batch items if upload failed
+      state.eventsQueue = [...batchItems, ...state.eventsQueue];
+      renderQueue();
+      if (showAlert) alert(`Batch upload failed: ${err.message}`);
+    }
+  }
+
   // Queue Event (Conforming strictly to EventBatchRequest & MobileEventItem schemas)
-  function queueEvent(type, worksiteId = null, recordedAt = null) {
+  async function queueEvent(type, worksiteId = null, recordedAt = null) {
     const timestamp = getSimulatedTimestamp(recordedAt);
     const evt = {
       event_id: crypto.randomUUID(),
@@ -994,6 +1212,10 @@
 
     state.eventsQueue.push(evt);
     renderQueue();
+
+    if (state.isAutoFlush && state.token) {
+      await flushEventsBatch(false);
+    }
   }
 
   function renderQueue() {
@@ -1426,6 +1648,42 @@
       });
     }
 
+    // Live Auto-Transmission Toggle
+    const btnAutoFlush = document.getElementById('btnToggleAutoFlush');
+    const autoFlushText = document.getElementById('autoFlushText');
+    if (btnAutoFlush) {
+      btnAutoFlush.addEventListener('click', () => {
+        state.isAutoFlush = !state.isAutoFlush;
+        if (state.isAutoFlush) {
+          btnAutoFlush.className = 'px-2 py-0.5 rounded font-bold transition flex items-center gap-1 bg-emerald-600 text-white hover:bg-emerald-500';
+          if (autoFlushText) autoFlushText.innerText = 'Live Upload: ON';
+          showToast('⚡ Live Auto-Upload enabled: events are transmitted immediately to the server.');
+        } else {
+          btnAutoFlush.className = 'px-2 py-0.5 rounded font-bold transition flex items-center gap-1 bg-slate-800 text-slate-400 hover:bg-slate-700';
+          if (autoFlushText) autoFlushText.innerText = 'Live Upload: OFF (Buffer)';
+          showToast('📦 Offline Buffer mode: events will accumulate on the phone until flushed.');
+        }
+      });
+    }
+
+    // Clock Mode Toggle (Live Wall-Clock vs Simulated Date/Time)
+    const btnClockMode = document.getElementById('btnToggleClockMode');
+    const clockModeText = document.getElementById('clockModeText');
+    if (btnClockMode) {
+      btnClockMode.addEventListener('click', () => {
+        state.isLiveClock = !state.isLiveClock;
+        if (state.isLiveClock) {
+          btnClockMode.className = 'px-2 py-0.5 rounded font-mono font-bold transition flex items-center gap-1 bg-indigo-600 text-white hover:bg-indigo-500';
+          if (clockModeText) clockModeText.innerText = 'Clock: Live';
+          showToast('🕒 Live Clock active: Events use current real-time UTC for Live Map tracking.');
+        } else {
+          btnClockMode.className = 'px-2 py-0.5 rounded font-mono font-bold transition flex items-center gap-1 bg-amber-600 text-white hover:bg-amber-500';
+          if (clockModeText) clockModeText.innerText = 'Clock: Simulated';
+          showToast('📅 Simulated Clock active: Events use selected date & route timeline.');
+        }
+      });
+    }
+
     // Manual Route Drawing Toggle
     const btnDrawMode = document.getElementById('btnToggleDrawMode');
     const drawModeText = document.getElementById('drawModeText');
@@ -1472,6 +1730,12 @@
       document.getElementById('customPolygonModal').classList.add('hidden');
       showToast('Custom polygon removed from map.');
     });
+
+    // Paste Polygon Boundary Controls
+    document.getElementById('btnOpenPastePolyModal')?.addEventListener('click', openPastePolygonModal);
+    document.getElementById('btnClosePastePolyModal')?.addEventListener('click', closePastePolygonModal);
+    document.getElementById('btnCancelPastePoly')?.addEventListener('click', closePastePolygonModal);
+    document.getElementById('btnApplyPastedPoly')?.addEventListener('click', applyPastedPolygon);
 
     // Quick Fill Account Buttons
     document.querySelectorAll('.btn-quick-fill').forEach((btn) => {
@@ -1760,47 +2024,8 @@
     document.getElementById('phoneBtnLocOn').addEventListener('click', () => queueEvent('LOCATION_ENABLED'));
 
     // Flush Batch (POST /api/v1/mobile/events/batch)
-    document.getElementById('phoneBtnFlushBatch').addEventListener('click', async () => {
-      if (!state.token) {
-        alert('Please sign in first.');
-        return;
-      }
-      if (state.eventsQueue.length === 0) return alert('Event buffer is empty.');
-      const batchItems = [...state.eventsQueue];
-
-      try {
-        const res = await api('/mobile/events/batch', {
-          method: 'POST',
-          body: JSON.stringify({
-            batch_id: crypto.randomUUID(),
-            device_clock_utc: new Date().toISOString(),
-            events: batchItems.map((e) => ({
-              event_id: e.event_id,
-              event_type: e.event_type,
-              event_timestamp_utc: e.event_timestamp_utc,
-              latitude: e.latitude,
-              longitude: e.longitude,
-              accuracy_meters: e.accuracy_meters,
-              is_mock_location: false,
-              job_id: e.job_id,
-              accommodation_id: e.accommodation_id,
-            })),
-          }),
-        });
-
-        const accepted = res.results.filter((r) => r.status === 'ACCEPTED').length;
-        const rejected = res.results.filter((r) => r.status === 'REJECTED').length;
-        state.eventsQueue = [];
-        renderQueue();
-        let toastMsg = `Batch sent! Accepted: ${accepted}, Rejected: ${rejected}. Cursor: ${res.latest_cursor}`;
-        if (rejected > 0) {
-          const reasons = [...new Set(res.results.filter((r) => r.reason).map((r) => r.reason))].join(', ');
-          toastMsg += ` (Reason: ${reasons})`;
-        }
-        showToast(toastMsg);
-      } catch (err) {
-        alert(`Batch failed: ${err.message}`);
-      }
+    document.getElementById('phoneBtnFlushBatch').addEventListener('click', () => {
+      flushEventsBatch(true);
     });
 
     // Clear Network Log
