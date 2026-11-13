@@ -3,6 +3,39 @@ All notable changes. Format: Keep a Changelog. Mobile-contract changes are also 
 
 ## [Unreleased]
 ### Added
+- PHASE-11 (Month-end Payroll, Salary Revisions, and Job Budget):
+  - Pure Payroll Rules (`fw.rules.payroll`):
+    - Overtime formulas complying with 208-hour standard monthly divisor (26 days × 8 hours): OT1 rate = `(basic / 208) * 1.25` (only hours beyond standard hours on normal working days); OT2 rate = `(basic / 208) * 1.50` (all hours worked on public holidays and worker's weekly off day). Benchmark: Basic $1,100 -> OT1 $6.61, OT2 $7.93.
+    - Missed hours deduction: `missed_hours * (basic / 208)` deducted from monthly salary portion. Paid leaves (annual, sick) incur zero deduction.
+    - Statutory employer provisions: Gratuity accrual = `(basic / 30) * (21 / 12)`; Leave salary provision = `((basic + housing) / 30) * (30 / 12)`.
+    - 5 company provisions (Visa, Air Ticket, Uniform, Medical, Accommodation) from company settings.
+    - HR overhead: 5% added to Total Staff Cost for Final Staff Cost.
+    - Planned hourly cost calculation for job budgeting from grade revision lines.
+  - Database Migration `0012_payroll_and_budget.py`:
+    - Tables: `salary_revisions`, `salary_revision_lines`, `payroll_runs`, `payroll_records`, and `job_cost_allocations`.
+    - Added `salary_revision_code` column to `worksites` for dynamic contract budget binding.
+  - Backend Module (`fw.modules.payroll`):
+    - Automated draft creation via background check (`POST /api/v1/payroll/auto-run-check`) running `payroll_auto_run_delay_days` (default 5) after month-end.
+    - Draft re-runs with automatic `run_no` increment.
+    - Issues endpoint (`GET /api/v1/payroll/runs/{id}/issues`) identifying unapproved overtime and missing employee salary structures.
+    - Approval endpoint (`POST /api/v1/payroll/runs/{id}/approve`) freezing immutable snapshots in `payroll_records` and setting `locked = True` on attendance records for that period and country.
+    - Role-based scoping: Admin manages and approves; Engineers inspect scoped records read-only; Supervisors receive 403.
+    - Worker-facing approved payroll slips endpoints: `GET /api/v1/payroll/my-records` and `GET /api/v1/mobile/me/payroll` returning employee-side pay components with employer provisions withheld.
+    - Salary revisions management: listing, creation, and side-by-side diff comparison (`POST /api/v1/salary-revisions/diff`).
+    - Dynamic job budget vs actual cost allocation (`GET /api/v1/payroll/budget-vs-actual`) and worksite revision binding (`PUT /api/v1/payroll/worksites/{id}/revision`).
+  - Web UI Features (`web/src/routes/Payroll.tsx`):
+    - 3-tab layout: Payroll Runs & Approvals, Salary Revisions, and Job Budget vs Actual.
+    - Payroll Runs tab: Run status badges (`DRAFT` / `APPROVED`), run numbers, summary KPI cards, Draft Inspector with collapsible Issues Panel, Re-run Draft button, Approve Payroll confirmation modal, and worker records table with search.
+    - Worker Detail Drawer: Comprehensive employee pay breakdown and employer staff cost breakdown (with 5% HR OH).
+    - Explanatory Formula Guide ("i" icon modal): Detailed documentation of legal/contractual math (208 divisor, OT1 vs OT2 classification, 21-day gratuity, 30-day leave salary, 5% HR OH).
+    - Salary Revisions tab: Revision selector dropdown, grade pricing lines table, "Export Template" button generating pre-filled sheet, and "Import Revision & Diff" modal with side-by-side red/green diff preview.
+    - Job Budget vs Actual tab: Worksite cards/table with dynamic revision binding dropdown, annual planned hours, annual labor budget, pro-rated budget, actual allocated cost from attendance minutes, variance indicators, and prominent information banner detailing the provision basis distinction between planned budgets and actual costs.
+  - Mobile Simulator & Proxy:
+    - Added Monthly Payslips card in worker Profile tab calling `/api/v1/payroll/my-records` and showing approved payslips with period, worked hours, OT amounts, and net pay.
+  - Architecture & Verification:
+    - ADR-020 (`docs/decisions/020-month-end-payroll-and-dynamic-budget.md`).
+    - Unit tests (`tests/test_payroll_rules.py`) and integration tests (`tests/test_payroll_api.py`) verifying all 8 checklist requirements.
+
 - PHASE-09 (Live Map, Pending Visits, Alerts, and Documents):
   - Database Migration `0011_live_map_and_alerts.py`:
     - Created dedicated `live_location_access_logs` table (`id`, `user_id`, `access_type`, `filters`, `client_ip`, `user_agent`, `created_at`) with performance indexes (`ix_live_location_access_logs_user`, `ix_live_location_access_logs_created_at`) for surveillance auditing without polluting business mutation logs.
