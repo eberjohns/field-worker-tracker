@@ -191,3 +191,4 @@ def downgrade() -> None:
     op.drop_table("transport_run_stops")
     op.drop_table("transport_runs")
     op.drop_table("vehicles")
+

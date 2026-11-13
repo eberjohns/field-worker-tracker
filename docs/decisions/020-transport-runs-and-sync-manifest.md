@@ -34,3 +34,4 @@ Provides full operational dispatch control while protecting worker privacy on mo
 - Mobile sync change logs provide offline-capable manifests to drivers and passengers.
 - If schedule changes occur after publishing, dispatchers see the `needs_update` flag immediately.
 - Zero impact on core attendance and payroll if transport is not used for a worksite or worker.
+

@@ -58,3 +58,4 @@ Per `docs/13-architecture.md` and `pyproject.toml` import-linter contracts:
 ## 5. Why a Separate Module?
 
 Transport operations represent a distinct business domain focused on physical logistics and dispatch. While it reads schedules and accommodations, it does not dictate attendance calculations, payroll rules, or GPS tracking logic. Isolating transport ensures that if a client does not use company transport, or if third-party vehicle tracking systems are utilized, the core field worker tracking, attendance, and payroll modules remain completely decoupled and operational.
+

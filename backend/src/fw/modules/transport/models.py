@@ -162,3 +162,4 @@ class TransportRunPassenger(Base):
     # Relationships
     run: Mapped[TransportRun] = relationship("TransportRun", back_populates="passengers")
     stop: Mapped[TransportRunStop] = relationship("TransportRunStop", back_populates="passengers")
+

@@ -1,5 +1,9 @@
 # PHASE-10 - Drivers and transport runs
 
+> **Status Note (Shelved / Parked):**  
+> Complete implementation preserved on branch `feature/phase-10-transport` and unmerged pull request [#12](https://github.com/eberjohns/field-worker-tracker/pull/12).  
+> Shelved for now per product priority as transport operations are independent of the core system. Can be reviewed, merged, and deployed after the complete core system is finished as an additional feature.
+
 **Depends on:** PHASE-07 (needs Phase 05 for schedules)
 
 ## Goal
