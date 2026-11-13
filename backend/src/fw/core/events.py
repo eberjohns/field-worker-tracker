@@ -79,6 +79,15 @@ class LocationEnabledRecorded(DomainEvent):
     captured_at: Any = None
 
 
+@dataclass
+class TransportRunChanged(DomainEvent):
+    run_id: UUID | None = None
+    run_date: Any = None
+    driver_id: UUID | None = None
+    affected_employee_ids: list[UUID] = field(default_factory=list)
+    op: str = "UPSERT"
+
+
 SyncHandler = Callable[[Any, Any], Awaitable[None]]
 PostCommitHandler = Callable[[Any], Awaitable[None]]
 

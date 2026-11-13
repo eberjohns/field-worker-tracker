@@ -175,12 +175,16 @@ Roles: A = Admin, E = Engineer, S = Superintendent, V = Supervisor. "scope" = li
 ### Transport (Drivers section)
 | Method | Path | Roles | Purpose |
 |---|---|---|---|
-| GET/POST/PATCH | /vehicles | A E V | vehicle labels (Hiace, Ertiga, Deira Bus...) |
-| GET | /drivers | A E V (scope) | drivers with their runs |
-| GET/POST/PATCH | /transport-runs?date=&direction= | A E V (write, scope), others read | a run: driver, vehicle, ordered stops, passengers per stop |
-| POST | /transport-runs/suggest?date= | A E V | proposes runs from the day's schedule and accommodations |
-| POST | /transport-runs/{id}/publish | A E V | syncs the run to the driver and passengers |
-| POST | /transport-runs/copy | A E V | copy a day or week of runs to other dates |
+| GET/POST | /vehicles | A E S V | list or create fleet vehicles (label, type, notes) |
+| PATCH | /vehicles/{id} | A E | update vehicle details or toggle `is_active` |
+| GET | /drivers | A E S V (scope) | list drivers with accommodation, phone, and runs count this week |
+| GET | /transport-runs?date=&direction= | A E S V (scope) | list transport runs for a date and direction (stops, passengers, vehicle, driver) |
+| POST | /transport-runs | A E S V (scope) | create transport run with ordered stops and passenger assignments |
+| GET/PATCH/DELETE | /transport-runs/{id} | A E S V (scope) | get run detail, update stops/passengers, or delete run |
+| POST | /transport-runs/{id}/publish | A E S V (scope) | publishes run, syncing manifest to driver and passengers |
+| GET | /transport-runs/unassigned-workers?date= | A E S V (scope) | list scheduled workers on a date not yet assigned to runs |
+| POST | /transport-runs/suggest | A E S V (scope) | proposes draft runs from schedule and worker accommodations |
+| POST | /transport-runs/copy | A E S V (scope) | copy day or week of runs forward; omits unscheduled/on-leave workers with reasons |
 
 ## 3. Selected request/response examples
 **Create scheduled work**

@@ -58,6 +58,16 @@ from fw.modules.sync.schemas import (
     SyncChangeItem,
     SyncChangesResponse,
     SyncSnapshotResponse,
+    TransportDriverSyncPayload,
+    TransportPassengerSyncPayload,
+    TransportRunPayload,
+    TransportStopSyncPayload,
+)
+from fw.modules.transport import (
+    TransportRun,
+    TransportRunPassenger,
+    TransportRunStop,
+    Vehicle,
 )
 from fw.rules.password import is_default_password_expired, validate_password_strength
 from fw.rules.scheduling import INT_TO_WEEKDAY
@@ -885,6 +895,159 @@ class SyncService:
                 )
             )
             cur_date += timedelta(days=1)
+
+        # 7. TRANSPORT_RUN entities in window [today, to_date]
+        runs_query = (
+            select(TransportRun)
+            .where(
+                TransportRun.run_date >= today,
+                TransportRun.run_date <= to_date,
+                TransportRun.status == "PUBLISHED",
+                TransportRun.is_active.is_(True),
+                or_(
+                    TransportRun.driver_id == employee_id,
+                    TransportRun.id.in_(
+                        select(TransportRunPassenger.run_id).where(
+                            TransportRunPassenger.employee_id == employee_id
+                        )
+                    ),
+                ),
+            )
+            .order_by(TransportRun.run_date.asc(), TransportRun.direction.asc())
+        )
+        runs_res = await session.execute(runs_query)
+        published_runs = runs_res.scalars().all()
+
+        for run in published_runs:
+            driver_emp = await session.get(Employee, run.driver_id)
+            driver_payload = TransportDriverSyncPayload(
+                name=driver_emp.name if driver_emp else "Driver",
+                phone=driver_emp.phone if driver_emp else None,
+            )
+            vehicle = await session.get(Vehicle, run.vehicle_id) if run.vehicle_id else None
+            vehicle_label = vehicle.label if vehicle else None
+
+            # Fetch stops
+            stops_q = (
+                select(TransportRunStop)
+                .where(TransportRunStop.run_id == run.id)
+                .order_by(TransportRunStop.sequence.asc())
+            )
+            stops_res = await session.execute(stops_q)
+            run_stops = stops_res.scalars().all()
+
+            if run.driver_id == employee_id:
+                # Driver sees all stops in order with all passengers
+                stops_payload = []
+                for st in run_stops:
+                    pass_q = select(TransportRunPassenger).where(
+                        TransportRunPassenger.stop_id == st.id
+                    )
+                    pass_res = await session.execute(pass_q)
+                    stop_passengers = pass_res.scalars().all()
+
+                    pass_payloads = []
+                    for sp in stop_passengers:
+                        p_emp = await session.get(Employee, sp.employee_id)
+                        if p_emp:
+                            pass_payloads.append(
+                                TransportPassengerSyncPayload(
+                                    name=p_emp.name, tally_id=p_emp.tally_id
+                                )
+                            )
+
+                    stop_name = "Stop"
+                    if st.worksite_id:
+                        ws_obj = await session.get(Worksite, st.worksite_id)
+                        if ws_obj:
+                            stop_name = ws_obj.job_name
+                    elif st.accommodation_id:
+                        acc_obj = await session.get(Accommodation, st.accommodation_id)
+                        if acc_obj:
+                            stop_name = acc_obj.name
+
+                    stops_payload.append(
+                        TransportStopSyncPayload(
+                            sequence=st.sequence,
+                            stop_type=st.stop_type,
+                            job_id=st.worksite_id,
+                            accommodation_id=st.accommodation_id,
+                            name=stop_name,
+                            planned_time=str(st.planned_time) if st.planned_time else None,
+                            passengers=pass_payloads,
+                        )
+                    )
+
+                run_payload = TransportRunPayload(
+                    run_id=run.id,
+                    run_date=run.run_date.isoformat(),
+                    direction=run.direction,
+                    vehicle_label=vehicle_label,
+                    driver=driver_payload,
+                    stops=stops_payload,
+                )
+                entities.append(
+                    SnapshotEntity(
+                        entity_type="TRANSPORT_RUN",
+                        entity_id=str(run.id),
+                        entity_version=run.version or 1,
+                        payload=run_payload.model_dump(mode="json"),
+                    )
+                )
+            else:
+                # Passenger sees only driver, vehicle, and their own stop (with only themselves)
+                my_pass_q = select(TransportRunPassenger).where(
+                    TransportRunPassenger.run_id == run.id,
+                    TransportRunPassenger.employee_id == employee_id,
+                )
+                my_pass_res = await session.execute(my_pass_q)
+                my_pass = my_pass_res.scalar_one_or_none()
+
+                if my_pass:
+                    my_stop = await session.get(TransportRunStop, my_pass.stop_id)
+                    if my_stop:
+                        stop_name = "Stop"
+                        if my_stop.worksite_id:
+                            ws_obj = await session.get(Worksite, my_stop.worksite_id)
+                            if ws_obj:
+                                stop_name = ws_obj.job_name
+                        elif my_stop.accommodation_id:
+                            acc_obj = await session.get(Accommodation, my_stop.accommodation_id)
+                            if acc_obj:
+                                stop_name = acc_obj.name
+
+                        stop_payload = TransportStopSyncPayload(
+                            sequence=my_stop.sequence,
+                            stop_type=my_stop.stop_type,
+                            job_id=my_stop.worksite_id,
+                            accommodation_id=my_stop.accommodation_id,
+                            name=stop_name,
+                            planned_time=str(my_stop.planned_time)
+                            if my_stop.planned_time
+                            else None,
+                            passengers=[
+                                TransportPassengerSyncPayload(
+                                    name=employee.name,
+                                    tally_id=employee.tally_id,
+                                )
+                            ],
+                        )
+                        run_payload = TransportRunPayload(
+                            run_id=run.id,
+                            run_date=run.run_date.isoformat(),
+                            direction=run.direction,
+                            vehicle_label=vehicle_label,
+                            driver=driver_payload,
+                            stops=[stop_payload],
+                        )
+                        entities.append(
+                            SnapshotEntity(
+                                entity_type="TRANSPORT_RUN",
+                                entity_id=str(run.id),
+                                entity_version=run.version or 1,
+                                payload=run_payload.model_dump(mode="json"),
+                            )
+                        )
 
         return SyncSnapshotResponse(
             cursor=cursor,

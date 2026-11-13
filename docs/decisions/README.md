@@ -23,6 +23,7 @@ One decision per file, numbered. Use the `write-adr` skill. Status: Proposed, Ac
 | 017 | [Mobile authentication, change log synchronization, and events architecture](017-mobile-sync-and-events-architecture.md) | Accepted |
 | 018 | [Attendance Engine, PostGIS Enrichment, and Append-Only Immutability](018-attendance-engine-and-review-workflow.md) | Accepted |
 | 019 | [Live Location Access Logging, SSE Streaming, and Follow-Up Workflows](019-live-location-access-logging-and-streaming.md) | Accepted |
+| 020 | [Transport runs, mobile sync manifests, and schedule integration](020-transport-runs-and-sync-manifest.md) | Accepted |
 
 See also [decision-register.md](decision-register.md) for business decisions awaiting client confirmation.
 

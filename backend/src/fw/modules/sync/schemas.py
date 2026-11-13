@@ -183,6 +183,35 @@ class ScheduleItemPayload(BaseModel):
     is_reassignment: bool = False
 
 
+class TransportPassengerSyncPayload(BaseModel):
+    name: str
+    tally_id: str
+
+
+class TransportDriverSyncPayload(BaseModel):
+    name: str
+    phone: str | None = None
+
+
+class TransportStopSyncPayload(BaseModel):
+    sequence: int
+    stop_type: str
+    job_id: UUID | None = None
+    accommodation_id: UUID | None = None
+    name: str
+    planned_time: str | None = None
+    passengers: list[TransportPassengerSyncPayload] = Field(default_factory=list)
+
+
+class TransportRunPayload(BaseModel):
+    run_id: UUID
+    run_date: str
+    direction: str
+    vehicle_label: str | None = None
+    driver: TransportDriverSyncPayload
+    stops: list[TransportStopSyncPayload] = Field(default_factory=list)
+
+
 class SnapshotEntity(BaseModel):
     entity_type: str
     entity_id: str

@@ -15,6 +15,7 @@ from fw.core.events import (
     ScheduledWorkChanged,
     SyncChangesCommitted,
     TimeRuleChanged,
+    TransportRunChanged,
     WorksiteBoundaryChanged,
     event_bus,
 )
@@ -37,6 +38,7 @@ __all__ = [
     "SyncChangesCommitted",
     "SystemClock",
     "TimeRuleChanged",
+    "TransportRunChanged",
     "WorksiteBoundaryChanged",
     "async_session_factory",
     "event_bus",

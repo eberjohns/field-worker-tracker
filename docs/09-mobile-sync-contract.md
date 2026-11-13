@@ -64,7 +64,8 @@ Returns everything needed offline plus the cursor to continue from.
     { "entity_type": "SETTINGS",      "entity_id": "self", "entity_version": 9, "payload": { } },
     { "entity_type": "ACCOMMODATION", "entity_id": "uuid", "entity_version": 1, "payload": { } },
     { "entity_type": "JOB",           "entity_id": "uuid", "entity_version": 5, "payload": { } },
-    { "entity_type": "SCHEDULE_ITEM", "entity_id": "uuid", "entity_version": 2, "payload": { } }
+    { "entity_type": "SCHEDULE_ITEM", "entity_id": "uuid", "entity_version": 2, "payload": { } },
+    { "entity_type": "TRANSPORT_RUN", "entity_id": "uuid", "entity_version": 1, "payload": { } }
   ]
 }
 ```

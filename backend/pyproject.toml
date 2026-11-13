@@ -91,6 +91,7 @@ layers = [
     "fw.modules.payroll",
     "fw.modules.attendance",
     "fw.modules.sync | fw.modules.notifications",
+    "fw.modules.transport",
     "fw.modules.scheduling | fw.modules.events",
     "fw.modules.jobs",
     "fw.modules.org",

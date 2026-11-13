@@ -3,6 +3,38 @@ All notable changes. Format: Keep a Changelog. Mobile-contract changes are also 
 
 ## [Unreleased]
 ### Added
+- PHASE-10 (Drivers and Transport Runs):
+  - Database Migration `0012_transport_and_drivers.py`:
+    - Created `vehicles` table (`id`, `label`, `type`, `notes`, `is_active`, `version`, `created_at`, `updated_at`).
+    - Created `transport_runs` table (`id`, `run_date`, `direction`, `driver_id`, `vehicle_id`, `status`, `needs_update`, `notes`, `version`, `created_by_user_id`, `created_at`, `updated_at`) with unique constraint on `(run_date, direction, driver_id)`.
+    - Created `transport_run_stops` table (`id`, `run_id`, `stop_type`, `accommodation_id`, `worksite_id`, `sequence`, `planned_time`, `notes`, `created_at`, `updated_at`) with unique constraint on `(run_id, sequence)`.
+    - Created `transport_run_passengers` table (`id`, `run_id`, `stop_id`, `employee_id`, `notes`, `created_at`, `updated_at`) with unique constraint on `(run_id, employee_id)` preventing workers from being assigned to multiple runs in the same direction on the same date.
+  - Backend Module (`fw.modules.transport`):
+    - Full vehicle management endpoints: `GET/POST /vehicles`, `PATCH /vehicles/{id}`.
+    - Drivers listing endpoint `GET /drivers` returning assigned accommodation, phone, and runs count for the current week.
+    - Transport runs CRUD endpoints: `GET /transport-runs?date=&direction=`, `POST /transport-runs`, `GET/PATCH/DELETE /transport-runs/{id}`.
+    - Unassigned workers endpoint `GET /transport-runs/unassigned-workers?date=` returning scheduled workers not yet assigned to runs on that date.
+    - Suggest runs endpoint `POST /transport-runs/suggest` grouping unassigned scheduled workers by accommodation and primary worksite to propose draft runs.
+    - Copy runs endpoint `POST /transport-runs/copy` copying runs forward to specified target dates, omitting workers unscheduled or on approved leave on target dates and reporting omissions with reasons.
+    - Publish run endpoint `POST /transport-runs/{id}/publish` emitting `TransportRunChanged` domain event for sync.
+  - Mobile Sync Integration (`TRANSPORT_RUN`):
+    - Role-based privacy slicing in 30-day snapshot and delta sync (`UPSERT` and `DELETE`): drivers receive all ordered stops and all passenger names; passengers receive their driver, vehicle, and only their own designated stop with only their name.
+    - Schedule change detection: `handle_scheduled_work_changed` event listener automatically flags published runs with `needs_update = True` when a passenger's schedule is modified or reassigned.
+  - Web UI Features (`/transport`):
+    - Daily run board with date picker, Morning/Evening toggle, and summary statistics badges.
+    - Unassigned scheduled workers drawer with quick search and count indicators.
+    - Run cards displaying driver, vehicle, status badge (`DRAFT` / `PUBLISHED`), `Needs Update` warning badge, ordered stop timelines, and passenger chips.
+    - Run Editor modal supporting vehicle selection, driver selection, adding accommodation/worksite stops, drag-and-drop / sequence ordering, and passenger assignment per stop.
+    - Fleet Vehicle Management modal for creating, updating, and toggling vehicle active status.
+    - Copy Runs modal supporting multi-date selection with instant display of omitted workers breakdown.
+    - Printable Driver Run Sheet modal styled with `@media print` for physical paper manifests and browser printing.
+  - Architecture, Standards & Testing:
+    - ADR-020 (`docs/decisions/020-transport-runs-and-sync-manifest.md`).
+    - Dedicated module documentation in `docs/modules/transport.md`.
+    - Integrated into `pyproject.toml` import-linter contract (0 violations).
+    - Database reset cleanup registered in `fw.api.settings.reset_database`.
+    - Comprehensive test suite `backend/tests/test_transport_api.py` covering all 9 operational scenarios, conflict checks, privacy slicing, and schedule change detection.
+
 - PHASE-09 (Live Map, Pending Visits, Alerts, and Documents):
   - Database Migration `0011_live_map_and_alerts.py`:
     - Created dedicated `live_location_access_logs` table (`id`, `user_id`, `access_type`, `filters`, `client_ip`, `user_agent`, `created_at`) with performance indexes (`ix_live_location_access_logs_user`, `ix_live_location_access_logs_created_at`) for surveillance auditing without polluting business mutation logs.

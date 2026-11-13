@@ -76,6 +76,7 @@ docs/  .agents/  infra/
 | org | employees, reporting lines, groups, zones, accommodations, documents |
 | jobs | worksites, boundaries, job items, occurrences |
 | scheduling | scheduled work, leave, reassignment, gaps, recommendations |
+| transport | vehicles, transport runs, stops, passengers, dispatch suggestions |
 | events | event ingestion, enrichment (PostGIS verdicts) |
 | sync | change log, snapshot builder, delta/ack, device sync status |
 | attendance | visits, gaps, daily calculation, versions, comments, approvals, alerts |
@@ -90,7 +91,7 @@ docs/  .agents/  infra/
 2  payroll
 3  attendance
 4  sync | notifications
-5  scheduling | events
+5  transport | scheduling | events
 6  jobs
 7  org
 8  settings | identity | audit
