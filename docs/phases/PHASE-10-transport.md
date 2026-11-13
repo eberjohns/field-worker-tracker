@@ -33,7 +33,7 @@ Drivers section with vehicles and daily runs synced to drivers and workers.
 - [x] Unassigned scheduled workers are listed
 - [x] Run sheet prints correctly
 - [x] Docs updated in the same change (`.agents/rules/documentation.md`), ADR written for any design decision, CHANGELOG entry
-- [ ] Pull request opened with the template; nothing merged by the agent
+- [x] Pull request opened with the template; nothing merged by the agent
 
 ## Demo script
 - Suggest runs for tomorrow, adjust, publish, and read them through the simulator as driver and passenger.
