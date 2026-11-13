@@ -423,6 +423,11 @@ async def reset_database(
 
     # 2. Clear transactional and master tables in strict foreign-key dependency order
     tables = [
+        "job_cost_allocations",
+        "payroll_records",
+        "payroll_runs",
+        "salary_revision_lines",
+        "salary_revisions",
         "pending_visits",
         "attendance_approvals",
         "attendance_comments",

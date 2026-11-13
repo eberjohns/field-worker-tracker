@@ -1,19 +1,64 @@
 """Public interface for payroll module."""
 
-from fw.modules.payroll.models import EmployeeSalary
+from fw.modules.payroll.api import router as payroll_router
+from fw.modules.payroll.models import (
+    EmployeeSalary,
+    JobCostAllocation,
+    PayrollRecord,
+    PayrollRun,
+    SalaryRevision,
+    SalaryRevisionLine,
+)
 from fw.modules.payroll.schemas import (
     EmployeeSalaryCreate,
     EmployeeSalaryHistoryResponse,
     EmployeeSalaryRead,
+    PayrollIssueItem,
+    PayrollRecordRead,
+    PayrollRunCreate,
+    PayrollRunDetailRead,
+    PayrollRunIssuesResponse,
+    PayrollRunRead,
+    SalaryRevisionCreate,
+    SalaryRevisionDetailRead,
+    SalaryRevisionImportDiffResponse,
+    SalaryRevisionLineCreate,
+    SalaryRevisionLineDiff,
+    SalaryRevisionLineRead,
+    SalaryRevisionRead,
     SalaryStructureListItem,
+    WorkerMobilePayrollSlip,
+    WorksiteBudgetVsActualItem,
 )
-from fw.modules.payroll.service import PayrollSalaryService
+from fw.modules.payroll.service import PayrollSalaryService, PayrollService
 
 __all__ = [
     "EmployeeSalary",
     "EmployeeSalaryCreate",
     "EmployeeSalaryHistoryResponse",
     "EmployeeSalaryRead",
+    "JobCostAllocation",
+    "PayrollIssueItem",
+    "PayrollRecord",
+    "PayrollRecordRead",
+    "PayrollRun",
+    "PayrollRunCreate",
+    "PayrollRunDetailRead",
+    "PayrollRunIssuesResponse",
+    "PayrollRunRead",
     "PayrollSalaryService",
+    "PayrollService",
+    "SalaryRevision",
+    "SalaryRevisionCreate",
+    "SalaryRevisionDetailRead",
+    "SalaryRevisionImportDiffResponse",
+    "SalaryRevisionLine",
+    "SalaryRevisionLineCreate",
+    "SalaryRevisionLineDiff",
+    "SalaryRevisionLineRead",
+    "SalaryRevisionRead",
     "SalaryStructureListItem",
+    "WorkerMobilePayrollSlip",
+    "WorksiteBudgetVsActualItem",
+    "payroll_router",
 ]

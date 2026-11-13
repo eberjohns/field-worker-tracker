@@ -19,22 +19,29 @@ salary_portion = basic + special_allowance + fixed_ot + bonus + telephone_allowa
 
 ## 3. Monthly formulas (per worker, per month)
 ```
-gratuity        = basic / 365 * 30
-leave_salary    = basic / 12
+gratuity        = (basic / 30) * (21 / 12)                     # statutory 21 days per year / 12 months
+leave_salary    = ((basic + housing_allowance) / 30) * (30 / 12) # 30 calendar days per year / 12 months
 provisions      = visa + air_ticket + uniform + accommodation + medical        # company settings
 per_month_provision = provisions + gratuity + leave_salary
-hourly_rate_ot1 = basic / 208 * 1.25          # divisor and multipliers are settings
+hourly_rate_ot1 = basic / 208 * 1.25          # divisor and multipliers from settings
 hourly_rate_ot2 = basic / 208 * 1.50
-ot1_amount = ot1_hours * hourly_rate_ot1 ; ot2_amount = ot2_hours * hourly_rate_ot2
-gross_pay  = salary_portion + ot1_amount + ot2_amount          # net pay = gross pay (no deductions)
+ot1_amount = ot1_hours * hourly_rate_ot1
+ot2_amount = ot2_hours * hourly_rate_ot2
+missed_hours = unpaid_leave_hours + shortfall_hours
+missed_hours_deduction = missed_hours * (basic / 208)           # paid leaves incur zero deduction
+gross_pay  = salary_portion + ot1_amount + ot2_amount
+net_pay    = gross_pay - missed_hours_deduction
 total_staff_cost       = gross_pay + per_month_provision
-hr_oh                  = total_staff_cost * 5%
+hr_oh                  = round(total_staff_cost * 0.05, 2)
 final_total_staff_cost = total_staff_cost + hr_oh              # the "real total staff cost" shown in the reports
 ```
 Example: basic 1100 -> OT1 rate (1100/208)*1.25 = 6.61, OT2 7.93.
-**Overtime hours** come from attendance (see 05): OT1 = hours beyond the worker's standard hours on normal assigned days, and **all** hours on weekly-off days or days with no assignment; OT2 = **all** hours on public holidays and on the OT2 weekdays (default Sunday, a setting). Only reviewed/approved overtime is paid. Rounding: money half-up to 2 dp per line.
+**Overtime hours** come from attendance (see 05):
+- **OT1**: ONLY hours worked beyond the worker's standard hours on normal assigned days.
+- **OT2**: ALL hours worked on public holidays and on the worker's weekly-off day.
+Only reviewed/approved overtime is paid (unapproved overtime is held in the Issues drawer). Rounding: money half-up to 2 dp per line.
 
-Provisions use **company settings**; the grade-review provisions are used only in the **budget**. The reports state which basis each column uses.
+Provisions use **company settings**; the grade-review provisions are used only in the **budget**. The reports and UI state which basis each column uses.
 
 ## 4. Month-end flow
 1. **Automatic draft**: `payroll_auto_run_delay_days` (default 5) after month-end, the system creates a **DRAFT payroll run** for the previous calendar month and generates the month-end reports.

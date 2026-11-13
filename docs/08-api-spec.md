@@ -131,19 +131,24 @@ Roles: A = Admin, E = Engineer, S = Superintendent, V = Supervisor. "scope" = li
 ### Salary, settings, payroll
 | Method | Path | Roles | Purpose |
 |---|---|---|---|
-| GET/POST/PATCH | /salary-revisions | A (write), E (read) | header |
-| GET/PUT | /salary-revisions/{id}/lines | A (write), E (read) | lines; `POST .../reconcile` returns derived vs client values |
+| GET/POST | /salary-revisions | A (write), E (read) | list & create salary revision header with lines |
+| GET | /salary-revisions/{code} | A, E | get salary revision detail with grade lines & planned hourly cost |
+| POST | /salary-revisions/diff | A | side-by-side diff comparing incoming revision lines against base revision |
 | GET | /settings?country=&as_of= | A (write), E (read) | settings resolved for a date (default today) |
 | PUT | /settings/{key} | A | adds a new effective-dated value `{ value, country?, effective_from }` (never edits in place) |
 | GET | /settings/{key}/history | A E | all values with their effective ranges |
 | GET/POST/PATCH | /time-rules | A (all), E (their scope), others read | planned times, break, standard-hours change, season, scope (company / team / drivers / employee), applies to all/outdoor/indoor; `GET /time-rules/resolve?employee_id=&date=` shows the effective plan and which rule won |
 | GET/POST | /consent-policies | A | publish location consent notice versions (per language) |
 | GET/POST/DELETE | /public-holidays | A | per country |
-| POST | /payroll/runs | A | create or **re-run** a DRAFT for a month (the system also creates it automatically `payroll_auto_run_delay_days` after month-end) |
-| GET | /payroll/runs, /payroll/runs/{id} | A, E (scope) | |
-| GET | /payroll/runs/{id}/issues | A E | blocking issues |
-| POST | /payroll/runs/{id}/approve | A | approves the draft: snapshots, locks the month, stores final reports |
-| GET | /payroll/records?employee_id=&period= | A, E (scope) | snapshots |
+| POST | /payroll/runs | A | create or **re-run** a DRAFT for a month (increments `run_no`; auto-created `payroll_auto_run_delay_days` after month-end) |
+| GET | /payroll/runs, /payroll/runs/{id} | A, E (scope) | list and inspect monthly payroll runs |
+| GET | /payroll/runs/{id}/issues | A, E | inspect blocking issues (unapproved overtime, missing salary structures) |
+| POST | /payroll/runs/{id}/approve | A | approves the draft: freezes immutable records, locks attendance, stores final snapshots |
+| GET | /payroll/records?employee_id=&period= | A, E (scope) | inspect immutable snapshots |
+| GET | /payroll/my-records | Self (Worker) | worker's own approved monthly payslips (employee components only, no provisions) |
+| GET | /payroll/budget-vs-actual | A, E | dynamic contract labor budget vs actual cost allocation and variance |
+| PUT | /payroll/worksites/{id}/revision | A | bind or update dynamic salary revision code on a worksite |
+| POST | /payroll/auto-run-check | A | trigger check for completed months past auto-run delay days |
 | GET | /employees/{id}/salary | A, E (scope), self | salary history, last change date and difference |
 | POST | /employees/{id}/salary | A | record a new salary structure revision for an employee |
 | GET | /salary-structures | A, E (scope) | list workers with current salary structure, standard hours, last change date and delta |
