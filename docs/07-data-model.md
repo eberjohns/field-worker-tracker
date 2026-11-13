@@ -254,14 +254,21 @@ Never updated after insert.
 `alert_type`, `employee_id` nullable, `target_user_id` nullable, `ref_type`, `ref_id`, `status` (OPEN/RESOLVED), `details` jsonb, `resolved_at`. Index (status, alert_type).
 
 ## Transport
+
 ### vehicles
-`label` (e.g. Hiace, Ertiga, Deira Bus), `type` (BUS | VAN | OTHER), `notes`, `is_active`.
+`id` (UUID PK), `label` (varchar 100, e.g. Hiace, Ertiga, Deira Bus), `type` (varchar 50: BUS, VAN, CAR, OTHER), `notes` (text nullable), `is_active` (boolean default true), `version` (int default 1), `created_at` (timestamptz), `updated_at` (timestamptz).
+
 ### transport_runs
-`run_date`, `direction` (MORNING | EVENING), `driver_id` (employee with is_driver), `vehicle_id` nullable, `status` (DRAFT | PUBLISHED), `created_by_user_id`. Unique (run_date, direction, driver_id).
+`id` (UUID PK), `run_date` (date), `direction` (varchar 20: MORNING | EVENING), `driver_id` (UUID FK employees.id), `vehicle_id` (UUID FK vehicles.id nullable), `status` (varchar 20: DRAFT | PUBLISHED), `needs_update` (boolean default false), `notes` (text nullable), `version` (int default 1), `created_by_user_id` (UUID FK users.id nullable), `created_at` (timestamptz), `updated_at` (timestamptz).
+Unique constraint: `(run_date, direction, driver_id)`. Index on `(run_date, direction)`.
+
 ### transport_run_stops
-`run_id`, `sequence`, `worksite_id` or `accommodation_id`, `planned_time` nullable.
+`id` (UUID PK), `run_id` (UUID FK transport_runs.id ON DELETE CASCADE), `stop_type` (varchar 20: ACCOMMODATION | WORKSITE), `accommodation_id` (UUID FK accommodations.id nullable), `worksite_id` (UUID FK worksites.id nullable), `sequence` (integer), `planned_time` (varchar 10 nullable), `notes` (text nullable), `created_at` (timestamptz), `updated_at` (timestamptz).
+Unique constraint: `(run_id, sequence)`.
+
 ### transport_run_passengers
-`run_id`, `stop_id` (where the worker gets off / on), `employee_id`. A worker is on at most one run per direction per day.
+`id` (UUID PK), `run_id` (UUID FK transport_runs.id ON DELETE CASCADE), `stop_id` (UUID FK transport_run_stops.id ON DELETE CASCADE), `employee_id` (UUID FK employees.id), `notes` (text nullable), `created_at` (timestamptz), `updated_at` (timestamptz).
+Unique constraint: `(run_id, employee_id)` (a worker can be on at most one run per direction on a given date).
 
 ## Salary and payroll
 

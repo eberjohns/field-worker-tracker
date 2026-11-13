@@ -13,6 +13,7 @@ from fw.core.events import (
     HolidayChanged,
     ScheduledWorkChanged,
     TimeRuleChanged,
+    TransportRunChanged,
     WorksiteBoundaryChanged,
     event_bus,
 )
@@ -35,11 +36,21 @@ from fw.modules.sync.schemas import (
     ProfilePayload,
     ProfileSupervisor,
     ScheduleItemPayload,
+    TransportDriverSyncPayload,
+    TransportPassengerSyncPayload,
+    TransportRunPayload,
+    TransportStopSyncPayload,
 )
 from fw.modules.sync.service import (
     SyncService,
     _geometry_to_geojson,
     _subtract_minutes_from_time_str,
+)
+from fw.modules.transport import (
+    TransportRun,
+    TransportRunPassenger,
+    TransportRunStop,
+    Vehicle,
 )
 from fw.rules.scheduling import INT_TO_WEEKDAY
 
@@ -47,10 +58,26 @@ logger = structlog.get_logger(__name__)
 
 
 async def handle_scheduled_work_changed(event: ScheduledWorkChanged, session: AsyncSession) -> None:
-    """When schedule items change, record delta changes and update DayPlan."""
+    """When schedule items change, record delta changes, update DayPlan, and flag runs."""
     now = datetime.now(UTC)
     today = now.date()
     window_end = today + timedelta(days=30)
+
+    # Flag any active published transport runs on event.work_date containing these workers
+    if event.work_date and event.employee_ids:
+        trans_q = (
+            select(TransportRun)
+            .join(TransportRunPassenger, TransportRun.id == TransportRunPassenger.run_id)
+            .where(
+                TransportRun.run_date == event.work_date,
+                TransportRun.status == "PUBLISHED",
+                TransportRun.is_active.is_(True),
+                TransportRunPassenger.employee_id.in_(event.employee_ids),
+            )
+        )
+        t_res = await session.execute(trans_q)
+        for tr in t_res.scalars().all():
+            tr.needs_update = True
 
     for emp_id in event.employee_ids:
         # Query active scheduled work for this worker in the window
@@ -584,6 +611,173 @@ async def handle_accommodation_boundary_changed(
         )
 
 
+async def handle_transport_run_changed(event: TransportRunChanged, session: AsyncSession) -> None:
+    """When a transport run is published, modified, or cancelled, record delta sync changes."""
+    if not event.run_id:
+        return
+
+    if event.op == "DELETE":
+        # Delete tombstone to driver
+        if event.driver_id:
+            await SyncService.write_sync_change(
+                session=session,
+                employee_id=event.driver_id,
+                entity_type="TRANSPORT_RUN",
+                entity_id=str(event.run_id),
+                entity_version=1,
+                op="DELETE",
+                payload=None,
+                priority=1,
+            )
+        # Delete tombstone to all affected passengers
+        for emp_id in event.affected_employee_ids:
+            await SyncService.write_sync_change(
+                session=session,
+                employee_id=emp_id,
+                entity_type="TRANSPORT_RUN",
+                entity_id=str(event.run_id),
+                entity_version=1,
+                op="DELETE",
+                payload=None,
+                priority=1,
+            )
+        return
+
+    # OP == "UPSERT"
+    run = await session.get(TransportRun, event.run_id)
+    if not run or not run.is_active or run.status != "PUBLISHED":
+        return
+
+    driver_emp = await session.get(Employee, run.driver_id)
+    driver_payload = TransportDriverSyncPayload(
+        name=driver_emp.name if driver_emp else "Driver",
+        phone=driver_emp.phone if driver_emp else None,
+    )
+    vehicle = await session.get(Vehicle, run.vehicle_id) if run.vehicle_id else None
+    vehicle_label = vehicle.label if vehicle else None
+
+    # Fetch stops
+    stops_q = (
+        select(TransportRunStop)
+        .where(TransportRunStop.run_id == run.id)
+        .order_by(TransportRunStop.sequence.asc())
+    )
+    stops_res = await session.execute(stops_q)
+    run_stops = stops_res.scalars().all()
+
+    # Build driver full payload and passenger-specific payloads
+    driver_stops_payload = []
+    passenger_to_stop: dict[UUID, TransportStopSyncPayload] = {}
+
+    for st in run_stops:
+        pass_q = select(TransportRunPassenger).where(TransportRunPassenger.stop_id == st.id)
+        pass_res = await session.execute(pass_q)
+        stop_passengers = pass_res.scalars().all()
+
+        pass_payloads = []
+        for sp in stop_passengers:
+            p_emp = await session.get(Employee, sp.employee_id)
+            if p_emp:
+                pass_payloads.append(
+                    TransportPassengerSyncPayload(name=p_emp.name, tally_id=p_emp.tally_id)
+                )
+
+        stop_name = "Stop"
+        if st.worksite_id:
+            ws_obj = await session.get(Worksite, st.worksite_id)
+            if ws_obj:
+                stop_name = ws_obj.job_name
+        elif st.accommodation_id:
+            acc_obj = await session.get(Accommodation, st.accommodation_id)
+            if acc_obj:
+                stop_name = acc_obj.name
+
+        st_payload = TransportStopSyncPayload(
+            sequence=st.sequence,
+            stop_type=st.stop_type,
+            job_id=st.worksite_id,
+            accommodation_id=st.accommodation_id,
+            name=stop_name,
+            planned_time=str(st.planned_time) if st.planned_time else None,
+            passengers=pass_payloads,
+        )
+        driver_stops_payload.append(st_payload)
+
+        for sp in stop_passengers:
+            p_emp = await session.get(Employee, sp.employee_id)
+            if p_emp:
+                passenger_to_stop[sp.employee_id] = TransportStopSyncPayload(
+                    sequence=st.sequence,
+                    stop_type=st.stop_type,
+                    job_id=st.worksite_id,
+                    accommodation_id=st.accommodation_id,
+                    name=stop_name,
+                    planned_time=str(st.planned_time) if st.planned_time else None,
+                    passengers=[
+                        TransportPassengerSyncPayload(
+                            name=p_emp.name,
+                            tally_id=p_emp.tally_id,
+                        )
+                    ],
+                )
+
+    # 1. Driver gets all stops and all passengers
+    driver_run_payload = TransportRunPayload(
+        run_id=run.id,
+        run_date=run.run_date.isoformat(),
+        direction=run.direction,
+        vehicle_label=vehicle_label,
+        driver=driver_payload,
+        stops=driver_stops_payload,
+    )
+    await SyncService.write_sync_change(
+        session=session,
+        employee_id=run.driver_id,
+        entity_type="TRANSPORT_RUN",
+        entity_id=str(run.id),
+        entity_version=run.version or 1,
+        op="UPSERT",
+        payload=driver_run_payload.model_dump(mode="json"),
+        priority=1,
+    )
+
+    # 2. Passenger gets driver, vehicle, and only their own stop
+    current_passenger_ids = set(passenger_to_stop.keys())
+    for emp_id, stop_payload in passenger_to_stop.items():
+        pass_run_payload = TransportRunPayload(
+            run_id=run.id,
+            run_date=run.run_date.isoformat(),
+            direction=run.direction,
+            vehicle_label=vehicle_label,
+            driver=driver_payload,
+            stops=[stop_payload],
+        )
+        await SyncService.write_sync_change(
+            session=session,
+            employee_id=emp_id,
+            entity_type="TRANSPORT_RUN",
+            entity_id=str(run.id),
+            entity_version=run.version or 1,
+            op="UPSERT",
+            payload=pass_run_payload.model_dump(mode="json"),
+            priority=1,
+        )
+
+    # 3. For any workers who were previously on this run but removed, send DELETE tombstone
+    for prev_emp_id in event.affected_employee_ids:
+        if prev_emp_id not in current_passenger_ids and prev_emp_id != run.driver_id:
+            await SyncService.write_sync_change(
+                session=session,
+                employee_id=prev_emp_id,
+                entity_type="TRANSPORT_RUN",
+                entity_id=str(event.run_id),
+                entity_version=1,
+                op="DELETE",
+                payload=None,
+                priority=1,
+            )
+
+
 _registered = False
 
 
@@ -600,3 +794,4 @@ def register_sync_listeners() -> None:
     event_bus.subscribe_sync(LeaveApprovedEvent, handle_leave_approved)
     event_bus.subscribe_sync(EmployeeProfileChanged, handle_employee_profile_changed)
     event_bus.subscribe_sync(AccommodationBoundaryChanged, handle_accommodation_boundary_changed)
+    event_bus.subscribe_sync(TransportRunChanged, handle_transport_run_changed)

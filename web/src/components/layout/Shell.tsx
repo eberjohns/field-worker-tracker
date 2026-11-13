@@ -25,6 +25,7 @@ import {
   Smartphone,
   AlertTriangle,
   Server,
+  Truck,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { Login } from "../../routes/Login";
@@ -47,6 +48,7 @@ const navItems: NavItem[] = [
   { label: "Documents", to: "/documents", icon: ShieldCheck, roles: ["ADMIN"] },
   { label: "Base Planner", to: "/base-planner", icon: CalendarRange, roles: ["ADMIN", "ENGINEER", "SUPERINTENDENT", "SUPERVISOR"] },
   { label: "Operational Planner", to: "/operational-planner", icon: CalendarDays, roles: ["ADMIN", "ENGINEER", "SUPERINTENDENT", "SUPERVISOR"] },
+  { label: "Drivers & Transport", to: "/transport", icon: Truck, roles: ["ADMIN", "ENGINEER", "SUPERINTENDENT", "SUPERVISOR"] },
   { label: "Leave Management", to: "/leave", icon: CalendarCheck, roles: ["ADMIN", "ENGINEER", "SUPERINTENDENT", "SUPERVISOR"] },
   { label: "Attendance", to: "/attendance", icon: Clock },
   { label: "Payroll", to: "/payroll", icon: DollarSign, roles: ["ADMIN", "ENGINEER"] },

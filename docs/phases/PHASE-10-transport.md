@@ -27,12 +27,12 @@ Drivers section with vehicles and daily runs synced to drivers and workers.
 - Route optimisation or maps navigation
 
 ## Checklist (tick each before asking for review)
-- [ ] A day of runs can be suggested, edited and published
-- [ ] Driver phone receives stops and passengers; passenger receives driver, vehicle, own stop
-- [ ] A worker cannot be on two morning runs
-- [ ] Unassigned scheduled workers are listed
-- [ ] Run sheet prints correctly
-- [ ] Docs updated in the same change (`.agents/rules/documentation.md`), ADR written for any design decision, CHANGELOG entry
+- [x] A day of runs can be suggested, edited and published
+- [x] Driver phone receives stops and passengers; passenger receives driver, vehicle, own stop
+- [x] A worker cannot be on two morning runs
+- [x] Unassigned scheduled workers are listed
+- [x] Run sheet prints correctly
+- [x] Docs updated in the same change (`.agents/rules/documentation.md`), ADR written for any design decision, CHANGELOG entry
 - [ ] Pull request opened with the template; nothing merged by the agent
 
 ## Demo script
