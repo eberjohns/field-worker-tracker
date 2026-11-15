@@ -1367,17 +1367,47 @@ class PayrollService:
 
         if lower_name.endswith((".xlsx", ".xls")):
             wb = openpyxl.load_workbook(io.BytesIO(file_content), data_only=True)
-            ws = wb.active
+
+            # Smart sheet detection: look for known revision line sheet names first
+            ws = None
+            preferred_line_sheets = [
+                "Salary_Revision_Lines",
+                "salary_revision_lines",
+                "Revision_Lines",
+                "revision_lines",
+                "Salary Revision Template",
+            ]
+            for s_name in preferred_line_sheets:
+                if s_name in wb.sheetnames:
+                    ws = wb[s_name]
+                    break
+
+            # If not found by name, scan sheets for one with grade and basic/salary headers
+            if ws is None:
+                for s_name in wb.sheetnames:
+                    candidate = wb[s_name]
+                    for r in list(candidate.iter_rows(max_row=10, values_only=True)):
+                        str_cells = [str(c).strip().lower() for c in r if c is not None]
+                        if len(str_cells) >= 3 and any("grade" in c for c in str_cells) and any("basic" in c or "salary" in c for c in str_cells):
+                            ws = candidate
+                            break
+                    if ws is not None:
+                        break
+
+            if ws is None:
+                ws = wb.active
+
             assert ws is not None
             rows = list(ws.iter_rows(values_only=True))
             if not rows:
                 raise AppError(code="INVALID_FILE", message="The uploaded spreadsheet is empty.")
 
+            # Find real header row (must have >= 3 non-empty cells and match grade + basic)
             header_row_idx = 0
             headers: list[str] = []
             for idx, r in enumerate(rows):
                 str_cells = [str(c).strip().lower().replace(" ", "_").replace("-", "_") for c in r if c is not None]
-                if any("grade" in c for c in str_cells) and any("basic" in c or "salary" in c for c in str_cells):
+                if len(str_cells) >= 3 and any("grade" in c for c in str_cells) and any("basic" in c or "salary" in c for c in str_cells):
                     header_row_idx = idx
                     headers = [
                         str(c).strip().lower().replace(" ", "_").replace("-", "_") if c is not None else ""
