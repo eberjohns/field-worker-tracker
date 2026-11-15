@@ -29,6 +29,9 @@ All notable changes. Format: Keep a Changelog. Mobile-contract changes are also 
     - Worker Detail Drawer: Comprehensive employee pay breakdown and employer staff cost breakdown (with 5% HR OH).
     - Explanatory Formula Guide ("i" icon modal): Detailed documentation of legal/contractual math (208 divisor, OT1 vs OT2 classification, 21-day gratuity, 30-day leave salary, 5% HR OH).
     - Salary Revisions tab: Revision selector dropdown, grade pricing lines table, "Export Template" button generating pre-filled sheet, and "Import Revision & Diff" modal with side-by-side red/green diff preview.
+    - Excel Template Import & Diff: Real `.xlsx` template export (`GET /api/v1/salary-revisions/{code}/export-template`), drag-and-drop Excel file upload, automated side-by-side diff (`POST /api/v1/salary-revisions/preview-file`), inline editable preview grid, and single-click revision commit.
+    - Worker Records Table enhancements: Clear Role pills with color-coding, Role filtering dropdown (Workers, Supervisors, Engineers, Admins), employee Tally ID rendering, and explicit standard target vs worked hours display (`8h/d (208h) / XX.Xh`).
+    - Job Budget vs Actual stability: Safe variance calculation ensuring robust rendering without undefined property exceptions.
     - Job Budget vs Actual tab: Worksite cards/table with dynamic revision binding dropdown, annual planned hours, annual labor budget, pro-rated budget, actual allocated cost from attendance minutes, variance indicators, and prominent information banner detailing the provision basis distinction between planned budgets and actual costs.
   - Mobile Simulator & Proxy:
     - Added Monthly Payslips card in worker Profile tab calling `/api/v1/payroll/my-records` and showing approved payslips with period, worked hours, OT amounts, and net pay.

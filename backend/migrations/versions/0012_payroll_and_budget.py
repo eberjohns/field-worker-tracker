@@ -235,3 +235,4 @@ def downgrade() -> None:
     op.drop_table("payroll_runs")
     op.drop_table("salary_revision_lines")
     op.drop_table("salary_revisions")
+

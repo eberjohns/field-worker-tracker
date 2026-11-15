@@ -48,3 +48,4 @@ Phase 11 introduces month-end payroll calculation, salary revisions management, 
 
 **Related ADRs:** ADR-001 (Modular Monolith), ADR-008 (Effective Configuration), ADR-013 (Salary Structures), ADR-018 (Attendance Immutability).  
 **Affected Docs:** `docs/06-payroll-and-cost.md`, `docs/07-data-model.md`, `docs/08-api-spec.md`, `docs/decisions/decision-register.md`.
+

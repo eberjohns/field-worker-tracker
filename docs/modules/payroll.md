@@ -51,3 +51,4 @@ The `payroll` module handles month-end payroll processing, draft generation, iss
 8. **HR Overhead**: 5% of Subtotal Staff Cost.
 9. **Final Total Staff Cost**: Subtotal Staff Cost + 5% HR OH.
 10. **Budget Provision Distinction**: Job Budgets use the static commercial provisions in the salary revision file; Actual Allocated Costs use dynamic statutory provisions derived from live company settings and attendance calculations.
+

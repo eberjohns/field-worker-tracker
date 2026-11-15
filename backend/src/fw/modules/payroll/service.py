@@ -1,9 +1,15 @@
 """Payroll Service implementing month-end runs, approvals, revisions, and budget costing."""
 
+from collections.abc import Mapping
+import csv
 from datetime import UTC, date, datetime
 from decimal import Decimal
+import io
 from uuid import UUID
 
+import openpyxl
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.utils import get_column_letter
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.core.errors import AppError
@@ -727,32 +733,57 @@ class PayrollService:
 
         record_reads: list[PayrollRecordRead] = []
         for r in records:
+            emp = r.employee
+            snap = r.snapshot or {}
+            std_daily = r.standard_hours
+            std_monthly = round_money(std_daily * Decimal("26"))
+            missed_h = round_money(r.unpaid_leave_hours + r.shortfall_hours)
+
             record_reads.append(
                 PayrollRecordRead(
                     id=r.id,
                     employee_id=r.employee_id,
-                    tally_id=r.employee.tally_id if r.employee else None,
-                    employee_name=r.employee.name if r.employee else None,
-                    standard_hours=r.standard_hours,
+                    tally_id=emp.tally_id if emp else None,
+                    employee_tally_id=emp.tally_id if emp else None,
+                    employee_name=emp.name if emp else None,
+                    employee_role=emp.role if emp else "WORKER",
+                    role=emp.role if emp else "WORKER",
+                    standard_hours=std_daily,
+                    standard_monthly_hours=std_monthly,
                     scheduled_hours=r.scheduled_hours,
                     worked_hours=r.worked_hours,
+                    actual_worked_hours=r.worked_hours,
                     paid_leave_hours=r.paid_leave_hours,
                     unpaid_leave_hours=r.unpaid_leave_hours,
                     shortfall_hours=r.shortfall_hours,
+                    missed_hours=missed_h,
                     missed_hours_deduction=r.missed_hours_deduction,
                     ot1_hours=r.ot1_hours,
                     ot2_hours=r.ot2_hours,
                     salary_portion=r.salary_portion,
+                    basic_salary=Decimal(str(snap.get("basic_salary", 0))),
+                    special_allowance=Decimal(str(snap.get("special_allowance", 0))),
+                    fixed_ot_amount=Decimal(str(snap.get("fixed_ot_amount", 0))),
+                    bonus=Decimal(str(snap.get("bonus", 0))),
+                    telephone_allowance=Decimal(str(snap.get("telephone_allowance", 0))),
+                    housing_transport_allowance=Decimal(str(snap.get("housing_transport_allowance", 0))),
+                    ot1_rate=Decimal(str(snap.get("ot1_rate", 0))),
+                    ot2_rate=Decimal(str(snap.get("ot2_rate", 0))),
                     ot1_amount=r.ot1_amount,
                     ot2_amount=r.ot2_amount,
                     gross_pay=r.gross_pay,
+                    total_deductions=r.missed_hours_deduction,
                     net_pay=r.net_pay,
                     gratuity=r.gratuity,
+                    gratuity_provision=r.gratuity,
                     leave_salary=r.leave_salary,
+                    leave_salary_provision=r.leave_salary,
                     provisions=r.provisions,
+                    company_provisions_total=r.provisions,
                     per_month_provision=r.per_month_provision,
                     total_staff_cost=r.total_staff_cost,
                     hr_oh_amount=r.hr_oh_amount,
+                    hr_overhead_amount=r.hr_oh_amount,
                     final_total_staff_cost=r.final_total_staff_cost,
                     snapshot=r.snapshot,
                     created_at=r.created_at,
@@ -1215,6 +1246,245 @@ class PayrollService:
         )
 
     @staticmethod
+    async def export_salary_revision_template(
+        session: AsyncSession,
+        revision_code: str | None = None,
+    ) -> bytes:
+        """Export salary revision as a professionally formatted Excel (.xlsx) workbook.
+
+        If revision_code is specified, pre-populates existing grade lines so user can edit.
+        """
+        rev = None
+        if revision_code and revision_code.upper() != "ALL":
+            rev = await PayrollRepository.get_revision_by_code(session, revision_code)
+        if not rev:
+            revs = await PayrollRepository.list_revisions(session)
+            if revs:
+                rev = revs[0]
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        assert ws is not None
+        ws.title = "Salary Revision Template"
+
+        headers = [
+            ("grade_code", "Grade Code"),
+            ("grade_group_title", "Grade Group Title"),
+            ("basic_salary", "Basic Salary"),
+            ("special_allowance", "Special Allowance"),
+            ("fixed_ot_amount", "Fixed OT Amount"),
+            ("bonus", "Bonus"),
+            ("visa_provision", "Visa Provision"),
+            ("air_ticket_provision", "Air Ticket Provision"),
+            ("uniform_provision", "Uniform Provision"),
+            ("medical_provision", "Medical Provision"),
+            ("accommodation_provision", "Accommodation Provision"),
+            ("transportation_provision", "Transportation Provision"),
+        ]
+
+        header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+        header_fill = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
+        center_align = Alignment(horizontal="center", vertical="center")
+        left_align = Alignment(horizontal="left", vertical="center")
+        right_align = Alignment(horizontal="right", vertical="center")
+
+        thin_border = Border(
+            left=Side(style="thin", color="E2E8F0"),
+            right=Side(style="thin", color="E2E8F0"),
+            top=Side(style="thin", color="E2E8F0"),
+            bottom=Side(style="thin", color="E2E8F0"),
+        )
+
+        for col_idx, (_, header_title) in enumerate(headers, start=1):
+            cell = ws.cell(row=1, column=col_idx, value=header_title)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = center_align
+
+        lines = rev.lines if rev else []
+        row_idx = 2
+
+        if lines:
+            for line in lines:
+                row_data = [
+                    line.grade_code,
+                    line.grade_group_title or "",
+                    float(line.basic_salary),
+                    float(line.special_allowance),
+                    float(line.fixed_ot_amount),
+                    float(line.bonus),
+                    float(line.visa_provision),
+                    float(line.air_ticket_provision),
+                    float(line.uniform_provision),
+                    float(line.medical_provision),
+                    float(line.accommodation_provision),
+                    float(line.transportation_provision or 0.0),
+                ]
+                for col_idx, val in enumerate(row_data, start=1):
+                    cell = ws.cell(row=row_idx, column=col_idx, value=val)
+                    cell.border = thin_border
+                    if col_idx in (1, 2):
+                        cell.alignment = left_align
+                    else:
+                        cell.alignment = right_align
+                        cell.number_format = "#,##0.00"
+                row_idx += 1
+        else:
+            sample_data = [
+                ("GE", "General Employees / Helpers", 1200.0, 150.0, 100.0, 0.0, 100.0, 75.0, 25.0, 50.0, 300.0, 0.0),
+                ("S1", "Skilled Technicians Level 1", 1800.0, 250.0, 150.0, 50.0, 100.0, 75.0, 25.0, 50.0, 350.0, 0.0),
+                ("SUP", "Site Supervisors", 2800.0, 400.0, 200.0, 100.0, 120.0, 100.0, 30.0, 75.0, 500.0, 0.0),
+            ]
+            for s in sample_data:
+                for col_idx, val in enumerate(s, start=1):
+                    cell = ws.cell(row=row_idx, column=col_idx, value=val)
+                    cell.border = thin_border
+                    if col_idx in (1, 2):
+                        cell.alignment = left_align
+                    else:
+                        cell.alignment = right_align
+                        cell.number_format = "#,##0.00"
+                row_idx += 1
+
+        for col in ws.columns:
+            max_len = max(len(str(cell.value or "")) for cell in col)
+            col_letter = get_column_letter(int(col[0].column or 1))
+            ws.column_dimensions[col_letter].width = max(max_len + 4, 15)
+
+        stream = io.BytesIO()
+        wb.save(stream)
+        stream.seek(0)
+        return stream.getvalue()
+
+    @staticmethod
+    def parse_salary_revision_file(
+        file_content: bytes,
+        filename: str,
+    ) -> list[SalaryRevisionLineCreate]:
+        """Parse an Excel (.xlsx/.xls) or CSV file into SalaryRevisionLineCreate objects."""
+        lower_name = filename.lower()
+        rows_data: list[dict[str, str | Decimal]] = []
+
+        if lower_name.endswith((".xlsx", ".xls")):
+            wb = openpyxl.load_workbook(io.BytesIO(file_content), data_only=True)
+            ws = wb.active
+            assert ws is not None
+            rows = list(ws.iter_rows(values_only=True))
+            if not rows:
+                raise AppError(code="INVALID_FILE", message="The uploaded spreadsheet is empty.")
+
+            header_row_idx = 0
+            headers: list[str] = []
+            for idx, r in enumerate(rows):
+                str_cells = [str(c).strip().lower().replace(" ", "_").replace("-", "_") for c in r if c is not None]
+                if any("grade" in c for c in str_cells) and any("basic" in c or "salary" in c for c in str_cells):
+                    header_row_idx = idx
+                    headers = [
+                        str(c).strip().lower().replace(" ", "_").replace("-", "_") if c is not None else ""
+                        for c in r
+                    ]
+                    break
+
+            if not headers:
+                headers = [
+                    str(c).strip().lower().replace(" ", "_").replace("-", "_") if c is not None else ""
+                    for c in rows[0]
+                ]
+                header_row_idx = 0
+
+            for r in rows[header_row_idx + 1 :]:
+                if not r or all(c is None or str(c).strip() == "" for c in r):
+                    continue
+                row_dict: dict[str, str | Decimal] = {}
+                for col_name, val in zip(headers, r, strict=False):
+                    if col_name and val is not None:
+                        row_dict[col_name] = str(val).strip()
+                if row_dict:
+                    rows_data.append(row_dict)
+        else:
+            try:
+                decoded = file_content.decode("utf-8-sig")
+            except UnicodeDecodeError:
+                decoded = file_content.decode("latin-1")
+
+            reader = csv.DictReader(io.StringIO(decoded))
+            for r in reader:
+                cleaned: dict[str, str | Decimal] = {
+                    k.strip().lower().replace(" ", "_").replace("-", "_"): v.strip()
+                    for k, v in r.items()
+                    if k
+                }
+                if cleaned:
+                    rows_data.append(cleaned)
+
+        lines: list[SalaryRevisionLineCreate] = []
+
+        def to_dec(val: object) -> Decimal:
+            if val is None or str(val).strip() == "":
+                return Decimal("0.00")
+            s = str(val).replace(",", "").replace("$", "").replace("AED", "").strip()
+            try:
+                return round_money(Decimal(s))
+            except Exception:
+                return Decimal("0.00")
+
+        def find_field(d: Mapping[str, object], *possible_keys: str) -> object:
+            for k in possible_keys:
+                if k in d:
+                    return d[k]
+                norm_k = k.lower().replace(" ", "_")
+                for dk, dv in d.items():
+                    if dk == norm_k or norm_k in dk:
+                        return dv
+            return None
+
+        for d in rows_data:
+            grade_code_val = find_field(d, "grade_code", "grade", "code")
+            if not grade_code_val:
+                continue
+            grade_code = str(grade_code_val).strip()
+            title = find_field(d, "grade_group_title", "title", "group_title", "description")
+
+            lines.append(
+                SalaryRevisionLineCreate(
+                    grade_code=grade_code,
+                    grade_group_title=str(title).strip() if title else None,
+                    basic_salary=to_dec(find_field(d, "basic_salary", "basic")),
+                    special_allowance=to_dec(find_field(d, "special_allowance", "special")),
+                    fixed_ot_amount=to_dec(find_field(d, "fixed_ot_amount", "fixed_ot", "ot_amount")),
+                    bonus=to_dec(find_field(d, "bonus")),
+                    visa_provision=to_dec(find_field(d, "visa_provision", "visa")),
+                    air_ticket_provision=to_dec(find_field(d, "air_ticket_provision", "air_ticket", "ticket")),
+                    uniform_provision=to_dec(find_field(d, "uniform_provision", "uniform")),
+                    medical_provision=to_dec(find_field(d, "medical_provision", "medical")),
+                    accommodation_provision=to_dec(find_field(d, "accommodation_provision", "accommodation")),
+                    transportation_provision=to_dec(find_field(d, "transportation_provision", "transportation")),
+                )
+            )
+
+        if not lines:
+            raise AppError(code="INVALID_DATA", message="No valid grade lines found in file. Please ensure 'Grade Code' column is present.")
+
+        return lines
+
+    @staticmethod
+    async def preview_salary_revision_file(
+        session: AsyncSession,
+        file_content: bytes,
+        filename: str,
+        target_revision_code: str,
+        base_revision_code: str | None = None,
+    ) -> SalaryRevisionImportDiffResponse:
+        """Parse uploaded Excel/CSV file and calculate side-by-side diff against base revision."""
+        lines = PayrollService.parse_salary_revision_file(file_content, filename)
+        return await PayrollService.diff_salary_revision_import(
+            session=session,
+            target_revision_code=target_revision_code,
+            base_revision_code=base_revision_code,
+            incoming_lines=lines,
+        )
+
+    @staticmethod
     async def get_budget_vs_actual(
         session: AsyncSession,
         country: str | None = None,
@@ -1299,7 +1569,6 @@ class PayrollService:
             elapsed_days = (target_date - start).days
             if elapsed_days < 0:
                 elapsed_days = 0
-            # Pro-rate based on 365 days
             fraction = min(Decimal("1.0"), Decimal(str(elapsed_days)) / Decimal("365.0"))
             prorated_budget = round_money(contract_annual_budget * fraction)
 
@@ -1319,7 +1588,13 @@ class PayrollService:
             actual_cost = Decimal(str(act_res.scalar() or "0.00"))
 
             variance = actual_cost - prorated_budget
+            variance_pct = (
+                round_money((variance / prorated_budget) * Decimal("100.0"))
+                if prorated_budget > Decimal("0.00")
+                else Decimal("0.0")
+            )
             is_over = variance > Decimal("0.00")
+            is_under = variance < Decimal("0.00")
 
             items.append(
                 WorksiteBudgetVsActualItem(
@@ -1328,13 +1603,20 @@ class PayrollService:
                     job_name=ws.job_name,
                     country=ws.country,
                     salary_revision_code=ws.salary_revision_code or (rev.code if rev else None),
+                    assigned_revision_code=ws.salary_revision_code or (rev.code if rev else None),
                     annual_planned_man_hours=annual_man_hours,
                     annual_labor_budget=contract_annual_budget,
                     prorated_budget=prorated_budget,
+                    pro_rated_budget=prorated_budget,
                     actual_cost_allocated=actual_cost,
+                    actual_allocated_cost=actual_cost,
                     variance=variance,
+                    variance_amount=variance,
+                    variance_percent=variance_pct,
                     is_over_budget=is_over,
+                    is_under_budget=is_under,
                     manual_budget_override=ws.budget_amount,
+                    is_custom_budget_override=bool(ws.budget_amount and ws.budget_amount > Decimal("0.00")),
                 )
             )
 

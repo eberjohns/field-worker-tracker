@@ -165,27 +165,46 @@ class PayrollRecordRead(BaseModel):
     id: UUID
     employee_id: UUID
     tally_id: str | None = None
+    employee_tally_id: str | None = None
     employee_name: str | None = None
+    employee_role: str | None = None
+    role: str | None = None
     standard_hours: Decimal
+    standard_monthly_hours: Decimal | None = None
     scheduled_hours: Decimal
     worked_hours: Decimal
+    actual_worked_hours: Decimal | None = None
     paid_leave_hours: Decimal
     unpaid_leave_hours: Decimal
     shortfall_hours: Decimal
+    missed_hours: Decimal | None = None
     missed_hours_deduction: Decimal
     ot1_hours: Decimal
     ot2_hours: Decimal
     salary_portion: Decimal
+    basic_salary: Decimal | None = None
+    special_allowance: Decimal | None = None
+    fixed_ot_amount: Decimal | None = None
+    bonus: Decimal | None = None
+    telephone_allowance: Decimal | None = None
+    housing_transport_allowance: Decimal | None = None
+    ot1_rate: Decimal | None = None
+    ot2_rate: Decimal | None = None
     ot1_amount: Decimal
     ot2_amount: Decimal
     gross_pay: Decimal
+    total_deductions: Decimal | None = None
     net_pay: Decimal
     gratuity: Decimal
+    gratuity_provision: Decimal | None = None
     leave_salary: Decimal
+    leave_salary_provision: Decimal | None = None
     provisions: Decimal
+    company_provisions_total: Decimal | None = None
     per_month_provision: Decimal
     total_staff_cost: Decimal
     hr_oh_amount: Decimal
+    hr_overhead_amount: Decimal | None = None
     final_total_staff_cost: Decimal
     snapshot: dict = Field(default_factory=dict)
     created_at: datetime
@@ -277,11 +296,19 @@ class WorksiteBudgetVsActualItem(BaseModel):
     job_name: str
     country: str
     salary_revision_code: str | None = None
+    assigned_revision_code: str | None = None
     annual_planned_man_hours: Decimal
     annual_labor_budget: Decimal
     prorated_budget: Decimal
+    pro_rated_budget: Decimal | None = None
     actual_cost_allocated: Decimal
+    actual_allocated_cost: Decimal | None = None
     variance: Decimal  # actual - prorated_budget
+    variance_amount: Decimal | None = None
+    variance_percent: Decimal = Decimal("0.0")
     is_over_budget: bool
+    is_under_budget: bool = False
     manual_budget_override: Decimal | None = None
+    is_custom_budget_override: bool = False
+
 

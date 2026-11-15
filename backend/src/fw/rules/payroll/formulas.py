@@ -164,3 +164,4 @@ def calculate_revision_planned_hourly_cost(
     with_overhead = total_base * (Decimal("1.00") + hr_oh_rate)
     hourly = with_overhead / divisor
     return round_money(hourly)
+

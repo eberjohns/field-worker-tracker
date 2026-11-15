@@ -21,6 +21,7 @@ import {
   ChevronRight,
   Building,
   AlertCircle,
+  FileSpreadsheet,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
@@ -46,32 +47,40 @@ interface PayrollRunItem {
 interface PayrollRecordItem {
   id: string;
   employee_id: string;
-  employee_tally_id: string;
+  employee_tally_id?: string;
+  tally_id?: string;
   employee_name: string;
-  employee_role: string;
-  standard_monthly_hours: number;
-  actual_worked_hours: number;
-  leave_hours: number;
-  missed_hours: number;
+  employee_role?: string;
+  role?: string;
+  standard_hours: number;
+  standard_monthly_hours?: number;
+  scheduled_hours: number;
+  worked_hours: number;
+  actual_worked_hours?: number;
+  paid_leave_hours: number;
+  unpaid_leave_hours: number;
+  shortfall_hours: number;
+  leave_hours?: number;
+  missed_hours?: number;
   missed_hours_deduction: number;
   salary_portion: number;
-  basic_salary: number;
-  special_allowance: number;
-  fixed_ot_amount: number;
-  bonus: number;
+  basic_salary?: number;
+  special_allowance?: number;
+  fixed_ot_amount?: number;
+  bonus?: number;
   ot1_hours: number;
-  ot1_rate: number;
+  ot1_rate?: number;
   ot1_amount: number;
   ot2_hours: number;
-  ot2_rate: number;
+  ot2_rate?: number;
   ot2_amount: number;
   gross_pay: number;
-  total_deductions: number;
+  total_deductions?: number;
   net_pay: number;
-  gratuity_provision: number;
-  leave_salary_provision: number;
-  company_provisions_total: number;
-  hr_overhead_amount: number;
+  gratuity_provision?: number;
+  leave_salary_provision?: number;
+  company_provisions_total?: number;
+  hr_overhead_amount?: number;
   final_total_staff_cost: number;
   snapshot: any;
 }
@@ -104,6 +113,7 @@ interface RevisionLineItem {
   uniform_provision: number;
   medical_provision: number;
   accommodation_provision: number;
+  transportation_provision?: number;
   planned_hourly_cost: number;
 }
 
@@ -121,15 +131,21 @@ interface BudgetVsActualItem {
   job_number: string;
   job_name: string;
   country: string;
-  assigned_revision_code: string | null;
+  assigned_revision_code?: string | null;
+  salary_revision_code?: string | null;
   annual_planned_man_hours: number;
   annual_labor_budget: number;
-  pro_rated_budget: number;
-  actual_allocated_cost: number;
-  variance_amount: number;
-  variance_percent: number;
-  is_under_budget: boolean;
-  is_custom_budget_override: boolean;
+  prorated_budget?: number;
+  pro_rated_budget?: number;
+  actual_cost_allocated?: number;
+  actual_allocated_cost?: number;
+  variance?: number;
+  variance_amount?: number;
+  variance_percent?: number;
+  is_over_budget?: boolean;
+  is_under_budget?: boolean;
+  manual_budget_override?: number | null;
+  is_custom_budget_override?: boolean;
 }
 
 export const Payroll: React.FC = () => {
@@ -152,6 +168,7 @@ export const Payroll: React.FC = () => {
   const [issuesOpen, setIssuesOpen] = useState(false);
   const [runsLoading, setRunsLoading] = useState(false);
   const [recordSearch, setRecordSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState<string>("ALL");
   const [selectedRecord, setSelectedRecord] = useState<PayrollRecordItem | null>(null);
   const [formulaModalOpen, setFormulaModalOpen] = useState(false);
 
@@ -175,7 +192,12 @@ export const Payroll: React.FC = () => {
   const [revisionsLoading, setRevisionsLoading] = useState(false);
   const [diffModalOpen, setDiffModalOpen] = useState(false);
   const [targetRevisionInput, setTargetRevisionInput] = useState("");
-  const [diffInputJson, setDiffInputJson] = useState("");
+  const [targetRevisionName, setTargetRevisionName] = useState("");
+  const [targetEffectiveDate, setTargetEffectiveDate] = useState(
+    new Date().toISOString().slice(0, 10)
+  );
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [previewLines, setPreviewLines] = useState<any[]>([]);
   const [diffResult, setDiffResult] = useState<any | null>(null);
   const [diffLoading, setDiffLoading] = useState(false);
 
@@ -438,92 +460,90 @@ export const Payroll: React.FC = () => {
     }
   };
 
-  const handleExportRevisionTemplate = () => {
-    const headers = [
-      "grade_code",
-      "grade_group_title",
-      "basic_salary",
-      "special_allowance",
-      "fixed_ot_amount",
-      "bonus",
-      "visa_provision",
-      "air_ticket_provision",
-      "uniform_provision",
-      "medical_provision",
-      "accommodation_provision",
-    ];
-    const rows = activeRevisionLines.map((l) => [
-      l.grade_code,
-      l.grade_group_title || "",
-      l.basic_salary,
-      l.special_allowance,
-      l.fixed_ot_amount,
-      l.bonus,
-      l.visa_provision,
-      l.air_ticket_provision,
-      l.uniform_provision,
-      l.medical_provision,
-      l.accommodation_provision,
-    ]);
-    const csvContent =
-      "data:text/csv;charset=utf-8," +
-      [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `salary_revision_template_${selectedRevisionCode || "export"}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleExportRevisionTemplate = async () => {
+    if (!token) return;
+    try {
+      const code = selectedRevisionCode || "ALL";
+      const res = await fetch(`/api/v1/salary-revisions/${code}/export-template`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to export template");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `salary_revision_${code}_template.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Export template error", err);
+      alert("Failed to export revision Excel template.");
+    }
   };
 
-  const handleRunDiffPreview = async () => {
-    if (!targetRevisionInput.trim()) {
-      alert("Please enter a Target Revision Code.");
+  const handleFileUploadAndPreview = async (selectedFile?: File) => {
+    const file = selectedFile || uploadFile;
+    if (!file) {
+      alert("Please choose an Excel (.xlsx/.xls) or CSV file first.");
       return;
     }
+    const targetCode = targetRevisionInput.trim() || `${selectedRevisionCode || "REV-2026"}-V2`;
+    setTargetRevisionInput(targetCode);
     setDiffLoading(true);
     try {
-      let lines = [];
-      try {
-        lines = JSON.parse(diffInputJson);
-      } catch {
-        alert("Invalid JSON format for lines. Please provide an array of grade objects.");
-        setDiffLoading(false);
-        return;
-      }
-      const res = await fetch(
-        `/api/v1/salary-revisions/diff?target_revision_code=${encodeURIComponent(
-          targetRevisionInput
-        )}&base_revision_code=${encodeURIComponent(selectedRevisionCode)}`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(lines),
-        }
-      );
+      const formData = new FormData();
+      formData.append("file", file);
+      const queryParams = new URLSearchParams({
+        target_revision_code: targetCode,
+        ...(selectedRevisionCode ? { base_revision_code: selectedRevisionCode } : {}),
+      });
+
+      const res = await fetch(`/api/v1/salary-revisions/preview-file?${queryParams.toString()}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
       if (res.ok) {
         const data = await res.json();
         setDiffResult(data);
+        setPreviewLines(data.preview_lines || []);
       } else {
-        const err = await res.json();
-        alert(err.detail || "Diff comparison failed.");
+        const err = await res.json().catch(() => ({}));
+        alert(err.detail?.message || err.detail || "Failed to analyze and diff the uploaded spreadsheet.");
       }
     } catch (err) {
-      console.error("Diff preview error", err);
+      console.error("File upload diff error", err);
+      alert("An unexpected error occurred while analyzing the file.");
     } finally {
       setDiffLoading(false);
     }
   };
 
+  const handleLineValueChange = (index: number, field: string, value: any) => {
+    setPreviewLines((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+  };
+
   const handleSaveImportedRevision = async () => {
-    if (!targetRevisionInput.trim() || !diffResult) return;
+    const code = targetRevisionInput.trim();
+    if (!code) {
+      alert("Please specify a target revision code.");
+      return;
+    }
+    if (!previewLines || previewLines.length === 0) {
+      alert("No revision lines to save. Please upload a spreadsheet first.");
+      return;
+    }
     setDiffLoading(true);
     try {
-      const lines = JSON.parse(diffInputJson);
       const res = await fetch("/api/v1/salary-revisions", {
         method: "POST",
         headers: {
@@ -531,26 +551,30 @@ export const Payroll: React.FC = () => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          code: targetRevisionInput.trim(),
-          name: `Salary Revision ${targetRevisionInput.trim()}`,
+          code: code,
+          name: targetRevisionName.trim() || `Salary Revision ${code}`,
           country: "AE",
-          effective_from: new Date().toISOString().split("T")[0],
-          lines: lines,
+          effective_from: targetEffectiveDate || new Date().toISOString().slice(0, 10),
+          lines: previewLines,
         }),
       });
       if (res.ok) {
         setDiffModalOpen(false);
         setDiffResult(null);
-        setDiffInputJson("");
+        setUploadFile(null);
+        setPreviewLines([]);
         setTargetRevisionInput("");
+        setTargetRevisionName("");
         await fetchRevisions();
-        setSelectedRevisionCode(targetRevisionInput.trim());
+        setSelectedRevisionCode(code);
+        alert(`Salary Revision ${code} created successfully!`);
       } else {
-        const err = await res.json();
-        alert(err.detail || "Failed to save salary revision.");
+        const err = await res.json().catch(() => ({}));
+        alert(err.detail?.message || err.detail || "Failed to save salary revision.");
       }
     } catch (err) {
       console.error("Save revision error", err);
+      alert("Error saving revision.");
     } finally {
       setDiffLoading(false);
     }
@@ -558,13 +582,14 @@ export const Payroll: React.FC = () => {
 
   // Filter records
   const filteredRecords = (selectedRunDetail?.records || []).filter((r) => {
+    const role = (r.employee_role || r.role || "WORKER").toUpperCase();
+    if (roleFilter !== "ALL" && role !== roleFilter) return false;
     if (!recordSearch.trim()) return true;
     const term = recordSearch.toLowerCase();
-    return (
-      r.employee_name.toLowerCase().includes(term) ||
-      r.employee_tally_id.toLowerCase().includes(term) ||
-      r.employee_role.toLowerCase().includes(term)
-    );
+    const nameMatch = (r.employee_name || "").toLowerCase().includes(term);
+    const tallyMatch = (r.employee_tally_id || r.tally_id || "").toLowerCase().includes(term);
+    const roleMatch = role.toLowerCase().includes(term);
+    return nameMatch || tallyMatch || roleMatch;
   });
 
   if (!canAccess) {
@@ -888,15 +913,29 @@ export const Payroll: React.FC = () => {
                     </span>
                   </div>
 
-                  <div className="relative w-full sm:w-64">
-                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-                    <input
-                      type="text"
-                      placeholder="Search worker name or ID..."
-                      value={recordSearch}
-                      onChange={(e) => setRecordSearch(e.target.value)}
-                      className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    />
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <select
+                      value={roleFilter}
+                      onChange={(e) => setRoleFilter(e.target.value)}
+                      className="px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value="ALL">All Roles</option>
+                      <option value="WORKER">Workers</option>
+                      <option value="SUPERVISOR">Supervisors</option>
+                      <option value="ENGINEER">Engineers</option>
+                      <option value="ADMIN">Admins</option>
+                    </select>
+
+                    <div className="relative w-full sm:w-64">
+                      <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                      <input
+                        type="text"
+                        placeholder="Search worker name or ID..."
+                        value={recordSearch}
+                        onChange={(e) => setRecordSearch(e.target.value)}
+                        className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -906,7 +945,10 @@ export const Payroll: React.FC = () => {
                       <tr className="bg-slate-50/70 border-b border-slate-200 text-3xs font-bold uppercase text-slate-500">
                         <th className="py-2.5 px-4">Worker</th>
                         <th className="py-2.5 px-3">Role</th>
-                        <th className="py-2.5 px-3">Std / Worked</th>
+                        <th className="py-2.5 px-3">
+                          <span>Std / Worked</span>
+                          <span className="block text-4xs normal-case text-slate-400 font-normal">26-day target vs actual</span>
+                        </th>
                         <th className="py-2.5 px-3">Missed (Ded)</th>
                         <th className="py-2.5 px-3">OT1 (Normal)</th>
                         <th className="py-2.5 px-3">OT2 (Holiday)</th>
@@ -917,67 +959,97 @@ export const Payroll: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {filteredRecords.map((r) => (
-                        <tr key={r.id} className="hover:bg-slate-50/60 transition">
-                          <td className="py-2.5 px-4">
-                            <span className="font-bold text-slate-900 block">{r.employee_name}</span>
-                            <span className="text-3xs font-mono text-slate-500">{r.employee_tally_id}</span>
-                          </td>
-                          <td className="py-2.5 px-3">
-                            <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-3xs font-semibold">
-                              {r.employee_role}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3 font-mono">
-                            <span>{r.standard_monthly_hours}h</span> /{" "}
-                            <span className="font-semibold text-slate-800">{r.actual_worked_hours}h</span>
-                          </td>
-                          <td className="py-2.5 px-3 font-mono">
-                            {Number(r.missed_hours) > 0 ? (
-                              <span className="text-rose-600 font-semibold">
-                                {r.missed_hours}h (-${Number(r.missed_hours_deduction).toFixed(2)})
+                      {filteredRecords.map((r) => {
+                        const role = (r.employee_role || r.role || "WORKER").toUpperCase();
+                        const roleColor =
+                          role === "ADMIN"
+                            ? "bg-amber-50 text-amber-700 border-amber-200"
+                            : role === "SUPERVISOR"
+                            ? "bg-purple-50 text-purple-700 border-purple-200"
+                            : role === "ENGINEER"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : "bg-blue-50 text-blue-700 border-blue-200";
+                        const stdDaily = Number(r.standard_hours || 8);
+                        const stdMonthly = Number(r.standard_monthly_hours ?? stdDaily * 26);
+                        const worked = Number(r.actual_worked_hours ?? r.worked_hours ?? 0);
+                        const missed = Number(r.missed_hours ?? 0);
+                        const missedDed = Number(r.missed_hours_deduction ?? 0);
+                        const ot1 = Number(r.ot1_hours ?? 0);
+                        const ot1Amt = Number(r.ot1_amount ?? 0);
+                        const ot2 = Number(r.ot2_hours ?? 0);
+                        const ot2Amt = Number(r.ot2_amount ?? 0);
+                        const gross = Number(r.gross_pay ?? 0);
+                        const net = Number(r.net_pay ?? 0);
+                        const totalCost = Number(r.final_total_staff_cost ?? 0);
+
+                        return (
+                          <tr key={r.id} className="hover:bg-slate-50/60 transition">
+                            <td className="py-2.5 px-4">
+                              <span className="font-bold text-slate-900 block">{r.employee_name}</span>
+                              <span className="text-3xs font-mono text-slate-500">{r.employee_tally_id || r.tally_id || "—"}</span>
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <span className={`px-2 py-0.5 rounded text-3xs font-semibold border ${roleColor}`}>
+                                {role}
                               </span>
-                            ) : (
-                              <span className="text-slate-400">0h</span>
-                            )}
-                          </td>
-                          <td className="py-2.5 px-3 font-mono">
-                            {Number(r.ot1_hours) > 0 ? (
-                              <span className="text-amber-700 font-semibold">
-                                {r.ot1_hours}h (${Number(r.ot1_amount).toFixed(2)})
-                              </span>
-                            ) : (
-                              <span className="text-slate-400">0h</span>
-                            )}
-                          </td>
-                          <td className="py-2.5 px-3 font-mono">
-                            {Number(r.ot2_hours) > 0 ? (
-                              <span className="text-indigo-700 font-semibold">
-                                {r.ot2_hours}h (${Number(r.ot2_amount).toFixed(2)})
-                              </span>
-                            ) : (
-                              <span className="text-slate-400">0h</span>
-                            )}
-                          </td>
-                          <td className="py-2.5 px-3 font-mono font-bold text-slate-900">
-                            ${Number(r.gross_pay).toFixed(2)}
-                          </td>
-                          <td className="py-2.5 px-3 font-mono font-bold text-indigo-700">
-                            ${Number(r.net_pay).toFixed(2)}
-                          </td>
-                          <td className="py-2.5 px-3 font-mono font-semibold text-slate-800">
-                            ${Number(r.final_total_staff_cost).toFixed(2)}
-                          </td>
-                          <td className="py-2.5 px-4 text-right">
-                            <button
-                              onClick={() => setSelectedRecord(r)}
-                              className="px-2.5 py-1 text-3xs font-semibold bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition"
-                            >
-                              Breakdown
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                            </td>
+                            <td className="py-2.5 px-3 font-mono">
+                              <div className="flex flex-col">
+                                <span className="text-slate-700 font-medium">
+                                  {stdDaily}h/d ({stdMonthly.toFixed(0)}h)
+                                </span>
+                                <span className="text-3xs text-indigo-700 font-bold">
+                                  Worked: {worked.toFixed(1)}h
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-3 font-mono">
+                              {missed > 0 ? (
+                                <span className="text-rose-600 font-semibold">
+                                  {missed.toFixed(1)}h (-${missedDed.toFixed(2)})
+                                </span>
+                              ) : (
+                                <span className="text-slate-400">0h</span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3 font-mono">
+                              {ot1 > 0 ? (
+                                <span className="text-amber-700 font-semibold">
+                                  {ot1.toFixed(1)}h (${ot1Amt.toFixed(2)})
+                                </span>
+                              ) : (
+                                <span className="text-slate-400">0h</span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3 font-mono">
+                              {ot2 > 0 ? (
+                                <span className="text-indigo-700 font-semibold">
+                                  {ot2.toFixed(1)}h (${ot2Amt.toFixed(2)})
+                                </span>
+                              ) : (
+                                <span className="text-slate-400">0h</span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3 font-mono font-bold text-slate-900">
+                              ${gross.toFixed(2)}
+                            </td>
+                            <td className="py-2.5 px-3 font-mono font-bold text-indigo-700">
+                              ${net.toFixed(2)}
+                            </td>
+                            <td className="py-2.5 px-3 font-mono font-semibold text-slate-800">
+                              ${totalCost.toFixed(2)}
+                            </td>
+                            <td className="py-2.5 px-4 text-right">
+                              <button
+                                onClick={() => setSelectedRecord(r)}
+                                className="px-2.5 py-1 text-3xs font-semibold bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition"
+                              >
+                                Breakdown
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -1238,29 +1310,43 @@ export const Payroll: React.FC = () => {
                         ${Number(item.annual_labor_budget).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </td>
 
-                      <td className="py-2.5 px-3 font-mono text-slate-700">
-                        ${Number(item.pro_rated_budget).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </td>
+                      {(() => {
+                        const proRated = Number(item.pro_rated_budget ?? item.prorated_budget ?? 0);
+                        const actualCost = Number(item.actual_allocated_cost ?? item.actual_cost_allocated ?? 0);
+                        const varianceAmt = Number(item.variance_amount ?? item.variance ?? (actualCost - proRated));
+                        const variancePct = Number(
+                          item.variance_percent ?? (proRated > 0 ? (varianceAmt / proRated) * 100 : 0)
+                        );
+                        const isUnder = item.is_under_budget ?? (varianceAmt < 0);
 
-                      <td className="py-2.5 px-3 font-mono font-bold text-indigo-700">
-                        ${Number(item.actual_allocated_cost).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </td>
+                        return (
+                          <>
+                            <td className="py-2.5 px-3 font-mono text-slate-700">
+                              ${proRated.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            </td>
 
-                      <td className="py-2.5 px-4">
-                        <div className="flex items-center gap-1.5">
-                          {item.is_under_budget ? (
-                            <span className="px-2 py-0.5 rounded-full text-3xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
-                              <TrendingDown className="w-3 h-3" />
-                              Under: ${Math.abs(item.variance_amount).toFixed(2)} ({item.variance_percent.toFixed(1)}%)
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded-full text-3xs font-bold bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1">
-                              <TrendingUp className="w-3 h-3" />
-                              Over: ${Math.abs(item.variance_amount).toFixed(2)} ({item.variance_percent.toFixed(1)}%)
-                            </span>
-                          )}
-                        </div>
-                      </td>
+                            <td className="py-2.5 px-3 font-mono font-bold text-indigo-700">
+                              ${actualCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            </td>
+
+                            <td className="py-2.5 px-4">
+                              <div className="flex items-center gap-1.5">
+                                {isUnder ? (
+                                  <span className="px-2 py-0.5 rounded-full text-3xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                                    <TrendingDown className="w-3 h-3" />
+                                    Under: ${Math.abs(varianceAmt).toFixed(2)} ({Math.abs(variancePct).toFixed(1)}%)
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-full text-3xs font-bold bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1">
+                                    <TrendingUp className="w-3 h-3" />
+                                    Over: ${Math.abs(varianceAmt).toFixed(2)} ({Math.abs(variancePct).toFixed(1)}%)
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          </>
+                        );
+                      })()}
                     </tr>
                   ))}
                 </tbody>
@@ -1281,7 +1367,7 @@ export const Payroll: React.FC = () => {
               <div>
                 <h3 className="text-base font-bold text-slate-900">{selectedRecord.employee_name}</h3>
                 <p className="text-xs text-slate-500 font-mono">
-                  {selectedRecord.employee_tally_id} • {selectedRecord.employee_role}
+                  {selectedRecord.employee_tally_id || selectedRecord.tally_id || "—"} • {selectedRecord.employee_role || selectedRecord.role || "WORKER"}
                 </p>
               </div>
               <button
@@ -1303,23 +1389,31 @@ export const Payroll: React.FC = () => {
                 <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 space-y-2">
                   <div className="flex justify-between">
                     <span className="text-slate-600">Basic Salary:</span>
-                    <span className="font-mono font-bold">${Number(selectedRecord.basic_salary).toFixed(2)}</span>
+                    <span className="font-mono font-bold">
+                      ${Number(selectedRecord.basic_salary ?? selectedRecord.snapshot?.basic_salary ?? 0).toFixed(2)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-600">Special Allowance:</span>
-                    <span className="font-mono">${Number(selectedRecord.special_allowance).toFixed(2)}</span>
+                    <span className="font-mono">
+                      ${Number(selectedRecord.special_allowance ?? selectedRecord.snapshot?.special_allowance ?? 0).toFixed(2)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-600">Fixed Overtime:</span>
-                    <span className="font-mono">${Number(selectedRecord.fixed_ot_amount).toFixed(2)}</span>
+                    <span className="font-mono">
+                      ${Number(selectedRecord.fixed_ot_amount ?? selectedRecord.snapshot?.fixed_ot_amount ?? 0).toFixed(2)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-600">Bonus:</span>
-                    <span className="font-mono">${Number(selectedRecord.bonus).toFixed(2)}</span>
+                    <span className="font-mono">
+                      ${Number(selectedRecord.bonus ?? selectedRecord.snapshot?.bonus ?? 0).toFixed(2)}
+                    </span>
                   </div>
                   <div className="flex justify-between border-t border-slate-200 pt-1 font-bold text-slate-900">
                     <span>Base Salary Portion:</span>
-                    <span className="font-mono">${Number(selectedRecord.salary_portion).toFixed(2)}</span>
+                    <span className="font-mono">${Number(selectedRecord.salary_portion || 0).toFixed(2)}</span>
                   </div>
                 </div>
 
@@ -1328,34 +1422,36 @@ export const Payroll: React.FC = () => {
                   <div className="flex justify-between text-slate-600">
                     <span>OT1 (Normal Hours &gt; Std):</span>
                     <span className="font-mono">
-                      {selectedRecord.ot1_hours}h × ${Number(selectedRecord.ot1_rate).toFixed(2)} ={" "}
-                      <strong className="text-slate-900">${Number(selectedRecord.ot1_amount).toFixed(2)}</strong>
+                      {Number(selectedRecord.ot1_hours || 0).toFixed(1)}h × $
+                      {Number(selectedRecord.ot1_rate ?? selectedRecord.snapshot?.ot1_rate ?? 0).toFixed(2)} ={" "}
+                      <strong className="text-slate-900">${Number(selectedRecord.ot1_amount || 0).toFixed(2)}</strong>
                     </span>
                   </div>
                   <div className="flex justify-between text-slate-600">
                     <span>OT2 (Holiday & Weekly Off):</span>
                     <span className="font-mono">
-                      {selectedRecord.ot2_hours}h × ${Number(selectedRecord.ot2_rate).toFixed(2)} ={" "}
-                      <strong className="text-slate-900">${Number(selectedRecord.ot2_amount).toFixed(2)}</strong>
+                      {Number(selectedRecord.ot2_hours || 0).toFixed(1)}h × $
+                      {Number(selectedRecord.ot2_rate ?? selectedRecord.snapshot?.ot2_rate ?? 0).toFixed(2)} ={" "}
+                      <strong className="text-slate-900">${Number(selectedRecord.ot2_amount || 0).toFixed(2)}</strong>
                     </span>
                   </div>
                   <div className="flex justify-between border-t border-slate-200 pt-1 font-bold text-slate-900">
                     <span>Gross Pay:</span>
-                    <span className="font-mono">${Number(selectedRecord.gross_pay).toFixed(2)}</span>
+                    <span className="font-mono">${Number(selectedRecord.gross_pay || 0).toFixed(2)}</span>
                   </div>
                 </div>
 
                 {/* Missed Hours Deductions */}
                 <div className="bg-rose-50/60 p-3.5 rounded-xl border border-rose-100 space-y-1.5 text-rose-900">
                   <div className="flex justify-between">
-                    <span>Missed Hours ({selectedRecord.missed_hours}h @ Basic/208):</span>
+                    <span>Missed Hours ({Number(selectedRecord.missed_hours || 0).toFixed(1)}h @ Basic/208):</span>
                     <span className="font-mono font-bold">
-                      -${Number(selectedRecord.missed_hours_deduction).toFixed(2)}
+                      -${Number(selectedRecord.missed_hours_deduction || 0).toFixed(2)}
                     </span>
                   </div>
                   <div className="flex justify-between border-t border-rose-200/60 pt-1 font-bold text-sm text-indigo-900">
                     <span>Final Net Pay:</span>
-                    <span className="font-mono">${Number(selectedRecord.net_pay).toFixed(2)}</span>
+                    <span className="font-mono">${Number(selectedRecord.net_pay || 0).toFixed(2)}</span>
                   </div>
                 </div>
               </div>
@@ -1370,25 +1466,25 @@ export const Payroll: React.FC = () => {
                   <div className="flex justify-between text-slate-600">
                     <span>Gratuity Provision (21/12):</span>
                     <span className="font-mono font-semibold">
-                      ${Number(selectedRecord.gratuity_provision).toFixed(2)}
+                      ${Number(selectedRecord.gratuity_provision ?? selectedRecord.snapshot?.gratuity_provision ?? 0).toFixed(2)}
                     </span>
                   </div>
                   <div className="flex justify-between text-slate-600">
                     <span>Leave Salary Provision (30/12):</span>
                     <span className="font-mono font-semibold">
-                      ${Number(selectedRecord.leave_salary_provision).toFixed(2)}
+                      ${Number(selectedRecord.leave_salary_provision ?? selectedRecord.snapshot?.leave_salary_provision ?? 0).toFixed(2)}
                     </span>
                   </div>
                   <div className="flex justify-between text-slate-600">
                     <span>Company Provisions (5 Items):</span>
                     <span className="font-mono font-semibold">
-                      ${Number(selectedRecord.company_provisions_total).toFixed(2)}
+                      ${Number(selectedRecord.company_provisions_total ?? selectedRecord.snapshot?.company_provisions_total ?? 0).toFixed(2)}
                     </span>
                   </div>
                   <div className="flex justify-between text-slate-600">
                     <span>HR Overhead (5% of Subtotal):</span>
                     <span className="font-mono font-semibold">
-                      ${Number(selectedRecord.hr_overhead_amount).toFixed(2)}
+                      ${Number(selectedRecord.hr_overhead_amount ?? selectedRecord.snapshot?.hr_overhead_amount ?? 0).toFixed(2)}
                     </span>
                   </div>
                   <div className="flex justify-between border-t border-slate-200 pt-1 font-bold text-sm text-indigo-950">
@@ -1531,17 +1627,20 @@ export const Payroll: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 4: SALARY REVISION IMPORT & SIDE-BY-SIDE DIFF                       */}
+      {/* MODAL 4: SALARY REVISION EXCEL IMPORT & SIDE-BY-SIDE DIFF                 */}
       {/* ========================================================================= */}
       {diffModalOpen && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+          <div className="bg-white rounded-2xl max-w-5xl w-full p-6 shadow-2xl space-y-4 max-h-[92vh] flex flex-col">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <div>
-                <h3 className="text-base font-bold text-slate-900">Import Revision & Side-by-Side Diff</h3>
-                <p className="text-3xs text-slate-500">
-                  Compare new revision numbers against base revision{" "}
-                  <strong className="text-indigo-600 font-mono">{selectedRevisionCode}</strong> before committing.
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
+                  Import Revision from Excel (.xlsx) & Side-by-Side Diff
+                </h3>
+                <p className="text-3xs text-slate-500 mt-0.5">
+                  Upload your edited Excel spreadsheet. The system parses all grade lines, diffs against base revision{" "}
+                  <strong className="text-indigo-600 font-mono">{selectedRevisionCode}</strong>, and lets you review & edit before confirming.
                 </p>
               </div>
               <button onClick={() => setDiffModalOpen(false)} className="text-slate-400 hover:text-slate-600">
@@ -1549,139 +1648,277 @@ export const Payroll: React.FC = () => {
               </button>
             </div>
 
-            <div className="overflow-y-auto space-y-4 flex-1 text-xs">
-              <div className="grid grid-cols-2 gap-4">
+            <div className="overflow-y-auto space-y-4 flex-1 text-xs pr-1">
+              {/* Revision Metadata Fields */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50/70 p-3.5 rounded-xl border border-slate-200">
                 <div>
-                  <label className="text-slate-700 font-semibold block mb-1">Target Revision Code</label>
+                  <label className="text-3xs uppercase font-bold text-slate-500 block mb-1">Target Revision Code *</label>
                   <input
                     type="text"
                     value={targetRevisionInput}
                     onChange={(e) => setTargetRevisionInput(e.target.value)}
                     placeholder="e.g. REV-2026-V2"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-mono font-bold"
+                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-mono font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   />
                 </div>
                 <div>
-                  <label className="text-slate-700 font-semibold block mb-1">Base Comparison Revision</label>
+                  <label className="text-3xs uppercase font-bold text-slate-500 block mb-1">Revision Name</label>
                   <input
                     type="text"
-                    value={selectedRevisionCode}
-                    disabled
-                    className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg font-mono text-slate-500"
+                    value={targetRevisionName}
+                    onChange={(e) => setTargetRevisionName(e.target.value)}
+                    placeholder={`Revision ${targetRevisionInput || "2026"}`}
+                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-3xs uppercase font-bold text-slate-500 block mb-1">Effective From Date</label>
+                  <input
+                    type="date"
+                    value={targetEffectiveDate}
+                    onChange={(e) => setTargetEffectiveDate(e.target.value)}
+                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="text-slate-700 font-semibold block mb-1">
-                  Revision Lines (Paste JSON Array)
-                </label>
-                <textarea
-                  rows={4}
-                  value={diffInputJson}
-                  onChange={(e) => setDiffInputJson(e.target.value)}
-                  placeholder='[{"grade_code": "GE", "basic_salary": 1300, "special_allowance": 200, "fixed_ot_amount": 100, "bonus": 0, "visa_provision": 100, "air_ticket_provision": 75, "uniform_provision": 25, "medical_provision": 50, "accommodation_provision": 300}]'
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-mono text-3xs"
+              {/* File Upload Zone */}
+              <div className="border-2 border-dashed border-slate-200 hover:border-indigo-400 bg-slate-50/50 hover:bg-indigo-50/20 rounded-xl p-5 text-center transition">
+                <input
+                  type="file"
+                  id="excel-file-input"
+                  accept=".xlsx, .xls, .csv"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setUploadFile(file);
+                      handleFileUploadAndPreview(file);
+                    }
+                  }}
                 />
-              </div>
-
-              <div className="flex justify-between items-center">
-                <button
-                  onClick={handleRunDiffPreview}
-                  disabled={diffLoading}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold disabled:opacity-50"
-                >
-                  {diffLoading ? "Comparing..." : "Generate Diff Preview"}
-                </button>
-              </div>
-
-              {/* Side-by-Side Diff Table */}
-              {diffResult && (
-                <div className="border border-slate-200 rounded-xl overflow-hidden mt-4">
-                  <div className="bg-slate-50 p-2.5 border-b border-slate-200 font-bold text-3xs uppercase text-slate-500 flex justify-between">
-                    <span>Side-by-Side Comparison</span>
-                    <span>{diffResult.diffs.length} grades analyzed</span>
+                <label htmlFor="excel-file-input" className="cursor-pointer block space-y-2">
+                  <div className="w-10 h-10 mx-auto rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                    <Upload className="w-5 h-5" />
                   </div>
-                  <div className="max-h-60 overflow-y-auto">
-                    <table className="w-full text-left text-3xs border-collapse">
-                      <thead>
-                        <tr className="bg-slate-100/70 border-b border-slate-200 font-semibold text-slate-600">
-                          <th className="py-2 px-3">Grade Code</th>
-                          <th className="py-2 px-3">Status</th>
-                          <th className="py-2 px-3">Field Changes (Red: Before → Green: After)</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {diffResult.diffs.map((d: any) => (
-                          <tr key={d.grade_code} className="hover:bg-slate-50/60">
-                            <td className="py-2 px-3 font-mono font-bold text-slate-900">{d.grade_code}</td>
-                            <td className="py-2 px-3">
-                              {d.status === "CHANGED" && (
-                                <span className="px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded font-bold">
-                                  CHANGED
+                  <div>
+                    <span className="font-bold text-indigo-600 hover:underline">Click to browse</span> or drag and drop your Excel template (.xlsx, .xls, .csv)
+                  </div>
+                  <p className="text-3xs text-slate-400">
+                    Use the template exported from the active revision. The system reads Grade Code, Basic Salary, Allowances, and Provisions.
+                  </p>
+                </label>
+
+                {uploadFile && (
+                  <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border border-slate-200 shadow-xs font-mono text-xs">
+                    <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                    <span className="font-bold text-slate-800">{uploadFile.name}</span>
+                    <span className="text-3xs text-slate-400">({(uploadFile.size / 1024).toFixed(1)} KB)</span>
+                    <button
+                      type="button"
+                      onClick={() => handleFileUploadAndPreview()}
+                      disabled={diffLoading}
+                      className="ml-2 px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-3xs font-bold disabled:opacity-50"
+                    >
+                      {diffLoading ? "Analyzing..." : "Re-Analyze Diff"}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Side-by-Side Diff Section */}
+              {diffResult && (
+                <div className="space-y-4">
+                  {/* Summary Chips */}
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <div className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-medium">
+                      Base Revision: <strong className="font-mono text-slate-900">{diffResult.base_revision_code || "None"}</strong>
+                    </div>
+                    <div className="px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>{diffResult.new_grades_count} New Grade(s)</span>
+                    </div>
+                    <div className="px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 text-xs font-semibold flex items-center gap-1.5">
+                      <Info className="w-3.5 h-3.5" />
+                      <span>{diffResult.updated_grades_count} Updated Grade(s)</span>
+                    </div>
+                    <div className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-xs">
+                      <span>{diffResult.unchanged_grades_count} Unchanged</span>
+                    </div>
+                  </div>
+
+                  {/* Changes Diff List (Red -> Green) */}
+                  {diffResult.diffs && diffResult.diffs.some((d: any) => d.is_changed) && (
+                    <div className="border border-slate-200 rounded-xl overflow-hidden">
+                      <div className="bg-slate-50 px-3 py-2 border-b border-slate-200 font-bold text-3xs uppercase text-slate-600 flex justify-between">
+                        <span>Side-by-Side Field Changes (Old vs New)</span>
+                        <span className="text-slate-400">Red: Previous Value → Green: Imported Value</span>
+                      </div>
+                      <div className="max-h-48 overflow-y-auto divide-y divide-slate-100 text-3xs">
+                        {diffResult.diffs
+                          .filter((d: any) => d.is_changed)
+                          .map((d: any, idx: number) => (
+                            <div key={idx} className="p-2.5 flex items-center justify-between hover:bg-slate-50/50">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono font-bold text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded">
+                                  {d.grade_code}
                                 </span>
-                              )}
-                              {d.status === "ADDED" && (
-                                <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded font-bold">
-                                  ADDED
+                                <span className="text-slate-600 font-medium">{d.field_name}:</span>
+                              </div>
+                              <div className="flex items-center gap-2 font-mono">
+                                <span className="bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 rounded line-through">
+                                  {d.old_value !== null ? Number(d.old_value).toFixed(2) : "None"}
                                 </span>
-                              )}
-                              {d.status === "REMOVED" && (
-                                <span className="px-1.5 py-0.5 bg-rose-100 text-rose-800 rounded font-bold">
-                                  REMOVED
+                                <ArrowRight className="w-3 h-3 text-slate-400" />
+                                <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded font-bold">
+                                  {d.new_value !== null ? Number(d.new_value).toFixed(2) : "0.00"}
                                 </span>
-                              )}
-                              {d.status === "UNCHANGED" && (
-                                <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded">
-                                  UNCHANGED
-                                </span>
-                              )}
-                            </td>
-                            <td className="py-2 px-3 font-mono">
-                              {Object.keys(d.field_diffs || {}).length > 0 ? (
-                                <div className="space-y-0.5">
-                                  {Object.entries(d.field_diffs).map(([field, change]: any) => (
-                                    <div key={field} className="flex items-center gap-1.5">
-                                      <span className="text-slate-500 font-sans">{field}:</span>
-                                      <span className="bg-rose-100 text-rose-800 px-1 rounded line-through">
-                                        {change.old}
-                                      </span>
-                                      <ArrowRight className="w-2.5 h-2.5 text-slate-400" />
-                                      <span className="bg-emerald-100 text-emerald-800 px-1 rounded font-bold">
-                                        {change.new}
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <span className="text-slate-400">No numeric changes</span>
-                              )}
-                            </td>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Editable Preview Table */}
+                  <div className="border border-slate-200 rounded-xl overflow-hidden">
+                    <div className="bg-slate-50 px-3 py-2 border-b border-slate-200 font-bold text-3xs uppercase text-slate-600 flex justify-between">
+                      <span>Editable Grade Lines Preview ({previewLines.length} lines)</span>
+                      <span className="text-indigo-600 font-normal">You can tweak numbers before saving</span>
+                    </div>
+                    <div className="max-h-60 overflow-y-auto">
+                      <table className="w-full text-left border-collapse text-3xs">
+                        <thead>
+                          <tr className="bg-slate-100/70 border-b border-slate-200 font-semibold text-slate-600">
+                            <th className="py-2 px-3">Grade</th>
+                            <th className="py-2 px-3">Title</th>
+                            <th className="py-2 px-2">Basic</th>
+                            <th className="py-2 px-2">Special</th>
+                            <th className="py-2 px-2">Fixed OT</th>
+                            <th className="py-2 px-2">Bonus</th>
+                            <th className="py-2 px-2">Visa</th>
+                            <th className="py-2 px-2">Air Tkt</th>
+                            <th className="py-2 px-2">Uniform</th>
+                            <th className="py-2 px-2">Medical</th>
+                            <th className="py-2 px-2">Accomm</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 font-mono">
+                          {previewLines.map((line: any, idx: number) => (
+                            <tr key={idx} className="hover:bg-slate-50/60">
+                              <td className="py-1.5 px-3 font-bold text-slate-900">{line.grade_code}</td>
+                              <td className="py-1.5 px-3 font-sans text-slate-600">{line.grade_group_title || "—"}</td>
+                              <td className="py-1 px-1">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={line.basic_salary}
+                                  onChange={(e) => handleLineValueChange(idx, "basic_salary", parseFloat(e.target.value) || 0)}
+                                  className="w-16 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-right font-bold text-slate-900 focus:bg-white"
+                                />
+                              </td>
+                              <td className="py-1 px-1">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={line.special_allowance}
+                                  onChange={(e) => handleLineValueChange(idx, "special_allowance", parseFloat(e.target.value) || 0)}
+                                  className="w-16 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-right text-slate-700 focus:bg-white"
+                                />
+                              </td>
+                              <td className="py-1 px-1">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={line.fixed_ot_amount}
+                                  onChange={(e) => handleLineValueChange(idx, "fixed_ot_amount", parseFloat(e.target.value) || 0)}
+                                  className="w-16 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-right text-slate-700 focus:bg-white"
+                                />
+                              </td>
+                              <td className="py-1 px-1">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={line.bonus}
+                                  onChange={(e) => handleLineValueChange(idx, "bonus", parseFloat(e.target.value) || 0)}
+                                  className="w-14 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-right text-slate-700 focus:bg-white"
+                                />
+                              </td>
+                              <td className="py-1 px-1">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={line.visa_provision}
+                                  onChange={(e) => handleLineValueChange(idx, "visa_provision", parseFloat(e.target.value) || 0)}
+                                  className="w-14 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-right text-slate-700 focus:bg-white"
+                                />
+                              </td>
+                              <td className="py-1 px-1">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={line.air_ticket_provision}
+                                  onChange={(e) => handleLineValueChange(idx, "air_ticket_provision", parseFloat(e.target.value) || 0)}
+                                  className="w-14 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-right text-slate-700 focus:bg-white"
+                                />
+                              </td>
+                              <td className="py-1 px-1">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={line.uniform_provision}
+                                  onChange={(e) => handleLineValueChange(idx, "uniform_provision", parseFloat(e.target.value) || 0)}
+                                  className="w-14 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-right text-slate-700 focus:bg-white"
+                                />
+                              </td>
+                              <td className="py-1 px-1">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={line.medical_provision}
+                                  onChange={(e) => handleLineValueChange(idx, "medical_provision", parseFloat(e.target.value) || 0)}
+                                  className="w-14 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-right text-slate-700 focus:bg-white"
+                                />
+                              </td>
+                              <td className="py-1 px-1">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={line.accommodation_provision}
+                                  onChange={(e) => handleLineValueChange(idx, "accommodation_provision", parseFloat(e.target.value) || 0)}
+                                  className="w-16 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-right text-slate-700 focus:bg-white"
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </div>
               )}
             </div>
 
-            <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+            <div className="flex justify-between items-center pt-3 border-t border-slate-100">
               <button
                 onClick={() => setDiffModalOpen(false)}
                 className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold"
               >
                 Cancel
               </button>
-              {diffResult && (
-                <button
-                  onClick={handleSaveImportedRevision}
-                  disabled={diffLoading}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold disabled:opacity-50"
-                >
-                  Confirm & Save Revision
-                </button>
-              )}
+
+              <div className="flex items-center gap-2">
+                {previewLines.length > 0 && (
+                  <button
+                    onClick={handleSaveImportedRevision}
+                    disabled={diffLoading}
+                    className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold disabled:opacity-50 flex items-center gap-1.5 shadow-xs transition"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    {diffLoading ? "Saving..." : `Confirm & Save ${targetRevisionInput || "Revision"}`}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

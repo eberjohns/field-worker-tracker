@@ -616,3 +616,103 @@ async def test_auto_draft_check_runner(db_session: AsyncSession):
         runs = resp.json()
         # Should have generated draft runs for completed October
         assert isinstance(runs, list)
+
+
+@pytest.mark.asyncio
+async def test_salary_revision_template_export_and_preview_file(db_session: AsyncSession):
+    """Test downloading real .xlsx template and previewing uploaded .xlsx with side-by-side diff."""
+    import io
+    import openpyxl
+
+    admin = await _create_test_employee(db_session, f"ADM_{uuid4().hex[:6]}", "Admin", role="ADMIN")
+    _, admin_token = await _create_test_user(db_session, admin, "ADMIN")
+
+    rev_code = f"REV_EXP_{uuid4().hex[:6]}"
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Create a revision
+        c_resp = await client.post(
+            "/api/v1/salary-revisions",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={
+                "code": rev_code,
+                "name": "Export Test Rev",
+                "country": "AE",
+                "effective_from": "2026-01-01",
+                "lines": [
+                    {
+                        "grade_code": "GE",
+                        "grade_group_title": "General Helpers",
+                        "basic_salary": "1200.00",
+                        "special_allowance": "150.00",
+                        "fixed_ot_amount": "100.00",
+                        "bonus": "0.00",
+                        "visa_provision": "100.00",
+                        "air_ticket_provision": "75.00",
+                        "uniform_provision": "25.00",
+                        "medical_provision": "50.00",
+                        "accommodation_provision": "300.00",
+                    }
+                ],
+            },
+        )
+        assert c_resp.status_code == 201
+
+        # 1. Download template as Excel
+        t_resp = await client.get(
+            f"/api/v1/salary-revisions/{rev_code}/export-template",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert t_resp.status_code == 200
+        assert "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" in t_resp.headers["content-type"]
+        xlsx_content = t_resp.content
+        assert len(xlsx_content) > 0
+
+        # Verify workbook can be read by openpyxl
+        wb = openpyxl.load_workbook(io.BytesIO(xlsx_content), data_only=True)
+        ws = wb.active
+        assert ws is not None
+        assert ws.cell(row=1, column=1).value == "Grade Code"
+        assert ws.cell(row=2, column=1).value == "GE"
+
+        # Modify values in the spreadsheet to simulate user edit
+        ws.cell(row=2, column=3, value=1400.0)  # Change basic salary from 1200 to 1400
+        # Add a new grade line
+        ws.cell(row=3, column=1, value="S1")
+        ws.cell(row=3, column=2, value="Senior Tech")
+        ws.cell(row=3, column=3, value=2200.0)
+
+        modified_stream = io.BytesIO()
+        wb.save(modified_stream)
+        modified_bytes = modified_stream.getvalue()
+
+        # 2. Upload modified spreadsheet to /preview-file
+        p_resp = await client.post(
+            "/api/v1/salary-revisions/preview-file",
+            headers={
+                "Authorization": f"Bearer {admin_token}",
+                "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            },
+            params={
+                "target_revision_code": f"{rev_code}-V2",
+                "base_revision_code": rev_code,
+            },
+            content=modified_bytes,
+        )
+        assert p_resp.status_code == 200
+        diff_data = p_resp.json()
+        assert diff_data["target_revision_code"] == f"{rev_code}-V2"
+        assert diff_data["base_revision_code"] == rev_code
+        assert diff_data["new_grades_count"] == 1  # S1
+        assert diff_data["updated_grades_count"] == 1  # GE
+        assert len(diff_data["preview_lines"]) == 2
+        # Check field diff
+        ge_basic_diff = next(
+            (d for d in diff_data["diffs"] if d["grade_code"] == "GE" and d["field_name"] == "Basic Salary"),
+            None,
+        )
+        assert ge_basic_diff is not None
+        assert ge_basic_diff["is_changed"] is True
+        assert Decimal(str(ge_basic_diff["old_value"])) == Decimal("1200.00")
+        assert Decimal(str(ge_basic_diff["new_value"])) == Decimal("1400.00")
+

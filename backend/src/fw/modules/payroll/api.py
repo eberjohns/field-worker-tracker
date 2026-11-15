@@ -1,9 +1,13 @@
 """FastAPI router for Month-End Payroll, Salary Revisions, and Job Budget."""
 
+import email
+from email import policy
+import io
 from datetime import date
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.core.db import get_db
@@ -174,6 +178,22 @@ async def get_salary_revision_detail(
     return await PayrollService.get_revision_detail(session=session, code=code)
 
 
+@router.get("/salary-revisions/{code}/export-template")
+async def export_salary_revision_template(
+    code: str,
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    session: AsyncSession = Depends(get_db),
+) -> StreamingResponse:
+    """Download professionally formatted Excel (.xlsx) template pre-populated with revision lines."""
+    xlsx_bytes = await PayrollService.export_salary_revision_template(session=session, revision_code=code)
+    filename = f"salary_revision_{code}_template.xlsx"
+    return StreamingResponse(
+        io.BytesIO(xlsx_bytes),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.post(
     "/salary-revisions",
     response_model=SalaryRevisionDetailRead,
@@ -206,6 +226,60 @@ async def diff_salary_revision(
         target_revision_code=target_revision_code,
         base_revision_code=base_revision_code,
         incoming_lines=incoming_lines,
+    )
+
+
+@router.post("/salary-revisions/preview-file", response_model=SalaryRevisionImportDiffResponse)
+async def preview_salary_revision_file(
+    request: Request,
+    target_revision_code: str | None = Query(None, description="Target revision code to create"),
+    base_revision_code: str | None = Query(None, description="Base revision code for comparison"),
+    current_user: User = Depends(require_role("ADMIN")),
+    session: AsyncSession = Depends(get_db),
+) -> SalaryRevisionImportDiffResponse:
+    """Upload Excel (.xlsx/.xls) or CSV template to parse and calculate side-by-side diff against base revision."""
+    content_type = request.headers.get("content-type", "")
+    body = await request.body()
+    if not body:
+        raise AppError(code="EMPTY_FILE", message="Uploaded file is empty", status_code=400)
+
+    filename = "template.xlsx"
+    file_bytes = body
+    target_code = target_revision_code or "NEW-REVISION"
+    base_code = base_revision_code
+
+    if "multipart/form-data" in content_type:
+        msg = email.message_from_bytes(
+            f"Content-Type: {content_type}\r\n\r\n".encode() + body, policy=policy.default
+        )
+        for part in msg.iter_parts():
+            fn = part.get_filename()
+            name = part.get_param("name", header="content-disposition")
+            if fn:
+                filename = fn
+                raw_payload = part.get_payload(decode=True)
+                if isinstance(raw_payload, bytes):
+                    file_bytes = raw_payload
+                elif isinstance(raw_payload, str):
+                    file_bytes = raw_payload.encode()
+            elif name == "target_revision_code":
+                text = part.get_content()
+                if text and text.strip():
+                    target_code = text.strip()
+            elif name == "base_revision_code":
+                text = part.get_content()
+                if text and text.strip():
+                    base_code = text.strip()
+
+    if not file_bytes:
+        raise AppError(code="EMPTY_FILE", message="No valid file found in upload", status_code=400)
+
+    return await PayrollService.preview_salary_revision_file(
+        session=session,
+        file_content=file_bytes,
+        filename=filename,
+        target_revision_code=target_code,
+        base_revision_code=base_code,
     )
 
 
