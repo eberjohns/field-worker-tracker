@@ -152,15 +152,17 @@ Roles: A = Admin, E = Engineer, S = Superintendent, V = Supervisor. "scope" = li
 | GET | /employees/{id}/salary | A, E (scope), self | salary history, last change date and difference |
 | POST | /employees/{id}/salary | A | record a new salary structure revision for an employee |
 | GET | /salary-structures | A, E (scope) | list workers with current salary structure, standard hours, last change date and delta |
-| GET | /generated-reports?kind=&report=&period=&country= | by role | **Generated reports** section: every month-end and on-demand file with its name; `GET /generated-reports/{id}/download` |
+| GET | /generated-reports?kind=&report_key=&period=&country=&status= | by role | **Generated reports** history: every month-end and on-demand file with its name; role-filtered (salary/cost reports ADMIN only) |
+| GET | /generated-reports/{id}/download | by role | re-download an archived generated report file |
 
 ### Reports, dashboard, import, ops
 | Method | Path | Roles | Purpose |
 |---|---|---|---|
-| GET | /reports | any | list of reports available to the role |
-| GET | /reports/{key} | by report | run with filters; paginated. Keys: `daily-attendance`, `monthly-attendance`, `employee-movement`, `site-visits`, `employee-utilization`, `job-costing`, `payroll`, `provisions-staff-cost`, `transportation-time`, `late-early-departure`, `project-attendance-summary`, `pending-visits`, `staffing-gaps`, `document-expiry` |
-| POST | /reports/{key}/export | by report | `{ format: xlsx|csv|pdf }` -> job. **Every report supports `xlsx`** |
-| GET | /exports/{id} | requester | status and download URL |
+| GET | /reports | any | list of reports available to the role with metadata, supported formats, filters, and columns |
+| GET | /reports/{key} | by report | run with filters; returns typed data rows. Keys: `daily-attendance`, `monthly-attendance`, `employee-movement`, `site-visits`, `employee-utilization`, `transportation-time`, `late-early-departure`, `project-attendance-summary`, `pending-visits`, `staffing-gaps`, `document-expiry`, `weekly-roster`, `payroll` (A only), `provisions-staff-cost` (A only), `job-costing` (A only) |
+| POST | /reports/{key}/export | by report | `{ format: xlsx|csv|pdf }` -> background job. **Every report supports `xlsx`** |
+| GET | /exports/{id} | requester | export job status, progress, and download URL |
+| GET | /exports/{id}/download | requester | download exported report file |
 | GET | /dashboard/summary | any | role-aware statistics: today's attendance, active/offline workers, pending visits, late arrivals, overtime hours today (derived/cached) |
 | GET | /live/positions | A E S V scope | last known verified position per worker with age, `live_state`, tracking state, site; filters `supervisor_id, group_id, state` |
 | POST | /live/stream-ticket | A E S V | returns a one-time, short-lived ticket (30 s) for the stream |

@@ -140,5 +140,15 @@ Other system alerts: `NO_ACTIVITY`, `STALE_DEVICE`, `SYNC_LAG`, `STAFFING_GAP` (
 - Movement splits (productive, transit, idle, shift span) are computed once per attendance calculation and stored (see `07-data-model.md`), so reports do not recompute them.
 - Excel via XlsxWriter/openpyxl; files go through the file-storage port with an expiry.
 
-## 7. Month-end generation   [DEC-45, DEC-46]
-`payroll_auto_run_delay_days` (5) after month-end the system creates the draft payroll and **automatically generates**: payroll, provisions-and-staff-cost, job-costing, daily and monthly attendance, project attendance summary, employee utilization, site visits, transportation time, late/early departure, employee movement. Live lists (pending visits, staffing gaps, document expiry) are always current and are not archived monthly. When Admin approves the run, the final copies are generated and stored (a new version). Visibility: **operational reports** to Admin, Engineers, Superintendents and Supervisors in scope; **salary and cost reports** (payroll, provisions-staff-cost, job-costing) to Admin and Engineers only. Admins and Engineers are notified (in-app) when the draft and the approved reports are ready.
+## 7. Month-end generation   [DEC-45, DEC-46, DEC-47]
+`payroll_auto_run_delay_days` (5) after month-end the system creates the draft payroll and **automatically generates the month-end package of 11 reports**: payroll, provisions-staff-cost, job-costing, daily-attendance, monthly-attendance, project-attendance-summary, employee-utilization, site-visits, transportation-time, late-early-departure, employee-movement. Live lists (pending visits, staffing gaps, document expiry, weekly roster) are always current and queried on-demand. When Admin approves the payroll run, the final copies are automatically generated and stored with status `APPROVED` (tagged in filename and versioned). 
+
+File naming follows DEC-46:
+`<Company>_<Report>_<Country>_<Period>_generated-<datetime>.xlsx` (e.g. `FieldWorkerTracker_Payroll-Report_AE_2026-10_generated-20261116-071253.xlsx`), with `_APPROVED` suffix on approved final copies.
+
+Role visibility:
+- **Operational reports**: Admin, Engineer, Superintendent, Supervisor (in scope).
+- **Salary and cost reports** (`payroll`, `provisions-staff-cost`, `job-costing`): Strictly **ADMIN only** (Engineers, Superintendents, and Supervisors receive 403 Forbidden).
+
+Notifications:
+In-app notifications are published to Admins and Engineers when the draft and approved month-end packages are ready.

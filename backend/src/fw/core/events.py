@@ -79,6 +79,21 @@ class LocationEnabledRecorded(DomainEvent):
     captured_at: Any = None
 
 
+@dataclass
+class PayrollRunCreated(DomainEvent):
+    payroll_run_id: UUID | None = None
+    country: str = "AE"
+    is_draft: bool = True
+    actor_user_id: UUID | None = None
+
+
+@dataclass
+class PayrollRunApproved(DomainEvent):
+    payroll_run_id: UUID | None = None
+    country: str = "AE"
+    actor_user_id: UUID | None = None
+
+
 SyncHandler = Callable[[Any, Any], Awaitable[None]]
 PostCommitHandler = Callable[[Any], Awaitable[None]]
 

@@ -19,6 +19,7 @@ from fw.api.settings import router as settings_router
 from fw.api.users import router as users_router
 from fw.modules.notifications import alert_router
 from fw.modules.payroll import payroll_router
+from fw.modules.reports import reports_router
 from fw.modules.sync import devices_router, mobile_router
 
 api_v1_router = APIRouter(prefix="/api/v1")
@@ -41,5 +42,6 @@ api_v1_router.include_router(pending_visits_router)
 api_v1_router.include_router(documents_router)
 api_v1_router.include_router(dashboard_router)
 api_v1_router.include_router(alert_router)
+api_v1_router.include_router(reports_router)
 
 __all__ = ["api_v1_router"]

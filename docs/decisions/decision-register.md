@@ -46,8 +46,8 @@ All client questions are answered. **CONFIRMED** = the client decided; **PROPOSE
 | DEC-43 | Approvals | Engineer approves leave, temporary reassignments (3 days notice) and attendance rows with variation, flags or overtime; clean rows are automatic | 04, 05, D2, ADR-016, ADR-018 | CONFIRMED |
 | DEC-44 | Transport | Drivers section: vehicles and daily runs (driver, ordered stops, passengers) synced to the driver and the workers | D5 | CONFIRMED |
 | DEC-45 | Month-end | Auto draft 5 days after month-end (`payroll_auto_run_delay_days`); Admin re-runs (increments run_no) and approves; approval locks attendance and creates immutable snapshots | 06, D4, ADR-020 | CONFIRMED |
-| DEC-46 | Reports history | Month-end reports auto-generated and every file kept, named `<Company>_<Report>_<Country>_<Period>_generated-<date>.xlsx`; leave taken is counted, no balances | 12, D4, ADR-016 | CONFIRMED |
-| DEC-47 | Report visibility | Operational reports: Admin, Engineers, Superintendents, Supervisors; salary/cost reports: Admin and Engineers | 12 | CONFIRMED |
+| DEC-46 | Reports history | Month-end reports auto-generated and every file kept, named `<Company>_<Report>_<Country>_<Period>_generated-<datetime>.xlsx`; versioned and immutable; re-downloads verified | 12, D4, ADR-021 | CONFIRMED |
+| DEC-47 | Report visibility | Operational reports: Admin, Engineers, Superintendents, Supervisors; salary/cost reports: strictly ADMIN only (403 for other roles) | 12, ADR-021 | CONFIRMED |
 | DEC-48 | Budget-only list | (see DEC-09) | 03 | CONFIRMED |
 | DEC-49 | Who is measured how | Everyone by site visits; only drivers accommodation-to-accommodation; no-accommodation workers have n/a accommodation columns | 05, ADR-018 | CONFIRMED |
 | DEC-50 | Product name | Field Worker Tracker (FWT) | all | CONFIRMED |

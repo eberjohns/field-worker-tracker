@@ -299,7 +299,10 @@ Batch: `kind`, `filename`, `file_hash`, `uploaded_by_user_id`, `status` (UPLOADE
 `recipient_user_id`/`employee_id`, `channel` (PUSH/EMAIL/INAPP), `template`, `status`, `provider_reference`, `error`.
 
 ### generated_reports
-`report_key`, `country`, `period_start`, `period_end`, `kind` (MONTH_END | ON_DEMAND), `params` jsonb, `file_name` (`<Company>_<Report>_<Country>_<Period>_generated-<date>.xlsx`), `file_ref` (storage key), `payroll_run_id` nullable, `version_no` (re-generations), `generated_by` (system or user), `generated_at`, `visible_roles` text[]. Never deleted; every copy stays downloadable. Retention per 14.
+`report_key`, `country`, `period_start`, `period_end`, `kind` (MONTH_END | ON_DEMAND), `params` jsonb, `file_name` (`<Company>_<Report>_<Country>_<Period>_generated-<datetime>.xlsx`), `file_ref` (storage key), `payroll_run_id` nullable, `version_no` (re-generations), `status` (DRAFT | APPROVED), `sha256` text, `file_size_bytes` bigint, `generated_by` (system or user), `generated_at`, `visible_roles` text[]. Never deleted; every copy stays downloadable. Retention per 14.
+
+### report_exports (background export jobs)
+`report_key`, `format` (xlsx | csv | pdf), `status` (PENDING | PROCESSING | COMPLETED | FAILED), `filters` jsonb, `requested_by_user_id` (FK to users), `file_ref` (storage key), `file_name`, `file_size_bytes`, `sha256`, `error_message`, `created_at`, `completed_at`.
 
 ## Retention and volume (see 14)
 High-volume tables: `mobile_event_logs` (~22 M rows/year at 500 workers pinging every 5 min), `sync_changes`, `audit_logs`, `notification_logs`. Archive/export old data with stable IDs and checksums; never delete events needed to explain finalized attendance or payroll without an approved retention policy.

@@ -3,6 +3,35 @@ All notable changes. Format: Keep a Changelog. Mobile-contract changes are also 
 
 ## [Unreleased]
 ### Added
+- PHASE-12 (Reports and the Generated Reports section):
+  - Database Migration `0013_reports_history.py`:
+    - Created `generated_reports` table (`report_key`, `country`, `period_start`, `period_end`, `kind`, `params`, `file_name`, `file_ref`, `version_no`, `status`, `sha256`, `file_size_bytes`, `visible_roles`, `generated_by`, `generated_at`).
+    - Created `report_exports` table (`report_key`, `format`, `status`, `filters`, `requested_by_user_id`, `file_ref`, `file_name`, `file_size_bytes`, `sha256`, `error_message`, `created_at`, `completed_at`).
+  - Storage Adapter (`fw.adapters.storage`):
+    - Pluggable `FileStoragePort` protocol and `LocalStorageAdapter` implementing secure relative path validation, parent directory auto-creation, SHA-256 digest computation, and local streaming.
+  - Reports Core & Registry (`fw.modules.reports`):
+    - Comprehensive `REPORTS_REGISTRY` managing 15 active reports (`daily-attendance`, `monthly-attendance`, `employee-movement`, `site-visits`, `employee-utilization`, `transportation-time`, `late-early-departure`, `project-attendance-summary`, `pending-visits`, `staffing-gaps`, `document-expiry`, `weekly-roster`, `payroll`, `provisions-staff-cost`, `job-costing`; `driver-run-sheet` omitted as transport is inactive).
+    - Formatters:
+      - Excel (`fw.modules.reports.formatters.excel`): Single header row, formatted ISO dates, typed numerics/currencies, no merged data cells, column width auto-fit, and a secondary `Filters` sheet capturing execution parameters.
+      - CSV (`fw.modules.reports.formatters.csv_formatter`): RFC 4180 compliant CSV stream.
+      - PDF (`fw.modules.reports.formatters.pdf_formatter`): Pure-Python landscape tabular PDF 1.4 formatter for daily attendance and payroll sheets.
+    - Handlers for all 15 reports implementing business rules, time calculations, planned vs actual comparisons, variations, and transitive scope filtering.
+    - Role Scoping & Confidentiality: `payroll`, `provisions-staff-cost`, and `job-costing` strictly ADMIN only (403 Forbidden for Engineers, Superintendents, and Supervisors).
+    - Asynchronous export job runner: `POST /api/v1/reports/{key}/export` dispatches background jobs; status polled via `GET /api/v1/exports/{id}`; files downloaded via `GET /api/v1/exports/{id}/download`.
+    - Month-end automatic report generation: Automatically generates 11 reports for each active country upon draft payroll run creation (`PayrollRunCreated`) and final approval (`PayrollRunApproved`).
+    - File naming convention (DEC-46): `<Company>_<Report>_<Country>_<Period>_generated-<datetime>.xlsx`, suffixed with `_APPROVED` for approved runs.
+    - Immutable archive: Generated reports cannot be mutated; re-downloading (`GET /api/v1/generated-reports/{id}/download`) returns the exact file with identical byte length and SHA-256 checksum.
+    - Notifications: Emits in-app notifications to Admins and Engineers upon month-end draft and approved package readiness.
+  - Web UI Features:
+    - Reports API client (`web/src/features/reports/api.ts`).
+    - Reports Hub (`web/src/features/reports/ReportsHub.tsx`): Interactive catalog browser, category filtering, typed dynamic filter toolbar (dates, year, month, country, worksite, supervisor), results preview table, and export action buttons with real-time job status polling.
+    - Generated Reports archive (`web/src/features/reports/GeneratedReports.tsx`): Filterable archive table (country, status, kind, period, search), status chips (`DRAFT` / `APPROVED`), version badges, visible role pills, file sizes, and one-click direct re-download.
+    - Top tab navigation in `web/src/routes/Reports.tsx` seamlessly switching between Reports Hub and Archive, with `/reports/generated` route in `router.tsx` and sidebar link in `Shell.tsx`.
+  - Architecture & Verification:
+    - ADR-021 (`docs/decisions/021-reports-registry-history-and-visibility.md`).
+    - Comprehensive integration tests in `backend/tests/test_reports_api.py` covering catalog role isolation, 403 enforcement, daily calculations, openpyxl inspection of generated Excel files, PDF headers, month-end automatic generation lifecycle, and re-download byte identity.
+    - All 173 backend tests passing; import-linter and pyright passing with 0 errors; frontend build verified.
+
 - PHASE-11 (Month-end Payroll, Salary Revisions, and Job Budget):
   - Pure Payroll Rules (`fw.rules.payroll`):
     - Overtime formulas complying with 208-hour standard monthly divisor (26 days × 8 hours): OT1 rate = `(basic / 208) * 1.25` (only hours beyond standard hours on normal working days); OT2 rate = `(basic / 208) * 1.50` (all hours worked on public holidays and worker's weekly off day). Benchmark: Basic $1,100 -> OT1 $6.61, OT2 $7.93.

@@ -54,6 +54,7 @@ const navItems: NavItem[] = [
   { label: "Master Data Import", to: "/imports", icon: UploadCloud, roles: ["ADMIN"] },
   { label: "Devices", to: "/devices", icon: Smartphone, roles: ["ADMIN", "ENGINEER", "SUPERINTENDENT"] },
   { label: "Reports", to: "/reports", icon: FileBarChart },
+  { label: "Generated Reports", to: "/reports/generated", icon: History },
   { label: "Users & Security", to: "/users", icon: UserCheck, roles: ["ADMIN"] },
   { label: "Audit Logs", to: "/audit-logs", icon: History, roles: ["ADMIN"] },
   { label: "Settings", to: "/settings", icon: SettingsIcon, roles: ["ADMIN", "ENGINEER"] },
