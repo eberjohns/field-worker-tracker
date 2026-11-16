@@ -1,9 +1,9 @@
 {
-  "version": "1.0.7",
+  "version": "1.1.0",
   "major": 1,
-  "minor": 0,
-  "patch": 7,
-  "last_branch": "feature/phase-13-hardening",
-  "last_commit": "d700ad3",
-  "updated_at": "2026-11-16T17:57:30.181833+00:00"
+  "minor": 1,
+  "patch": 0,
+  "last_branch": "main",
+  "last_commit": "d19a740",
+  "updated_at": "2026-11-16T18:07:41.390959+00:00"
 }
