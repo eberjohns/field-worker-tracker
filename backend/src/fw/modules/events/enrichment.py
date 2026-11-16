@@ -51,9 +51,7 @@ class EventEnrichmentService:
         )
         sites_res = await session.execute(sites_q)
         all_sites = [
-            (row[0], to_shape(cast(Any, row[1])))
-            for row in sites_res.all()
-            if row[1] is not None
+            (row[0], to_shape(cast(Any, row[1]))) for row in sites_res.all() if row[1] is not None
         ]
 
         acc_q = select(Accommodation.id, Accommodation.boundary).where(
@@ -62,9 +60,7 @@ class EventEnrichmentService:
         )
         acc_res = await session.execute(acc_q)
         all_accs = [
-            (row[0], to_shape(cast(Any, row[1])))
-            for row in acc_res.all()
-            if row[1] is not None
+            (row[0], to_shape(cast(Any, row[1]))) for row in acc_res.all() if row[1] is not None
         ]
 
         for ev in events:
