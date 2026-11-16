@@ -24,6 +24,7 @@ One decision per file, numbered. Use the `write-adr` skill. Status: Proposed, Ac
 | 018 | [Attendance Engine, PostGIS Enrichment, and Append-Only Immutability](018-attendance-engine-and-review-workflow.md) | Accepted |
 | 019 | [Live Location Access Logging, SSE Streaming, and Follow-Up Workflows](019-live-location-access-logging-and-streaming.md) | Accepted |
 | 020 | [Month-End Payroll, Salary Revisions, and Dynamic Job Budget](020-month-end-payroll-and-dynamic-budget.md) | Accepted |
+| 021 | [Reports Registry, Month-End Archive, and Role Visibility](021-reports-registry-history-and-visibility.md) | Accepted |
 
 See also [decision-register.md](decision-register.md) for business decisions awaiting client confirmation.
 

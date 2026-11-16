@@ -28,14 +28,14 @@ All 16 reports, Excel export for every report, automatic month-end generation, g
 - -
 
 ## Checklist (tick each before asking for review)
-- [ ] Every report exports to Excel and respects scope
-- [ ] Salary and cost reports hidden from Superintendents and Supervisors
-- [ ] Month-end files appear automatically with the right names and versions
-- [ ] Re-downloading an old file returns the same content
-- [ ] Large exports run as background jobs
-- [ ] Each report matches its definition in 12
-- [ ] Docs updated in the same change (`.agents/rules/documentation.md`), ADR written for any design decision, CHANGELOG entry
-- [ ] Pull request opened with the template; nothing merged by the agent
+- [x] Every report exports to Excel and respects scope
+- [x] Salary and cost reports hidden from Superintendents and Supervisors
+- [x] Month-end files appear automatically with the right names and versions
+- [x] Re-downloading an old file returns the same content
+- [x] Large exports run as background jobs
+- [x] Each report matches its definition in 12
+- [x] Docs updated in the same change (`.agents/rules/documentation.md`), ADR written for any design decision, CHANGELOG entry
+- [x] Pull request opened with the template; nothing merged by the agent
 
 ## Demo script
 - Approve a payroll run and open the Generated Reports list; download the payroll-cost file.

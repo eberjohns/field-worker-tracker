@@ -48,6 +48,8 @@ pnpm-debug.log*
 *.key
 storage/
 local_storage/
+!backend/src/fw/adapters/storage/
+!backend/src/fw/adapters/storage/*.py
 
 # System / IDE
 .DS_Store

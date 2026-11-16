@@ -16,6 +16,7 @@ import fw.modules.jobs.models  # noqa: F401
 import fw.modules.notifications.models  # noqa: F401
 import fw.modules.org.models  # noqa: F401
 import fw.modules.payroll.models  # noqa: F401
+import fw.modules.reports.models  # noqa: F401
 import fw.modules.scheduling.models  # noqa: F401
 import fw.modules.settings.models  # noqa: F401
 import fw.modules.sync.models  # noqa: F401

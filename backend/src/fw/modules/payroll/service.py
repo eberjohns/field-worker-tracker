@@ -13,6 +13,7 @@ from openpyxl.utils import get_column_letter
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.core.errors import AppError
+from fw.core.events import PayrollRunApproved, PayrollRunCreated, event_bus
 from fw.modules.audit import AuditService
 from fw.modules.org import Employee
 from fw.modules.payroll.models import (
@@ -795,6 +796,16 @@ class PayrollService:
                 )
             )
 
+        await event_bus.publish(
+            PayrollRunCreated(
+                payroll_run_id=run.id,
+                country=run.country,
+                is_draft=True,
+                actor_user_id=run.created_by_user_id,
+            ),
+            session=session,
+        )
+
         return PayrollRunDetailRead(
             id=run.id,
             period_start=run.period_start,
@@ -960,6 +971,15 @@ class PayrollService:
             },
             reason=reason
             or f"Approved payroll run #{run.run_no} for period {run.period_start} to {run.period_end}",
+        )
+
+        await event_bus.publish(
+            PayrollRunApproved(
+                payroll_run_id=run.id,
+                country=run.country,
+                actor_user_id=user_id,
+            ),
+            session=session,
         )
 
         return PayrollRunRead(

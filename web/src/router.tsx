@@ -116,6 +116,12 @@ const reportsRoute = createRoute({
   component: Reports,
 });
 
+const generatedReportsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/reports/generated",
+  component: () => <Reports initialTab="generated" />,
+});
+
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings",
@@ -211,6 +217,7 @@ const routeTree = rootRoute.addChildren([
   attendanceRoute,
   payrollRoute,
   reportsRoute,
+  generatedReportsRoute,
   settingsRoute,
   importsRoute,
   salaryStructuresRoute,
