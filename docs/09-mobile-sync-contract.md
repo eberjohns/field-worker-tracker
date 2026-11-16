@@ -194,8 +194,33 @@ Client rules: delete an event from the local queue on `ACCEPTED` or `DUPLICATE`;
 
 ## 8. On-demand data (not synced)
 - `GET /mobile/me/scorecard?week_start=2026-11-02` -> assigned hours, completed work count, worked minutes, status per day (supplied by the backend).
-- `GET /mobile/me/payroll?period=2026-10` -> the worker's own finalized payroll: salary components, OT hours and amounts, employee-side totals only (no provisions, overhead or cost). 404 until the period is finalized.
-These shapes will be added to the OpenAPI file when the web side reaches payroll; the app should hide the screens until the endpoints are available.
+- `GET /mobile/me/payroll?period=2026-10` -> the worker's own finalized payroll slip:
+  ```json
+  {
+    "period": "2026-10",
+    "employee_tally_id": "1193",
+    "employee_name": "Ahmed Al-Mansoor",
+    "currency": "AED",
+    "basic_salary": 1100.00,
+    "special_allowance": 0.00,
+    "fixed_ot_amount": 0.00,
+    "bonus": 0.00,
+    "worked_hours": 216.5,
+    "standard_monthly_hours": 208,
+    "missed_hours": 0.0,
+    "missed_hours_deduction": 0.00,
+    "ot1_hours": 8.5,
+    "ot1_amount": 56.19,
+    "ot2_hours": 0.0,
+    "ot2_amount": 0.00,
+    "gross_pay": 1156.19,
+    "deductions": 0.00,
+    "net_pay": 1156.19,
+    "status": "APPROVED",
+    "payment_method": "BANK_TRANSFER"
+  }
+  ```
+  Employee-side totals only (provisions, company overhead, and employer costs are withheld). Returns 404 until the period is approved.
 
 ## 9. Error codes
 `INVALID_CREDENTIALS`, `INVALID_ACTIVATION`, `ACTIVATION_EXPIRED`, `DEVICE_ALREADY_REGISTERED`, `DEVICE_MISMATCH`, `DEVICE_NOT_ACTIVE`, `ACCOUNT_DISABLED`, `RESYNC_REQUIRED` (informational), `VALIDATION_ERROR`, `RATE_LIMITED`, `APP_VERSION_UNSUPPORTED` (426).
@@ -213,5 +238,6 @@ Store tokens in the OS secure store. Do not log tokens or coordinates in plain l
 | - | 1 | Initial contract |
 | draft | 1 | Login by employee ID + password with forced first change and device binding (activation code removed); new entities `DAY_PLAN` and `TRANSPORT_RUN`; planned times moved from SETTINGS to DAY_PLAN |
 | draft | 1 | PROFILE `is_driver` replaces `work_time_rule`; `device_model` on registration; `GET /mobile/policy/location`; SETTINGS `upcoming` array; `deployment_type` on schedule item summary |
+| 2026-11-15 | 1 | Added `GET /mobile/me/payroll` finalized payslip response payload schema (Phase 11) |
 | draft | 1 | LOCATION_DISABLED/ENABLED uploaded immediately; `source` gains `FOLLOW_UP` (unknown values treated as PLANNED) |
 | 2026-11-08 | 1.0.0 | Phase 07 baseline release: Auth (`/mobile/auth/login`, forced password change, single-device binding, mismatch handling), consent (`/mobile/auth/consent`), heartbeat (`/mobile/auth/heartbeat`), change log synchronization (`/mobile/sync/snapshot`, `/mobile/sync/changes` with delta coalescing, `/mobile/sync/ack`), location events batch ingestion (`/mobile/events/batch`), openapi-mobile.json, and standalone Mobile Tester Proxy (`tools/mobile-proxy/`). |

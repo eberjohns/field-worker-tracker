@@ -37,6 +37,7 @@ All notable changes. Format: Keep a Changelog. Mobile-contract changes are also 
     - Added Monthly Payslips card in worker Profile tab calling `/api/v1/payroll/my-records` and showing approved payslips with period, worked hours, OT amounts, and net pay.
   - Architecture & Verification:
     - ADR-020 (`docs/decisions/020-month-end-payroll-and-dynamic-budget.md`).
+    - Bulk Master Data Import & Template Integration: Enabled `Salary_Revisions` and `Salary_Revision_Lines` sheets in master import registry (`SHEET_REGISTRY`) and commit pipeline, allowing master workbook (`FieldWorkerTracker_Import_Template_v1.0.xlsx`) and standalone revision sheets to be previewed, diffed, and committed directly.
     - Unit tests (`tests/test_payroll_rules.py`) and integration tests (`tests/test_payroll_api.py`) verifying all 8 checklist requirements.
 
 - PHASE-09 (Live Map, Pending Visits, Alerts, and Documents):
