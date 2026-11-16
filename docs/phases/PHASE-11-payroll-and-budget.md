@@ -27,14 +27,14 @@ Automatic draft payroll after month-end, re-run and Admin approval with immutabl
 - Report files and the Generated Reports section (Phase 12)
 
 ## Checklist (tick each before asking for review)
-- [ ] The documented example reproduces: OT1 rate (1100/208)*1.25 = 6.61, OT2 = 7.93
-- [ ] Gratuity and leave salary use the formula for everyone
-- [ ] Per-month provision = five provisions + gratuity + leave salary; HR OH 5% added to total staff cost for the final figure
-- [ ] Approved run does not change when settings or later events change
-- [ ] Engineers see their scope read-only; Supervisors see nothing
-- [ ] Budget report states the provision basis difference
-- [ ] Docs updated in the same change (`.agents/rules/documentation.md`), ADR written for any design decision, CHANGELOG entry
-- [ ] Pull request opened with the template; nothing merged by the agent
+- [x] The documented example reproduces: OT1 rate (1100/208)*1.25 = 6.61, OT2 = 7.93
+- [x] Gratuity and leave salary use the formula for everyone
+- [x] Per-month provision = five provisions + gratuity + leave salary; HR OH 5% added to total staff cost for the final figure
+- [x] Approved run does not change when settings or later events change
+- [x] Engineers see their scope read-only; Supervisors see nothing
+- [x] Budget report states the provision basis difference
+- [x] Docs updated in the same change (`.agents/rules/documentation.md`), ADR written for any design decision, CHANGELOG entry
+- [x] Pull request opened with the template; nothing merged by the agent
 
 ## Demo script
 - Generate a draft for the previous month, upload extra events, re-run, approve, then show the immutable record.

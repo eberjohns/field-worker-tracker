@@ -42,7 +42,12 @@ from fw.modules.org import (
     Group,
     Zone,
 )
-from fw.modules.payroll import EmployeeSalary, PayrollSalaryService
+from fw.modules.payroll import (
+    EmployeeSalary,
+    PayrollSalaryService,
+    SalaryRevision,
+    SalaryRevisionLine,
+)
 from fw.modules.payroll.schemas import EmployeeSalaryCreate
 from fw.modules.settings import CompanySettingValue, PublicHoliday, SettingsService, TimeRule
 from fw.rules.imports import (
@@ -164,6 +169,13 @@ class ImportService:
             (j.worksite_id, j.sub_item_code): j
             for j in (await session.execute(select(JobItem))).scalars().all()
         }
+        existing_revisions = {
+            r.code: r for r in (await session.execute(select(SalaryRevision))).scalars().all()
+        }
+        existing_revision_lines = {
+            (r.revision_id, r.grade_code): r
+            for r in (await session.execute(select(SalaryRevisionLine))).scalars().all()
+        }
 
         # Pre-collect natural keys present in this workbook for same-file foreign key resolution
         file_groups: set[str] = set()
@@ -217,6 +229,17 @@ class ImportService:
                 val = ws_emp.cell(r_idx, 2).value
                 if val is not None and str(val).strip() != "":
                     file_employees.add(str(val).strip())
+
+        file_revisions: set[str] = set()
+        if "Salary_Revisions" in wb.sheetnames:
+            ws_sr = wb["Salary_Revisions"]
+            for r_idx in range(5, ws_sr.max_row + 1):
+                col_a = ws_sr.cell(r_idx, 1).value
+                if col_a is not None and str(col_a).strip() != "":
+                    continue
+                val = ws_sr.cell(r_idx, 2).value
+                if val is not None and str(val).strip() != "":
+                    file_revisions.add(str(val).strip())
 
         # Process each sheet defined in registry
         for sheet_name, sheet_def in SHEET_REGISTRY.items():
@@ -786,6 +809,130 @@ class ImportService:
                                 }
                         if row_action != "REACTIVATED" and not row_diff:
                             row_action = "UNCHANGED"
+
+                elif sheet_name == "Salary_Revisions":
+                    rev_code = normalized_dict.get("revision_code", {}).get("value")
+                    if rev_code and rev_code in existing_revisions:
+                        rev_obj = existing_revisions[rev_code]
+                        for field_name, model_attr in (
+                            ("revision_name", "name"),
+                            ("country", "country"),
+                            ("effective_from", "effective_from"),
+                            ("status", "status"),
+                            ("notes", "notes"),
+                        ):
+                            act = normalized_dict.get(field_name, {}).get("action")
+                            new_v = normalized_dict.get(field_name, {}).get("value")
+                            old_v = getattr(rev_obj, model_attr)
+                            if act == "CLEAR" and old_v is not None:
+                                row_action = "UPDATED"
+                                row_diff[field_name] = {"old": str(old_v), "new": None}
+                            elif act == "SET" and new_v is not None:
+                                if model_attr == "effective_from":
+                                    old_str = (
+                                        old_v.isoformat()
+                                        if old_v is not None and hasattr(old_v, "isoformat")
+                                        else str(old_v or "")
+                                    )
+                                    new_str = (
+                                        new_v.isoformat()
+                                        if hasattr(new_v, "isoformat")
+                                        else str(new_v)
+                                    )
+                                    if old_str != new_str:
+                                        row_action = "UPDATED"
+                                        row_diff[field_name] = {"old": old_str, "new": new_str}
+                                elif model_attr == "status":
+                                    norm_new_status = (
+                                        "ACTIVE"
+                                        if str(new_v).upper() in ("APPROVED", "ACTIVE")
+                                        else str(new_v).upper()
+                                    )
+                                    norm_old_status = (
+                                        "ACTIVE"
+                                        if str(old_v).upper() in ("APPROVED", "ACTIVE")
+                                        else str(old_v).upper()
+                                    )
+                                    if norm_new_status != norm_old_status:
+                                        row_action = "UPDATED"
+                                        row_diff[field_name] = {
+                                            "old": str(old_v),
+                                            "new": str(new_v),
+                                        }
+                                else:
+                                    if str(old_v or "") != str(new_v):
+                                        row_action = "UPDATED"
+                                        row_diff[field_name] = {
+                                            "old": str(old_v) if old_v is not None else None,
+                                            "new": str(new_v),
+                                        }
+                        if not row_diff:
+                            row_action = "UNCHANGED"
+                    else:
+                        row_action = "NEW"
+
+                elif sheet_name == "Salary_Revision_Lines":
+                    rev_code = normalized_dict.get("revision_code", {}).get("value")
+                    grade_code = normalized_dict.get("grade_code", {}).get("value")
+
+                    # Check FK to Salary_Revisions
+                    rev_exists = (rev_code in existing_revisions) or (rev_code in file_revisions)
+                    if not rev_exists:
+                        row_codes.append("FOREIGN_KEY_MISSING")
+                        row_messages.append(
+                            {
+                                "field": "revision_code",
+                                "code": "FOREIGN_KEY_MISSING",
+                                "message": f"Salary revision '{rev_code}' not found.",
+                            }
+                        )
+                        row_status = "ERROR"
+
+                    rev_obj = existing_revisions.get(rev_code) if rev_code else None
+                    line_obj = (
+                        existing_revision_lines.get((rev_obj.id, grade_code))
+                        if rev_obj and grade_code
+                        else None
+                    )
+                    if line_obj:
+                        for field_name in (
+                            "grade_group_title",
+                            "basic_salary",
+                            "special_allowance",
+                            "fixed_ot_amount",
+                            "bonus",
+                            "visa_provision",
+                            "air_ticket_provision",
+                            "uniform_provision",
+                            "medical_provision",
+                            "accommodation_provision",
+                            "transportation_provision",
+                        ):
+                            act = normalized_dict.get(field_name, {}).get("action")
+                            new_v = normalized_dict.get(field_name, {}).get("value")
+                            old_v = getattr(line_obj, field_name)
+                            if act == "CLEAR" and old_v is not None:
+                                row_action = "UPDATED"
+                                row_diff[field_name] = {"old": str(old_v), "new": None}
+                            elif act == "SET" and new_v is not None:
+                                if field_name == "grade_group_title":
+                                    if str(old_v or "") != str(new_v):
+                                        row_action = "UPDATED"
+                                        row_diff[field_name] = {
+                                            "old": str(old_v) if old_v is not None else None,
+                                            "new": str(new_v),
+                                        }
+                                else:
+                                    if Decimal(str(new_v)) != Decimal(str(old_v or 0)):
+                                        row_action = "UPDATED"
+                                        row_diff[field_name] = {
+                                            "old": str(old_v),
+                                            "new": str(new_v),
+                                        }
+                        if not row_diff:
+                            row_action = "UNCHANGED"
+                    else:
+                        row_action = "NEW"
 
                 # Tally counts
                 if row_status == "ERROR":
@@ -1382,6 +1529,115 @@ class ImportService:
                     actor_user_id=user_id,
                     actor_role=actor_role,
                 )
+
+        await session.flush()
+
+        # 12. Salary_Revisions
+        rev_id_map: dict[str, UUID] = {}
+        for r in sheet_to_rows.get("Salary_Revisions", []):
+            if r.action in ("NEW", "UPDATED", "REACTIVATED"):
+                rev_code = str(r.normalized.get("revision_code") or "").strip()
+                if not rev_code:
+                    continue
+                rev_name = str(r.normalized.get("revision_name") or rev_code).strip()
+                country = str(r.normalized.get("country") or "AE").strip()
+                eff_from = (
+                    to_date_obj(r.normalized.get("effective_from")) or datetime.now(UTC).date()
+                )
+                raw_status = str(r.normalized.get("status") or "ACTIVE").strip().upper()
+                status = "ACTIVE" if raw_status in ("APPROVED", "ACTIVE") else raw_status
+                notes = r.normalized.get("notes")
+
+                stmt = select(SalaryRevision).where(SalaryRevision.code == rev_code)
+                existing_rev = (await session.execute(stmt)).scalar_one_or_none()
+                if existing_rev:
+                    if rev_name:
+                        existing_rev.name = rev_name
+                    if country:
+                        existing_rev.country = country
+                    if eff_from:
+                        existing_rev.effective_from = eff_from
+                    existing_rev.status = status
+                    if notes is not None:
+                        existing_rev.notes = notes
+                    rev_id_map[rev_code] = existing_rev.id
+                else:
+                    new_rev = SalaryRevision(
+                        code=rev_code,
+                        name=rev_name,
+                        country=country,
+                        effective_from=eff_from,
+                        status=status,
+                        notes=notes,
+                    )
+                    session.add(new_rev)
+                    await session.flush()
+                    rev_id_map[rev_code] = new_rev.id
+
+        await session.flush()
+
+        # Prepopulate rev_id_map with all active DB revisions for Salary_Revision_Lines FK
+        all_revs = (await session.execute(select(SalaryRevision))).scalars().all()
+        for rev in all_revs:
+            rev_id_map[rev.code] = rev.id
+
+        # 13. Salary_Revision_Lines
+        for r in sheet_to_rows.get("Salary_Revision_Lines", []):
+            if r.action in ("NEW", "UPDATED", "REACTIVATED"):
+                rev_code = str(r.normalized.get("revision_code") or "").strip()
+                grade_code = str(r.normalized.get("grade_code") or "").strip()
+                rev_id = rev_id_map.get(rev_code)
+                if not rev_id or not grade_code:
+                    continue
+
+                line_stmt = select(SalaryRevisionLine).where(
+                    SalaryRevisionLine.revision_id == rev_id,
+                    SalaryRevisionLine.grade_code == grade_code,
+                )
+                existing_line = (await session.execute(line_stmt)).scalar_one_or_none()
+                if existing_line:
+                    for field_name in (
+                        "grade_group_title",
+                        "basic_salary",
+                        "special_allowance",
+                        "fixed_ot_amount",
+                        "bonus",
+                        "visa_provision",
+                        "air_ticket_provision",
+                        "uniform_provision",
+                        "medical_provision",
+                        "accommodation_provision",
+                        "transportation_provision",
+                    ):
+                        if field_name in r.normalized:
+                            val = r.normalized[field_name]
+                            if val is not None and field_name != "grade_group_title":
+                                setattr(existing_line, field_name, Decimal(str(val)))
+                            else:
+                                setattr(existing_line, field_name, val)
+                else:
+                    trans_val = r.normalized.get("transportation_provision")
+                    trans_dec = Decimal(str(trans_val)) if trans_val is not None else None
+                    new_line = SalaryRevisionLine(
+                        revision_id=rev_id,
+                        grade_code=grade_code,
+                        grade_group_title=r.normalized.get("grade_group_title"),
+                        basic_salary=Decimal(str(r.normalized.get("basic_salary") or 0)),
+                        special_allowance=Decimal(str(r.normalized.get("special_allowance") or 0)),
+                        fixed_ot_amount=Decimal(str(r.normalized.get("fixed_ot_amount") or 0)),
+                        bonus=Decimal(str(r.normalized.get("bonus") or 0)),
+                        visa_provision=Decimal(str(r.normalized.get("visa_provision") or 0)),
+                        air_ticket_provision=Decimal(
+                            str(r.normalized.get("air_ticket_provision") or 0)
+                        ),
+                        uniform_provision=Decimal(str(r.normalized.get("uniform_provision") or 0)),
+                        medical_provision=Decimal(str(r.normalized.get("medical_provision") or 0)),
+                        accommodation_provision=Decimal(
+                            str(r.normalized.get("accommodation_provision") or 0)
+                        ),
+                        transportation_provision=trans_dec,
+                    )
+                    session.add(new_line)
 
         await session.flush()
 

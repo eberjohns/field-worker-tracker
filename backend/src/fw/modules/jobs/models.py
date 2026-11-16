@@ -63,6 +63,7 @@ class Worksite(ModelBase):
     rep_latitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6), nullable=True)
     rep_longitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6), nullable=True)
     budget_amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    salary_revision_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # Relationships
     items: Mapped[list["JobItem"]] = relationship(

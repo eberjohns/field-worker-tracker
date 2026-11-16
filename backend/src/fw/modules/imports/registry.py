@@ -795,10 +795,10 @@ SHEET_REGISTRY: dict[str, SheetDef] = {
     "Salary_Revisions": SheetDef(
         name="Salary_Revisions",
         title="Grade cost revisions (job budget only). One row per revision.",
-        description="Budget pricing revisions. Deferred to Phase 11.",
+        description="Budget pricing revisions for job cost allocation.",
         primary_key=["revision_code"],
         commit_order=11,
-        is_in_scope_phase_03=False,
+        is_in_scope_phase_03=True,
         columns=[
             ColumnDef(
                 "revision_code",
@@ -838,7 +838,7 @@ SHEET_REGISTRY: dict[str, SheetDef] = {
                 "text",
                 True,
                 "Required",
-                enum_values=["DRAFT", "ACTIVE", "ARCHIVED"],
+                enum_values=["DRAFT", "ACTIVE", "ARCHIVED", "APPROVED"],
                 description="Status.",
                 example="ACTIVE",
             ),
@@ -848,10 +848,10 @@ SHEET_REGISTRY: dict[str, SheetDef] = {
     "Salary_Revision_Lines": SheetDef(
         name="Salary_Revision_Lines",
         title="Per-grade costs inside a salary revision. One row per grade.",
-        description="Grade-level budget costing lines. Deferred to Phase 11.",
+        description="Grade-level budget costing lines.",
         primary_key=["revision_code", "grade_code"],
         commit_order=12,
-        is_in_scope_phase_03=False,
+        is_in_scope_phase_03=True,
         columns=[
             ColumnDef(
                 "revision_code",

@@ -388,6 +388,17 @@
                   </div>
                 </div>
 
+                <!-- Monthly Payslips Card (PHASE-11) -->
+                <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs text-3xs space-y-2">
+                  <div class="flex justify-between items-center">
+                    <span class="text-3xs font-bold uppercase text-slate-400">Monthly Payslips (Approved)</span>
+                    <button id="phoneBtnRefreshSlips" class="text-indigo-600 hover:text-indigo-800 font-bold text-3xs">Refresh</button>
+                  </div>
+                  <div id="phonePayslipsList" class="space-y-1.5 max-h-40 overflow-y-auto">
+                    <div class="text-slate-400 text-center py-2">No approved payslips available yet</div>
+                  </div>
+                </div>
+
                 <button id="phoneBtnLogout" class="w-full bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 font-bold text-2xs py-2 rounded-lg">
                   Sign Out from Device
                 </button>

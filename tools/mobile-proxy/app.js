@@ -1362,6 +1362,48 @@
         btn.className = 'flex flex-col items-center text-slate-400 hover:text-slate-700 font-medium text-3xs space-y-0.5';
       }
     });
+    if (tabId.toLowerCase() === 'profile') {
+      fetchWorkerPayslips();
+    }
+  }
+
+  async function fetchWorkerPayslips() {
+    const listEl = document.getElementById('phonePayslipsList');
+    if (!listEl || !state.authToken) return;
+    try {
+      const res = await fetch('/api/v1/payroll/my-records', {
+        headers: { Authorization: `Bearer ${state.authToken}` },
+      });
+      if (res.ok) {
+        const slips = await res.json();
+        if (slips.length === 0) {
+          listEl.innerHTML = '<div class="text-slate-400 text-center py-2">No approved payslips available yet</div>';
+          return;
+        }
+        listEl.innerHTML = slips
+          .map(
+            (s) => `
+          <div class="bg-slate-50 p-2 rounded-lg border border-slate-100 space-y-1">
+            <div class="flex justify-between items-center">
+              <span class="font-bold text-slate-800">${s.period_start} → ${s.period_end}</span>
+              <span class="px-1.5 py-0.2 bg-emerald-100 text-emerald-800 rounded font-bold text-3xs">APPROVED</span>
+            </div>
+            <div class="flex justify-between text-slate-600">
+              <span>Salary: $${Number(s.salary_portion).toFixed(2)}</span>
+              <span>Worked: ${s.actual_worked_hours}h</span>
+            </div>
+            <div class="flex justify-between text-slate-600">
+              <span>OT: $${(Number(s.ot1_amount) + Number(s.ot2_amount)).toFixed(2)}</span>
+              <span class="font-bold text-indigo-700">Net: $${Number(s.net_pay).toFixed(2)}</span>
+            </div>
+          </div>
+        `
+          )
+          .join('');
+      }
+    } catch (err) {
+      console.error('Failed to load payslips', err);
+    }
   }
 
   // Update authenticated UI state
@@ -1574,6 +1616,11 @@
     document.getElementById('navBtnRoster').addEventListener('click', () => switchTab('roster'));
     document.getElementById('navBtnProfile').addEventListener('click', () => switchTab('profile'));
     document.getElementById('navBtnSync').addEventListener('click', () => switchTab('sync'));
+
+    const btnRefreshSlips = document.getElementById('phoneBtnRefreshSlips');
+    if (btnRefreshSlips) {
+      btnRefreshSlips.addEventListener('click', fetchWorkerPayslips);
+    }
 
     // Test Alarm Audio Chime
     document.getElementById('btnTestAlarm').addEventListener('click', () => {

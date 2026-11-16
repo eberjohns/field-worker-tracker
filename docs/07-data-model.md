@@ -142,6 +142,7 @@ Replaces single supervisor/superintendent/engineer columns. One row per link: `e
 | is_outdoor | bool | required: outdoor job (letter A) vs indoor (B) / water feature (C); outdoor-only time rules apply when true |
 | country | text | AE/SA, not null |
 | contract_group_ref | text | links combined job numbers |
+| salary_revision_code | text | nullable; binds worksite to specific salary revision code for dynamic labor budget |
 | start_date, end_date | date | contract period |
 | boundary | geometry(Polygon,4326) | nullable until drawn; GiST index; must be valid, area > 0 |
 | rep_latitude, rep_longitude | numeric(9,6) | derived from the boundary (`ST_PointOnSurface`) |
@@ -278,7 +279,7 @@ Never updated after insert.
 `period_start`, `period_end`, `country`, `status` (DRAFT | APPROVED), `run_no` (re-runs of the same period), `created_by` (system or user), `scheduled_for`, `approved_by_user_id`, `approved_at`, `calculation_version`. Only one APPROVED run per (period, country); DRAFT runs are replaced by re-runs (history kept).
 
 ### payroll_records (immutable once the run is APPROVED)
-`payroll_run_id`, `employee_id`, `salary_id` (the salary version used), `standard_hours`, `ot1_hours`, `ot2_hours`, `salary_portion`, `ot1_amount`, `ot2_amount`, `gross_pay`, `net_pay` (= gross pay), `gratuity`, `leave_salary`, `provisions`, `per_month_provision`, `total_staff_cost`, `hr_oh_amount`, `final_total_staff_cost` (numeric(14,2)), `snapshot` jsonb (everything used). Unique (payroll_run_id, employee_id).
+`payroll_run_id`, `employee_id`, `salary_id` (the salary version used), `standard_hours`, `actual_worked_hours`, `leave_hours`, `missed_hours`, `missed_hours_deduction`, `ot1_hours`, `ot2_hours`, `salary_portion`, `ot1_amount`, `ot2_amount`, `gross_pay`, `net_pay` (= gross_pay - missed_hours_deduction), `gratuity`, `leave_salary`, `provisions`, `per_month_provision`, `total_staff_cost`, `hr_oh_amount`, `final_total_staff_cost` (numeric(14,2)), `snapshot` jsonb (everything used). Unique (payroll_run_id, employee_id).
 
 ### job_cost_allocations
 `payroll_record_id`, `worksite_id`, `worked_minutes`, `allocated_amount`.

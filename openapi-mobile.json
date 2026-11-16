@@ -7831,6 +7831,829 @@
         ],
         "title": "PasswordChangeRequest"
       },
+      "PayrollIssueItem": {
+        "properties": {
+          "issue_type": {
+            "type": "string",
+            "title": "Issue Type"
+          },
+          "employee_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Employee Id"
+          },
+          "tally_id": {
+            "type": "string",
+            "title": "Tally Id"
+          },
+          "employee_name": {
+            "type": "string",
+            "title": "Employee Name"
+          },
+          "details": {
+            "type": "string",
+            "title": "Details"
+          },
+          "work_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Work Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "issue_type",
+          "employee_id",
+          "tally_id",
+          "employee_name",
+          "details"
+        ],
+        "title": "PayrollIssueItem"
+      },
+      "PayrollRecordRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "employee_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Employee Id"
+          },
+          "tally_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tally Id"
+          },
+          "employee_tally_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Tally Id"
+          },
+          "employee_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Name"
+          },
+          "employee_role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Role"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "standard_hours": {
+            "type": "string",
+            "title": "Standard Hours"
+          },
+          "standard_monthly_hours": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Standard Monthly Hours"
+          },
+          "scheduled_hours": {
+            "type": "string",
+            "title": "Scheduled Hours"
+          },
+          "worked_hours": {
+            "type": "string",
+            "title": "Worked Hours"
+          },
+          "actual_worked_hours": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Worked Hours"
+          },
+          "paid_leave_hours": {
+            "type": "string",
+            "title": "Paid Leave Hours"
+          },
+          "unpaid_leave_hours": {
+            "type": "string",
+            "title": "Unpaid Leave Hours"
+          },
+          "shortfall_hours": {
+            "type": "string",
+            "title": "Shortfall Hours"
+          },
+          "missed_hours": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Missed Hours"
+          },
+          "missed_hours_deduction": {
+            "type": "string",
+            "title": "Missed Hours Deduction"
+          },
+          "ot1_hours": {
+            "type": "string",
+            "title": "Ot1 Hours"
+          },
+          "ot2_hours": {
+            "type": "string",
+            "title": "Ot2 Hours"
+          },
+          "salary_portion": {
+            "type": "string",
+            "title": "Salary Portion"
+          },
+          "basic_salary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basic Salary"
+          },
+          "special_allowance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Special Allowance"
+          },
+          "fixed_ot_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fixed Ot Amount"
+          },
+          "bonus": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bonus"
+          },
+          "telephone_allowance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telephone Allowance"
+          },
+          "housing_transport_allowance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Housing Transport Allowance"
+          },
+          "ot1_rate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ot1 Rate"
+          },
+          "ot2_rate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ot2 Rate"
+          },
+          "ot1_amount": {
+            "type": "string",
+            "title": "Ot1 Amount"
+          },
+          "ot2_amount": {
+            "type": "string",
+            "title": "Ot2 Amount"
+          },
+          "gross_pay": {
+            "type": "string",
+            "title": "Gross Pay"
+          },
+          "total_deductions": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Deductions"
+          },
+          "net_pay": {
+            "type": "string",
+            "title": "Net Pay"
+          },
+          "gratuity": {
+            "type": "string",
+            "title": "Gratuity"
+          },
+          "gratuity_provision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gratuity Provision"
+          },
+          "leave_salary": {
+            "type": "string",
+            "title": "Leave Salary"
+          },
+          "leave_salary_provision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leave Salary Provision"
+          },
+          "provisions": {
+            "type": "string",
+            "title": "Provisions"
+          },
+          "company_provisions_total": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Provisions Total"
+          },
+          "per_month_provision": {
+            "type": "string",
+            "title": "Per Month Provision"
+          },
+          "total_staff_cost": {
+            "type": "string",
+            "title": "Total Staff Cost"
+          },
+          "hr_oh_amount": {
+            "type": "string",
+            "title": "Hr Oh Amount"
+          },
+          "hr_overhead_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hr Overhead Amount"
+          },
+          "final_total_staff_cost": {
+            "type": "string",
+            "title": "Final Total Staff Cost"
+          },
+          "snapshot": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Snapshot"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "employee_id",
+          "standard_hours",
+          "scheduled_hours",
+          "worked_hours",
+          "paid_leave_hours",
+          "unpaid_leave_hours",
+          "shortfall_hours",
+          "missed_hours_deduction",
+          "ot1_hours",
+          "ot2_hours",
+          "salary_portion",
+          "ot1_amount",
+          "ot2_amount",
+          "gross_pay",
+          "net_pay",
+          "gratuity",
+          "leave_salary",
+          "provisions",
+          "per_month_provision",
+          "total_staff_cost",
+          "hr_oh_amount",
+          "final_total_staff_cost",
+          "created_at"
+        ],
+        "title": "PayrollRecordRead"
+      },
+      "PayrollRunCreate": {
+        "properties": {
+          "period_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Period Start"
+          },
+          "period_end": {
+            "type": "string",
+            "format": "date",
+            "title": "Period End"
+          },
+          "country": {
+            "type": "string",
+            "title": "Country",
+            "default": "AE"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "period_start",
+          "period_end"
+        ],
+        "title": "PayrollRunCreate"
+      },
+      "PayrollRunDetailRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "period_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Period Start"
+          },
+          "period_end": {
+            "type": "string",
+            "format": "date",
+            "title": "Period End"
+          },
+          "country": {
+            "type": "string",
+            "title": "Country"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "run_no": {
+            "type": "integer",
+            "title": "Run No"
+          },
+          "created_by": {
+            "type": "string",
+            "title": "Created By"
+          },
+          "created_by_user_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By User Id"
+          },
+          "approved_by_user_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved By User Id"
+          },
+          "approved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "calculation_version": {
+            "type": "string",
+            "title": "Calculation Version"
+          },
+          "totals_snapshot": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PayrollTotalsSnapshot"
+              },
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Totals Snapshot"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "record_count": {
+            "type": "integer",
+            "title": "Record Count",
+            "default": 0
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/PayrollRecordRead"
+            },
+            "type": "array",
+            "title": "Records"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "period_start",
+          "period_end",
+          "country",
+          "status",
+          "run_no",
+          "created_by",
+          "calculation_version",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "PayrollRunDetailRead"
+      },
+      "PayrollRunIssuesResponse": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "total_issues": {
+            "type": "integer",
+            "title": "Total Issues"
+          },
+          "unapproved_overtime_count": {
+            "type": "integer",
+            "title": "Unapproved Overtime Count"
+          },
+          "missing_salary_structure_count": {
+            "type": "integer",
+            "title": "Missing Salary Structure Count"
+          },
+          "missing_standard_hours_count": {
+            "type": "integer",
+            "title": "Missing Standard Hours Count"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/PayrollIssueItem"
+            },
+            "type": "array",
+            "title": "Issues"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "total_issues",
+          "unapproved_overtime_count",
+          "missing_salary_structure_count",
+          "missing_standard_hours_count"
+        ],
+        "title": "PayrollRunIssuesResponse"
+      },
+      "PayrollRunRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "period_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Period Start"
+          },
+          "period_end": {
+            "type": "string",
+            "format": "date",
+            "title": "Period End"
+          },
+          "country": {
+            "type": "string",
+            "title": "Country"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "run_no": {
+            "type": "integer",
+            "title": "Run No"
+          },
+          "created_by": {
+            "type": "string",
+            "title": "Created By"
+          },
+          "created_by_user_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By User Id"
+          },
+          "approved_by_user_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved By User Id"
+          },
+          "approved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "calculation_version": {
+            "type": "string",
+            "title": "Calculation Version"
+          },
+          "totals_snapshot": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PayrollTotalsSnapshot"
+              },
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Totals Snapshot"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "record_count": {
+            "type": "integer",
+            "title": "Record Count",
+            "default": 0
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "period_start",
+          "period_end",
+          "country",
+          "status",
+          "run_no",
+          "created_by",
+          "calculation_version",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "PayrollRunRead"
+      },
+      "PayrollTotalsSnapshot": {
+        "properties": {
+          "worker_count": {
+            "type": "integer",
+            "title": "Worker Count",
+            "default": 0
+          },
+          "scheduled_hours_total": {
+            "type": "string",
+            "title": "Scheduled Hours Total",
+            "default": "0.00"
+          },
+          "worked_hours_total": {
+            "type": "string",
+            "title": "Worked Hours Total",
+            "default": "0.00"
+          },
+          "ot1_hours_total": {
+            "type": "string",
+            "title": "Ot1 Hours Total",
+            "default": "0.00"
+          },
+          "ot2_hours_total": {
+            "type": "string",
+            "title": "Ot2 Hours Total",
+            "default": "0.00"
+          },
+          "ot1_amount_total": {
+            "type": "string",
+            "title": "Ot1 Amount Total",
+            "default": "0.00"
+          },
+          "ot2_amount_total": {
+            "type": "string",
+            "title": "Ot2 Amount Total",
+            "default": "0.00"
+          },
+          "gross_pay_total": {
+            "type": "string",
+            "title": "Gross Pay Total",
+            "default": "0.00"
+          },
+          "net_pay_total": {
+            "type": "string",
+            "title": "Net Pay Total",
+            "default": "0.00"
+          },
+          "provisions_total": {
+            "type": "string",
+            "title": "Provisions Total",
+            "default": "0.00"
+          },
+          "total_staff_cost_total": {
+            "type": "string",
+            "title": "Total Staff Cost Total",
+            "default": "0.00"
+          },
+          "final_total_staff_cost_total": {
+            "type": "string",
+            "title": "Final Total Staff Cost Total",
+            "default": "0.00"
+          }
+        },
+        "type": "object",
+        "title": "PayrollTotalsSnapshot"
+      },
       "PendingVisitCloseRequest": {
         "properties": {
           "reason": {
@@ -9101,6 +9924,676 @@
           "message"
         ],
         "title": "ResetPasswordResponse"
+      },
+      "SalaryRevisionCreate": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 2,
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 2,
+            "title": "Name"
+          },
+          "country": {
+            "type": "string",
+            "maxLength": 10,
+            "title": "Country",
+            "default": "AE"
+          },
+          "effective_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Effective From"
+          },
+          "effective_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective To"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/SalaryRevisionLineCreate-Input"
+            },
+            "type": "array",
+            "title": "Lines"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "effective_from"
+        ],
+        "title": "SalaryRevisionCreate"
+      },
+      "SalaryRevisionDetailRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "country": {
+            "type": "string",
+            "title": "Country"
+          },
+          "effective_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Effective From"
+          },
+          "effective_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective To"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "line_count": {
+            "type": "integer",
+            "title": "Line Count",
+            "default": 0
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/SalaryRevisionLineRead"
+            },
+            "type": "array",
+            "title": "Lines"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "name",
+          "country",
+          "effective_from",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "SalaryRevisionDetailRead"
+      },
+      "SalaryRevisionImportDiffResponse": {
+        "properties": {
+          "target_revision_code": {
+            "type": "string",
+            "title": "Target Revision Code"
+          },
+          "base_revision_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Revision Code"
+          },
+          "new_grades_count": {
+            "type": "integer",
+            "title": "New Grades Count"
+          },
+          "updated_grades_count": {
+            "type": "integer",
+            "title": "Updated Grades Count"
+          },
+          "unchanged_grades_count": {
+            "type": "integer",
+            "title": "Unchanged Grades Count"
+          },
+          "diffs": {
+            "items": {
+              "$ref": "#/components/schemas/SalaryRevisionLineDiff"
+            },
+            "type": "array",
+            "title": "Diffs"
+          },
+          "preview_lines": {
+            "items": {
+              "$ref": "#/components/schemas/SalaryRevisionLineCreate-Output"
+            },
+            "type": "array",
+            "title": "Preview Lines"
+          }
+        },
+        "type": "object",
+        "required": [
+          "target_revision_code",
+          "new_grades_count",
+          "updated_grades_count",
+          "unchanged_grades_count"
+        ],
+        "title": "SalaryRevisionImportDiffResponse"
+      },
+      "SalaryRevisionLineCreate-Input": {
+        "properties": {
+          "grade_code": {
+            "type": "string",
+            "title": "Grade Code"
+          },
+          "grade_group_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grade Group Title"
+          },
+          "basic_salary": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Basic Salary",
+            "default": "0.00"
+          },
+          "special_allowance": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Special Allowance",
+            "default": "0.00"
+          },
+          "fixed_ot_amount": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Fixed Ot Amount",
+            "default": "0.00"
+          },
+          "bonus": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Bonus",
+            "default": "0.00"
+          },
+          "visa_provision": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Visa Provision",
+            "default": "0.00"
+          },
+          "air_ticket_provision": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Air Ticket Provision",
+            "default": "0.00"
+          },
+          "uniform_provision": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Uniform Provision",
+            "default": "0.00"
+          },
+          "medical_provision": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Medical Provision",
+            "default": "0.00"
+          },
+          "accommodation_provision": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Accommodation Provision",
+            "default": "0.00"
+          },
+          "transportation_provision": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transportation Provision",
+            "default": "0.00"
+          }
+        },
+        "type": "object",
+        "required": [
+          "grade_code"
+        ],
+        "title": "SalaryRevisionLineCreate"
+      },
+      "SalaryRevisionLineCreate-Output": {
+        "properties": {
+          "grade_code": {
+            "type": "string",
+            "title": "Grade Code"
+          },
+          "grade_group_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grade Group Title"
+          },
+          "basic_salary": {
+            "type": "string",
+            "title": "Basic Salary",
+            "default": "0.00"
+          },
+          "special_allowance": {
+            "type": "string",
+            "title": "Special Allowance",
+            "default": "0.00"
+          },
+          "fixed_ot_amount": {
+            "type": "string",
+            "title": "Fixed Ot Amount",
+            "default": "0.00"
+          },
+          "bonus": {
+            "type": "string",
+            "title": "Bonus",
+            "default": "0.00"
+          },
+          "visa_provision": {
+            "type": "string",
+            "title": "Visa Provision",
+            "default": "0.00"
+          },
+          "air_ticket_provision": {
+            "type": "string",
+            "title": "Air Ticket Provision",
+            "default": "0.00"
+          },
+          "uniform_provision": {
+            "type": "string",
+            "title": "Uniform Provision",
+            "default": "0.00"
+          },
+          "medical_provision": {
+            "type": "string",
+            "title": "Medical Provision",
+            "default": "0.00"
+          },
+          "accommodation_provision": {
+            "type": "string",
+            "title": "Accommodation Provision",
+            "default": "0.00"
+          },
+          "transportation_provision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transportation Provision",
+            "default": "0.00"
+          }
+        },
+        "type": "object",
+        "required": [
+          "grade_code"
+        ],
+        "title": "SalaryRevisionLineCreate"
+      },
+      "SalaryRevisionLineDiff": {
+        "properties": {
+          "grade_code": {
+            "type": "string",
+            "title": "Grade Code"
+          },
+          "field_name": {
+            "type": "string",
+            "title": "Field Name"
+          },
+          "old_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Old Value"
+          },
+          "new_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Value"
+          },
+          "is_changed": {
+            "type": "boolean",
+            "title": "Is Changed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "grade_code",
+          "field_name",
+          "old_value",
+          "new_value",
+          "is_changed"
+        ],
+        "title": "SalaryRevisionLineDiff"
+      },
+      "SalaryRevisionLineRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "grade_code": {
+            "type": "string",
+            "title": "Grade Code"
+          },
+          "grade_group_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grade Group Title"
+          },
+          "basic_salary": {
+            "type": "string",
+            "title": "Basic Salary"
+          },
+          "special_allowance": {
+            "type": "string",
+            "title": "Special Allowance"
+          },
+          "fixed_ot_amount": {
+            "type": "string",
+            "title": "Fixed Ot Amount"
+          },
+          "bonus": {
+            "type": "string",
+            "title": "Bonus"
+          },
+          "visa_provision": {
+            "type": "string",
+            "title": "Visa Provision"
+          },
+          "air_ticket_provision": {
+            "type": "string",
+            "title": "Air Ticket Provision"
+          },
+          "uniform_provision": {
+            "type": "string",
+            "title": "Uniform Provision"
+          },
+          "medical_provision": {
+            "type": "string",
+            "title": "Medical Provision"
+          },
+          "accommodation_provision": {
+            "type": "string",
+            "title": "Accommodation Provision"
+          },
+          "transportation_provision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transportation Provision"
+          },
+          "total_provisions": {
+            "type": "string",
+            "title": "Total Provisions",
+            "default": "0.00"
+          },
+          "total_salary_portion": {
+            "type": "string",
+            "title": "Total Salary Portion",
+            "default": "0.00"
+          },
+          "planned_hourly_cost": {
+            "type": "string",
+            "title": "Planned Hourly Cost",
+            "default": "0.00"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "grade_code",
+          "basic_salary",
+          "special_allowance",
+          "fixed_ot_amount",
+          "bonus",
+          "visa_provision",
+          "air_ticket_provision",
+          "uniform_provision",
+          "medical_provision",
+          "accommodation_provision"
+        ],
+        "title": "SalaryRevisionLineRead"
+      },
+      "SalaryRevisionRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "country": {
+            "type": "string",
+            "title": "Country"
+          },
+          "effective_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Effective From"
+          },
+          "effective_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective To"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "line_count": {
+            "type": "integer",
+            "title": "Line Count",
+            "default": 0
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "name",
+          "country",
+          "effective_from",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "SalaryRevisionRead"
       },
       "SalaryStructureListItem": {
         "properties": {
@@ -11153,6 +12646,260 @@
           "month_is_under"
         ],
         "title": "WorkerAllocationResponse"
+      },
+      "WorkerMobilePayrollSlip": {
+        "properties": {
+          "payroll_record_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Payroll Record Id"
+          },
+          "payroll_run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Payroll Run Id"
+          },
+          "month_label": {
+            "type": "string",
+            "title": "Month Label"
+          },
+          "period_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Period Start"
+          },
+          "period_end": {
+            "type": "string",
+            "format": "date",
+            "title": "Period End"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "standard_hours": {
+            "type": "string",
+            "title": "Standard Hours"
+          },
+          "worked_hours": {
+            "type": "string",
+            "title": "Worked Hours"
+          },
+          "paid_leave_hours": {
+            "type": "string",
+            "title": "Paid Leave Hours"
+          },
+          "unpaid_leave_hours": {
+            "type": "string",
+            "title": "Unpaid Leave Hours"
+          },
+          "salary_portion": {
+            "type": "string",
+            "title": "Salary Portion"
+          },
+          "missed_hours_deduction": {
+            "type": "string",
+            "title": "Missed Hours Deduction"
+          },
+          "ot1_hours": {
+            "type": "string",
+            "title": "Ot1 Hours"
+          },
+          "ot1_amount": {
+            "type": "string",
+            "title": "Ot1 Amount"
+          },
+          "ot2_hours": {
+            "type": "string",
+            "title": "Ot2 Hours"
+          },
+          "ot2_amount": {
+            "type": "string",
+            "title": "Ot2 Amount"
+          },
+          "gross_pay": {
+            "type": "string",
+            "title": "Gross Pay"
+          },
+          "net_pay": {
+            "type": "string",
+            "title": "Net Pay"
+          },
+          "approved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "payroll_record_id",
+          "payroll_run_id",
+          "month_label",
+          "period_start",
+          "period_end",
+          "status",
+          "standard_hours",
+          "worked_hours",
+          "paid_leave_hours",
+          "unpaid_leave_hours",
+          "salary_portion",
+          "missed_hours_deduction",
+          "ot1_hours",
+          "ot1_amount",
+          "ot2_hours",
+          "ot2_amount",
+          "gross_pay",
+          "net_pay"
+        ],
+        "title": "WorkerMobilePayrollSlip"
+      },
+      "WorksiteBudgetVsActualItem": {
+        "properties": {
+          "worksite_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Worksite Id"
+          },
+          "job_number": {
+            "type": "string",
+            "title": "Job Number"
+          },
+          "job_name": {
+            "type": "string",
+            "title": "Job Name"
+          },
+          "country": {
+            "type": "string",
+            "title": "Country"
+          },
+          "salary_revision_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Salary Revision Code"
+          },
+          "assigned_revision_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned Revision Code"
+          },
+          "annual_planned_man_hours": {
+            "type": "string",
+            "title": "Annual Planned Man Hours"
+          },
+          "annual_labor_budget": {
+            "type": "string",
+            "title": "Annual Labor Budget"
+          },
+          "prorated_budget": {
+            "type": "string",
+            "title": "Prorated Budget"
+          },
+          "pro_rated_budget": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pro Rated Budget"
+          },
+          "actual_cost_allocated": {
+            "type": "string",
+            "title": "Actual Cost Allocated"
+          },
+          "actual_allocated_cost": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Allocated Cost"
+          },
+          "variance": {
+            "type": "string",
+            "title": "Variance"
+          },
+          "variance_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Variance Amount"
+          },
+          "variance_percent": {
+            "type": "string",
+            "title": "Variance Percent",
+            "default": "0.0"
+          },
+          "is_over_budget": {
+            "type": "boolean",
+            "title": "Is Over Budget"
+          },
+          "is_under_budget": {
+            "type": "boolean",
+            "title": "Is Under Budget",
+            "default": false
+          },
+          "manual_budget_override": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manual Budget Override"
+          },
+          "is_custom_budget_override": {
+            "type": "boolean",
+            "title": "Is Custom Budget Override",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "worksite_id",
+          "job_number",
+          "job_name",
+          "country",
+          "annual_planned_man_hours",
+          "annual_labor_budget",
+          "prorated_budget",
+          "actual_cost_allocated",
+          "variance",
+          "is_over_budget"
+        ],
+        "title": "WorksiteBudgetVsActualItem"
       },
       "WorksiteCreate": {
         "properties": {
