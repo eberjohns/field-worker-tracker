@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import { Link } from "@tanstack/react-router";
 import { useAuth } from "../context/AuthContext";
 import {
   CalendarDays,
@@ -22,6 +23,8 @@ import {
   RotateCcw,
   AlertCircle,
   Clock,
+  Download,
+  Upload,
 } from "lucide-react";
 import {
   OperationalCoverageResponse,
@@ -127,6 +130,30 @@ export const OperationalPlanner: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [exportingRoster, setExportingRoster] = useState<boolean>(false);
+
+  const handleExportRoster = async () => {
+    setExportingRoster(true);
+    try {
+      const res = await fetch(`/api/v1/roster?week_start=${weekStartDate}&format=xlsx`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error("Failed to export Excel roster.");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `roster_${weekStartDate}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert(err.message || "Failed to download Excel roster export.");
+    } finally {
+      setExportingRoster(false);
+    }
+  };
 
   // Staffing Gaps & Reassignment Request Modal State
   const [staffingGaps, setStaffingGaps] = useState<any[]>([]);
@@ -1268,6 +1295,28 @@ export const OperationalPlanner: React.FC = () => {
               <Plus className="h-3.5 w-3.5" />
               Request Reassignment
             </button>
+
+            {/* Export Roster (.xlsx) */}
+            <button
+              type="button"
+              onClick={handleExportRoster}
+              disabled={exportingRoster}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 shadow-2xs transition cursor-pointer disabled:opacity-50"
+              title="Export weekly roster to Excel"
+            >
+              <Download className="h-3.5 w-3.5 text-slate-500" />
+              {exportingRoster ? "Exporting..." : "Export Roster"}
+            </button>
+
+            {/* Import Schedule */}
+            <Link
+              to="/imports"
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 shadow-2xs transition cursor-pointer"
+              title="Import roster or shift schedule"
+            >
+              <Upload className="h-3.5 w-3.5 text-slate-500" />
+              Import Schedule
+            </Link>
           </div>
         </div>
 

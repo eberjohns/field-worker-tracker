@@ -38,7 +38,7 @@ All client questions are answered. **CONFIRMED** = the client decided; **PROPOSE
 | DEC-35 | Effective-dated configuration | Settings and time rules resolved as of the work date | 03, ADR-008, ADR-012 | CONFIRMED |
 | DEC-36 | Permanent vs Remote | PERMANENT: only that job that day; REMOTE: several while hours remain | 03, 04, ADR-014 | CONFIRMED |
 | DEC-37 | Revision lookup (budget) | Latest revision containing the grade; partial revisions allowed; grade year suffix ignored | 06 | PROPOSED |
-| DEC-38 | Retention | 13 months live, encrypted yearly archive for a fixed period, then deletion; payroll/attendance 7 years. Client wants "forever" | 14, legal | HUMAN |
+| DEC-38 | Retention | 13 months live, encrypted yearly archive for a fixed period, then deletion; payroll/attendance 7 years; AES-256-GCM archive + purge implemented | 14, legal, ADR-022 | CONFIRMED |
 | DEC-39 | Provisions | Actual: five provisions from company settings, one value for everyone, plus calculated gratuity and leave salary, + 5% HR OH; budget: the revision file's own static provisions | 06, ADR-020 | CONFIRMED |
 | DEC-40 | Out of scope | Checklists, manual shift confirmation, WPS | 01 | CONFIRMED |
 | DEC-41 | Time rules | Five-point planned schedule (accommodation start, first site, break, last site, accommodation end); company default, overridden for a team, drivers or one person, by season and outdoor/indoor; engineers manage within scope | 05, D3, ADR-012 | CONFIRMED |
@@ -55,5 +55,5 @@ All client questions are answered. **CONFIRMED** = the client decided; **PROPOSE
 | DEC-52 | Suggestions | Same grade group first-class eligible, exact staff type first | 04, ADR-014 | CONFIRMED |
 | DEC-53 | Accounts | Username = worker ID; one default password for all (setting), forced change at first login, lock after `default_password_max_days`, Admin-only reset, workers bound to first device | 02, 09 | CONFIRMED |
 | DEC-54 | Saudi Arabia | Separate stack inside the Kingdom when Saudi goes live; UAE stack stays; ADR-009 | 13, ADR-009 | HUMAN |
-| DEC-55 | Hosting | Azure UAE North + UAE Central, managed PostgreSQL/PostGIS, quarterly restore drills; off-region copy only if counsel agrees | 14, ADR-009 | CONFIRMED (direction) |
-| DEC-56 | Legal | Worker notice, DPIA, inventory, breach runbook drafted; counsel review, contract clause, DPAs, incident owner outstanding | legal/ | HUMAN |
+| DEC-55 | Hosting | Azure UAE North + UAE Central, managed PostgreSQL/PostGIS, quarterly restore drills; automated drill tool verified; ADR-022 | 14, ADR-009, ADR-022 | CONFIRMED |
+| DEC-56 | Legal | Worker notice, DPIA, inventory, breach runbook; owners and statuses assigned in `legal/01-human-actions.md`; Runbooks 01-05; ADR-022 | legal/, ADR-022 | CONFIRMED |

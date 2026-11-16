@@ -15,6 +15,7 @@ from fw.modules.org import Employee, RegisteredDevice
 from fw.modules.sync.schemas import (
     MobileChangePasswordRequest,
     MobileConsentRequest,
+    MobileConsentWithdrawRequest,
     MobileDeviceUpdateRequest,
     MobileEmployeeInfo,
     MobileHeartbeatRequest,
@@ -219,6 +220,23 @@ async def mobile_record_consent(
     return {"status": "CONSENT_RECORDED", "server_time_utc": datetime.now(UTC)}
 
 
+@router.post("/consent/withdraw")
+async def mobile_withdraw_consent(
+    request: MobileConsentWithdrawRequest | None = None,
+    ctx: tuple[User, Employee, RegisteredDevice] = Depends(get_current_mobile_worker),
+    session: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Worker withdraws tracking consent; stops tracking and notifies Admin."""
+    _user, emp, _dev = ctx
+    reason = request.reason if request else None
+    await SyncService.withdraw_consent(
+        session=session,
+        employee_id=emp.id,
+        reason=reason,
+    )
+    return {"status": "CONSENT_WITHDRAWN", "server_time_utc": datetime.now(UTC)}
+
+
 @router.get("/policy/location", response_model=MobilePolicyResponse)
 async def get_mobile_location_policy(
     language: str = Query(default="en"),
@@ -310,6 +328,12 @@ async def ingest_event_batch(
 ) -> EventBatchResponse:
     """Ingest a batch of up to 200 raw location events from a mobile device."""
     _user, employee, device = ctx
+    if employee.consent_status == "WITHDRAWN":
+        raise AppError(
+            code="CONSENT_WITHDRAWN",
+            message="Location tracking consent has been withdrawn. Events rejected.",
+            status_code=403,
+        )
     now = datetime.now(UTC)
     results = await EventsService.ingest_batch(
         session=session,

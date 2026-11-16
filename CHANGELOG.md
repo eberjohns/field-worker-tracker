@@ -3,6 +3,39 @@ All notable changes. Format: Keep a Changelog. Mobile-contract changes are also 
 
 ## [Unreleased]
 ### Added
+- PHASE-13 (Hardening, Archive, Backup, Privacy and Go-Live):
+  - Database Migration `0014_archive_and_retention.py`:
+    - Created `archive_records` table (`id`, `year`, `file_name`, `file_path`, `file_size_bytes`, `sha256_checksum`, `encryption_algo`, `record_count`, `status`, `archived_at`, `verified_at`, `purged_at`, `purged_record_count`, `details`).
+    - Added `consent_status`, `consent_withdrawn_at`, `anonymised_at` to `employees`.
+    - Added `status`, `withdrawn_at`, `withdrawal_reason` to `consent_records`, altered `device_id` to nullable.
+  - Yearly Archive Engine (`fw.modules.archive`):
+    - Export, AES-256-GCM encryption with 96-bit nonce and 16-byte authentication tag (PyCA `cryptography`), SHA-256 checksum computation, downloadable `.enc` package, verified sample decryption, and transactional purge using `SET LOCAL fwt.bypass_immutability = 'on'`.
+    - Purges historical raw `mobile_event_logs`, `site_visits`, and `tracking_gaps` for the archived calendar year while preserving daily attendance records and payroll snapshots for 7 years.
+    - Endpoints: `GET /api/v1/admin/archives`, `POST /api/v1/admin/archives`, `GET /api/v1/admin/archives/{year}/download`, `POST /api/v1/admin/archives/{year}/verify`, `POST /api/v1/admin/archives/{year}/purge`.
+  - Statutory Data Retention & Privacy Controls:
+    - Purge endpoint `POST /api/v1/admin/retention/purge`: purges transient `sync_changes` older than 60 days and resolved notifications older than 6 months.
+    - Terminated worker anonymisation endpoint `POST /api/v1/admin/retention/anonymise`: anonymises inactive employees terminated > 2 years per UAE labour law while retaining hours and payroll history for audit.
+    - Worker Tracking Consent Withdrawal: mobile endpoint `POST /api/v1/mobile/consent/withdraw` and admin endpoint `POST /api/v1/employees/{id}/withdraw-consent`. Immediate rejection (`HTTP 403 CONSENT_WITHDRAWN`) of subsequent location batches; emits `WorkerConsentWithdrawn` domain event creating Admin alert.
+    - Employee Data Subject Access Request (DSAR): `GET /api/v1/employees/{id}/export-dsar` generates a multi-sheet Excel package (Profile, Consent History, Documents, Attendance Summary, Payroll Slips).
+  - Web UI Features:
+    - Archive Viewer & Retention Management in Admin Settings (`web/src/features/admin/ArchiveSettings.tsx`, integrated into `web/src/routes/Settings.tsx`).
+    - Export & Import action buttons on Employees page (`/api/v1/employees/export`, Link to `/imports`), Worksites page (`/api/v1/worksites/export`, Link to `/imports`), and Planner pages (Roster export, Link to `/imports`).
+    - Employee Detail DSAR Export button, Consent Status badge, and administrative Consent Withdrawal button.
+  - Disaster Recovery & Performance Benchmarks:
+    - Automated restore drill tool `tools/backup_restore_drill.py`: creates backup dump, restores to scratch database, validates data parity across 9 tables, checks PostGIS geometry validity (`ST_IsValid`), and measures RTO against the 4-hour SLA (achieved 4.49s). Full record saved in `docs/runbooks/restore_drill_record.json`.
+    - 300-worker performance load test `tools/load_test.py`: verified all non-functional requirements in `docs/14-nonfunctional.md` (Sync changes pull: 94.8ms < 300ms p95; List endpoints: 227.9ms < 300ms p95; Week view roster: 1104.1ms < 1500ms p95; Event batch ingest: 455.1ms < 500ms p95).
+    - Spatial point-in-polygon batch optimization in `EventEnrichmentService` using in-memory Shapely geometries.
+  - Operational Runbooks (`docs/runbooks/`):
+    - `01-production-deployment.md`: Azure UAE North topology, secrets management, rolling zero-downtime deployment, health probes, and rollback procedures.
+    - `02-backup-and-restore-drill.md`: Point-in-time recovery policy, quarterly drill procedure, and recorded pre-go-live drill result.
+    - `03-incident-breach-response.md`: 72-hour SDAIA and UAE Data Office breach notification protocols, severity classification, containment steps.
+    - `04-sync-failure-recovery.md`: Mobile sync gap recovery, cursor drift diagnostics, and forced snapshot resync.
+    - `05-admin-operations-guide.md`: Operating guide for yearly archive, retention purge, DSAR exports, and consent withdrawal.
+  - Legal & Architectural Documentation:
+    - Assigned operational role owners and statuses for all 10 human actions in `docs/legal/01-human-actions.md`.
+    - Updated Decision Register (`DEC-38`, `DEC-55`, `DEC-56`).
+    - Architecture Decision Record `docs/decisions/022-archive-retention-and-hardening.md` (ADR-022).
+
 - PHASE-12 (Reports and the Generated Reports section):
   - Database Migration `0013_reports_history.py`:
     - Created `generated_reports` table (`report_key`, `country`, `period_start`, `period_end`, `kind`, `params`, `file_name`, `file_ref`, `version_no`, `status`, `sha256`, `file_size_bytes`, `visible_roles`, `generated_by`, `generated_at`).

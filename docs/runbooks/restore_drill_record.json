@@ -1,0 +1,58 @@
+{
+  "timestamp": "2026-11-16T11:07:49.041732+00:00",
+  "backup_duration_seconds": 0.45,
+  "restore_duration_seconds": 4.49,
+  "rto_target_seconds": 14400,
+  "rto_met": true,
+  "backup_size_bytes": 2212702,
+  "tables_verified": {
+    "employees": {
+      "source": 315,
+      "restored": 315,
+      "match": true
+    },
+    "worksites": {
+      "source": 4,
+      "restored": 4,
+      "match": true
+    },
+    "accommodations": {
+      "source": 0,
+      "restored": 0,
+      "match": true
+    },
+    "mobile_event_logs": {
+      "source": 0,
+      "restored": 0,
+      "match": true
+    },
+    "attendance_records": {
+      "source": 2,
+      "restored": 2,
+      "match": true
+    },
+    "payroll_runs": {
+      "source": 6,
+      "restored": 6,
+      "match": true
+    },
+    "audit_logs": {
+      "source": 5650,
+      "restored": 5650,
+      "match": true
+    },
+    "archive_records": {
+      "source": 4,
+      "restored": 4,
+      "match": true
+    },
+    "users": {
+      "source": 28,
+      "restored": 28,
+      "match": true
+    }
+  },
+  "invalid_geometries": 0,
+  "alembic_version": "0014_archive_and_retention",
+  "overall_status": "PASSED"
+}

@@ -1,10 +1,12 @@
 """API endpoints for Worksites, Job Items, Boundaries, and Occurrences (Phase 04)."""
 
-from datetime import date
+import io
+from datetime import UTC, date, datetime
 from uuid import UUID
 
+import xlsxwriter
 from fastapi import APIRouter, Depends, Query, status
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.core.db import get_db
@@ -58,6 +60,66 @@ async def list_worksites(
         is_active=is_active,
         limit=limit,
         offset=offset,
+    )
+
+
+@router.get("/worksites/export")
+async def export_worksites_excel(
+    q: str | None = Query(None),
+    country: str | None = None,
+    is_active: bool | None = True,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """Export worksites list to an Excel spreadsheet."""
+    worksites = await JobsService.list_worksites(
+        session=session,
+        q=q,
+        country=country,
+        is_active=is_active,
+        limit=5000,
+        offset=0,
+    )
+
+    output = io.BytesIO()
+    workbook = xlsxwriter.Workbook(output, {"in_memory": True})
+    sheet = workbook.add_worksheet("Worksites")
+    hdr = workbook.add_format(
+        {"bold": True, "bg_color": "#1E293B", "font_color": "#FFFFFF", "border": 1}
+    )
+    cell = workbook.add_format({"border": 1})
+    headers = [
+        "Job Number",
+        "Worksite Name",
+        "Country",
+        "Group",
+        "Zone",
+        "Has Boundary",
+        "Rep Latitude",
+        "Rep Longitude",
+        "Status",
+    ]
+    for i, h in enumerate(headers):
+        sheet.write(0, i, h, hdr)
+        sheet.set_column(i, i, max(len(h) + 4, 15))
+
+    for row_idx, w in enumerate(worksites, start=1):
+        sheet.write(row_idx, 0, w.job_number, cell)
+        sheet.write(row_idx, 1, w.job_name, cell)
+        sheet.write(row_idx, 2, w.country, cell)
+        sheet.write(row_idx, 3, w.group_name or "", cell)
+        sheet.write(row_idx, 4, w.zone_name or "", cell)
+        sheet.write(row_idx, 5, "Yes" if w.has_boundary else "No", cell)
+        sheet.write(row_idx, 6, str(w.rep_latitude) if w.rep_latitude else "", cell)
+        sheet.write(row_idx, 7, str(w.rep_longitude) if w.rep_longitude else "", cell)
+        sheet.write(row_idx, 8, "ACTIVE" if w.is_active else "INACTIVE", cell)
+
+    workbook.close()
+    filename = f"Worksites_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.xlsx"
+    return StreamingResponse(
+        io.BytesIO(output.getvalue()),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 

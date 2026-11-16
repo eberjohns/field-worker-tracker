@@ -12,7 +12,26 @@
           "Health"
         ],
         "summary": "Liveness check",
-        "operationId": "health_health_get",
+        "operationId": "health_health_head",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "head": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Liveness check",
+        "operationId": "health_health_head",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -33,7 +52,29 @@
           "Health"
         ],
         "summary": "Readiness check",
-        "operationId": "health_ready_health_ready_get",
+        "operationId": "health_ready_health_ready_head",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service not ready"
+          }
+        }
+      },
+      "head": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Readiness check",
+        "operationId": "health_ready_health_ready_head",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -580,6 +621,235 @@
                 "schema": {
                   "$ref": "#/components/schemas/EmployeeRead"
                 }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/employees/export": {
+      "get": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "Export Employees Directory",
+        "description": "Export filtered employee directory as an Excel spreadsheet.",
+        "operationId": "export_employees_directory_api_v1_employees_export_get",
+        "parameters": [
+          {
+            "name": "role",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Role"
+            }
+          },
+          {
+            "name": "country",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Country"
+            }
+          },
+          {
+            "name": "is_active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Is Active"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/employees/{employee_id}/export-dsar": {
+      "get": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "Export Employee Dsar",
+        "description": "Export complete Subject Access Request (DSAR) multi-sheet Excel file for an employee.",
+        "operationId": "export_employee_dsar_api_v1_employees__employee_id__export_dsar_get",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Employee Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/employees/{employee_id}/withdraw-consent": {
+      "post": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "Admin Withdraw Consent",
+        "description": "Administrator records worker consent withdrawal.",
+        "operationId": "admin_withdraw_consent_api_v1_employees__employee_id__withdraw_consent_post",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Employee Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/MobileConsentWithdrawRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           },
@@ -2501,6 +2771,85 @@
         }
       }
     },
+    "/api/v1/mobile/consent/withdraw": {
+      "post": {
+        "tags": [
+          "mobile"
+        ],
+        "summary": "Mobile Withdraw Consent",
+        "description": "Worker withdraws tracking consent; stops tracking and notifies Admin.",
+        "operationId": "mobile_withdraw_consent_api_v1_mobile_consent_withdraw_post",
+        "parameters": [
+          {
+            "name": "allow_password_change_pending",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Allow Password Change Pending"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/MobileConsentWithdrawRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Mobile Withdraw Consent Api V1 Mobile Consent Withdraw Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/mobile/policy/location": {
       "get": {
         "tags": [
@@ -3189,6 +3538,60 @@
                     "$ref": "#/components/schemas/CompanySettingRead"
                   },
                   "title": "Response List Resolved Settings Api V1 Settings Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/settings/staff-grades": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "List Staff Grades",
+        "description": "Return distinct staff grade descriptions across employees and settings.",
+        "operationId": "list_staff_grades_api_v1_settings_staff_grades_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Response List Staff Grades Api V1 Settings Staff Grades Get"
                 }
               }
             }
@@ -4771,6 +5174,1171 @@
         }
       }
     },
+    "/api/v1/payroll/runs": {
+      "post": {
+        "tags": [
+          "payroll"
+        ],
+        "summary": "Generate Payroll Run",
+        "description": "Generate or re-run a DRAFT payroll run for a month.",
+        "operationId": "generate_payroll_run_api_v1_payroll_runs_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PayrollRunCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PayrollRunDetailRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "payroll"
+        ],
+        "summary": "List Payroll Runs",
+        "description": "List payroll runs with status, totals, and run counts.",
+        "operationId": "list_payroll_runs_api_v1_payroll_runs_get",
+        "parameters": [
+          {
+            "name": "country",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Country"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PayrollRunRead"
+                  },
+                  "title": "Response List Payroll Runs Api V1 Payroll Runs Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/payroll/runs/{run_id}": {
+      "get": {
+        "tags": [
+          "payroll"
+        ],
+        "summary": "Get Payroll Run",
+        "description": "Get payroll run detail with worker records.",
+        "operationId": "get_payroll_run_api_v1_payroll_runs__run_id__get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PayrollRunDetailRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/payroll/runs/{run_id}/issues": {
+      "get": {
+        "tags": [
+          "payroll"
+        ],
+        "summary": "Get Payroll Run Issues",
+        "description": "List issues needing review before approval (unapproved OT, missing salary structures).",
+        "operationId": "get_payroll_run_issues_api_v1_payroll_runs__run_id__issues_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PayrollRunIssuesResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/payroll/runs/{run_id}/approve": {
+      "post": {
+        "tags": [
+          "payroll"
+        ],
+        "summary": "Approve Payroll Run",
+        "description": "Approve a DRAFT payroll run: freeze it, snapshot records, and lock month attendance.",
+        "operationId": "approve_payroll_run_api_v1_payroll_runs__run_id__approve_post",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "notes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Notes"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PayrollRunRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/payroll/records": {
+      "get": {
+        "tags": [
+          "payroll"
+        ],
+        "summary": "List Payroll Records",
+        "description": "List payroll records for a run, scoped to user.",
+        "operationId": "list_payroll_records_api_v1_payroll_records_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PayrollRecordRead"
+                  },
+                  "title": "Response List Payroll Records Api V1 Payroll Records Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/payroll/my-records": {
+      "get": {
+        "tags": [
+          "payroll"
+        ],
+        "summary": "Get My Payroll Records",
+        "description": "Worker's own approved monthly payroll records (employer provisions stripped).",
+        "operationId": "get_my_payroll_records_api_v1_payroll_my_records_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WorkerMobilePayrollSlip"
+                  },
+                  "title": "Response Get My Payroll Records Api V1 Payroll My Records Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mobile/me/payroll": {
+      "get": {
+        "tags": [
+          "payroll"
+        ],
+        "summary": "Get My Payroll Records",
+        "description": "Worker's own approved monthly payroll records (employer provisions stripped).",
+        "operationId": "get_my_payroll_records_api_v1_mobile_me_payroll_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WorkerMobilePayrollSlip"
+                  },
+                  "title": "Response Get My Payroll Records Api V1 Mobile Me Payroll Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/salary-revisions": {
+      "get": {
+        "tags": [
+          "payroll"
+        ],
+        "summary": "List Salary Revisions",
+        "description": "List all salary revisions.",
+        "operationId": "list_salary_revisions_api_v1_salary_revisions_get",
+        "parameters": [
+          {
+            "name": "country",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Country"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SalaryRevisionRead"
+                  },
+                  "title": "Response List Salary Revisions Api V1 Salary Revisions Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "payroll"
+        ],
+        "summary": "Create Salary Revision",
+        "description": "Create a new salary revision with grade lines.",
+        "operationId": "create_salary_revision_api_v1_salary_revisions_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SalaryRevisionCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SalaryRevisionDetailRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/salary-revisions/{code}": {
+      "get": {
+        "tags": [
+          "payroll"
+        ],
+        "summary": "Get Salary Revision Detail",
+        "description": "Get full details of a salary revision with grade lines and calculated planned rates.",
+        "operationId": "get_salary_revision_detail_api_v1_salary_revisions__code__get",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Code"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SalaryRevisionDetailRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/salary-revisions/{code}/export-template": {
+      "get": {
+        "tags": [
+          "payroll"
+        ],
+        "summary": "Export Salary Revision Template",
+        "description": "Download professionally formatted Excel (.xlsx) template pre-populated with revision lines.",
+        "operationId": "export_salary_revision_template_api_v1_salary_revisions__code__export_template_get",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Code"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/salary-revisions/diff": {
+      "post": {
+        "tags": [
+          "payroll"
+        ],
+        "summary": "Diff Salary Revision",
+        "description": "Produce a side-by-side diff comparing incoming revision lines against a base revision.",
+        "operationId": "diff_salary_revision_api_v1_salary_revisions_diff_post",
+        "parameters": [
+          {
+            "name": "target_revision_code",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Target Revision Code"
+            }
+          },
+          {
+            "name": "base_revision_code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Base Revision Code"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SalaryRevisionLineCreate-Input"
+                },
+                "title": "Incoming Lines"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SalaryRevisionImportDiffResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/salary-revisions/preview-file": {
+      "post": {
+        "tags": [
+          "payroll"
+        ],
+        "summary": "Preview Salary Revision File",
+        "description": "Upload Excel (.xlsx/.xls) or CSV template to parse and calculate side-by-side diff against base revision.",
+        "operationId": "preview_salary_revision_file_api_v1_salary_revisions_preview_file_post",
+        "parameters": [
+          {
+            "name": "target_revision_code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Target revision code to create",
+              "title": "Target Revision Code"
+            },
+            "description": "Target revision code to create"
+          },
+          {
+            "name": "base_revision_code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Base revision code for comparison",
+              "title": "Base Revision Code"
+            },
+            "description": "Base revision code for comparison"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SalaryRevisionImportDiffResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/payroll/budget-vs-actual": {
+      "get": {
+        "tags": [
+          "payroll"
+        ],
+        "summary": "Get Budget Vs Actual",
+        "description": "Calculate dynamic contract budget from assigned revision lines and items vs actual allocated cost.",
+        "operationId": "get_budget_vs_actual_api_v1_payroll_budget_vs_actual_get",
+        "parameters": [
+          {
+            "name": "country",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Country"
+            }
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WorksiteBudgetVsActualItem"
+                  },
+                  "title": "Response Get Budget Vs Actual Api V1 Payroll Budget Vs Actual Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/payroll/worksites/{worksite_id}/revision": {
+      "put": {
+        "tags": [
+          "payroll"
+        ],
+        "summary": "Update Worksite Revision",
+        "description": "Bind a specific salary revision code to a worksite for job budget calculation.",
+        "operationId": "update_worksite_revision_api_v1_payroll_worksites__worksite_id__revision_put",
+        "parameters": [
+          {
+            "name": "worksite_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Worksite Id"
+            }
+          },
+          {
+            "name": "revision_code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Salary revision code to bind, or empty/null to clear",
+              "title": "Revision Code"
+            },
+            "description": "Salary revision code to bind, or empty/null to clear"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/payroll/auto-run-check": {
+      "post": {
+        "tags": [
+          "payroll"
+        ],
+        "summary": "Trigger Auto Draft Check",
+        "description": "Check for completed previous calendar months past delay days and auto-generate draft.",
+        "operationId": "trigger_auto_draft_check_api_v1_payroll_auto_run_check_post",
+        "parameters": [
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PayrollRunRead"
+                  },
+                  "title": "Response Trigger Auto Draft Check Api V1 Payroll Auto Run Check Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/worksites": {
       "get": {
         "tags": [
@@ -5007,6 +6575,103 @@
         }
       }
     },
+    "/api/v1/worksites/export": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Export Worksites Excel",
+        "description": "Export worksites list to an Excel spreadsheet.",
+        "operationId": "export_worksites_excel_api_v1_worksites_export_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "name": "country",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Country"
+            }
+          },
+          {
+            "name": "is_active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": true,
+              "title": "Is Active"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/worksites/{worksite_id}": {
       "get": {
         "tags": [
@@ -5219,6 +6884,153 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/BoundaryQueueResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/boundaries/export": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Export Boundaries",
+        "description": "Export all worksite and accommodation boundaries as CSV or JSON.",
+        "operationId": "export_boundaries_api_v1_boundaries_export_get",
+        "parameters": [
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^(csv|json)$",
+              "default": "csv",
+              "title": "Format"
+            }
+          },
+          {
+            "name": "entity_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(WORKSITE|ACCOMMODATION)$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Entity Type"
+            }
+          },
+          {
+            "name": "polygon_format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^(WKT|GeoJSON)$",
+              "default": "WKT",
+              "title": "Polygon Format"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/boundaries/import": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Import Boundaries",
+        "description": "Bulk import boundaries with row-level validation and skip reporting.",
+        "operationId": "import_boundaries_api_v1_boundaries_import_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BoundaryImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoundaryImportResponse"
                 }
               }
             }
@@ -10721,6 +12533,1208 @@
           }
         }
       }
+    },
+    "/api/v1/reports": {
+      "get": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "List Available Reports",
+        "description": "List reports accessible to the calling user's role.",
+        "operationId": "list_available_reports_api_v1_reports_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ReportDefinition"
+                  },
+                  "title": "Response List Available Reports Api V1 Reports Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reports/{key}": {
+      "get": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "Get Report Data",
+        "description": "Run a report with filter parameters (paginated, scope applied).",
+        "operationId": "get_report_data_api_v1_reports__key__get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date From"
+            }
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date To"
+            }
+          },
+          {
+            "name": "worksite_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Worksite Id"
+            }
+          },
+          {
+            "name": "group_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Group Id"
+            }
+          },
+          {
+            "name": "zone_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Zone Id"
+            }
+          },
+          {
+            "name": "supervisor_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Supervisor Id"
+            }
+          },
+          {
+            "name": "superintendent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Superintendent Id"
+            }
+          },
+          {
+            "name": "engineer_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Engineer Id"
+            }
+          },
+          {
+            "name": "employee_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Employee Id"
+            }
+          },
+          {
+            "name": "sgd",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sgd"
+            }
+          },
+          {
+            "name": "country",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": "AE",
+              "title": "Country"
+            }
+          },
+          {
+            "name": "month",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Month"
+            }
+          },
+          {
+            "name": "year",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Year"
+            }
+          },
+          {
+            "name": "week_start",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Week Start"
+            }
+          },
+          {
+            "name": "payroll_run_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Payroll Run Id"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 50,
+              "title": "Page Size"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportDataResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reports/{key}/export": {
+      "post": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "Request Report Export",
+        "description": "Trigger report export as a background job (supports xlsx, csv, pdf).",
+        "operationId": "request_report_export_api_v1_reports__key__export_post",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportExportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportExportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/exports/{export_id}": {
+      "get": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "Get Export Status",
+        "description": "Check status of a requested report export job.",
+        "operationId": "get_export_status_api_v1_exports__export_id__get",
+        "parameters": [
+          {
+            "name": "export_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Export Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportExportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/exports/{export_id}/download": {
+      "get": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "Download Export File",
+        "description": "Download the completed export file.",
+        "operationId": "download_export_file_api_v1_exports__export_id__download_get",
+        "parameters": [
+          {
+            "name": "export_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Export Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/generated-reports": {
+      "get": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "List Generated Reports",
+        "description": "List archived month-end and on-demand report history files.",
+        "operationId": "list_generated_reports_api_v1_generated_reports_get",
+        "parameters": [
+          {
+            "name": "report_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Report Key"
+            }
+          },
+          {
+            "name": "country",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Country"
+            }
+          },
+          {
+            "name": "period",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Period"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GeneratedReportRead"
+                  },
+                  "title": "Response List Generated Reports Api V1 Generated Reports Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/generated-reports/{report_id}/download": {
+      "get": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "Download Generated Report",
+        "description": "Re-download an archived generated report file.",
+        "operationId": "download_generated_report_api_v1_generated_reports__report_id__download_get",
+        "parameters": [
+          {
+            "name": "report_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Report Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/archives": {
+      "get": {
+        "tags": [
+          "admin-archive"
+        ],
+        "summary": "List Archives",
+        "description": "List yearly archive records with SHA-256 checksums, encryption algorithm, and status.",
+        "operationId": "list_archives_api_v1_admin_archives_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ArchiveRecordResponse"
+                  },
+                  "title": "Response List Archives Api V1 Admin Archives Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/archives/generate": {
+      "post": {
+        "tags": [
+          "admin-archive"
+        ],
+        "summary": "Generate Archive",
+        "description": "Trigger yearly data archive, compute SHA-256, encrypt with AES-256-GCM, and optionally purge live records.",
+        "operationId": "generate_archive_api_v1_admin_archives_generate_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArchiveTriggerRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArchiveRecordResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/archives/{archive_id}": {
+      "get": {
+        "tags": [
+          "admin-archive"
+        ],
+        "summary": "Get Archive Record",
+        "description": "Retrieve details for a single archive record.",
+        "operationId": "get_archive_record_api_v1_admin_archives__archive_id__get",
+        "parameters": [
+          {
+            "name": "archive_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Archive Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArchiveRecordResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/archives/{archive_id}/download": {
+      "get": {
+        "tags": [
+          "admin-archive"
+        ],
+        "summary": "Download Encrypted Archive",
+        "description": "Download the encrypted yearly archive file with integrity headers.",
+        "operationId": "download_encrypted_archive_api_v1_admin_archives__archive_id__download_get",
+        "parameters": [
+          {
+            "name": "archive_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Archive Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/archives/{archive_id}/verify": {
+      "post": {
+        "tags": [
+          "admin-archive"
+        ],
+        "summary": "Verify Archive Integrity",
+        "description": "Verify archive SHA-256 checksum and sample decryption to ensure file is uncorrupted and recoverable.",
+        "operationId": "verify_archive_integrity_api_v1_admin_archives__archive_id__verify_post",
+        "parameters": [
+          {
+            "name": "archive_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Archive Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArchiveVerificationResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/retention/run": {
+      "post": {
+        "tags": [
+          "admin-retention"
+        ],
+        "summary": "Run Retention Purge",
+        "description": "Execute scheduled retention cleanup: purge sync_changes (>60d) and notifications (>6mo).",
+        "operationId": "run_retention_purge_api_v1_admin_retention_run_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetentionPurgeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetentionPurgeResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/retention/anonymise": {
+      "post": {
+        "tags": [
+          "admin-retention"
+        ],
+        "summary": "Run Employee Anonymisation",
+        "description": "Anonymise workers whose employment ended past the statutory retention window (default 2 years).",
+        "operationId": "run_employee_anonymisation_api_v1_admin_retention_anonymise_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnonymisationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnonymisationResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -11069,6 +14083,66 @@
         "title": "AlertResponse",
         "description": "API representation of an alert."
       },
+      "AnonymisationRequest": {
+        "properties": {
+          "older_than_years": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Older Than Years",
+            "description": "Minimum years since end of employment before anonymising (default 2 years)",
+            "default": 2
+          },
+          "employee_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Ids",
+            "description": "Optional specific list of employee IDs to anonymise"
+          }
+        },
+        "type": "object",
+        "title": "AnonymisationRequest",
+        "description": "Request to run employee anonymisation."
+      },
+      "AnonymisationResult": {
+        "properties": {
+          "anonymised_employees_count": {
+            "type": "integer",
+            "title": "Anonymised Employees Count"
+          },
+          "anonymised_employee_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Anonymised Employee Ids"
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Completed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "anonymised_employees_count",
+          "anonymised_employee_ids",
+          "completed_at"
+        ],
+        "title": "AnonymisationResult",
+        "description": "Result summary of employee anonymisation."
+      },
       "ApprovalsCounts": {
         "properties": {
           "leave": {
@@ -11128,6 +14202,166 @@
           "counts"
         ],
         "title": "ApprovalsInboxResponse"
+      },
+      "ArchiveRecordResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "year": {
+            "type": "integer",
+            "title": "Year"
+          },
+          "file_name": {
+            "type": "string",
+            "title": "File Name"
+          },
+          "file_size_bytes": {
+            "type": "integer",
+            "title": "File Size Bytes"
+          },
+          "sha256_checksum": {
+            "type": "string",
+            "title": "Sha256 Checksum"
+          },
+          "encryption_algo": {
+            "type": "string",
+            "title": "Encryption Algo"
+          },
+          "record_count": {
+            "type": "integer",
+            "title": "Record Count"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "archived_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Archived At"
+          },
+          "verified_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified At"
+          },
+          "purged_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purged At"
+          },
+          "purged_record_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purged Record Count"
+          },
+          "details": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Details"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "year",
+          "file_name",
+          "file_size_bytes",
+          "sha256_checksum",
+          "encryption_algo",
+          "record_count",
+          "status",
+          "archived_at",
+          "created_at"
+        ],
+        "title": "ArchiveRecordResponse",
+        "description": "Schema for archive metadata response."
+      },
+      "ArchiveTriggerRequest": {
+        "properties": {
+          "year": {
+            "type": "integer",
+            "maximum": 2100.0,
+            "minimum": 2020.0,
+            "title": "Year",
+            "description": "Calendar year to archive"
+          },
+          "purge_live_events": {
+            "type": "boolean",
+            "title": "Purge Live Events",
+            "description": "Whether to purge the archived raw events/visits from live database after verification",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "year"
+        ],
+        "title": "ArchiveTriggerRequest",
+        "description": "Request to generate yearly archive."
+      },
+      "ArchiveVerificationResult": {
+        "properties": {
+          "archive_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Archive Id"
+          },
+          "verified": {
+            "type": "boolean",
+            "title": "Verified"
+          },
+          "record_count": {
+            "type": "integer",
+            "title": "Record Count"
+          },
+          "sha256_checksum": {
+            "type": "string",
+            "title": "Sha256 Checksum"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "archive_id",
+          "verified",
+          "record_count",
+          "sha256_checksum",
+          "message"
+        ],
+        "title": "ArchiveVerificationResult",
+        "description": "Response from verifying an archive package."
       },
       "AssignedWorkerSummary": {
         "properties": {
@@ -12554,6 +15788,106 @@
           "target_worksite_ids"
         ],
         "title": "BoundaryCopyToRequest"
+      },
+      "BoundaryImportError": {
+        "properties": {
+          "row": {
+            "type": "integer",
+            "title": "Row"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "entity_type": {
+            "type": "string",
+            "title": "Entity Type"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "row",
+          "code",
+          "entity_type",
+          "reason"
+        ],
+        "title": "BoundaryImportError"
+      },
+      "BoundaryImportItem": {
+        "properties": {
+          "entity_type": {
+            "type": "string",
+            "title": "Entity Type",
+            "description": "WORKSITE or ACCOMMODATION"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code",
+            "description": "Worksite job number or accommodation code"
+          },
+          "polygon": {
+            "title": "Polygon",
+            "description": "GeoJSON dict/string or WKT string"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entity_type",
+          "code",
+          "polygon"
+        ],
+        "title": "BoundaryImportItem"
+      },
+      "BoundaryImportRequest": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BoundaryImportItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "BoundaryImportRequest"
+      },
+      "BoundaryImportResponse": {
+        "properties": {
+          "total_rows": {
+            "type": "integer",
+            "title": "Total Rows"
+          },
+          "updated_count": {
+            "type": "integer",
+            "title": "Updated Count"
+          },
+          "skipped_count": {
+            "type": "integer",
+            "title": "Skipped Count"
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/BoundaryImportError"
+            },
+            "type": "array",
+            "title": "Errors"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_rows",
+          "updated_count",
+          "skipped_count",
+          "errors"
+        ],
+        "title": "BoundaryImportResponse"
       },
       "BoundaryQueueItemResponse": {
         "properties": {
@@ -14586,6 +17920,110 @@
         "type": "object",
         "title": "GenerateOccurrencesRequest"
       },
+      "GeneratedReportRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "report_key": {
+            "type": "string",
+            "title": "Report Key"
+          },
+          "country": {
+            "type": "string",
+            "title": "Country"
+          },
+          "period_start": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Start"
+          },
+          "period_end": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period End"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "file_name": {
+            "type": "string",
+            "title": "File Name"
+          },
+          "version_no": {
+            "type": "integer",
+            "title": "Version No"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "visible_roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Visible Roles"
+          },
+          "generated_by": {
+            "type": "string",
+            "title": "Generated By"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          },
+          "file_size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Size Bytes"
+          },
+          "download_url": {
+            "type": "string",
+            "title": "Download Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "report_key",
+          "country",
+          "kind",
+          "file_name",
+          "version_no",
+          "status",
+          "visible_roles",
+          "generated_by",
+          "generated_at",
+          "download_url"
+        ],
+        "title": "GeneratedReportRead",
+        "description": "Archived generated report item."
+      },
       "GradeChangeRequest": {
         "properties": {
           "new_grade_code": {
@@ -16476,6 +19914,23 @@
         ],
         "title": "MobileConsentRequest"
       },
+      "MobileConsentWithdrawRequest": {
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "title": "MobileConsentWithdrawRequest"
+      },
       "MobileDeviceRegistration": {
         "properties": {
           "device_identifier": {
@@ -17734,6 +21189,829 @@
         ],
         "title": "PasswordChangeRequest"
       },
+      "PayrollIssueItem": {
+        "properties": {
+          "issue_type": {
+            "type": "string",
+            "title": "Issue Type"
+          },
+          "employee_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Employee Id"
+          },
+          "tally_id": {
+            "type": "string",
+            "title": "Tally Id"
+          },
+          "employee_name": {
+            "type": "string",
+            "title": "Employee Name"
+          },
+          "details": {
+            "type": "string",
+            "title": "Details"
+          },
+          "work_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Work Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "issue_type",
+          "employee_id",
+          "tally_id",
+          "employee_name",
+          "details"
+        ],
+        "title": "PayrollIssueItem"
+      },
+      "PayrollRecordRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "employee_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Employee Id"
+          },
+          "tally_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tally Id"
+          },
+          "employee_tally_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Tally Id"
+          },
+          "employee_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Name"
+          },
+          "employee_role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Role"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "standard_hours": {
+            "type": "string",
+            "title": "Standard Hours"
+          },
+          "standard_monthly_hours": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Standard Monthly Hours"
+          },
+          "scheduled_hours": {
+            "type": "string",
+            "title": "Scheduled Hours"
+          },
+          "worked_hours": {
+            "type": "string",
+            "title": "Worked Hours"
+          },
+          "actual_worked_hours": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Worked Hours"
+          },
+          "paid_leave_hours": {
+            "type": "string",
+            "title": "Paid Leave Hours"
+          },
+          "unpaid_leave_hours": {
+            "type": "string",
+            "title": "Unpaid Leave Hours"
+          },
+          "shortfall_hours": {
+            "type": "string",
+            "title": "Shortfall Hours"
+          },
+          "missed_hours": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Missed Hours"
+          },
+          "missed_hours_deduction": {
+            "type": "string",
+            "title": "Missed Hours Deduction"
+          },
+          "ot1_hours": {
+            "type": "string",
+            "title": "Ot1 Hours"
+          },
+          "ot2_hours": {
+            "type": "string",
+            "title": "Ot2 Hours"
+          },
+          "salary_portion": {
+            "type": "string",
+            "title": "Salary Portion"
+          },
+          "basic_salary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basic Salary"
+          },
+          "special_allowance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Special Allowance"
+          },
+          "fixed_ot_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fixed Ot Amount"
+          },
+          "bonus": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bonus"
+          },
+          "telephone_allowance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telephone Allowance"
+          },
+          "housing_transport_allowance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Housing Transport Allowance"
+          },
+          "ot1_rate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ot1 Rate"
+          },
+          "ot2_rate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ot2 Rate"
+          },
+          "ot1_amount": {
+            "type": "string",
+            "title": "Ot1 Amount"
+          },
+          "ot2_amount": {
+            "type": "string",
+            "title": "Ot2 Amount"
+          },
+          "gross_pay": {
+            "type": "string",
+            "title": "Gross Pay"
+          },
+          "total_deductions": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Deductions"
+          },
+          "net_pay": {
+            "type": "string",
+            "title": "Net Pay"
+          },
+          "gratuity": {
+            "type": "string",
+            "title": "Gratuity"
+          },
+          "gratuity_provision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gratuity Provision"
+          },
+          "leave_salary": {
+            "type": "string",
+            "title": "Leave Salary"
+          },
+          "leave_salary_provision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leave Salary Provision"
+          },
+          "provisions": {
+            "type": "string",
+            "title": "Provisions"
+          },
+          "company_provisions_total": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Provisions Total"
+          },
+          "per_month_provision": {
+            "type": "string",
+            "title": "Per Month Provision"
+          },
+          "total_staff_cost": {
+            "type": "string",
+            "title": "Total Staff Cost"
+          },
+          "hr_oh_amount": {
+            "type": "string",
+            "title": "Hr Oh Amount"
+          },
+          "hr_overhead_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hr Overhead Amount"
+          },
+          "final_total_staff_cost": {
+            "type": "string",
+            "title": "Final Total Staff Cost"
+          },
+          "snapshot": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Snapshot"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "employee_id",
+          "standard_hours",
+          "scheduled_hours",
+          "worked_hours",
+          "paid_leave_hours",
+          "unpaid_leave_hours",
+          "shortfall_hours",
+          "missed_hours_deduction",
+          "ot1_hours",
+          "ot2_hours",
+          "salary_portion",
+          "ot1_amount",
+          "ot2_amount",
+          "gross_pay",
+          "net_pay",
+          "gratuity",
+          "leave_salary",
+          "provisions",
+          "per_month_provision",
+          "total_staff_cost",
+          "hr_oh_amount",
+          "final_total_staff_cost",
+          "created_at"
+        ],
+        "title": "PayrollRecordRead"
+      },
+      "PayrollRunCreate": {
+        "properties": {
+          "period_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Period Start"
+          },
+          "period_end": {
+            "type": "string",
+            "format": "date",
+            "title": "Period End"
+          },
+          "country": {
+            "type": "string",
+            "title": "Country",
+            "default": "AE"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "period_start",
+          "period_end"
+        ],
+        "title": "PayrollRunCreate"
+      },
+      "PayrollRunDetailRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "period_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Period Start"
+          },
+          "period_end": {
+            "type": "string",
+            "format": "date",
+            "title": "Period End"
+          },
+          "country": {
+            "type": "string",
+            "title": "Country"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "run_no": {
+            "type": "integer",
+            "title": "Run No"
+          },
+          "created_by": {
+            "type": "string",
+            "title": "Created By"
+          },
+          "created_by_user_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By User Id"
+          },
+          "approved_by_user_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved By User Id"
+          },
+          "approved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "calculation_version": {
+            "type": "string",
+            "title": "Calculation Version"
+          },
+          "totals_snapshot": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PayrollTotalsSnapshot"
+              },
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Totals Snapshot"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "record_count": {
+            "type": "integer",
+            "title": "Record Count",
+            "default": 0
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/PayrollRecordRead"
+            },
+            "type": "array",
+            "title": "Records"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "period_start",
+          "period_end",
+          "country",
+          "status",
+          "run_no",
+          "created_by",
+          "calculation_version",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "PayrollRunDetailRead"
+      },
+      "PayrollRunIssuesResponse": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "total_issues": {
+            "type": "integer",
+            "title": "Total Issues"
+          },
+          "unapproved_overtime_count": {
+            "type": "integer",
+            "title": "Unapproved Overtime Count"
+          },
+          "missing_salary_structure_count": {
+            "type": "integer",
+            "title": "Missing Salary Structure Count"
+          },
+          "missing_standard_hours_count": {
+            "type": "integer",
+            "title": "Missing Standard Hours Count"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/PayrollIssueItem"
+            },
+            "type": "array",
+            "title": "Issues"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "total_issues",
+          "unapproved_overtime_count",
+          "missing_salary_structure_count",
+          "missing_standard_hours_count"
+        ],
+        "title": "PayrollRunIssuesResponse"
+      },
+      "PayrollRunRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "period_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Period Start"
+          },
+          "period_end": {
+            "type": "string",
+            "format": "date",
+            "title": "Period End"
+          },
+          "country": {
+            "type": "string",
+            "title": "Country"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "run_no": {
+            "type": "integer",
+            "title": "Run No"
+          },
+          "created_by": {
+            "type": "string",
+            "title": "Created By"
+          },
+          "created_by_user_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By User Id"
+          },
+          "approved_by_user_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved By User Id"
+          },
+          "approved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "calculation_version": {
+            "type": "string",
+            "title": "Calculation Version"
+          },
+          "totals_snapshot": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PayrollTotalsSnapshot"
+              },
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Totals Snapshot"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "record_count": {
+            "type": "integer",
+            "title": "Record Count",
+            "default": 0
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "period_start",
+          "period_end",
+          "country",
+          "status",
+          "run_no",
+          "created_by",
+          "calculation_version",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "PayrollRunRead"
+      },
+      "PayrollTotalsSnapshot": {
+        "properties": {
+          "worker_count": {
+            "type": "integer",
+            "title": "Worker Count",
+            "default": 0
+          },
+          "scheduled_hours_total": {
+            "type": "string",
+            "title": "Scheduled Hours Total",
+            "default": "0.00"
+          },
+          "worked_hours_total": {
+            "type": "string",
+            "title": "Worked Hours Total",
+            "default": "0.00"
+          },
+          "ot1_hours_total": {
+            "type": "string",
+            "title": "Ot1 Hours Total",
+            "default": "0.00"
+          },
+          "ot2_hours_total": {
+            "type": "string",
+            "title": "Ot2 Hours Total",
+            "default": "0.00"
+          },
+          "ot1_amount_total": {
+            "type": "string",
+            "title": "Ot1 Amount Total",
+            "default": "0.00"
+          },
+          "ot2_amount_total": {
+            "type": "string",
+            "title": "Ot2 Amount Total",
+            "default": "0.00"
+          },
+          "gross_pay_total": {
+            "type": "string",
+            "title": "Gross Pay Total",
+            "default": "0.00"
+          },
+          "net_pay_total": {
+            "type": "string",
+            "title": "Net Pay Total",
+            "default": "0.00"
+          },
+          "provisions_total": {
+            "type": "string",
+            "title": "Provisions Total",
+            "default": "0.00"
+          },
+          "total_staff_cost_total": {
+            "type": "string",
+            "title": "Total Staff Cost Total",
+            "default": "0.00"
+          },
+          "final_total_staff_cost_total": {
+            "type": "string",
+            "title": "Final Total Staff Cost Total",
+            "default": "0.00"
+          }
+        },
+        "type": "object",
+        "title": "PayrollTotalsSnapshot"
+      },
       "PendingVisitCloseRequest": {
         "properties": {
           "reason": {
@@ -17859,7 +22137,14 @@
             "title": "Worksite Id"
           },
           "worksite_name": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Worksite Name"
           },
           "job_number": {
@@ -17924,7 +22209,14 @@
             "title": "Employee Id"
           },
           "employee_name": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Employee Name"
           },
           "tally_id": {
@@ -18087,9 +22379,7 @@
           "id",
           "scheduled_work_id",
           "worksite_id",
-          "worksite_name",
           "employee_id",
-          "employee_name",
           "due_date",
           "detected_on",
           "age_days",
@@ -18858,6 +23148,254 @@
         ],
         "title": "RejectReason"
       },
+      "ReportColumn": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "default": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label"
+        ],
+        "title": "ReportColumn",
+        "description": "Metadata for a report column."
+      },
+      "ReportDataResponse": {
+        "properties": {
+          "report_key": {
+            "type": "string",
+            "title": "Report Key"
+          },
+          "total_rows": {
+            "type": "integer",
+            "title": "Total Rows"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          },
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/ReportColumn"
+            },
+            "type": "array",
+            "title": "Columns"
+          },
+          "data": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "summary": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Summary"
+          }
+        },
+        "type": "object",
+        "required": [
+          "report_key",
+          "total_rows",
+          "page",
+          "page_size",
+          "columns",
+          "data"
+        ],
+        "title": "ReportDataResponse",
+        "description": "Paginated report results."
+      },
+      "ReportDefinition": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "allowed_roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Allowed Roles"
+          },
+          "is_cost_report": {
+            "type": "boolean",
+            "title": "Is Cost Report"
+          },
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/ReportColumn"
+            },
+            "type": "array",
+            "title": "Columns"
+          },
+          "supported_formats": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Supported Formats"
+          },
+          "filter_schema": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Filter Schema"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "name",
+          "description",
+          "category",
+          "allowed_roles",
+          "is_cost_report",
+          "columns",
+          "supported_formats"
+        ],
+        "title": "ReportDefinition",
+        "description": "Specification of an available report."
+      },
+      "ReportExportRequest": {
+        "properties": {
+          "format": {
+            "type": "string",
+            "pattern": "^(xlsx|csv|pdf)$",
+            "title": "Format",
+            "default": "xlsx"
+          },
+          "params": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Params"
+          }
+        },
+        "type": "object",
+        "title": "ReportExportRequest",
+        "description": "Export request body."
+      },
+      "ReportExportResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "report_key": {
+            "type": "string",
+            "title": "Report Key"
+          },
+          "format": {
+            "type": "string",
+            "title": "Format"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "download_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Download Url"
+          },
+          "file_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Name"
+          },
+          "file_size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Size Bytes"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "report_key",
+          "format",
+          "status",
+          "created_at"
+        ],
+        "title": "ReportExportResponse",
+        "description": "Export job status response."
+      },
       "ReportingLineCreate": {
         "properties": {
           "manager_id": {
@@ -18992,6 +23530,724 @@
           "message"
         ],
         "title": "ResetPasswordResponse"
+      },
+      "RetentionPurgeRequest": {
+        "properties": {
+          "purge_sync_older_than_days": {
+            "type": "integer",
+            "maximum": 365.0,
+            "minimum": 30.0,
+            "title": "Purge Sync Older Than Days",
+            "description": "Retention for mobile sync changes (default 60 days)",
+            "default": 60
+          },
+          "purge_notifications_older_than_months": {
+            "type": "integer",
+            "maximum": 24.0,
+            "minimum": 1.0,
+            "title": "Purge Notifications Older Than Months",
+            "description": "Retention for notification logs (default 6 months)",
+            "default": 6
+          }
+        },
+        "type": "object",
+        "title": "RetentionPurgeRequest",
+        "description": "Request parameters for retention cleanup jobs."
+      },
+      "RetentionPurgeResult": {
+        "properties": {
+          "sync_changes_purged": {
+            "type": "integer",
+            "title": "Sync Changes Purged"
+          },
+          "notification_logs_purged": {
+            "type": "integer",
+            "title": "Notification Logs Purged"
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Completed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sync_changes_purged",
+          "notification_logs_purged",
+          "completed_at"
+        ],
+        "title": "RetentionPurgeResult",
+        "description": "Summary of purged records from retention run."
+      },
+      "SalaryRevisionCreate": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 2,
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 2,
+            "title": "Name"
+          },
+          "country": {
+            "type": "string",
+            "maxLength": 10,
+            "title": "Country",
+            "default": "AE"
+          },
+          "effective_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Effective From"
+          },
+          "effective_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective To"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/SalaryRevisionLineCreate-Input"
+            },
+            "type": "array",
+            "title": "Lines"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "effective_from"
+        ],
+        "title": "SalaryRevisionCreate"
+      },
+      "SalaryRevisionDetailRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "country": {
+            "type": "string",
+            "title": "Country"
+          },
+          "effective_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Effective From"
+          },
+          "effective_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective To"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "line_count": {
+            "type": "integer",
+            "title": "Line Count",
+            "default": 0
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/SalaryRevisionLineRead"
+            },
+            "type": "array",
+            "title": "Lines"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "name",
+          "country",
+          "effective_from",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "SalaryRevisionDetailRead"
+      },
+      "SalaryRevisionImportDiffResponse": {
+        "properties": {
+          "target_revision_code": {
+            "type": "string",
+            "title": "Target Revision Code"
+          },
+          "base_revision_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Revision Code"
+          },
+          "new_grades_count": {
+            "type": "integer",
+            "title": "New Grades Count"
+          },
+          "updated_grades_count": {
+            "type": "integer",
+            "title": "Updated Grades Count"
+          },
+          "unchanged_grades_count": {
+            "type": "integer",
+            "title": "Unchanged Grades Count"
+          },
+          "diffs": {
+            "items": {
+              "$ref": "#/components/schemas/SalaryRevisionLineDiff"
+            },
+            "type": "array",
+            "title": "Diffs"
+          },
+          "preview_lines": {
+            "items": {
+              "$ref": "#/components/schemas/SalaryRevisionLineCreate-Output"
+            },
+            "type": "array",
+            "title": "Preview Lines"
+          }
+        },
+        "type": "object",
+        "required": [
+          "target_revision_code",
+          "new_grades_count",
+          "updated_grades_count",
+          "unchanged_grades_count"
+        ],
+        "title": "SalaryRevisionImportDiffResponse"
+      },
+      "SalaryRevisionLineCreate-Input": {
+        "properties": {
+          "grade_code": {
+            "type": "string",
+            "title": "Grade Code"
+          },
+          "grade_group_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grade Group Title"
+          },
+          "basic_salary": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Basic Salary",
+            "default": "0.00"
+          },
+          "special_allowance": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Special Allowance",
+            "default": "0.00"
+          },
+          "fixed_ot_amount": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Fixed Ot Amount",
+            "default": "0.00"
+          },
+          "bonus": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Bonus",
+            "default": "0.00"
+          },
+          "visa_provision": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Visa Provision",
+            "default": "0.00"
+          },
+          "air_ticket_provision": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Air Ticket Provision",
+            "default": "0.00"
+          },
+          "uniform_provision": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Uniform Provision",
+            "default": "0.00"
+          },
+          "medical_provision": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Medical Provision",
+            "default": "0.00"
+          },
+          "accommodation_provision": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Accommodation Provision",
+            "default": "0.00"
+          },
+          "transportation_provision": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transportation Provision",
+            "default": "0.00"
+          }
+        },
+        "type": "object",
+        "required": [
+          "grade_code"
+        ],
+        "title": "SalaryRevisionLineCreate"
+      },
+      "SalaryRevisionLineCreate-Output": {
+        "properties": {
+          "grade_code": {
+            "type": "string",
+            "title": "Grade Code"
+          },
+          "grade_group_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grade Group Title"
+          },
+          "basic_salary": {
+            "type": "string",
+            "title": "Basic Salary",
+            "default": "0.00"
+          },
+          "special_allowance": {
+            "type": "string",
+            "title": "Special Allowance",
+            "default": "0.00"
+          },
+          "fixed_ot_amount": {
+            "type": "string",
+            "title": "Fixed Ot Amount",
+            "default": "0.00"
+          },
+          "bonus": {
+            "type": "string",
+            "title": "Bonus",
+            "default": "0.00"
+          },
+          "visa_provision": {
+            "type": "string",
+            "title": "Visa Provision",
+            "default": "0.00"
+          },
+          "air_ticket_provision": {
+            "type": "string",
+            "title": "Air Ticket Provision",
+            "default": "0.00"
+          },
+          "uniform_provision": {
+            "type": "string",
+            "title": "Uniform Provision",
+            "default": "0.00"
+          },
+          "medical_provision": {
+            "type": "string",
+            "title": "Medical Provision",
+            "default": "0.00"
+          },
+          "accommodation_provision": {
+            "type": "string",
+            "title": "Accommodation Provision",
+            "default": "0.00"
+          },
+          "transportation_provision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transportation Provision",
+            "default": "0.00"
+          }
+        },
+        "type": "object",
+        "required": [
+          "grade_code"
+        ],
+        "title": "SalaryRevisionLineCreate"
+      },
+      "SalaryRevisionLineDiff": {
+        "properties": {
+          "grade_code": {
+            "type": "string",
+            "title": "Grade Code"
+          },
+          "field_name": {
+            "type": "string",
+            "title": "Field Name"
+          },
+          "old_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Old Value"
+          },
+          "new_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Value"
+          },
+          "is_changed": {
+            "type": "boolean",
+            "title": "Is Changed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "grade_code",
+          "field_name",
+          "old_value",
+          "new_value",
+          "is_changed"
+        ],
+        "title": "SalaryRevisionLineDiff"
+      },
+      "SalaryRevisionLineRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "grade_code": {
+            "type": "string",
+            "title": "Grade Code"
+          },
+          "grade_group_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grade Group Title"
+          },
+          "basic_salary": {
+            "type": "string",
+            "title": "Basic Salary"
+          },
+          "special_allowance": {
+            "type": "string",
+            "title": "Special Allowance"
+          },
+          "fixed_ot_amount": {
+            "type": "string",
+            "title": "Fixed Ot Amount"
+          },
+          "bonus": {
+            "type": "string",
+            "title": "Bonus"
+          },
+          "visa_provision": {
+            "type": "string",
+            "title": "Visa Provision"
+          },
+          "air_ticket_provision": {
+            "type": "string",
+            "title": "Air Ticket Provision"
+          },
+          "uniform_provision": {
+            "type": "string",
+            "title": "Uniform Provision"
+          },
+          "medical_provision": {
+            "type": "string",
+            "title": "Medical Provision"
+          },
+          "accommodation_provision": {
+            "type": "string",
+            "title": "Accommodation Provision"
+          },
+          "transportation_provision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transportation Provision"
+          },
+          "total_provisions": {
+            "type": "string",
+            "title": "Total Provisions",
+            "default": "0.00"
+          },
+          "total_salary_portion": {
+            "type": "string",
+            "title": "Total Salary Portion",
+            "default": "0.00"
+          },
+          "planned_hourly_cost": {
+            "type": "string",
+            "title": "Planned Hourly Cost",
+            "default": "0.00"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "grade_code",
+          "basic_salary",
+          "special_allowance",
+          "fixed_ot_amount",
+          "bonus",
+          "visa_provision",
+          "air_ticket_provision",
+          "uniform_provision",
+          "medical_provision",
+          "accommodation_provision"
+        ],
+        "title": "SalaryRevisionLineRead"
+      },
+      "SalaryRevisionRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "country": {
+            "type": "string",
+            "title": "Country"
+          },
+          "effective_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Effective From"
+          },
+          "effective_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective To"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "line_count": {
+            "type": "integer",
+            "title": "Line Count",
+            "default": 0
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "name",
+          "country",
+          "effective_from",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "SalaryRevisionRead"
       },
       "SalaryStructureListItem": {
         "properties": {
@@ -21044,6 +26300,260 @@
           "month_is_under"
         ],
         "title": "WorkerAllocationResponse"
+      },
+      "WorkerMobilePayrollSlip": {
+        "properties": {
+          "payroll_record_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Payroll Record Id"
+          },
+          "payroll_run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Payroll Run Id"
+          },
+          "month_label": {
+            "type": "string",
+            "title": "Month Label"
+          },
+          "period_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Period Start"
+          },
+          "period_end": {
+            "type": "string",
+            "format": "date",
+            "title": "Period End"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "standard_hours": {
+            "type": "string",
+            "title": "Standard Hours"
+          },
+          "worked_hours": {
+            "type": "string",
+            "title": "Worked Hours"
+          },
+          "paid_leave_hours": {
+            "type": "string",
+            "title": "Paid Leave Hours"
+          },
+          "unpaid_leave_hours": {
+            "type": "string",
+            "title": "Unpaid Leave Hours"
+          },
+          "salary_portion": {
+            "type": "string",
+            "title": "Salary Portion"
+          },
+          "missed_hours_deduction": {
+            "type": "string",
+            "title": "Missed Hours Deduction"
+          },
+          "ot1_hours": {
+            "type": "string",
+            "title": "Ot1 Hours"
+          },
+          "ot1_amount": {
+            "type": "string",
+            "title": "Ot1 Amount"
+          },
+          "ot2_hours": {
+            "type": "string",
+            "title": "Ot2 Hours"
+          },
+          "ot2_amount": {
+            "type": "string",
+            "title": "Ot2 Amount"
+          },
+          "gross_pay": {
+            "type": "string",
+            "title": "Gross Pay"
+          },
+          "net_pay": {
+            "type": "string",
+            "title": "Net Pay"
+          },
+          "approved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "payroll_record_id",
+          "payroll_run_id",
+          "month_label",
+          "period_start",
+          "period_end",
+          "status",
+          "standard_hours",
+          "worked_hours",
+          "paid_leave_hours",
+          "unpaid_leave_hours",
+          "salary_portion",
+          "missed_hours_deduction",
+          "ot1_hours",
+          "ot1_amount",
+          "ot2_hours",
+          "ot2_amount",
+          "gross_pay",
+          "net_pay"
+        ],
+        "title": "WorkerMobilePayrollSlip"
+      },
+      "WorksiteBudgetVsActualItem": {
+        "properties": {
+          "worksite_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Worksite Id"
+          },
+          "job_number": {
+            "type": "string",
+            "title": "Job Number"
+          },
+          "job_name": {
+            "type": "string",
+            "title": "Job Name"
+          },
+          "country": {
+            "type": "string",
+            "title": "Country"
+          },
+          "salary_revision_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Salary Revision Code"
+          },
+          "assigned_revision_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned Revision Code"
+          },
+          "annual_planned_man_hours": {
+            "type": "string",
+            "title": "Annual Planned Man Hours"
+          },
+          "annual_labor_budget": {
+            "type": "string",
+            "title": "Annual Labor Budget"
+          },
+          "prorated_budget": {
+            "type": "string",
+            "title": "Prorated Budget"
+          },
+          "pro_rated_budget": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pro Rated Budget"
+          },
+          "actual_cost_allocated": {
+            "type": "string",
+            "title": "Actual Cost Allocated"
+          },
+          "actual_allocated_cost": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Allocated Cost"
+          },
+          "variance": {
+            "type": "string",
+            "title": "Variance"
+          },
+          "variance_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Variance Amount"
+          },
+          "variance_percent": {
+            "type": "string",
+            "title": "Variance Percent",
+            "default": "0.0"
+          },
+          "is_over_budget": {
+            "type": "boolean",
+            "title": "Is Over Budget"
+          },
+          "is_under_budget": {
+            "type": "boolean",
+            "title": "Is Under Budget",
+            "default": false
+          },
+          "manual_budget_override": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manual Budget Override"
+          },
+          "is_custom_budget_override": {
+            "type": "boolean",
+            "title": "Is Custom Budget Override",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "worksite_id",
+          "job_number",
+          "job_name",
+          "country",
+          "annual_planned_man_hours",
+          "annual_labor_budget",
+          "prorated_budget",
+          "actual_cost_allocated",
+          "variance",
+          "is_over_budget"
+        ],
+        "title": "WorksiteBudgetVsActualItem"
       },
       "WorksiteCreate": {
         "properties": {

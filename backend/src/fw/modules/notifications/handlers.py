@@ -9,6 +9,7 @@ from fw.core.events import (
     DomainEvent,
     LocationDisabledRecorded,
     LocationEnabledRecorded,
+    WorkerConsentWithdrawn,
     event_bus,
 )
 from fw.modules.notifications.models import Alert
@@ -129,6 +130,30 @@ async def handle_location_enabled(event: DomainEvent, session: AsyncSession) -> 
         await session.flush()
 
 
+async def handle_worker_consent_withdrawn(event: DomainEvent, session: AsyncSession) -> None:
+    assert isinstance(event, WorkerConsentWithdrawn)
+    worker_name = "Worker"
+    if event.employee_id:
+        emp = await session.get(Employee, event.employee_id)
+        if emp:
+            worker_name = f"{emp.name} ({emp.tally_id})"
+
+    await NotificationService.create_alert(
+        session=session,
+        alert_type="CONSENT_WITHDRAWN",
+        title=f"Consent Withdrawn: {worker_name}",
+        message=f"{worker_name} has withdrawn location tracking consent. Tracking stopped. Reason: {event.reason or 'Not specified'}.",
+        ref_type="EMPLOYEE",
+        ref_id=event.employee_id,
+        employee_id=event.employee_id,
+        target_role="ADMIN",
+        details={
+            "employee_id": str(event.employee_id) if event.employee_id else None,
+            "reason": event.reason,
+        },
+    )
+
+
 _HANDLERS_REGISTERED = False
 
 
@@ -144,3 +169,4 @@ def register_notification_handlers() -> None:
     event_bus.subscribe_sync(ReassignmentApprovedEvent, handle_reassignment_approved)  # type: ignore
     event_bus.subscribe_sync(LocationDisabledRecorded, handle_location_disabled)  # type: ignore
     event_bus.subscribe_sync(LocationEnabledRecorded, handle_location_enabled)  # type: ignore
+    event_bus.subscribe_sync(WorkerConsentWithdrawn, handle_worker_consent_withdrawn)  # type: ignore

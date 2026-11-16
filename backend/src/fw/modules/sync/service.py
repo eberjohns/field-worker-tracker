@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fw.adapters.push import get_push_provider
 from fw.core.config import get_settings
 from fw.core.errors import AppError
+from fw.core.events import WorkerConsentWithdrawn, event_bus
 from fw.modules.identity import (
     AuthService,
     User,
@@ -425,10 +426,57 @@ class SyncService:
             device_id=device.id,
             policy_version=policy_version,
             consented_at=consented_at_utc,
+            status="ACCEPTED",
             recorded_at=datetime.now(UTC),
         )
         session.add(record)
+
+        emp = await session.get(Employee, employee_id)
+        if emp:
+            emp.consent_status = "ACCEPTED"
+            emp.consent_withdrawn_at = None
+
         await session.flush()
+        return record
+
+    @staticmethod
+    async def withdraw_consent(
+        session: AsyncSession,
+        employee_id: UUID,
+        reason: str | None = None,
+    ) -> ConsentRecord:
+        """Record worker location consent withdrawal, update status, and publish event."""
+        dev_query = select(RegisteredDevice).where(
+            RegisteredDevice.employee_id == employee_id,
+            RegisteredDevice.is_active.is_(True),
+        )
+        dev_res = await session.execute(dev_query)
+        device = dev_res.scalar_one_or_none()
+        device_id = device.id if device else None
+
+        emp = await session.get(Employee, employee_id)
+        if emp:
+            emp.consent_status = "WITHDRAWN"
+            emp.consent_withdrawn_at = datetime.now(UTC)
+
+        now = datetime.now(UTC)
+        record = ConsentRecord(
+            employee_id=employee_id,
+            device_id=device_id,
+            policy_version=1,
+            consented_at=now,
+            status="WITHDRAWN",
+            withdrawn_at=now,
+            withdrawal_reason=reason,
+            recorded_at=now,
+        )
+        session.add(record)
+        await session.flush()
+
+        await event_bus.publish(
+            WorkerConsentWithdrawn(employee_id=employee_id, reason=reason),
+            session,
+        )
         return record
 
     @staticmethod

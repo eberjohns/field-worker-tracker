@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "@tanstack/react-router";
 import { useAuth } from "../context/AuthContext";
 import {
   CalendarDays,
@@ -8,6 +9,7 @@ import {
   PanelRightClose,
   AlertTriangle,
   Loader2,
+  Upload,
 } from "lucide-react";
 import {
   RosterResponse,
@@ -418,6 +420,15 @@ export const Planner: React.FC = () => {
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
+
+          <Link
+            to="/imports"
+            className="p-2 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-xs font-semibold flex items-center space-x-1.5 transition"
+            title="Import roster or shift schedule"
+          >
+            <Upload className="h-4 w-4" />
+            <span className="hidden sm:inline">Import</span>
+          </Link>
 
           <button
             onClick={() => setIsSidePanelOpen(!isSidePanelOpen)}

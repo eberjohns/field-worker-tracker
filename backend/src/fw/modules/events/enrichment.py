@@ -1,7 +1,10 @@
+import math
 from datetime import UTC, date, datetime
 from uuid import UUID
 
 from geoalchemy2 import Geography
+from geoalchemy2.shape import to_shape
+from shapely.geometry import Point
 from sqlalchemy import cast, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -40,6 +43,29 @@ class EventEnrichmentService:
         events_q = select(MobileEventLog).where(MobileEventLog.event_id.in_(event_ids))
         events_res = await session.execute(events_q)
         events = list(events_res.scalars().all())
+
+        # Pre-fetch all active worksites and accommodations with boundaries once for high-throughput batch evaluation
+        sites_q = select(Worksite.id, Worksite.boundary).where(
+            Worksite.is_active.is_(True),
+            Worksite.boundary.is_not(None),
+        )
+        sites_res = await session.execute(sites_q)
+        all_sites = [
+            (row[0], to_shape(row[1]))
+            for row in sites_res.all()
+            if row[1] is not None
+        ]
+
+        acc_q = select(Accommodation.id, Accommodation.boundary).where(
+            Accommodation.is_active.is_(True),
+            Accommodation.boundary.is_not(None),
+        )
+        acc_res = await session.execute(acc_q)
+        all_accs = [
+            (row[0], to_shape(row[1]))
+            for row in acc_res.all()
+            if row[1] is not None
+        ]
 
         for ev in events:
             # Publish tracking state events for alert management
@@ -91,20 +117,10 @@ class EventEnrichmentService:
                 ev.is_processed = True
                 continue
 
-            pt_geom = func.ST_SetSRID(
-                func.ST_MakePoint(float(ev.longitude), float(ev.latitude)), 4326
-            )
+            pt = Point(float(ev.longitude), float(ev.latitude))
 
-            # Query candidate worksites covering the point or nearest worksite
-            # A) Check worksites containing the point
-            covering_sites_q = select(Worksite.id).where(
-                Worksite.is_active.is_(True),
-                Worksite.boundary.is_not(None),
-                func.ST_Covers(Worksite.boundary, pt_geom),
-            )
-            cov_res = await session.execute(covering_sites_q)
-            covering_site_ids = set(cov_res.scalars().all())
-
+            # Check worksites containing the point
+            covering_site_ids = {s_id for s_id, poly in all_sites if poly.covers(pt)}
             matched_site_id: UUID | None = None
             is_inside_site = False
 
@@ -117,96 +133,48 @@ class EventEnrichmentService:
                 else:
                     matched_site_id = next(iter(covering_site_ids))
 
-            # B) Check accommodations containing the point
-            covering_acc_q = select(Accommodation.id).where(
-                Accommodation.is_active.is_(True),
-                Accommodation.boundary.is_not(None),
-                func.ST_Covers(Accommodation.boundary, pt_geom),
-            )
-            acc_res = await session.execute(covering_acc_q)
-            covering_acc_ids = list(acc_res.scalars().all())
+            # Check accommodations containing the point
+            covering_acc_ids = [a_id for a_id, poly in all_accs if poly.covers(pt)]
             matched_acc_id = covering_acc_ids[0] if covering_acc_ids else None
             is_inside_acc = matched_acc_id is not None
 
-            # C) If not inside any polygon, resolve target polygon and distance
+            # If not inside any polygon, resolve target polygon and distance
             distance_to_polygon_m: float | None = None
             if not is_inside_site and not is_inside_acc:
+                lat_rad = math.radians(float(ev.latitude))
+                m_per_deg = 111132.954 * math.cos(lat_rad)
+                scale = (111132.954 + m_per_deg) / 2.0
+
                 # 1. If device reported accommodation_id, associate with accommodation
                 if ev.accommodation_id is not None:
                     matched_acc_id = ev.accommodation_id
-                    dist_q = select(
-                        func.ST_Distance(
-                            cast(pt_geom, Geography),
-                            cast(Accommodation.boundary, Geography),
-                        )
-                    ).where(
-                        Accommodation.id == ev.accommodation_id,
-                        Accommodation.boundary.is_not(None),
-                    )
-                    dist_res = await session.execute(dist_q)
-                    d_val = dist_res.scalar()
-                    if d_val is not None:
-                        distance_to_polygon_m = float(d_val)
+                    target_acc = next((poly for a_id, poly in all_accs if a_id == ev.accommodation_id), None)
+                    if target_acc:
+                        distance_to_polygon_m = float(target_acc.distance(pt) * scale)
                 # 2. If device reported job_id (e.g. exit from site), associate with that site
                 elif ev.job_id is not None:
                     matched_site_id = ev.job_id
-                    dist_q = select(
-                        func.ST_Distance(
-                            cast(pt_geom, Geography),
-                            cast(Worksite.boundary, Geography),
-                        )
-                    ).where(
-                        Worksite.id == ev.job_id,
-                        Worksite.boundary.is_not(None),
-                    )
-                    dist_res = await session.execute(dist_q)
-                    d_val = dist_res.scalar()
-                    if d_val is not None:
-                        distance_to_polygon_m = float(d_val)
+                    target_site = next((poly for s_id, poly in all_sites if s_id == ev.job_id), None)
+                    if target_site:
+                        distance_to_polygon_m = float(target_site.distance(pt) * scale)
                 # 3. If employee has assigned sites today, measure distance to nearest assigned site
                 elif assigned_site_ids:
-                    nearest_assigned_q = (
-                        select(
-                            Worksite.id,
-                            func.ST_Distance(
-                                cast(pt_geom, Geography),
-                                cast(Worksite.boundary, Geography),
-                            ).label("dist_m"),
+                    assigned_sites = [(s_id, poly) for s_id, poly in all_sites if s_id in assigned_site_ids]
+                    if assigned_sites:
+                        closest_site, closest_dist = min(
+                            ((s_id, poly.distance(pt)) for s_id, poly in assigned_sites),
+                            key=lambda x: x[1],
                         )
-                        .where(
-                            Worksite.id.in_(assigned_site_ids),
-                            Worksite.boundary.is_not(None),
-                        )
-                        .order_by("dist_m")
-                        .limit(1)
-                    )
-                    nearest_res = await session.execute(nearest_assigned_q)
-                    nearest_row = nearest_res.first()
-                    if nearest_row is not None:
-                        matched_site_id = nearest_row[0]
-                        distance_to_polygon_m = float(nearest_row[1])
+                        matched_site_id = closest_site
+                        distance_to_polygon_m = float(closest_dist * scale)
                 # 4. Fallback to nearest active worksite
-                else:
-                    nearest_site_q = (
-                        select(
-                            Worksite.id,
-                            func.ST_Distance(
-                                cast(pt_geom, Geography),
-                                cast(Worksite.boundary, Geography),
-                            ).label("dist_m"),
-                        )
-                        .where(
-                            Worksite.is_active.is_(True),
-                            Worksite.boundary.is_not(None),
-                        )
-                        .order_by("dist_m")
-                        .limit(1)
+                elif all_sites:
+                    closest_site, closest_dist = min(
+                        ((s_id, poly.distance(pt)) for s_id, poly in all_sites),
+                        key=lambda x: x[1],
                     )
-                    nearest_res = await session.execute(nearest_site_q)
-                    nearest_row = nearest_res.first()
-                    if nearest_row is not None:
-                        matched_site_id = nearest_row[0]
-                        distance_to_polygon_m = float(nearest_row[1])
+                    matched_site_id = closest_site
+                    distance_to_polygon_m = float(closest_dist * scale)
 
             # Run verdict rule
             has_assigned = (matched_site_id in assigned_site_ids) if matched_site_id else False

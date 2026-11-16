@@ -106,6 +106,13 @@ class Employee(ModelBase):
     break_override_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     join_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     employment_end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    consent_status: Mapped[str] = mapped_column(String(20), default="ACCEPTED", nullable=False)
+    consent_withdrawn_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    anonymised_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     accommodation: Mapped[Accommodation | None] = relationship("Accommodation")
 

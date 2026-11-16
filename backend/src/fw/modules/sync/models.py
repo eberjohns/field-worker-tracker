@@ -56,13 +56,16 @@ class ConsentRecord(Base):
         ForeignKey("employees.id", ondelete="CASCADE"),
         nullable=False,
     )
-    device_id: Mapped[UUID] = mapped_column(
+    device_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("registered_devices.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
     )
     policy_version: Mapped[int] = mapped_column(Integer, nullable=False)
     consented_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="ACCEPTED", nullable=False)
+    withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    withdrawal_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
     recorded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

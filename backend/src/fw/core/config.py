@@ -54,6 +54,10 @@ class Settings(BaseSettings):
 
     FILE_STORAGE_BACKEND: str = "local"
     LOCAL_STORAGE_PATH: str = "./storage"
+    ARCHIVE_STORAGE_PATH: str = "./storage/archives"
+    ARCHIVE_ENCRYPTION_KEY: str = "insecure-dev-archive-encryption-key-min-32-chars-ok"
+    RATE_LIMIT_LOGIN_MAX_ATTEMPTS: int = 5
+    RATE_LIMIT_LOGIN_WINDOW_MINUTES: int = 15
 
     MAP_STYLE_STREETS_URL: str = "https://api.maptiler.com/maps/streets-v2/style.json?key={key}"
     MAP_STYLE_SATELLITE_URL: str = "https://api.maptiler.com/maps/satellite/style.json?key={key}"

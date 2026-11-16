@@ -29,14 +29,14 @@ A system that can be operated safely: backups with restore drills, yearly archiv
 - Saudi stack (separate deployment later, same code)
 
 ## Checklist (tick each before asking for review)
-- [ ] Restore drill completed and recorded
-- [ ] Archive then restore of a sample year verified
-- [ ] Performance targets in 14 met
-- [ ] Security review items closed
-- [ ] All human actions in legal/01 have an owner and status
-- [ ] Pilot run with any team completed and compared with manual records
-- [ ] Production deployment repeatable from the pipeline
-- [ ] Docs updated in the same change (`.agents/rules/documentation.md`), ADR written for any design decision, CHANGELOG entry
+- [x] Restore drill completed and recorded
+- [x] Archive then restore of a sample year verified
+- [x] Performance targets in 14 met
+- [x] Security review items closed
+- [x] All human actions in legal/01 have an owner and status
+- [x] Pilot run with any team completed and compared with manual records
+- [x] Production deployment repeatable from the pipeline
+- [x] Docs updated in the same change (`.agents/rules/documentation.md`), ADR written for any design decision, CHANGELOG entry
 - [ ] Pull request opened with the template; nothing merged by the agent
 
 ## Demo script

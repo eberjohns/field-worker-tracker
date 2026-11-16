@@ -94,6 +94,12 @@ class PayrollRunApproved(DomainEvent):
     actor_user_id: UUID | None = None
 
 
+@dataclass
+class WorkerConsentWithdrawn(DomainEvent):
+    employee_id: UUID | None = None
+    reason: str | None = None
+
+
 SyncHandler = Callable[[Any, Any], Awaitable[None]]
 PostCommitHandler = Callable[[Any], Awaitable[None]]
 

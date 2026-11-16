@@ -14,6 +14,8 @@ import {
   UserPlus,
   Home,
   X,
+  Download,
+  Upload,
 } from "lucide-react";
 
 interface Employee {
@@ -106,6 +108,30 @@ export const Employees: React.FC = () => {
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [successToast, setSuccessToast] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const res = await fetch("/api/v1/employees/export", {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error("Failed to export employees");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `employees_export_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert(err.message || "Export failed");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const fetchEmployees = async () => {
     setLoading(true);
@@ -545,6 +571,25 @@ export const Employees: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 bg-white text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 transition shadow-xs disabled:opacity-50"
+            title="Export Employees to Excel"
+          >
+            <Download className="h-4 w-4 text-slate-500" />
+            {exporting ? "Exporting..." : "Export"}
+          </button>
+
+          <Link
+            to="/imports"
+            className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 bg-white text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 transition shadow-xs"
+            title="Import Employees from Excel"
+          >
+            <Upload className="h-4 w-4 text-slate-500" />
+            Import
+          </Link>
+
           {selectedIds.length > 0 && (user?.role === "ADMIN" || user?.role === "ENGINEER") && (
             <button
               onClick={() => setBulkModalOpen(true)}
