@@ -27,9 +27,8 @@ export const ReportsHub: React.FC = () => {
   const [loadingCatalog, setLoadingCatalog] = useState(true);
   const [catalogError, setCatalogError] = useState<string | null>(null);
 
-  // Search and filter for catalog
+  // Search for catalog
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
   // Report execution state
   const [filterParams, setFilterParams] = useState<ReportFilterParams>({
@@ -128,23 +127,12 @@ export const ReportsHub: React.FC = () => {
     }
   };
 
-  // Filter catalog list
+  // Filter catalog list by search query
   const filteredReports = reports.filter((r) => {
-    const matchesSearch =
-      r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      r.description.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCat = selectedCategory === "all" || r.category === selectedCategory;
-    return matchesSearch && matchesCat;
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return r.name.toLowerCase().includes(q) || r.description.toLowerCase().includes(q);
   });
-
-  const categories = [
-    { id: "all", label: "All Reports" },
-    { id: "attendance", label: "Attendance & Time" },
-    { id: "operations", label: "Operations & Tracking" },
-    { id: "payroll", label: "Payroll & Cost" },
-    { id: "planning", label: "Planning & Utilization" },
-    { id: "compliance", label: "Compliance & Expiry" },
-  ];
 
   return (
     <div className="flex flex-col lg:flex-row gap-6 min-h-[calc(100vh-140px)]">
@@ -167,23 +155,6 @@ export const ReportsHub: React.FC = () => {
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-9 pr-3 py-1.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
           />
-        </div>
-
-        {/* Categories */}
-        <div className="flex flex-wrap gap-1 border-b border-slate-100 pb-2">
-          {categories.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => setSelectedCategory(c.id)}
-              className={`px-2 py-1 text-xs rounded-md font-medium transition ${
-                selectedCategory === c.id
-                  ? "bg-blue-50 text-blue-700"
-                  : "text-slate-600 hover:bg-slate-50"
-              }`}
-            >
-              {c.label}
-            </button>
-          ))}
         </div>
 
         {/* List of Reports */}

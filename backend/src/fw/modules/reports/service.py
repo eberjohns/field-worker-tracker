@@ -303,7 +303,9 @@ class ReportService:
             rows = await handler(session=session, filters=filter_params, scoped_ids=None)
 
             # Name: <Company>_<Report>_<Country>_<Period>_generated-<datetime>.xlsx
-            report_title_slug = spec.name.replace(" ", "-")
+            report_title_slug = re.sub(
+                r"[^A-Za-z0-9\-]", "", spec.name.replace(" / ", "-").replace("/", "-").replace(" ", "-")
+            )
             file_name = f"{company_clean}_{report_title_slug}_{country}_{period_str}_generated-{ts_str}.xlsx"
             if is_approval:
                 file_name = f"{company_clean}_{report_title_slug}_{country}_{period_str}_APPROVED_generated-{ts_str}.xlsx"
@@ -476,6 +478,35 @@ class ReportService:
             )
 
         storage = get_file_storage()
-        content = await storage.read(r.file_ref)
+        if not await storage.exists(r.file_ref):
+            # Self-healing: if file missing from disk, re-generate dynamically
+            try:
+                from fw.modules.reports.formatters.excel import generate_excel_report
+                from fw.modules.reports.handlers import HANDLERS
+                from fw.modules.reports.registry import get_report_definition
+
+                spec = get_report_definition(r.report_key)
+                handler = HANDLERS[r.report_key]
+                fp = ReportFilterParams(
+                    country=r.country,
+                    date_from=r.period_start,
+                    date_to=r.period_end,
+                    payroll_run_id=r.payroll_run_id,
+                    year=r.period_start.year if r.period_start else None,
+                    month=r.period_start.month if r.period_start else None,
+                )
+                rows = await handler(session=session, filters=fp, scoped_ids=None)
+                applied = r.params or {"country": r.country, "period": f"{r.period_start} to {r.period_end}"}
+                content = generate_excel_report(spec.columns, rows, applied, title=spec.name)
+                await storage.save(r.file_ref, content)
+            except Exception as e:
+                logger.warning("on_demand_regeneration_failed", error=str(e), file_ref=r.file_ref)
+                raise AppError(code="NOT_FOUND", message="Archived report file not found on storage", status_code=404)
+        else:
+            try:
+                content = await storage.read(r.file_ref)
+            except FileNotFoundError:
+                raise AppError(code="NOT_FOUND", message="Archived report file not found on storage", status_code=404)
+
         mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         return content, r.file_name, mime

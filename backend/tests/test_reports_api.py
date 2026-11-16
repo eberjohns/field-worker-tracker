@@ -31,13 +31,26 @@ from fw.modules.reports.models import GeneratedReport, ReportExport
 from fw.modules.reports.registry import MONTH_END_REPORT_KEYS, REPORTS_REGISTRY
 
 
-async def _cleanup_test_data(session: AsyncSession) -> None:
-    await session.execute(delete(ReportExport))
-    await session.execute(delete(GeneratedReport))
-    await session.execute(delete(JobCostAllocation))
-    await session.execute(delete(PayrollRecord))
-    await session.execute(delete(PayrollRun))
-    await session.commit()
+async def _cleanup_test_data(session: AsyncSession, period_start: date | None = None) -> None:
+    """Safely clean up test period data without wiping development database."""
+    if period_start:
+        runs = (
+            await session.execute(select(PayrollRun).where(PayrollRun.period_start == period_start))
+        ).scalars().all()
+        for r in runs:
+            await session.execute(
+                delete(GeneratedReport).where(GeneratedReport.payroll_run_id == r.id)
+            )
+            await session.execute(
+                delete(JobCostAllocation).where(
+                    JobCostAllocation.payroll_record_id.in_(
+                        select(PayrollRecord.id).where(PayrollRecord.payroll_run_id == r.id)
+                    )
+                )
+            )
+            await session.execute(delete(PayrollRecord).where(PayrollRecord.payroll_run_id == r.id))
+            await session.execute(delete(PayrollRun).where(PayrollRun.id == r.id))
+        await session.commit()
 
 
 async def _create_employee_with_user(
@@ -312,8 +325,9 @@ async def test_month_end_automatic_generation_and_history(
     )
 
     # 1. Trigger draft payroll run
-    p_start = date(2026, 10, 1)
-    p_end = date(2026, 10, 31)
+    p_start = date(2026, 5, 1)
+    p_end = date(2026, 5, 31)
+    await _cleanup_test_data(db_session, p_start)
 
     payroll_payload = {
         "period_start": str(p_start),
@@ -332,7 +346,7 @@ async def test_month_end_automatic_generation_and_history(
     # 2. Check generated_reports for month-end reports
     gen_list_resp = await client.get(
         "/api/v1/generated-reports",
-        params={"country": "AE", "period": "2026-10"},
+        params={"country": "AE", "period": "2026-05"},
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert gen_list_resp.status_code == 200
@@ -344,7 +358,7 @@ async def test_month_end_automatic_generation_and_history(
 
     # Check file name pattern: <Company>_<Report>_<Country>_<Period>_generated-<timestamp>.xlsx
     sample_rep = gen_reports[0]
-    assert "_AE_2026-10_generated-" in sample_rep["file_name"]
+    assert "_AE_2026-05_generated-" in sample_rep["file_name"]
     assert sample_rep["version_no"] == 1
     assert sample_rep["status"] == "DRAFT"
 
@@ -359,7 +373,7 @@ async def test_month_end_automatic_generation_and_history(
     # 4. Supervisor visibility check on generated reports
     sup_gen_resp = await client.get(
         "/api/v1/generated-reports",
-        params={"country": "AE", "period": "2026-10"},
+        params={"country": "AE", "period": "2026-05"},
         headers={"Authorization": f"Bearer {sup_token}"},
     )
     assert sup_gen_resp.status_code == 200
@@ -380,7 +394,7 @@ async def test_month_end_automatic_generation_and_history(
     # Verify approved version reports were created
     appr_gen_resp = await client.get(
         "/api/v1/generated-reports",
-        params={"country": "AE", "period": "2026-10", "status": "APPROVED"},
+        params={"country": "AE", "period": "2026-05", "status": "APPROVED"},
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert appr_gen_resp.status_code == 200
