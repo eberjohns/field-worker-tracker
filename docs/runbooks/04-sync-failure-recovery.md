@@ -100,3 +100,4 @@ If location events are returning `403 CONSENT_WITHDRAWN`:
    SELECT id, tally_id, name, consent_status, consent_withdrawn_at FROM employees WHERE id = '<employee_uuid>';
    ```
 2. If the employee wishes to resume tracking, re-record consent via the mobile app or have HR update the profile.
+

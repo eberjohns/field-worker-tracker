@@ -97,3 +97,4 @@ If an employee revokes consent for location tracking:
    - The employee's consent status becomes `WITHDRAWN`.
    - All subsequent mobile location batch uploads from this worker will immediately be rejected with **HTTP 403 CONSENT_WITHDRAWN**.
    - An alert is automatically published to system administrators.
+

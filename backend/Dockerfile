@@ -16,6 +16,8 @@ RUN uv sync --no-dev --no-install-project
 # Copy source code and install project
 COPY src/ src/
 COPY tools/ tools/
+COPY migrations/ migrations/
+COPY alembic.ini alembic.ini
 RUN uv sync --no-dev
 
 EXPOSE 8000

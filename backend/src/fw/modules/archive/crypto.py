@@ -61,3 +61,4 @@ def decrypt_payload(encrypted_package: bytes, secret: str | bytes) -> bytes:
         return decrypted_data
     except InvalidTag as err:
         raise ValueError("Archive decryption failed: authentication tag mismatch or corrupted file.") from err
+

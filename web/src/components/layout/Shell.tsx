@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { Login } from "../../routes/Login";
+import { APP_VERSION } from "../../version";
 
 interface NavItem {
   label: string;
@@ -198,16 +199,19 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
           {isCollapsed ? (
             <span
               className="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-2xs"
-              title="Phase 01 Active (v0.1.0)"
+              title={`System Active (v${APP_VERSION})`}
             />
           ) : (
             <div className="flex items-center justify-between text-xs text-slate-500">
-              <span className="flex items-center gap-1.5 font-medium">
-                <span className="h-2 w-2 rounded-full bg-emerald-500 inline-block"></span>
-                Phase 01 Active
+              <span className="flex items-center gap-1.5 font-medium text-slate-700">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
+                System Active
               </span>
-              <span className="px-2 py-0.5 rounded bg-slate-100 font-mono text-[10px] text-slate-600 font-semibold">
-                v0.1.0
+              <span
+                className="px-2 py-0.5 rounded bg-slate-100 font-mono text-[10px] text-slate-700 font-bold border border-slate-200"
+                title="System Version"
+              >
+                v{APP_VERSION}
               </span>
             </div>
           )}

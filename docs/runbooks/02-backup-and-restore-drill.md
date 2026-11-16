@@ -76,3 +76,4 @@ The Phase 13 pre-go-live restore drill was executed on **2026-11-16**.
 | **Overall Assessment** | Full Recovery | **SUCCESSFUL** | **PASS** |
 
 The full machine-readable verification record is stored at `docs/runbooks/restore_drill_record.json`.
+
