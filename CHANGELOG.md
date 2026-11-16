@@ -25,6 +25,13 @@ All notable changes. Format: Keep a Changelog. Mobile-contract changes are also 
     - Automated restore drill tool `tools/backup_restore_drill.py`: creates backup dump, restores to scratch database, validates data parity across 9 tables, checks PostGIS geometry validity (`ST_IsValid`), and measures RTO against the 4-hour SLA (achieved 4.49s). Full record saved in `docs/runbooks/restore_drill_record.json`.
     - 300-worker performance load test `tools/load_test.py`: verified all non-functional requirements in `docs/14-nonfunctional.md` (Sync changes pull: 94.8ms < 300ms p95; List endpoints: 227.9ms < 300ms p95; Week view roster: 1104.1ms < 1500ms p95; Event batch ingest: 455.1ms < 500ms p95).
     - Spatial point-in-polygon batch optimization in `EventEnrichmentService` using in-memory Shapely geometries.
+    - Standalone air-gapped archive decryptor `tools/decrypt_archive.py` supporting CLI verification, key generation, and decryption of AES-256-GCM packages without a database connection.
+    - Automated semver versioning engine `tools/version.py`: manages synchronized versions across `version.json`, `web/src/version.ts`, `web/package.json`, and `backend/pyproject.toml`, logged in `docs/system-versioning.md`, with an automatic git `pre-commit` hook.
+  - Production Deployment & Reverse Proxy:
+    - Dual reverse proxy support for sovereign deployments:
+      - Default: Caddy (`infra/caddy/Caddyfile`) with automatic Let's Encrypt TLS.
+      - Alternative: Nginx (`infra/nginx/nginx.conf`) with TLS 1.3, HSTS, CSP, SSE streaming optimizations (`proxy_buffering off;`), 12MB client upload limit for Excel workbooks, and Docker Compose `--profile nginx`.
+    - Production compose manifests at repository root `docker-compose.prod.yml` and `infra/docker-compose.prod.yml`.
   - Operational Runbooks (`docs/runbooks/`):
     - `01-production-deployment.md`: Azure UAE North topology, secrets management, rolling zero-downtime deployment, health probes, and rollback procedures.
     - `02-backup-and-restore-drill.md`: Point-in-time recovery policy, quarterly drill procedure, and recorded pre-go-live drill result.

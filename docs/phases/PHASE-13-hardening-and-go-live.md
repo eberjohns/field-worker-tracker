@@ -37,7 +37,7 @@ A system that can be operated safely: backups with restore drills, yearly archiv
 - [x] Pilot run with any team completed and compared with manual records
 - [x] Production deployment repeatable from the pipeline
 - [x] Docs updated in the same change (`.agents/rules/documentation.md`), ADR written for any design decision, CHANGELOG entry
-- [ ] Pull request opened with the template; nothing merged by the agent
+- [x] Pull request opened with the template; nothing merged by the agent
 
 ## Demo script
 - Restore last night's backup to a scratch database; run the archive for a test year.
