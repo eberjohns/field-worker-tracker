@@ -133,3 +133,34 @@ Content-Type: application/json
   - **RTO (Recovery Time Objective)**: <= 4 hours.
 - **Restore Drills**: Executed quarterly using `tools/backup_restore_drill.py`. The Phase 13 pre-go-live drill restored a full database image, validated 100% table parity across 9 tables, verified 0 invalid PostGIS geometries, and completed in **4.49 seconds**.
 
+---
+
+## 7. Audit Logs & System Log File Maintenance
+
+### A. Database Audit Logs (`audit_logs` table)
+- **Backup**:
+  - The `audit_logs` table records every administrative change, security action, setting update, payroll approval, and export.
+  - It is stored directly in PostgreSQL and is automatically backed up as part of the daily automated database snapshots and continuous WAL streaming.
+- **Retention & Pruning Policy**:
+  - In accordance with statutory labour law, tax, and privacy regulations (UAE PDPL Federal Decree-Law No. 45/2021 and KSA PDPL), audit records have a **7-year mandatory retention window**.
+  - Unlike high-frequency GPS logs (which are archived and purged annually), audit logs are **not purged after 1 or 2 years**.
+  - Audit records older than 7 years may be archived to cold immutable WORM (Write Once, Read Many) storage or pruned via scheduled annual compliance jobs.
+
+### B. Host & Container Log File Maintenance
+To prevent unmanaged container log files from consuming disk space and causing host outages:
+1. **Docker Container Log Rotation**:
+   - In `docker-compose.prod.yml`, all running services (`api`, `worker`, `proxy`, `nginx`) are explicitly configured with Docker's `json-file` rotation:
+     ```yaml
+     logging:
+       driver: "json-file"
+       options:
+         max-size: "50m"
+         max-file: "5"
+     ```
+   - Each container is bounded to a maximum of 250 MB (5 files × 50 MB) before older logs are automatically rotated out.
+2. **Reverse Proxy Logs (Nginx / Caddy)**:
+   - In production containers, Nginx and Caddy access and error logs stream directly to standard output (`/dev/stdout` and `/dev/stderr`), where they are captured and rotated by Docker's log driver or forwarded to Cloud Log Analytics without accumulating on disk.
+3. **Cloud Log Analytics (Azure Monitor)**:
+   - When deployed on Azure Container Apps / Azure App Service, container standard streams are ingested into **Azure Log Analytics Workspace**, which enforces centralized retention policies (default: 30–90 days interactive retention, auto-archived to storage).
+
+

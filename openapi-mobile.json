@@ -256,6 +256,85 @@
         }
       }
     },
+    "/api/v1/mobile/consent/withdraw": {
+      "post": {
+        "tags": [
+          "mobile"
+        ],
+        "summary": "Mobile Withdraw Consent",
+        "description": "Worker withdraws tracking consent; stops tracking and notifies Admin.",
+        "operationId": "mobile_withdraw_consent_api_v1_mobile_consent_withdraw_post",
+        "parameters": [
+          {
+            "name": "allow_password_change_pending",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Allow Password Change Pending"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/MobileConsentWithdrawRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Mobile Withdraw Consent Api V1 Mobile Consent Withdraw Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/mobile/policy/location": {
       "get": {
         "tags": [
@@ -1066,6 +1145,66 @@
         "title": "AlertResponse",
         "description": "API representation of an alert."
       },
+      "AnonymisationRequest": {
+        "properties": {
+          "older_than_years": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Older Than Years",
+            "description": "Minimum years since end of employment before anonymising (default 2 years)",
+            "default": 2
+          },
+          "employee_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Ids",
+            "description": "Optional specific list of employee IDs to anonymise"
+          }
+        },
+        "type": "object",
+        "title": "AnonymisationRequest",
+        "description": "Request to run employee anonymisation."
+      },
+      "AnonymisationResult": {
+        "properties": {
+          "anonymised_employees_count": {
+            "type": "integer",
+            "title": "Anonymised Employees Count"
+          },
+          "anonymised_employee_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Anonymised Employee Ids"
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Completed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "anonymised_employees_count",
+          "anonymised_employee_ids",
+          "completed_at"
+        ],
+        "title": "AnonymisationResult",
+        "description": "Result summary of employee anonymisation."
+      },
       "ApprovalsCounts": {
         "properties": {
           "leave": {
@@ -1125,6 +1264,166 @@
           "counts"
         ],
         "title": "ApprovalsInboxResponse"
+      },
+      "ArchiveRecordResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "year": {
+            "type": "integer",
+            "title": "Year"
+          },
+          "file_name": {
+            "type": "string",
+            "title": "File Name"
+          },
+          "file_size_bytes": {
+            "type": "integer",
+            "title": "File Size Bytes"
+          },
+          "sha256_checksum": {
+            "type": "string",
+            "title": "Sha256 Checksum"
+          },
+          "encryption_algo": {
+            "type": "string",
+            "title": "Encryption Algo"
+          },
+          "record_count": {
+            "type": "integer",
+            "title": "Record Count"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "archived_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Archived At"
+          },
+          "verified_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified At"
+          },
+          "purged_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purged At"
+          },
+          "purged_record_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purged Record Count"
+          },
+          "details": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Details"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "year",
+          "file_name",
+          "file_size_bytes",
+          "sha256_checksum",
+          "encryption_algo",
+          "record_count",
+          "status",
+          "archived_at",
+          "created_at"
+        ],
+        "title": "ArchiveRecordResponse",
+        "description": "Schema for archive metadata response."
+      },
+      "ArchiveTriggerRequest": {
+        "properties": {
+          "year": {
+            "type": "integer",
+            "maximum": 2100.0,
+            "minimum": 2020.0,
+            "title": "Year",
+            "description": "Calendar year to archive"
+          },
+          "purge_live_events": {
+            "type": "boolean",
+            "title": "Purge Live Events",
+            "description": "Whether to purge the archived raw events/visits from live database after verification",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "year"
+        ],
+        "title": "ArchiveTriggerRequest",
+        "description": "Request to generate yearly archive."
+      },
+      "ArchiveVerificationResult": {
+        "properties": {
+          "archive_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Archive Id"
+          },
+          "verified": {
+            "type": "boolean",
+            "title": "Verified"
+          },
+          "record_count": {
+            "type": "integer",
+            "title": "Record Count"
+          },
+          "sha256_checksum": {
+            "type": "string",
+            "title": "Sha256 Checksum"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "archive_id",
+          "verified",
+          "record_count",
+          "sha256_checksum",
+          "message"
+        ],
+        "title": "ArchiveVerificationResult",
+        "description": "Response from verifying an archive package."
       },
       "AssignedWorkerSummary": {
         "properties": {
@@ -6677,6 +6976,23 @@
         ],
         "title": "MobileConsentRequest"
       },
+      "MobileConsentWithdrawRequest": {
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "title": "MobileConsentWithdrawRequest"
+      },
       "MobileDeviceRegistration": {
         "properties": {
           "device_identifier": {
@@ -10276,6 +10592,54 @@
           "message"
         ],
         "title": "ResetPasswordResponse"
+      },
+      "RetentionPurgeRequest": {
+        "properties": {
+          "purge_sync_older_than_days": {
+            "type": "integer",
+            "maximum": 365.0,
+            "minimum": 30.0,
+            "title": "Purge Sync Older Than Days",
+            "description": "Retention for mobile sync changes (default 60 days)",
+            "default": 60
+          },
+          "purge_notifications_older_than_months": {
+            "type": "integer",
+            "maximum": 24.0,
+            "minimum": 1.0,
+            "title": "Purge Notifications Older Than Months",
+            "description": "Retention for notification logs (default 6 months)",
+            "default": 6
+          }
+        },
+        "type": "object",
+        "title": "RetentionPurgeRequest",
+        "description": "Request parameters for retention cleanup jobs."
+      },
+      "RetentionPurgeResult": {
+        "properties": {
+          "sync_changes_purged": {
+            "type": "integer",
+            "title": "Sync Changes Purged"
+          },
+          "notification_logs_purged": {
+            "type": "integer",
+            "title": "Notification Logs Purged"
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Completed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sync_changes_purged",
+          "notification_logs_purged",
+          "completed_at"
+        ],
+        "title": "RetentionPurgeResult",
+        "description": "Summary of purged records from retention run."
       },
       "SalaryRevisionCreate": {
         "properties": {

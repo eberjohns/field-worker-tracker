@@ -110,9 +110,7 @@ class Employee(ModelBase):
     consent_withdrawn_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    anonymised_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    anonymised_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     accommodation: Mapped[Accommodation | None] = relationship("Accommodation")
 

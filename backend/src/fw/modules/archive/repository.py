@@ -142,7 +142,7 @@ class ArchiveRepository:
                 TrackingGap.work_date >= start_date, TrackingGap.work_date <= end_date
             )
         )
-        gaps_count = del_gaps.rowcount or 0
+        gaps_count = int(getattr(del_gaps, "rowcount", 0) or 0)
 
         # 2. Purge site visits for the year (which reference mobile_event_logs)
         del_visits = await session.execute(
@@ -150,7 +150,7 @@ class ArchiveRepository:
                 SiteVisit.work_date >= start_date, SiteVisit.work_date <= end_date
             )
         )
-        visits_count = del_visits.rowcount or 0
+        visits_count = int(getattr(del_visits, "rowcount", 0) or 0)
 
         # 3. Purge mobile_event_logs for the year
         del_events = await session.execute(
@@ -159,7 +159,7 @@ class ArchiveRepository:
                 MobileEventLog.event_timestamp_utc < end_dt,
             )
         )
-        events_count = del_events.rowcount or 0
+        events_count = int(getattr(del_events, "rowcount", 0) or 0)
 
         await session.flush()
         return {
@@ -169,13 +169,11 @@ class ArchiveRepository:
         }
 
     @staticmethod
-    async def purge_expired_sync_changes(
-        session: AsyncSession, cutoff_datetime: datetime
-    ) -> int:
+    async def purge_expired_sync_changes(session: AsyncSession, cutoff_datetime: datetime) -> int:
         stmt = delete(SyncChange).where(SyncChange.created_at < cutoff_datetime)
         res = await session.execute(stmt)
         await session.flush()
-        return res.rowcount or 0
+        return int(getattr(res, "rowcount", 0) or 0)
 
     @staticmethod
     async def purge_expired_alerts(session: AsyncSession, cutoff_datetime: datetime) -> int:
@@ -185,7 +183,7 @@ class ArchiveRepository:
         )
         res = await session.execute(stmt)
         await session.flush()
-        return res.rowcount or 0
+        return int(getattr(res, "rowcount", 0) or 0)
 
     @staticmethod
     async def get_terminations_for_anonymisation(

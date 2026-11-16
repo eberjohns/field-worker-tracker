@@ -1,11 +1,11 @@
 import math
 from datetime import UTC, date, datetime
+from typing import Any, cast
 from uuid import UUID
 
-from geoalchemy2 import Geography
 from geoalchemy2.shape import to_shape
 from shapely.geometry import Point
-from sqlalchemy import cast, func, select, text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.core.events import (
@@ -51,7 +51,7 @@ class EventEnrichmentService:
         )
         sites_res = await session.execute(sites_q)
         all_sites = [
-            (row[0], to_shape(row[1]))
+            (row[0], to_shape(cast(Any, row[1])))
             for row in sites_res.all()
             if row[1] is not None
         ]
@@ -62,7 +62,7 @@ class EventEnrichmentService:
         )
         acc_res = await session.execute(acc_q)
         all_accs = [
-            (row[0], to_shape(row[1]))
+            (row[0], to_shape(cast(Any, row[1])))
             for row in acc_res.all()
             if row[1] is not None
         ]
@@ -148,18 +148,24 @@ class EventEnrichmentService:
                 # 1. If device reported accommodation_id, associate with accommodation
                 if ev.accommodation_id is not None:
                     matched_acc_id = ev.accommodation_id
-                    target_acc = next((poly for a_id, poly in all_accs if a_id == ev.accommodation_id), None)
+                    target_acc = next(
+                        (poly for a_id, poly in all_accs if a_id == ev.accommodation_id), None
+                    )
                     if target_acc:
                         distance_to_polygon_m = float(target_acc.distance(pt) * scale)
                 # 2. If device reported job_id (e.g. exit from site), associate with that site
                 elif ev.job_id is not None:
                     matched_site_id = ev.job_id
-                    target_site = next((poly for s_id, poly in all_sites if s_id == ev.job_id), None)
+                    target_site = next(
+                        (poly for s_id, poly in all_sites if s_id == ev.job_id), None
+                    )
                     if target_site:
                         distance_to_polygon_m = float(target_site.distance(pt) * scale)
                 # 3. If employee has assigned sites today, measure distance to nearest assigned site
                 elif assigned_site_ids:
-                    assigned_sites = [(s_id, poly) for s_id, poly in all_sites if s_id in assigned_site_ids]
+                    assigned_sites = [
+                        (s_id, poly) for s_id, poly in all_sites if s_id in assigned_site_ids
+                    ]
                     if assigned_sites:
                         closest_site, closest_dist = min(
                             ((s_id, poly.distance(pt)) for s_id, poly in assigned_sites),

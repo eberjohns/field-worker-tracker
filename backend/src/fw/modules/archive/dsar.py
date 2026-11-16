@@ -13,6 +13,7 @@ from uuid import UUID
 import xlsxwriter
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from fw.modules.attendance import AttendanceRecord
 from fw.modules.org import Employee, EmployeeDocument
@@ -51,7 +52,9 @@ def _write_sheet(
             elif isinstance(val, (int, float, Decimal)):
                 sheet.write_number(row_idx, col_idx, float(val), num_format)
             else:
-                sheet.write_string(row_idx, col_idx, str(val) if val is not None else "", cell_format)
+                sheet.write_string(
+                    row_idx, col_idx, str(val) if val is not None else "", cell_format
+                )
 
 
 async def generate_employee_dsar_excel(session: AsyncSession, employee_id: UUID) -> bytes:
@@ -91,7 +94,14 @@ async def generate_employee_dsar_excel(session: AsyncSession, employee_id: UUID)
         .order_by(ConsentRecord.recorded_at.asc())
     )
     c_records = (await session.execute(c_stmt)).scalars().all()
-    consent_headers = ["Policy Version", "Consented At", "Status", "Withdrawn At", "Reason", "Recorded At"]
+    consent_headers = [
+        "Policy Version",
+        "Consented At",
+        "Status",
+        "Withdrawn At",
+        "Reason",
+        "Recorded At",
+    ]
     consent_rows = [
         [
             c.policy_version,
@@ -118,33 +128,36 @@ async def generate_employee_dsar_excel(session: AsyncSession, employee_id: UUID)
     # 4. Attendance History Sheet
     att_stmt = (
         select(AttendanceRecord)
+        .options(joinedload(AttendanceRecord.current_calculation))
         .where(AttendanceRecord.employee_id == employee_id)
         .order_by(AttendanceRecord.work_date.desc())
     )
     att_records = (await session.execute(att_stmt)).scalars().all()
     att_headers = [
         "Work Date",
-        "Status",
-        "Standard Hours",
-        "Actual Work (min)",
+        "Business Status",
+        "Review Status",
+        "Worked Minutes",
         "Break (min)",
         "OT1 (min)",
         "OT2 (min)",
         "Variation (min)",
     ]
-    att_rows = [
-        [
-            a.work_date,
-            a.status,
-            float(a.standard_hours) if a.standard_hours else 0.0,
-            a.actual_work_minutes,
-            a.break_minutes,
-            a.ot1_minutes,
-            a.ot2_minutes,
-            a.variation_minutes,
-        ]
-        for a in att_records
-    ]
+    att_rows = []
+    for a in att_records:
+        calc = a.current_calculation
+        att_rows.append(
+            [
+                a.work_date,
+                a.business_status,
+                a.review_status,
+                calc.worked_minutes if calc else 0,
+                calc.break_minutes_used if calc else 0,
+                calc.ot1_minutes if calc else 0,
+                calc.ot2_minutes if calc else 0,
+                calc.variation_minutes if calc else 0,
+            ]
+        )
     _write_sheet(workbook, "Attendance Summary", att_headers, att_rows)
 
     # 5. Payroll History Sheet

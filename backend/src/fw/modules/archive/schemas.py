@@ -87,4 +87,3 @@ class AnonymisationResult(BaseModel):
     anonymised_employees_count: int
     anonymised_employee_ids: list[UUID]
     completed_at: datetime
-

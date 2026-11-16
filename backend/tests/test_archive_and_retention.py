@@ -18,9 +18,8 @@ from fw.modules.archive.crypto import (
     encrypt_payload,
 )
 from fw.modules.archive.dsar import generate_employee_dsar_excel
-from fw.modules.archive.models import ArchiveRecord
 from fw.modules.archive.service import ArchiveService
-from fw.modules.attendance import SiteVisit, TrackingGap
+from fw.modules.attendance import TrackingGap
 from fw.modules.events import MobileEventLog
 from fw.modules.identity import User
 from fw.modules.notifications import Alert
@@ -428,12 +427,16 @@ async def test_archive_api_endpoints_and_exports():
             assert any(a["id"] == archive_id for a in list_res.json())
 
             # 3. Verify archive via API
-            v_res = await client.post(f"/api/v1/admin/archives/{archive_id}/verify", headers=headers)
+            v_res = await client.post(
+                f"/api/v1/admin/archives/{archive_id}/verify", headers=headers
+            )
             assert v_res.status_code == 200
             assert v_res.json()["verified"] is True
 
             # 4. Download encrypted archive
-            dl_res = await client.get(f"/api/v1/admin/archives/{archive_id}/download", headers=headers)
+            dl_res = await client.get(
+                f"/api/v1/admin/archives/{archive_id}/download", headers=headers
+            )
             assert dl_res.status_code == 200
             assert "X-Checksum-SHA256" in dl_res.headers
             assert len(dl_res.content) > 0
@@ -471,4 +474,3 @@ async def test_archive_api_endpoints_and_exports():
             )
             assert aw_res.status_code == 200
             assert aw_res.json()["status"] == "CONSENT_WITHDRAWN"
-

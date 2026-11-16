@@ -1,5 +1,6 @@
 """Admin API endpoints for yearly archive viewer, downloads, integrity checks, and retention."""
 
+import asyncio
 import os
 from uuid import UUID
 
@@ -65,7 +66,9 @@ async def get_archive_record(
     """Retrieve details for a single archive record."""
     record = await ArchiveRepository.get_by_id(session, archive_id)
     if not record:
-        raise AppError(code="ARCHIVE_NOT_FOUND", message="Archive record not found.", status_code=404)
+        raise AppError(
+            code="ARCHIVE_NOT_FOUND", message="Archive record not found.", status_code=404
+        )
     return record
 
 
@@ -78,9 +81,12 @@ async def download_encrypted_archive(
     """Download the encrypted yearly archive file with integrity headers."""
     record = await ArchiveRepository.get_by_id(session, archive_id)
     if not record:
-        raise AppError(code="ARCHIVE_NOT_FOUND", message="Archive record not found.", status_code=404)
+        raise AppError(
+            code="ARCHIVE_NOT_FOUND", message="Archive record not found.", status_code=404
+        )
 
-    if not os.path.exists(record.file_path):
+    file_exists = await asyncio.to_thread(os.path.exists, record.file_path)
+    if not file_exists:
         raise AppError(
             code="ARCHIVE_FILE_MISSING",
             message=f"Archive file {record.file_name} not found on server.",
@@ -145,4 +151,3 @@ async def run_employee_anonymisation(
         employee_ids=req.employee_ids,
         actor_id=current_user.id,
     )
-

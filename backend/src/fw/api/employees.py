@@ -167,7 +167,11 @@ async def admin_withdraw_consent(
     session: AsyncSession = Depends(get_db),
 ):
     """Administrator records worker consent withdrawal."""
-    reason = request.reason if request and request.reason else "Withdrawn by Administrator on behalf of worker"
+    reason = (
+        request.reason
+        if request and request.reason
+        else "Withdrawn by Administrator on behalf of worker"
+    )
     await SyncService.withdraw_consent(session=session, employee_id=employee_id, reason=reason)
     return {"status": "CONSENT_WITHDRAWN", "employee_id": str(employee_id)}
 

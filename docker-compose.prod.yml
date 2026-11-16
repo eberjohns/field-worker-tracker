@@ -49,6 +49,11 @@ services:
         reservations:
           cpus: "0.5"
           memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
     depends_on:
       migrator:
         condition: service_completed_successfully
@@ -70,6 +75,11 @@ services:
         limits:
           cpus: "1.0"
           memory: 1024M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
     depends_on:
       migrator:
         condition: service_completed_successfully
@@ -90,6 +100,11 @@ services:
       - ./web/dist:/srv/web:ro
       - caddy_data:/data
       - caddy_config:/config
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
     depends_on:
       api:
         condition: service_healthy
@@ -107,6 +122,11 @@ services:
       - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./web/dist:/srv/web:ro
       - ./infra/nginx/certs:/etc/nginx/certs:ro
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
     depends_on:
       api:
         condition: service_healthy

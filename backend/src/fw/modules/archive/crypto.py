@@ -60,5 +60,6 @@ def decrypt_payload(encrypted_package: bytes, secret: str | bytes) -> bytes:
         decrypted_data = aesgcm.decrypt(nonce, ciphertext, associated_data=None)
         return decrypted_data
     except InvalidTag as err:
-        raise ValueError("Archive decryption failed: authentication tag mismatch or corrupted file.") from err
-
+        raise ValueError(
+            "Archive decryption failed: authentication tag mismatch or corrupted file."
+        ) from err

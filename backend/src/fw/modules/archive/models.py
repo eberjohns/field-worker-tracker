@@ -27,9 +27,7 @@ class ArchiveRecord(Base):
     file_path: Mapped[str] = mapped_column(String(500), nullable=False)
     file_size_bytes: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
     sha256_checksum: Mapped[str] = mapped_column(String(64), nullable=False)
-    encryption_algo: Mapped[str] = mapped_column(
-        String(50), default="AES-256-GCM", nullable=False
-    )
+    encryption_algo: Mapped[str] = mapped_column(String(50), default="AES-256-GCM", nullable=False)
     record_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     status: Mapped[str] = mapped_column(String(30), default="COMPLETED", nullable=False)
     archived_at: Mapped[datetime] = mapped_column(
@@ -42,4 +40,3 @@ class ArchiveRecord(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
     )
-

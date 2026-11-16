@@ -1,5 +1,6 @@
 """Service layer for yearly archiving, verification, retention cleanup, and anonymisation."""
 
+import asyncio
 import gzip
 import json
 import os
@@ -9,6 +10,7 @@ from typing import Any
 from uuid import UUID
 
 import structlog
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.core.config import get_settings
@@ -26,8 +28,30 @@ from fw.modules.archive.schemas import (
     RetentionPurgeResult,
 )
 from fw.modules.audit import AuditService
+from fw.modules.org import Employee
 
 logger = structlog.get_logger(__name__)
+
+
+def _write_archive_file(storage_dir_str: str, file_name: str, data: bytes) -> tuple[str, int]:
+    storage_dir = Path(storage_dir_str)
+    storage_dir.mkdir(parents=True, exist_ok=True)
+    target = storage_dir / file_name
+    with open(target, "wb") as f:
+        f.write(data)
+    return str(target), len(data)
+
+
+def _read_archive_file(file_path_str: str) -> bytes:
+    if not os.path.exists(file_path_str):
+        raise FileNotFoundError(file_path_str)
+    with open(file_path_str, "rb") as f:
+        return f.read()
+
+
+def _remove_archive_file(file_path_str: str) -> None:
+    if os.path.exists(file_path_str):
+        os.remove(file_path_str)
 
 
 class ArchiveService:
@@ -75,29 +99,22 @@ class ArchiveService:
         )
 
         # 3. Save to disk storage
-        storage_dir = Path(settings.ARCHIVE_STORAGE_PATH)
-        storage_dir.mkdir(parents=True, exist_ok=True)
         ts_str = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         file_name = f"fwt_archive_{year}_{ts_str}.enc"
-        file_path = storage_dir / file_name
-
-        with open(file_path, "wb") as f:
-            f.write(encrypted_package)
-
-        file_size = len(encrypted_package)
+        file_path_str, file_size = await asyncio.to_thread(
+            _write_archive_file, settings.ARCHIVE_STORAGE_PATH, file_name, encrypted_package
+        )
+        file_path = Path(file_path_str)
 
         # 4. Immediate restore verification drill on the package
         try:
-            sample_decrypted = decrypt_payload(
-                encrypted_package, settings.ARCHIVE_ENCRYPTION_KEY
-            )
+            sample_decrypted = decrypt_payload(encrypted_package, settings.ARCHIVE_ENCRYPTION_KEY)
             sample_json = json.loads(gzip.decompress(sample_decrypted).decode("utf-8"))
             if sample_json.get("metadata", {}).get("year") != year:
                 raise ValueError("Restored payload metadata mismatch.")
         except Exception as err:
             logger.error("Archive self-verification failed", year=year, error=str(err))
-            if file_path.exists():
-                os.remove(file_path)
+            await asyncio.to_thread(_remove_archive_file, file_path_str)
             raise AppError(
                 code="ARCHIVE_VERIFICATION_FAILED",
                 message=f"Archive verification failed after encryption: {err}",
@@ -165,17 +182,18 @@ class ArchiveService:
         settings = get_settings()
         record = await ArchiveRepository.get_by_id(session, archive_id)
         if not record:
-            raise AppError(code="ARCHIVE_NOT_FOUND", message="Archive record not found.", status_code=404)
+            raise AppError(
+                code="ARCHIVE_NOT_FOUND", message="Archive record not found.", status_code=404
+            )
 
-        if not os.path.exists(record.file_path):
+        try:
+            encrypted_data = await asyncio.to_thread(_read_archive_file, record.file_path)
+        except FileNotFoundError as err:
             raise AppError(
                 code="ARCHIVE_FILE_MISSING",
                 message=f"Archive file {record.file_name} not found on storage.",
                 status_code=404,
-            )
-
-        with open(record.file_path, "rb") as f:
-            encrypted_data = f.read()
+            ) from err
 
         # Checksum check
         actual_checksum = compute_sha256(encrypted_data)
@@ -198,7 +216,8 @@ class ArchiveService:
                 status_code=422,
             ) from err
 
-        record.verified_at = datetime.now(UTC)
+        now_utc = datetime.now(UTC)
+        record.verified_at = now_utc
         record.status = "VERIFIED"
 
         if actor_id:
@@ -207,7 +226,10 @@ class ArchiveService:
                 action="ARCHIVE_VERIFIED",
                 entity_type="ArchiveRecord",
                 entity_id=str(record.id),
-                diff={"verified_at": record.verified_at.isoformat(), "status": "VERIFIED"},
+                diff={
+                    "verified_at": now_utc.isoformat(),
+                    "status": "VERIFIED",
+                },
                 actor_user_id=actor_id,
                 reason="Archive integrity and checksum verification passed",
             )
@@ -270,8 +292,6 @@ class ArchiveService:
         cutoff_date = date.today() - timedelta(days=older_than_years * 365)
 
         if employee_ids:
-            from sqlalchemy import select
-            from fw.modules.org import Employee
             stmt = select(Employee).where(
                 Employee.id.in_(employee_ids),
                 Employee.anonymised_at.is_(None),
@@ -294,7 +314,10 @@ class ArchiveService:
                 action="EMPLOYEES_ANONYMISED",
                 entity_type="Employee",
                 entity_id="bulk",
-                diff={"count": len(anonymised_ids), "anonymised_ids": [str(i) for i in anonymised_ids]},
+                diff={
+                    "count": len(anonymised_ids),
+                    "anonymised_ids": [str(i) for i in anonymised_ids],
+                },
                 actor_user_id=actor_id,
                 reason=f"Anonymised terminated employees older than {older_than_years} years per retention policy",
             )
