@@ -72,6 +72,10 @@ class MobileConsentRequest(BaseModel):
     consented_at_utc: datetime
 
 
+class MobileConsentWithdrawRequest(BaseModel):
+    reason: str | None = None
+
+
 class MobilePolicyResponse(BaseModel):
     version: int
     language: str

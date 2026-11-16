@@ -16,7 +16,9 @@ import {
   Info,
   Database,
   Trash2,
+  Archive,
 } from "lucide-react";
+import { ArchiveSettings } from "../features/admin/ArchiveSettings";
 
 interface SettingItem {
   id: string;
@@ -113,7 +115,7 @@ interface ResolvedSchedule {
 export const Settings: React.FC = () => {
   const { token, user } = useAuth();
   const [activeTab, setActiveTab] = useState<
-    "company" | "timerules" | "checktool" | "holidays" | "budget" | "password" | "consent" | "database"
+    "company" | "timerules" | "checktool" | "holidays" | "budget" | "password" | "consent" | "database" | "archive"
   >("company");
 
   // Reset database state
@@ -661,7 +663,10 @@ export const Settings: React.FC = () => {
           { id: "password", label: "Default Password", icon: KeyRound },
           { id: "consent", label: "Consent Notice", icon: ShieldCheck },
           ...(user?.role === "ADMIN"
-            ? [{ id: "database", label: "Clear Database", icon: Database }]
+            ? [
+                { id: "archive", label: "Archive & Retention", icon: Archive },
+                { id: "database", label: "Clear Database", icon: Database },
+              ]
             : []),
         ].map((tab) => {
           const Icon = tab.icon;
@@ -1315,6 +1320,11 @@ export const Settings: React.FC = () => {
             ))}
           </div>
         </div>
+      )}
+
+      {/* TAB: Archive & Retention (Admin Only) */}
+      {activeTab === "archive" && user?.role === "ADMIN" && (
+        <ArchiveSettings />
       )}
 
       {/* TAB 8: Clear Database (Admin Only) */}

@@ -27,6 +27,12 @@ class ReadinessResponse(BaseModel):
     response_model=HealthResponse,
     summary="Liveness check",
 )
+@router.api_route(
+    "/health/liveness",
+    methods=["GET", "HEAD"],
+    response_model=HealthResponse,
+    summary="Liveness check alias",
+)
 async def health(settings: Settings = Depends(get_settings)) -> HealthResponse:
     return HealthResponse(
         status="ok",
@@ -41,6 +47,13 @@ async def health(settings: Settings = Depends(get_settings)) -> HealthResponse:
     response_model=ReadinessResponse,
     responses={503: {"description": "Service not ready"}},
     summary="Readiness check",
+)
+@router.api_route(
+    "/health/readiness",
+    methods=["GET", "HEAD"],
+    response_model=ReadinessResponse,
+    responses={503: {"description": "Service not ready"}},
+    summary="Readiness check alias",
 )
 async def health_ready(db: AsyncSession = Depends(get_db)) -> JSONResponse:
     try:

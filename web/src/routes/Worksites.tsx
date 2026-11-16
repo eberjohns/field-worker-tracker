@@ -13,6 +13,8 @@ import {
   ExternalLink,
   MapPin,
   X,
+  Download,
+  Upload,
 } from "lucide-react";
 import { MapContainer, PolygonEditor } from "../features/map";
 import { Map as MapLibreMap } from "maplibre-gl";
@@ -98,6 +100,30 @@ export const Worksites: React.FC = () => {
   const [formCustomerType, setFormCustomerType] = useState("Direct");
   const [formRenewalRef, setFormRenewalRef] = useState("");
   const [formBudget, setFormBudget] = useState("");
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const res = await fetch("/api/v1/worksites/export", {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error("Failed to export worksites");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `worksites_export_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert(err.message || "Export failed");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -252,6 +278,25 @@ export const Worksites: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 bg-white text-slate-700 rounded-md text-sm font-medium hover:bg-slate-50 transition shadow-xs disabled:opacity-50"
+            title="Export Worksites to Excel"
+          >
+            <Download className="h-4 w-4 text-slate-500" />
+            {exporting ? "Exporting..." : "Export"}
+          </button>
+
+          <Link
+            to="/imports"
+            className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 bg-white text-slate-700 rounded-md text-sm font-medium hover:bg-slate-50 transition shadow-xs"
+            title="Import Worksites from Excel"
+          >
+            <Upload className="h-4 w-4 text-slate-500" />
+            Import
+          </Link>
+
           <Link
             to="/boundaries"
             className="flex items-center gap-2 px-3.5 py-2 rounded-md bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-sm font-medium transition"

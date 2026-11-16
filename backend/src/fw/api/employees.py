@@ -1,12 +1,18 @@
+import io
+from datetime import UTC, datetime
 from uuid import UUID
 
+import xlsxwriter
 from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.core.db import get_db
 from fw.core.errors import AppError
+from fw.modules.archive.dsar import generate_employee_dsar_excel
 from fw.modules.identity import User, get_current_user, require_role
 from fw.modules.org import (
+    Employee,
     EmployeeBulkUpdateRequest,
     EmployeeCreate,
     EmployeeDocumentCreate,
@@ -22,6 +28,7 @@ from fw.modules.org import (
     ScopeService,
 )
 from fw.modules.settings import SettingsService
+from fw.modules.sync import MobileConsentWithdrawRequest, SyncService
 
 router = APIRouter(prefix="/employees", tags=["employees"])
 
@@ -59,6 +66,114 @@ async def list_employees(
         offset=offset,
     )
     return [EmployeeRead.model_validate(e) for e in employees]
+
+
+@router.get("/export")
+async def export_employees_directory(
+    role: str | None = None,
+    country: str | None = None,
+    is_active: bool | None = None,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """Export filtered employee directory as an Excel spreadsheet."""
+    scoped_ids = await ScopeService.get_scoped_employee_ids(session, current_user)
+    employees = await OrgService.list_employees(
+        session=session,
+        scoped_ids=scoped_ids,
+        role=role,
+        country=country,
+        is_active=is_active,
+        limit=5000,
+        offset=0,
+    )
+
+    output = io.BytesIO()
+    workbook = xlsxwriter.Workbook(output, {"in_memory": True})
+    sheet = workbook.add_worksheet("Employees")
+    hdr = workbook.add_format(
+        {"bold": True, "bg_color": "#1E293B", "font_color": "#FFFFFF", "border": 1}
+    )
+    cell = workbook.add_format({"border": 1})
+    headers = [
+        "Tally ID",
+        "Name",
+        "Role",
+        "Country",
+        "Staff Grade Description",
+        "Weekly Off",
+        "Phone",
+        "Email",
+        "Consent Status",
+        "Status",
+    ]
+    for i, h in enumerate(headers):
+        sheet.write(0, i, h, hdr)
+        sheet.set_column(i, i, max(len(h) + 4, 15))
+
+    for row_idx, e in enumerate(employees, start=1):
+        sheet.write(row_idx, 0, e.tally_id, cell)
+        sheet.write(row_idx, 1, e.name, cell)
+        sheet.write(row_idx, 2, e.role, cell)
+        sheet.write(row_idx, 3, e.country, cell)
+        sheet.write(row_idx, 4, e.staff_grade_description or "", cell)
+        sheet.write(row_idx, 5, e.weekly_off_day or "Sunday", cell)
+        sheet.write(row_idx, 6, e.phone or "", cell)
+        sheet.write(row_idx, 7, e.email or "", cell)
+        sheet.write(row_idx, 8, e.consent_status, cell)
+        sheet.write(row_idx, 9, "ACTIVE" if e.is_active else "INACTIVE", cell)
+
+    workbook.close()
+    filename = f"Employees_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.xlsx"
+    return StreamingResponse(
+        io.BytesIO(output.getvalue()),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/{employee_id}/export-dsar")
+async def export_employee_dsar(
+    employee_id: UUID,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """Export complete Subject Access Request (DSAR) multi-sheet Excel file for an employee."""
+    if current_user.role != "ADMIN" and current_user.employee_id != employee_id:
+        scoped = await ScopeService.get_scoped_employee_ids(session, current_user)
+        if scoped and employee_id not in scoped:
+            raise AppError(
+                code="FORBIDDEN",
+                message="Cannot export data for employee outside your scope.",
+                status_code=403,
+            )
+
+    excel_bytes = await generate_employee_dsar_excel(session, employee_id)
+    emp = await session.get(Employee, employee_id)
+    tally = emp.tally_id if emp else str(employee_id)[:8]
+    filename = f"DSAR_{tally}_{datetime.now(UTC).strftime('%Y%m%d')}.xlsx"
+    return StreamingResponse(
+        io.BytesIO(excel_bytes),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/{employee_id}/withdraw-consent")
+async def admin_withdraw_consent(
+    employee_id: UUID,
+    request: MobileConsentWithdrawRequest | None = None,
+    current_user: User = Depends(require_role("ADMIN")),
+    session: AsyncSession = Depends(get_db),
+):
+    """Administrator records worker consent withdrawal."""
+    reason = (
+        request.reason
+        if request and request.reason
+        else "Withdrawn by Administrator on behalf of worker"
+    )
+    await SyncService.withdraw_consent(session=session, employee_id=employee_id, reason=reason)
+    return {"status": "CONSENT_WITHDRAWN", "employee_id": str(employee_id)}
 
 
 @router.post("", response_model=EmployeeRead, status_code=201)

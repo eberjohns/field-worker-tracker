@@ -1,6 +1,6 @@
 [project]
 name = "field-worker-tracker-backend"
-version = "0.1.0"
+version = "1.0.7"
 description = "Field Worker Tracker Backend API and Worker"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
@@ -20,6 +20,7 @@ dependencies = [
     "structlog>=24.4.0",
     "openpyxl>=3.1.5",
     "xlsxwriter>=3.2.0",
+    "cryptography>=50.0.2",
 ]
 
 [dependency-groups]
@@ -87,7 +88,7 @@ include_external_packages = true
 name = "Modular monolith layers contract"
 type = "layers"
 layers = [
-    "fw.modules.reports | fw.modules.imports",
+    "fw.modules.reports | fw.modules.imports | fw.modules.archive",
     "fw.modules.payroll",
     "fw.modules.attendance",
     "fw.modules.sync | fw.modules.notifications",

@@ -1,0 +1,137 @@
+# Field Worker Tracker - Production Stack (UAE Sovereign Deployment)
+# Reference: docs/14-nonfunctional.md, ADR-009, docs/runbooks/01-production-deployment.md
+# Note: Primary database is a managed Azure Database for PostgreSQL Flexible Server in UAE North.
+
+services:
+  migrator:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: "no"
+    command: ["uv", "run", "alembic", "upgrade", "head"]
+    environment:
+      - APP_ENV=production
+      - DATABASE_URL=${DATABASE_MIGRATOR_URL}
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: always
+    command: ["uv", "run", "uvicorn", "fw.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+    environment:
+      - APP_ENV=production
+      - DEPLOYMENT_COUNTRY=${DEPLOYMENT_COUNTRY:-AE}
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - ARCHIVE_ENCRYPTION_KEY=${ARCHIVE_ENCRYPTION_KEY}
+      - CORS_ORIGINS=${CORS_ORIGINS:-https://fieldtracker.example.com}
+      - PUSH_BACKEND=${PUSH_BACKEND:-fcm}
+      - FCM_CREDENTIALS=${FCM_CREDENTIALS:-}
+      - LOG_LEVEL=INFO
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health/liveness || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2048M
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: always
+    command: ["uv", "run", "python", "-m", "fw.worker"]
+    environment:
+      - APP_ENV=production
+      - DEPLOYMENT_COUNTRY=${DEPLOYMENT_COUNTRY:-AE}
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - ARCHIVE_ENCRYPTION_KEY=${ARCHIVE_ENCRYPTION_KEY}
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1024M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+
+  # Ingress Proxy Option A: Caddy (Default - Automatic Let's Encrypt / ZeroSSL TLS)
+  proxy:
+    image: caddy:2.8-alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3 QUIC
+    environment:
+      - DOMAIN=${DOMAIN:-fieldtracker.example.com}
+      - ACME_EMAIL=${ACME_EMAIL:-admin@example.com}
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./web/dist:/srv/web:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+    depends_on:
+      api:
+        condition: service_healthy
+
+  # Ingress Proxy Option B: Nginx (Alternative production reverse proxy)
+  # To use Nginx instead of Caddy, run: docker compose -f docker-compose.prod.yml --profile nginx up
+  nginx:
+    image: nginx:alpine
+    restart: always
+    profiles: ["nginx"]
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./web/dist:/srv/web:ro
+      - ./infra/nginx/certs:/etc/nginx/certs:ro
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  caddy_data:
+  caddy_config:
+

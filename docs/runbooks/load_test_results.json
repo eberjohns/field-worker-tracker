@@ -1,0 +1,45 @@
+{
+  "timestamp": "2026-11-16T11:29:20.388225+00:00",
+  "worker_concurrency": 300,
+  "sync_pull": {
+    "count": 300,
+    "mean": 56.7,
+    "p50": 53.2,
+    "p90": 69.9,
+    "p95": 94.8,
+    "max": 132.6,
+    "target_p95_ms": 300.0,
+    "status": "PASS"
+  },
+  "list_endpoints": {
+    "count": 120,
+    "mean": 107.9,
+    "p50": 89.7,
+    "p90": 182.4,
+    "p95": 227.9,
+    "max": 283.9,
+    "target_p95_ms": 300.0,
+    "status": "PASS"
+  },
+  "roster_week_view": {
+    "count": 30,
+    "mean": 983.7,
+    "p50": 953.3,
+    "p90": 1099.5,
+    "p95": 1104.1,
+    "max": 1104.1,
+    "target_p95_ms": 1500.0,
+    "status": "PASS"
+  },
+  "batch_ingest_200": {
+    "count": 30,
+    "mean": 304.3,
+    "p50": 286.3,
+    "p90": 444.8,
+    "p95": 455.1,
+    "max": 478.6,
+    "target_p95_ms": 500.0,
+    "status": "PASS"
+  },
+  "overall_status": "PASSED"
+}

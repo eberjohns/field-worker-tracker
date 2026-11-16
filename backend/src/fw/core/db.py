@@ -19,6 +19,8 @@ engine = create_async_engine(
     settings.DATABASE_URL,
     echo=(settings.APP_ENV == "local" and settings.LOG_LEVEL == "DEBUG"),
     pool_pre_ping=True,
+    pool_size=20,
+    max_overflow=20,
 )
 
 async_session_factory = async_sessionmaker(

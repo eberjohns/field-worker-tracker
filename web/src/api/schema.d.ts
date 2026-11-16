@@ -12,12 +12,13 @@ export interface paths {
             cookie?: never;
         };
         /** Liveness check */
-        get: operations["health_health_get"];
+        get: operations["health_health_head"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
-        head?: never;
+        /** Liveness check */
+        head: operations["health_health_head"];
         patch?: never;
         trace?: never;
     };
@@ -29,12 +30,13 @@ export interface paths {
             cookie?: never;
         };
         /** Readiness check */
-        get: operations["health_ready_health_ready_get"];
+        get: operations["health_ready_health_ready_head"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
-        head?: never;
+        /** Readiness check */
+        head: operations["health_ready_health_ready_head"];
         patch?: never;
         trace?: never;
     };
@@ -135,6 +137,66 @@ export interface paths {
         put?: never;
         /** Create Employee */
         post: operations["create_employee_api_v1_employees_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/employees/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Employees Directory
+         * @description Export filtered employee directory as an Excel spreadsheet.
+         */
+        get: operations["export_employees_directory_api_v1_employees_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/employees/{employee_id}/export-dsar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Employee Dsar
+         * @description Export complete Subject Access Request (DSAR) multi-sheet Excel file for an employee.
+         */
+        get: operations["export_employee_dsar_api_v1_employees__employee_id__export_dsar_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/employees/{employee_id}/withdraw-consent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Admin Withdraw Consent
+         * @description Administrator records worker consent withdrawal.
+         */
+        post: operations["admin_withdraw_consent_api_v1_employees__employee_id__withdraw_consent_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -581,6 +643,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/mobile/consent/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mobile Withdraw Consent
+         * @description Worker withdraws tracking consent; stops tracking and notifies Admin.
+         */
+        post: operations["mobile_withdraw_consent_api_v1_mobile_consent_withdraw_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/mobile/policy/location": {
         parameters: {
             query?: never;
@@ -729,6 +811,26 @@ export interface paths {
         };
         /** List Resolved Settings */
         get: operations["list_resolved_settings_api_v1_settings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/staff-grades": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Staff Grades
+         * @description Return distinct staff grade descriptions across employees and settings.
+         */
+        get: operations["list_staff_grades_api_v1_settings_staff_grades_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1068,6 +1170,314 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/payroll/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Payroll Runs
+         * @description List payroll runs with status, totals, and run counts.
+         */
+        get: operations["list_payroll_runs_api_v1_payroll_runs_get"];
+        put?: never;
+        /**
+         * Generate Payroll Run
+         * @description Generate or re-run a DRAFT payroll run for a month.
+         */
+        post: operations["generate_payroll_run_api_v1_payroll_runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payroll/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Payroll Run
+         * @description Get payroll run detail with worker records.
+         */
+        get: operations["get_payroll_run_api_v1_payroll_runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payroll/runs/{run_id}/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Payroll Run Issues
+         * @description List issues needing review before approval (unapproved OT, missing salary structures).
+         */
+        get: operations["get_payroll_run_issues_api_v1_payroll_runs__run_id__issues_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payroll/runs/{run_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Payroll Run
+         * @description Approve a DRAFT payroll run: freeze it, snapshot records, and lock month attendance.
+         */
+        post: operations["approve_payroll_run_api_v1_payroll_runs__run_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payroll/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Payroll Records
+         * @description List payroll records for a run, scoped to user.
+         */
+        get: operations["list_payroll_records_api_v1_payroll_records_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payroll/my-records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get My Payroll Records
+         * @description Worker's own approved monthly payroll records (employer provisions stripped).
+         */
+        get: operations["get_my_payroll_records_api_v1_payroll_my_records_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mobile/me/payroll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get My Payroll Records
+         * @description Worker's own approved monthly payroll records (employer provisions stripped).
+         */
+        get: operations["get_my_payroll_records_api_v1_mobile_me_payroll_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/salary-revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Salary Revisions
+         * @description List all salary revisions.
+         */
+        get: operations["list_salary_revisions_api_v1_salary_revisions_get"];
+        put?: never;
+        /**
+         * Create Salary Revision
+         * @description Create a new salary revision with grade lines.
+         */
+        post: operations["create_salary_revision_api_v1_salary_revisions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/salary-revisions/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Salary Revision Detail
+         * @description Get full details of a salary revision with grade lines and calculated planned rates.
+         */
+        get: operations["get_salary_revision_detail_api_v1_salary_revisions__code__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/salary-revisions/{code}/export-template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Salary Revision Template
+         * @description Download professionally formatted Excel (.xlsx) template pre-populated with revision lines.
+         */
+        get: operations["export_salary_revision_template_api_v1_salary_revisions__code__export_template_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/salary-revisions/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Diff Salary Revision
+         * @description Produce a side-by-side diff comparing incoming revision lines against a base revision.
+         */
+        post: operations["diff_salary_revision_api_v1_salary_revisions_diff_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/salary-revisions/preview-file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Salary Revision File
+         * @description Upload Excel (.xlsx/.xls) or CSV template to parse and calculate side-by-side diff against base revision.
+         */
+        post: operations["preview_salary_revision_file_api_v1_salary_revisions_preview_file_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payroll/budget-vs-actual": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Budget Vs Actual
+         * @description Calculate dynamic contract budget from assigned revision lines and items vs actual allocated cost.
+         */
+        get: operations["get_budget_vs_actual_api_v1_payroll_budget_vs_actual_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payroll/worksites/{worksite_id}/revision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Worksite Revision
+         * @description Bind a specific salary revision code to a worksite for job budget calculation.
+         */
+        put: operations["update_worksite_revision_api_v1_payroll_worksites__worksite_id__revision_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payroll/auto-run-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trigger Auto Draft Check
+         * @description Check for completed previous calendar months past delay days and auto-generate draft.
+         */
+        post: operations["trigger_auto_draft_check_api_v1_payroll_auto_run_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/worksites": {
         parameters: {
             query?: never;
@@ -1086,6 +1496,26 @@ export interface paths {
          * @description Create a worksite record (Admin only).
          */
         post: operations["create_worksite_api_v1_worksites_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/worksites/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Worksites Excel
+         * @description Export worksites list to an Excel spreadsheet.
+         */
+        get: operations["export_worksites_excel_api_v1_worksites_export_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1130,6 +1560,46 @@ export interface paths {
         get: operations["get_boundary_queue_api_v1_boundary_queue_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/boundaries/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Boundaries
+         * @description Export all worksite and accommodation boundaries as CSV or JSON.
+         */
+        get: operations["export_boundaries_api_v1_boundaries_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/boundaries/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Boundaries
+         * @description Bulk import boundaries with row-level validation and skip reporting.
+         */
+        post: operations["import_boundaries_api_v1_boundaries_import_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2512,6 +2982,286 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Available Reports
+         * @description List reports accessible to the calling user's role.
+         */
+        get: operations["list_available_reports_api_v1_reports_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Report Data
+         * @description Run a report with filter parameters (paginated, scope applied).
+         */
+        get: operations["get_report_data_api_v1_reports__key__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/{key}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request Report Export
+         * @description Trigger report export as a background job (supports xlsx, csv, pdf).
+         */
+        post: operations["request_report_export_api_v1_reports__key__export_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exports/{export_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Export Status
+         * @description Check status of a requested report export job.
+         */
+        get: operations["get_export_status_api_v1_exports__export_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exports/{export_id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Export File
+         * @description Download the completed export file.
+         */
+        get: operations["download_export_file_api_v1_exports__export_id__download_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/generated-reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Generated Reports
+         * @description List archived month-end and on-demand report history files.
+         */
+        get: operations["list_generated_reports_api_v1_generated_reports_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/generated-reports/{report_id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Generated Report
+         * @description Re-download an archived generated report file.
+         */
+        get: operations["download_generated_report_api_v1_generated_reports__report_id__download_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/archives": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Archives
+         * @description List yearly archive records with SHA-256 checksums, encryption algorithm, and status.
+         */
+        get: operations["list_archives_api_v1_admin_archives_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/archives/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate Archive
+         * @description Trigger yearly data archive, compute SHA-256, encrypt with AES-256-GCM, and optionally purge live records.
+         */
+        post: operations["generate_archive_api_v1_admin_archives_generate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/archives/{archive_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Archive Record
+         * @description Retrieve details for a single archive record.
+         */
+        get: operations["get_archive_record_api_v1_admin_archives__archive_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/archives/{archive_id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Encrypted Archive
+         * @description Download the encrypted yearly archive file with integrity headers.
+         */
+        get: operations["download_encrypted_archive_api_v1_admin_archives__archive_id__download_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/archives/{archive_id}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify Archive Integrity
+         * @description Verify archive SHA-256 checksum and sample decryption to ensure file is uncorrupted and recoverable.
+         */
+        post: operations["verify_archive_integrity_api_v1_admin_archives__archive_id__verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/retention/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Retention Purge
+         * @description Execute scheduled retention cleanup: purge sync_changes (>60d) and notifications (>6mo).
+         */
+        post: operations["run_retention_purge_api_v1_admin_retention_run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/retention/anonymise": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Employee Anonymisation
+         * @description Anonymise workers whose employment ended past the statutory retention window (default 2 years).
+         */
+        post: operations["run_employee_anonymisation_api_v1_admin_retention_anonymise_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2626,6 +3376,38 @@ export interface components {
              */
             created_at: string;
         };
+        /**
+         * AnonymisationRequest
+         * @description Request to run employee anonymisation.
+         */
+        AnonymisationRequest: {
+            /**
+             * Older Than Years
+             * @description Minimum years since end of employment before anonymising (default 2 years)
+             * @default 2
+             */
+            older_than_years: number;
+            /**
+             * Employee Ids
+             * @description Optional specific list of employee IDs to anonymise
+             */
+            employee_ids?: string[] | null;
+        };
+        /**
+         * AnonymisationResult
+         * @description Result summary of employee anonymisation.
+         */
+        AnonymisationResult: {
+            /** Anonymised Employees Count */
+            anonymised_employees_count: number;
+            /** Anonymised Employee Ids */
+            anonymised_employee_ids: string[];
+            /**
+             * Completed At
+             * Format: date-time
+             */
+            completed_at: string;
+        };
         /** ApprovalsCounts */
         ApprovalsCounts: {
             /**
@@ -2660,6 +3442,87 @@ export interface components {
             attendance_rows?: {
                 [key: string]: unknown;
             }[];
+        };
+        /**
+         * ArchiveRecordResponse
+         * @description Schema for archive metadata response.
+         */
+        ArchiveRecordResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Year */
+            year: number;
+            /** File Name */
+            file_name: string;
+            /** File Size Bytes */
+            file_size_bytes: number;
+            /** Sha256 Checksum */
+            sha256_checksum: string;
+            /** Encryption Algo */
+            encryption_algo: string;
+            /** Record Count */
+            record_count: number;
+            /** Status */
+            status: string;
+            /**
+             * Archived At
+             * Format: date-time
+             */
+            archived_at: string;
+            /** Verified At */
+            verified_at?: string | null;
+            /** Purged At */
+            purged_at?: string | null;
+            /** Purged Record Count */
+            purged_record_count?: number | null;
+            /** Details */
+            details?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * ArchiveTriggerRequest
+         * @description Request to generate yearly archive.
+         */
+        ArchiveTriggerRequest: {
+            /**
+             * Year
+             * @description Calendar year to archive
+             */
+            year: number;
+            /**
+             * Purge Live Events
+             * @description Whether to purge the archived raw events/visits from live database after verification
+             * @default true
+             */
+            purge_live_events: boolean;
+        };
+        /**
+         * ArchiveVerificationResult
+         * @description Response from verifying an archive package.
+         */
+        ArchiveVerificationResult: {
+            /**
+             * Archive Id
+             * Format: uuid
+             */
+            archive_id: string;
+            /** Verified */
+            verified: boolean;
+            /** Record Count */
+            record_count: number;
+            /** Sha256 Checksum */
+            sha256_checksum: string;
+            /** Message */
+            message: string;
         };
         /** AssignedWorkerSummary */
         AssignedWorkerSummary: {
@@ -3245,6 +4108,51 @@ export interface components {
         BoundaryCopyToRequest: {
             /** Target Worksite Ids */
             target_worksite_ids: string[];
+        };
+        /** BoundaryImportError */
+        BoundaryImportError: {
+            /** Row */
+            row: number;
+            /** Code */
+            code: string;
+            /** Entity Type */
+            entity_type: string;
+            /** Reason */
+            reason: string;
+        };
+        /** BoundaryImportItem */
+        BoundaryImportItem: {
+            /**
+             * Entity Type
+             * @description WORKSITE or ACCOMMODATION
+             */
+            entity_type: string;
+            /**
+             * Code
+             * @description Worksite job number or accommodation code
+             */
+            code: string;
+            /**
+             * Polygon
+             * @description GeoJSON dict/string or WKT string
+             */
+            polygon: unknown;
+        };
+        /** BoundaryImportRequest */
+        BoundaryImportRequest: {
+            /** Items */
+            items: components["schemas"]["BoundaryImportItem"][];
+        };
+        /** BoundaryImportResponse */
+        BoundaryImportResponse: {
+            /** Total Rows */
+            total_rows: number;
+            /** Updated Count */
+            updated_count: number;
+            /** Skipped Count */
+            skipped_count: number;
+            /** Errors */
+            errors: components["schemas"]["BoundaryImportError"][];
         };
         /** BoundaryQueueItemResponse */
         BoundaryQueueItemResponse: {
@@ -4001,6 +4909,46 @@ export interface components {
             /** To Date */
             to_date?: string | null;
         };
+        /**
+         * GeneratedReportRead
+         * @description Archived generated report item.
+         */
+        GeneratedReportRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Report Key */
+            report_key: string;
+            /** Country */
+            country: string;
+            /** Period Start */
+            period_start?: string | null;
+            /** Period End */
+            period_end?: string | null;
+            /** Kind */
+            kind: string;
+            /** File Name */
+            file_name: string;
+            /** Version No */
+            version_no: number;
+            /** Status */
+            status: string;
+            /** Visible Roles */
+            visible_roles: string[];
+            /** Generated By */
+            generated_by: string;
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /** File Size Bytes */
+            file_size_bytes?: number | null;
+            /** Download Url */
+            download_url: string;
+        };
         /** GradeChangeRequest */
         GradeChangeRequest: {
             /** New Grade Code */
@@ -4738,6 +5686,11 @@ export interface components {
              */
             consented_at_utc: string;
         };
+        /** MobileConsentWithdrawRequest */
+        MobileConsentWithdrawRequest: {
+            /** Reason */
+            reason?: string | null;
+        };
         /** MobileDeviceRegistration */
         MobileDeviceRegistration: {
             /** Device Identifier */
@@ -5216,6 +6169,343 @@ export interface components {
             /** New Password */
             new_password: string;
         };
+        /** PayrollIssueItem */
+        PayrollIssueItem: {
+            /** Issue Type */
+            issue_type: string;
+            /**
+             * Employee Id
+             * Format: uuid
+             */
+            employee_id: string;
+            /** Tally Id */
+            tally_id: string;
+            /** Employee Name */
+            employee_name: string;
+            /** Details */
+            details: string;
+            /** Work Date */
+            work_date?: string | null;
+        };
+        /** PayrollRecordRead */
+        PayrollRecordRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Employee Id
+             * Format: uuid
+             */
+            employee_id: string;
+            /** Tally Id */
+            tally_id?: string | null;
+            /** Employee Tally Id */
+            employee_tally_id?: string | null;
+            /** Employee Name */
+            employee_name?: string | null;
+            /** Employee Role */
+            employee_role?: string | null;
+            /** Role */
+            role?: string | null;
+            /** Standard Hours */
+            standard_hours: string;
+            /** Standard Monthly Hours */
+            standard_monthly_hours?: string | null;
+            /** Scheduled Hours */
+            scheduled_hours: string;
+            /** Worked Hours */
+            worked_hours: string;
+            /** Actual Worked Hours */
+            actual_worked_hours?: string | null;
+            /** Paid Leave Hours */
+            paid_leave_hours: string;
+            /** Unpaid Leave Hours */
+            unpaid_leave_hours: string;
+            /** Shortfall Hours */
+            shortfall_hours: string;
+            /** Missed Hours */
+            missed_hours?: string | null;
+            /** Missed Hours Deduction */
+            missed_hours_deduction: string;
+            /** Ot1 Hours */
+            ot1_hours: string;
+            /** Ot2 Hours */
+            ot2_hours: string;
+            /** Salary Portion */
+            salary_portion: string;
+            /** Basic Salary */
+            basic_salary?: string | null;
+            /** Special Allowance */
+            special_allowance?: string | null;
+            /** Fixed Ot Amount */
+            fixed_ot_amount?: string | null;
+            /** Bonus */
+            bonus?: string | null;
+            /** Telephone Allowance */
+            telephone_allowance?: string | null;
+            /** Housing Transport Allowance */
+            housing_transport_allowance?: string | null;
+            /** Ot1 Rate */
+            ot1_rate?: string | null;
+            /** Ot2 Rate */
+            ot2_rate?: string | null;
+            /** Ot1 Amount */
+            ot1_amount: string;
+            /** Ot2 Amount */
+            ot2_amount: string;
+            /** Gross Pay */
+            gross_pay: string;
+            /** Total Deductions */
+            total_deductions?: string | null;
+            /** Net Pay */
+            net_pay: string;
+            /** Gratuity */
+            gratuity: string;
+            /** Gratuity Provision */
+            gratuity_provision?: string | null;
+            /** Leave Salary */
+            leave_salary: string;
+            /** Leave Salary Provision */
+            leave_salary_provision?: string | null;
+            /** Provisions */
+            provisions: string;
+            /** Company Provisions Total */
+            company_provisions_total?: string | null;
+            /** Per Month Provision */
+            per_month_provision: string;
+            /** Total Staff Cost */
+            total_staff_cost: string;
+            /** Hr Oh Amount */
+            hr_oh_amount: string;
+            /** Hr Overhead Amount */
+            hr_overhead_amount?: string | null;
+            /** Final Total Staff Cost */
+            final_total_staff_cost: string;
+            /** Snapshot */
+            snapshot?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** PayrollRunCreate */
+        PayrollRunCreate: {
+            /**
+             * Period Start
+             * Format: date
+             */
+            period_start: string;
+            /**
+             * Period End
+             * Format: date
+             */
+            period_end: string;
+            /**
+             * Country
+             * @default AE
+             */
+            country: string;
+            /** Notes */
+            notes?: string | null;
+        };
+        /** PayrollRunDetailRead */
+        PayrollRunDetailRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Period Start
+             * Format: date
+             */
+            period_start: string;
+            /**
+             * Period End
+             * Format: date
+             */
+            period_end: string;
+            /** Country */
+            country: string;
+            /** Status */
+            status: string;
+            /** Run No */
+            run_no: number;
+            /** Created By */
+            created_by: string;
+            /** Created By User Id */
+            created_by_user_id?: string | null;
+            /** Approved By User Id */
+            approved_by_user_id?: string | null;
+            /** Approved At */
+            approved_at?: string | null;
+            /** Calculation Version */
+            calculation_version: string;
+            /** Totals Snapshot */
+            totals_snapshot?: components["schemas"]["PayrollTotalsSnapshot"] | {
+                [key: string]: unknown;
+            } | null;
+            /** Notes */
+            notes?: string | null;
+            /**
+             * Record Count
+             * @default 0
+             */
+            record_count: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Records */
+            records?: components["schemas"]["PayrollRecordRead"][];
+        };
+        /** PayrollRunIssuesResponse */
+        PayrollRunIssuesResponse: {
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /** Total Issues */
+            total_issues: number;
+            /** Unapproved Overtime Count */
+            unapproved_overtime_count: number;
+            /** Missing Salary Structure Count */
+            missing_salary_structure_count: number;
+            /** Missing Standard Hours Count */
+            missing_standard_hours_count: number;
+            /** Issues */
+            issues?: components["schemas"]["PayrollIssueItem"][];
+        };
+        /** PayrollRunRead */
+        PayrollRunRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Period Start
+             * Format: date
+             */
+            period_start: string;
+            /**
+             * Period End
+             * Format: date
+             */
+            period_end: string;
+            /** Country */
+            country: string;
+            /** Status */
+            status: string;
+            /** Run No */
+            run_no: number;
+            /** Created By */
+            created_by: string;
+            /** Created By User Id */
+            created_by_user_id?: string | null;
+            /** Approved By User Id */
+            approved_by_user_id?: string | null;
+            /** Approved At */
+            approved_at?: string | null;
+            /** Calculation Version */
+            calculation_version: string;
+            /** Totals Snapshot */
+            totals_snapshot?: components["schemas"]["PayrollTotalsSnapshot"] | {
+                [key: string]: unknown;
+            } | null;
+            /** Notes */
+            notes?: string | null;
+            /**
+             * Record Count
+             * @default 0
+             */
+            record_count: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** PayrollTotalsSnapshot */
+        PayrollTotalsSnapshot: {
+            /**
+             * Worker Count
+             * @default 0
+             */
+            worker_count: number;
+            /**
+             * Scheduled Hours Total
+             * @default 0.00
+             */
+            scheduled_hours_total: string;
+            /**
+             * Worked Hours Total
+             * @default 0.00
+             */
+            worked_hours_total: string;
+            /**
+             * Ot1 Hours Total
+             * @default 0.00
+             */
+            ot1_hours_total: string;
+            /**
+             * Ot2 Hours Total
+             * @default 0.00
+             */
+            ot2_hours_total: string;
+            /**
+             * Ot1 Amount Total
+             * @default 0.00
+             */
+            ot1_amount_total: string;
+            /**
+             * Ot2 Amount Total
+             * @default 0.00
+             */
+            ot2_amount_total: string;
+            /**
+             * Gross Pay Total
+             * @default 0.00
+             */
+            gross_pay_total: string;
+            /**
+             * Net Pay Total
+             * @default 0.00
+             */
+            net_pay_total: string;
+            /**
+             * Provisions Total
+             * @default 0.00
+             */
+            provisions_total: string;
+            /**
+             * Total Staff Cost Total
+             * @default 0.00
+             */
+            total_staff_cost_total: string;
+            /**
+             * Final Total Staff Cost Total
+             * @default 0.00
+             */
+            final_total_staff_cost_total: string;
+        };
         /** PendingVisitCloseRequest */
         PendingVisitCloseRequest: {
             /** Reason */
@@ -5273,7 +6563,7 @@ export interface components {
              */
             worksite_id: string;
             /** Worksite Name */
-            worksite_name: string;
+            worksite_name?: string | null;
             /** Job Number */
             job_number?: string | null;
             /** Job Item Id */
@@ -5290,7 +6580,7 @@ export interface components {
              */
             employee_id: string;
             /** Employee Name */
-            employee_name: string;
+            employee_name?: string | null;
             /** Tally Id */
             tally_id?: string | null;
             /** Supervisor Id */
@@ -5625,6 +6915,118 @@ export interface components {
          * @enum {string}
          */
         RejectReason: "INVALID_SCHEMA" | "INVALID_COORDINATES" | "TIMESTAMP_IN_FUTURE" | "TIMESTAMP_TOO_OLD";
+        /**
+         * ReportColumn
+         * @description Metadata for a report column.
+         */
+        ReportColumn: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /**
+             * Type
+             * @default string
+             */
+            type: string;
+            /** Description */
+            description?: string | null;
+        };
+        /**
+         * ReportDataResponse
+         * @description Paginated report results.
+         */
+        ReportDataResponse: {
+            /** Report Key */
+            report_key: string;
+            /** Total Rows */
+            total_rows: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Columns */
+            columns: components["schemas"]["ReportColumn"][];
+            /** Data */
+            data: {
+                [key: string]: unknown;
+            }[];
+            /** Summary */
+            summary?: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * ReportDefinition
+         * @description Specification of an available report.
+         */
+        ReportDefinition: {
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Category */
+            category: string;
+            /** Allowed Roles */
+            allowed_roles: string[];
+            /** Is Cost Report */
+            is_cost_report: boolean;
+            /** Columns */
+            columns: components["schemas"]["ReportColumn"][];
+            /** Supported Formats */
+            supported_formats: string[];
+            /** Filter Schema */
+            filter_schema?: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * ReportExportRequest
+         * @description Export request body.
+         */
+        ReportExportRequest: {
+            /**
+             * Format
+             * @default xlsx
+             */
+            format: string;
+            /** Params */
+            params?: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * ReportExportResponse
+         * @description Export job status response.
+         */
+        ReportExportResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Report Key */
+            report_key: string;
+            /** Format */
+            format: string;
+            /** Status */
+            status: string;
+            /** Download Url */
+            download_url?: string | null;
+            /** File Name */
+            file_name?: string | null;
+            /** File Size Bytes */
+            file_size_bytes?: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Completed At */
+            completed_at?: string | null;
+        };
         /** ReportingLineCreate */
         ReportingLineCreate: {
             /**
@@ -5687,6 +7089,335 @@ export interface components {
              * @default true
              */
             must_change_password: boolean;
+        };
+        /**
+         * RetentionPurgeRequest
+         * @description Request parameters for retention cleanup jobs.
+         */
+        RetentionPurgeRequest: {
+            /**
+             * Purge Sync Older Than Days
+             * @description Retention for mobile sync changes (default 60 days)
+             * @default 60
+             */
+            purge_sync_older_than_days: number;
+            /**
+             * Purge Notifications Older Than Months
+             * @description Retention for notification logs (default 6 months)
+             * @default 6
+             */
+            purge_notifications_older_than_months: number;
+        };
+        /**
+         * RetentionPurgeResult
+         * @description Summary of purged records from retention run.
+         */
+        RetentionPurgeResult: {
+            /** Sync Changes Purged */
+            sync_changes_purged: number;
+            /** Notification Logs Purged */
+            notification_logs_purged: number;
+            /**
+             * Completed At
+             * Format: date-time
+             */
+            completed_at: string;
+        };
+        /** SalaryRevisionCreate */
+        SalaryRevisionCreate: {
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /**
+             * Country
+             * @default AE
+             */
+            country: string;
+            /**
+             * Effective From
+             * Format: date
+             */
+            effective_from: string;
+            /** Effective To */
+            effective_to?: string | null;
+            /** Notes */
+            notes?: string | null;
+            /** Lines */
+            lines?: components["schemas"]["SalaryRevisionLineCreate-Input"][];
+        };
+        /** SalaryRevisionDetailRead */
+        SalaryRevisionDetailRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /** Country */
+            country: string;
+            /**
+             * Effective From
+             * Format: date
+             */
+            effective_from: string;
+            /** Effective To */
+            effective_to?: string | null;
+            /** Status */
+            status: string;
+            /** Notes */
+            notes?: string | null;
+            /**
+             * Line Count
+             * @default 0
+             */
+            line_count: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Lines */
+            lines?: components["schemas"]["SalaryRevisionLineRead"][];
+        };
+        /** SalaryRevisionImportDiffResponse */
+        SalaryRevisionImportDiffResponse: {
+            /** Target Revision Code */
+            target_revision_code: string;
+            /** Base Revision Code */
+            base_revision_code?: string | null;
+            /** New Grades Count */
+            new_grades_count: number;
+            /** Updated Grades Count */
+            updated_grades_count: number;
+            /** Unchanged Grades Count */
+            unchanged_grades_count: number;
+            /** Diffs */
+            diffs?: components["schemas"]["SalaryRevisionLineDiff"][];
+            /** Preview Lines */
+            preview_lines?: components["schemas"]["SalaryRevisionLineCreate-Output"][];
+        };
+        /** SalaryRevisionLineCreate */
+        "SalaryRevisionLineCreate-Input": {
+            /** Grade Code */
+            grade_code: string;
+            /** Grade Group Title */
+            grade_group_title?: string | null;
+            /**
+             * Basic Salary
+             * @default 0.00
+             */
+            basic_salary: number | string;
+            /**
+             * Special Allowance
+             * @default 0.00
+             */
+            special_allowance: number | string;
+            /**
+             * Fixed Ot Amount
+             * @default 0.00
+             */
+            fixed_ot_amount: number | string;
+            /**
+             * Bonus
+             * @default 0.00
+             */
+            bonus: number | string;
+            /**
+             * Visa Provision
+             * @default 0.00
+             */
+            visa_provision: number | string;
+            /**
+             * Air Ticket Provision
+             * @default 0.00
+             */
+            air_ticket_provision: number | string;
+            /**
+             * Uniform Provision
+             * @default 0.00
+             */
+            uniform_provision: number | string;
+            /**
+             * Medical Provision
+             * @default 0.00
+             */
+            medical_provision: number | string;
+            /**
+             * Accommodation Provision
+             * @default 0.00
+             */
+            accommodation_provision: number | string;
+            /**
+             * Transportation Provision
+             * @default 0.00
+             */
+            transportation_provision: number | string | null;
+        };
+        /** SalaryRevisionLineCreate */
+        "SalaryRevisionLineCreate-Output": {
+            /** Grade Code */
+            grade_code: string;
+            /** Grade Group Title */
+            grade_group_title?: string | null;
+            /**
+             * Basic Salary
+             * @default 0.00
+             */
+            basic_salary: string;
+            /**
+             * Special Allowance
+             * @default 0.00
+             */
+            special_allowance: string;
+            /**
+             * Fixed Ot Amount
+             * @default 0.00
+             */
+            fixed_ot_amount: string;
+            /**
+             * Bonus
+             * @default 0.00
+             */
+            bonus: string;
+            /**
+             * Visa Provision
+             * @default 0.00
+             */
+            visa_provision: string;
+            /**
+             * Air Ticket Provision
+             * @default 0.00
+             */
+            air_ticket_provision: string;
+            /**
+             * Uniform Provision
+             * @default 0.00
+             */
+            uniform_provision: string;
+            /**
+             * Medical Provision
+             * @default 0.00
+             */
+            medical_provision: string;
+            /**
+             * Accommodation Provision
+             * @default 0.00
+             */
+            accommodation_provision: string;
+            /**
+             * Transportation Provision
+             * @default 0.00
+             */
+            transportation_provision: string | null;
+        };
+        /** SalaryRevisionLineDiff */
+        SalaryRevisionLineDiff: {
+            /** Grade Code */
+            grade_code: string;
+            /** Field Name */
+            field_name: string;
+            /** Old Value */
+            old_value: string | null;
+            /** New Value */
+            new_value: string | null;
+            /** Is Changed */
+            is_changed: boolean;
+        };
+        /** SalaryRevisionLineRead */
+        SalaryRevisionLineRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Grade Code */
+            grade_code: string;
+            /** Grade Group Title */
+            grade_group_title?: string | null;
+            /** Basic Salary */
+            basic_salary: string;
+            /** Special Allowance */
+            special_allowance: string;
+            /** Fixed Ot Amount */
+            fixed_ot_amount: string;
+            /** Bonus */
+            bonus: string;
+            /** Visa Provision */
+            visa_provision: string;
+            /** Air Ticket Provision */
+            air_ticket_provision: string;
+            /** Uniform Provision */
+            uniform_provision: string;
+            /** Medical Provision */
+            medical_provision: string;
+            /** Accommodation Provision */
+            accommodation_provision: string;
+            /** Transportation Provision */
+            transportation_provision?: string | null;
+            /**
+             * Total Provisions
+             * @default 0.00
+             */
+            total_provisions: string;
+            /**
+             * Total Salary Portion
+             * @default 0.00
+             */
+            total_salary_portion: string;
+            /**
+             * Planned Hourly Cost
+             * @default 0.00
+             */
+            planned_hourly_cost: string;
+        };
+        /** SalaryRevisionRead */
+        SalaryRevisionRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /** Country */
+            country: string;
+            /**
+             * Effective From
+             * Format: date
+             */
+            effective_from: string;
+            /** Effective To */
+            effective_to?: string | null;
+            /** Status */
+            status: string;
+            /** Notes */
+            notes?: string | null;
+            /**
+             * Line Count
+             * @default 0
+             */
+            line_count: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /** SalaryStructureListItem */
         SalaryStructureListItem: {
@@ -6436,6 +8167,112 @@ export interface components {
             /** Month Is Under */
             month_is_under: boolean;
         };
+        /** WorkerMobilePayrollSlip */
+        WorkerMobilePayrollSlip: {
+            /**
+             * Payroll Record Id
+             * Format: uuid
+             */
+            payroll_record_id: string;
+            /**
+             * Payroll Run Id
+             * Format: uuid
+             */
+            payroll_run_id: string;
+            /** Month Label */
+            month_label: string;
+            /**
+             * Period Start
+             * Format: date
+             */
+            period_start: string;
+            /**
+             * Period End
+             * Format: date
+             */
+            period_end: string;
+            /** Status */
+            status: string;
+            /** Standard Hours */
+            standard_hours: string;
+            /** Worked Hours */
+            worked_hours: string;
+            /** Paid Leave Hours */
+            paid_leave_hours: string;
+            /** Unpaid Leave Hours */
+            unpaid_leave_hours: string;
+            /** Salary Portion */
+            salary_portion: string;
+            /** Missed Hours Deduction */
+            missed_hours_deduction: string;
+            /** Ot1 Hours */
+            ot1_hours: string;
+            /** Ot1 Amount */
+            ot1_amount: string;
+            /** Ot2 Hours */
+            ot2_hours: string;
+            /** Ot2 Amount */
+            ot2_amount: string;
+            /** Gross Pay */
+            gross_pay: string;
+            /** Net Pay */
+            net_pay: string;
+            /** Approved At */
+            approved_at?: string | null;
+        };
+        /** WorksiteBudgetVsActualItem */
+        WorksiteBudgetVsActualItem: {
+            /**
+             * Worksite Id
+             * Format: uuid
+             */
+            worksite_id: string;
+            /** Job Number */
+            job_number: string;
+            /** Job Name */
+            job_name: string;
+            /** Country */
+            country: string;
+            /** Salary Revision Code */
+            salary_revision_code?: string | null;
+            /** Assigned Revision Code */
+            assigned_revision_code?: string | null;
+            /** Annual Planned Man Hours */
+            annual_planned_man_hours: string;
+            /** Annual Labor Budget */
+            annual_labor_budget: string;
+            /** Prorated Budget */
+            prorated_budget: string;
+            /** Pro Rated Budget */
+            pro_rated_budget?: string | null;
+            /** Actual Cost Allocated */
+            actual_cost_allocated: string;
+            /** Actual Allocated Cost */
+            actual_allocated_cost?: string | null;
+            /** Variance */
+            variance: string;
+            /** Variance Amount */
+            variance_amount?: string | null;
+            /**
+             * Variance Percent
+             * @default 0.0
+             */
+            variance_percent: string;
+            /** Is Over Budget */
+            is_over_budget: boolean;
+            /**
+             * Is Under Budget
+             * @default false
+             */
+            is_under_budget: boolean;
+            /** Manual Budget Override */
+            manual_budget_override?: string | null;
+            /**
+             * Is Custom Budget Override
+             * @default false
+             */
+            is_custom_budget_override: boolean;
+        };
         /** WorksiteCreate */
         WorksiteCreate: {
             /**
@@ -6681,7 +8518,7 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    health_health_get: {
+    health_health_head: {
         parameters: {
             query?: never;
             header?: never;
@@ -6701,7 +8538,54 @@ export interface operations {
             };
         };
     };
-    health_ready_health_ready_get: {
+    health_health_head: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
+    health_ready_health_ready_head: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadinessResponse"];
+                };
+            };
+            /** @description Service not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    health_ready_health_ready_head: {
         parameters: {
             query?: never;
             header?: never;
@@ -6960,6 +8844,111 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EmployeeRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_employees_directory_api_v1_employees_export_get: {
+        parameters: {
+            query?: {
+                role?: string | null;
+                country?: string | null;
+                is_active?: boolean | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_employee_dsar_api_v1_employees__employee_id__export_dsar_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                employee_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_withdraw_consent_api_v1_employees__employee_id__withdraw_consent_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                employee_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["MobileConsentWithdrawRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -8048,6 +10037,45 @@ export interface operations {
             };
         };
     };
+    mobile_withdraw_consent_api_v1_mobile_consent_withdraw_post: {
+        parameters: {
+            query?: {
+                allow_password_change_pending?: boolean;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["MobileConsentWithdrawRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_mobile_location_policy_api_v1_mobile_policy_location_get: {
         parameters: {
             query?: {
@@ -8357,6 +10385,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CompanySettingRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_staff_grades_api_v1_settings_staff_grades_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
                 };
             };
             /** @description Validation Error */
@@ -9155,6 +11214,582 @@ export interface operations {
             };
         };
     };
+    list_payroll_runs_api_v1_payroll_runs_get: {
+        parameters: {
+            query?: {
+                country?: string | null;
+                status?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayrollRunRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_payroll_run_api_v1_payroll_runs_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PayrollRunCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayrollRunDetailRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_payroll_run_api_v1_payroll_runs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayrollRunDetailRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_payroll_run_issues_api_v1_payroll_runs__run_id__issues_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayrollRunIssuesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_payroll_run_api_v1_payroll_runs__run_id__approve_post: {
+        parameters: {
+            query?: {
+                notes?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayrollRunRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_payroll_records_api_v1_payroll_records_get: {
+        parameters: {
+            query: {
+                run_id: string;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayrollRecordRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_my_payroll_records_api_v1_payroll_my_records_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerMobilePayrollSlip"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_my_payroll_records_api_v1_mobile_me_payroll_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerMobilePayrollSlip"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_salary_revisions_api_v1_salary_revisions_get: {
+        parameters: {
+            query?: {
+                country?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SalaryRevisionRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_salary_revision_api_v1_salary_revisions_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SalaryRevisionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SalaryRevisionDetailRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_salary_revision_detail_api_v1_salary_revisions__code__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SalaryRevisionDetailRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_salary_revision_template_api_v1_salary_revisions__code__export_template_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    diff_salary_revision_api_v1_salary_revisions_diff_post: {
+        parameters: {
+            query: {
+                target_revision_code: string;
+                base_revision_code?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SalaryRevisionLineCreate-Input"][];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SalaryRevisionImportDiffResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_salary_revision_file_api_v1_salary_revisions_preview_file_post: {
+        parameters: {
+            query?: {
+                /** @description Target revision code to create */
+                target_revision_code?: string | null;
+                /** @description Base revision code for comparison */
+                base_revision_code?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SalaryRevisionImportDiffResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_budget_vs_actual_api_v1_payroll_budget_vs_actual_get: {
+        parameters: {
+            query?: {
+                country?: string | null;
+                as_of?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorksiteBudgetVsActualItem"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_worksite_revision_api_v1_payroll_worksites__worksite_id__revision_put: {
+        parameters: {
+            query?: {
+                /** @description Salary revision code to bind, or empty/null to clear */
+                revision_code?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                worksite_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    trigger_auto_draft_check_api_v1_payroll_auto_run_check_post: {
+        parameters: {
+            query?: {
+                as_of?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayrollRunRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_worksites_api_v1_worksites_get: {
         parameters: {
             query?: {
@@ -9218,6 +11853,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorksiteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_worksites_excel_api_v1_worksites_export_get: {
+        parameters: {
+            query?: {
+                q?: string | null;
+                country?: string | null;
+                is_active?: boolean | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -9324,6 +11994,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BoundaryQueueResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_boundaries_api_v1_boundaries_export_get: {
+        parameters: {
+            query?: {
+                format?: string;
+                entity_type?: string | null;
+                polygon_format?: string;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_boundaries_api_v1_boundaries_import_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BoundaryImportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoundaryImportResponse"];
                 };
             };
             /** @description Validation Error */
@@ -11875,6 +14615,499 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AlertResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_available_reports_api_v1_reports_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportDefinition"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_report_data_api_v1_reports__key__get: {
+        parameters: {
+            query?: {
+                date_from?: string | null;
+                date_to?: string | null;
+                worksite_id?: string | null;
+                group_id?: string | null;
+                zone_id?: string | null;
+                supervisor_id?: string | null;
+                superintendent_id?: string | null;
+                engineer_id?: string | null;
+                employee_id?: string | null;
+                sgd?: string | null;
+                country?: string | null;
+                month?: number | null;
+                year?: number | null;
+                week_start?: string | null;
+                payroll_run_id?: string | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportDataResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    request_report_export_api_v1_reports__key__export_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportExportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportExportResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_export_status_api_v1_exports__export_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                export_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportExportResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_export_file_api_v1_exports__export_id__download_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                export_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_generated_reports_api_v1_generated_reports_get: {
+        parameters: {
+            query?: {
+                report_key?: string | null;
+                country?: string | null;
+                period?: string | null;
+                kind?: string | null;
+                status?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneratedReportRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_generated_report_api_v1_generated_reports__report_id__download_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_archives_api_v1_admin_archives_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArchiveRecordResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_archive_api_v1_admin_archives_generate_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArchiveTriggerRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArchiveRecordResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_archive_record_api_v1_admin_archives__archive_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                archive_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArchiveRecordResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_encrypted_archive_api_v1_admin_archives__archive_id__download_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                archive_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    verify_archive_integrity_api_v1_admin_archives__archive_id__verify_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                archive_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArchiveVerificationResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_retention_purge_api_v1_admin_retention_run_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetentionPurgeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetentionPurgeResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_employee_anonymisation_api_v1_admin_retention_anonymise_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnonymisationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnonymisationResult"];
                 };
             };
             /** @description Validation Error */

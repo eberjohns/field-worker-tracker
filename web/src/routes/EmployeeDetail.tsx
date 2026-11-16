@@ -16,6 +16,8 @@ import {
   DollarSign,
   TrendingUp,
   TrendingDown,
+  Download,
+  ShieldAlert,
 } from "lucide-react";
 
 export const EmployeeDetail: React.FC = () => {
@@ -43,6 +45,60 @@ export const EmployeeDetail: React.FC = () => {
   // Add document state
   const [newDocType, setNewDocType] = useState("VISA");
   const [newDocExpiry, setNewDocExpiry] = useState("");
+
+  // Phase 13 DSAR and Consent actions
+  const [exportingDsar, setExportingDsar] = useState(false);
+  const [withdrawingConsent, setWithdrawingConsent] = useState(false);
+
+  const handleExportDsar = async () => {
+    setExportingDsar(true);
+    try {
+      const res = await fetch(`/api/v1/employees/${employeeId}/export-dsar`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error("Failed to export employee DSAR");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `dsar_${employee?.tally_id || employeeId}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      setStatusMessage("DSAR package exported successfully.");
+    } catch (err: any) {
+      setErrorMessage(err.message || "DSAR export failed");
+    } finally {
+      setExportingDsar(false);
+    }
+  };
+
+  const handleWithdrawConsent = async () => {
+    const reason = window.prompt("Enter reason for consent withdrawal (e.g. Employee request, Contract review):");
+    if (!reason) return;
+    setWithdrawingConsent(true);
+    try {
+      const res = await fetch(`/api/v1/employees/${employeeId}/withdraw-consent`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ reason }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to withdraw consent");
+      }
+      setStatusMessage("Consent withdrawn successfully. Mobile tracking events will now be rejected with HTTP 403.");
+      fetchData();
+    } catch (err: any) {
+      setErrorMessage(err.message || "Failed to record consent withdrawal");
+    } finally {
+      setWithdrawingConsent(false);
+    }
+  };
 
   const fetchData = async () => {
     if (!employeeId) return;
@@ -228,11 +284,44 @@ export const EmployeeDetail: React.FC = () => {
               <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700">
                 {employee.role}
               </span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                  employee.consent_status === "WITHDRAWN"
+                    ? "bg-rose-100 text-rose-800 border border-rose-200"
+                    : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                }`}
+              >
+                Consent: {employee.consent_status || "ACCEPTED"}
+              </span>
             </div>
             <p className="text-xs text-slate-500 mt-1">
               {employee.staff_grade_description || "Field Worker"} • {employee.country} Operations
             </p>
           </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExportDsar}
+            disabled={exportingDsar}
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 bg-white text-slate-700 rounded-lg text-xs font-medium hover:bg-slate-50 transition shadow-xs disabled:opacity-50"
+            title="Export full Data Subject Access Request (DSAR) Excel package"
+          >
+            <Download className="h-3.5 w-3.5 text-slate-500" />
+            {exportingDsar ? "Exporting DSAR..." : "Export DSAR (.xlsx)"}
+          </button>
+
+          {user?.role === "ADMIN" && employee.consent_status !== "WITHDRAWN" && (
+            <button
+              onClick={handleWithdrawConsent}
+              disabled={withdrawingConsent}
+              className="flex items-center gap-1.5 px-3 py-1.5 border border-rose-200 bg-rose-50 text-rose-700 rounded-lg text-xs font-medium hover:bg-rose-100 transition shadow-xs disabled:opacity-50"
+              title="Record consent withdrawal for tracking events"
+            >
+              <ShieldAlert className="h-3.5 w-3.5 text-rose-600" />
+              {withdrawingConsent ? "Withdrawing..." : "Withdraw Consent"}
+            </button>
+          )}
         </div>
       </div>
 

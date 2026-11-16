@@ -220,6 +220,7 @@ async def get_live_positions(
 @router.get("/trail/{employee_id}")
 async def get_worker_day_trail(
     employee_id: UUID,
+    request: Request,
     date: str | None = Query(None, description="Date YYYY-MM-DD (defaults to today)"),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
@@ -239,6 +240,18 @@ async def get_worker_day_trail(
         datetime.strptime(date, "%Y-%m-%d").date()
         if date
         else datetime.now(UTC).astimezone(ZoneInfo("Asia/Dubai")).date()
+    )
+
+    # Log trail view in live location access logs (audit of location views)
+    client_ip = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+    await EventsService.log_live_access(
+        session=session,
+        user_id=current_user.id,
+        access_type="TRAIL",
+        filters={"target_employee_id": str(employee_id), "date": str(target_date)},
+        client_ip=client_ip,
+        user_agent=user_agent,
     )
 
     # Query enriched events for this employee with valid coordinates

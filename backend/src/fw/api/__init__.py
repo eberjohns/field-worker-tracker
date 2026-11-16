@@ -17,6 +17,7 @@ from fw.api.salary import router as salary_router
 from fw.api.scheduling import router as scheduling_router
 from fw.api.settings import router as settings_router
 from fw.api.users import router as users_router
+from fw.modules.archive import archive_router, retention_router
 from fw.modules.notifications import alert_router
 from fw.modules.payroll import payroll_router
 from fw.modules.reports import reports_router
@@ -43,5 +44,7 @@ api_v1_router.include_router(documents_router)
 api_v1_router.include_router(dashboard_router)
 api_v1_router.include_router(alert_router)
 api_v1_router.include_router(reports_router)
+api_v1_router.include_router(archive_router)
+api_v1_router.include_router(retention_router)
 
 __all__ = ["api_v1_router"]
