@@ -194,15 +194,24 @@ def install_git_hook():
         print(f"Error: .git/hooks directory not found at {hooks_dir}")
         return
 
-    hook_path = os.path.join(hooks_dir, "post-commit")
+    # Clean up old post-commit if present
+    post_commit_path = os.path.join(hooks_dir, "post-commit")
+    if os.path.exists(post_commit_path):
+        try:
+            os.remove(post_commit_path)
+        except Exception:
+            pass
+
+    hook_path = os.path.join(hooks_dir, "pre-commit")
     hook_content = """#!/usr/bin/env sh
-# Auto-increment FWT version on every commit
+# Auto-increment FWT version and stage targets atomically
 python tools/version.py auto
+git add version.json web/src/version.ts web/package.json backend/pyproject.toml docs/system-versioning.md
 """
     with open(hook_path, "w", encoding="utf-8") as f:
         f.write(hook_content)
 
-    print(f"Git post-commit hook successfully installed at: {hook_path}")
+    print(f"Git pre-commit hook successfully installed at: {hook_path}")
 
 
 def main():
