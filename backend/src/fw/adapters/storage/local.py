@@ -1,10 +1,10 @@
 """Local file storage adapter implementing FileStoragePort."""
 
 import hashlib
-import os
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
+import anyio
 import structlog
 
 from fw.core.config import get_settings
@@ -110,10 +110,14 @@ class LocalStorageAdapter:
 
     async def delete(self, file_ref: str) -> bool:
         path_obj = Path(self.get_absolute_path(file_ref))
-        if path_obj.exists():
-            path_obj.unlink()
-            return True
-        return False
+
+        def _do_unlink() -> bool:
+            if path_obj.exists():
+                path_obj.unlink()
+                return True
+            return False
+
+        return await anyio.to_thread.run_sync(_do_unlink)
 
     def get_absolute_path(self, file_ref: str) -> str:
         normalized_rel = file_ref.lstrip("/\\").replace("\\", "/")
@@ -132,4 +136,3 @@ def get_file_storage() -> FileStoragePort:
     if _storage_instance is None:
         _storage_instance = LocalStorageAdapter()
     return _storage_instance
-
