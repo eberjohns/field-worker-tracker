@@ -33,4 +33,3 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
         pytest.skip("PostgreSQL not available on localhost:5432")
     async with async_session_factory() as session:
         yield session
-

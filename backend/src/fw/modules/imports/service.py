@@ -829,21 +829,43 @@ class ImportService:
                                 row_diff[field_name] = {"old": str(old_v), "new": None}
                             elif act == "SET" and new_v is not None:
                                 if model_attr == "effective_from":
-                                    old_str = old_v.isoformat() if old_v is not None and hasattr(old_v, "isoformat") else str(old_v or "")
-                                    new_str = new_v.isoformat() if hasattr(new_v, "isoformat") else str(new_v)
+                                    old_str = (
+                                        old_v.isoformat()
+                                        if old_v is not None and hasattr(old_v, "isoformat")
+                                        else str(old_v or "")
+                                    )
+                                    new_str = (
+                                        new_v.isoformat()
+                                        if hasattr(new_v, "isoformat")
+                                        else str(new_v)
+                                    )
                                     if old_str != new_str:
                                         row_action = "UPDATED"
                                         row_diff[field_name] = {"old": old_str, "new": new_str}
                                 elif model_attr == "status":
-                                    norm_new_status = "ACTIVE" if str(new_v).upper() in ("APPROVED", "ACTIVE") else str(new_v).upper()
-                                    norm_old_status = "ACTIVE" if str(old_v).upper() in ("APPROVED", "ACTIVE") else str(old_v).upper()
+                                    norm_new_status = (
+                                        "ACTIVE"
+                                        if str(new_v).upper() in ("APPROVED", "ACTIVE")
+                                        else str(new_v).upper()
+                                    )
+                                    norm_old_status = (
+                                        "ACTIVE"
+                                        if str(old_v).upper() in ("APPROVED", "ACTIVE")
+                                        else str(old_v).upper()
+                                    )
                                     if norm_new_status != norm_old_status:
                                         row_action = "UPDATED"
-                                        row_diff[field_name] = {"old": str(old_v), "new": str(new_v)}
+                                        row_diff[field_name] = {
+                                            "old": str(old_v),
+                                            "new": str(new_v),
+                                        }
                                 else:
                                     if str(old_v or "") != str(new_v):
                                         row_action = "UPDATED"
-                                        row_diff[field_name] = {"old": str(old_v) if old_v is not None else None, "new": str(new_v)}
+                                        row_diff[field_name] = {
+                                            "old": str(old_v) if old_v is not None else None,
+                                            "new": str(new_v),
+                                        }
                         if not row_diff:
                             row_action = "UNCHANGED"
                     else:
@@ -868,7 +890,9 @@ class ImportService:
 
                     rev_obj = existing_revisions.get(rev_code) if rev_code else None
                     line_obj = (
-                        existing_revision_lines.get((rev_obj.id, grade_code)) if rev_obj and grade_code else None
+                        existing_revision_lines.get((rev_obj.id, grade_code))
+                        if rev_obj and grade_code
+                        else None
                     )
                     if line_obj:
                         for field_name in (
@@ -894,11 +918,17 @@ class ImportService:
                                 if field_name == "grade_group_title":
                                     if str(old_v or "") != str(new_v):
                                         row_action = "UPDATED"
-                                        row_diff[field_name] = {"old": str(old_v) if old_v is not None else None, "new": str(new_v)}
+                                        row_diff[field_name] = {
+                                            "old": str(old_v) if old_v is not None else None,
+                                            "new": str(new_v),
+                                        }
                                 else:
                                     if Decimal(str(new_v)) != Decimal(str(old_v or 0)):
                                         row_action = "UPDATED"
-                                        row_diff[field_name] = {"old": str(old_v), "new": str(new_v)}
+                                        row_diff[field_name] = {
+                                            "old": str(old_v),
+                                            "new": str(new_v),
+                                        }
                         if not row_diff:
                             row_action = "UNCHANGED"
                     else:
@@ -1511,7 +1541,9 @@ class ImportService:
                     continue
                 rev_name = str(r.normalized.get("revision_name") or rev_code).strip()
                 country = str(r.normalized.get("country") or "AE").strip()
-                eff_from = to_date_obj(r.normalized.get("effective_from")) or datetime.now(UTC).date()
+                eff_from = (
+                    to_date_obj(r.normalized.get("effective_from")) or datetime.now(UTC).date()
+                )
                 raw_status = str(r.normalized.get("status") or "ACTIVE").strip().upper()
                 status = "ACTIVE" if raw_status in ("APPROVED", "ACTIVE") else raw_status
                 notes = r.normalized.get("notes")
@@ -1595,10 +1627,14 @@ class ImportService:
                         fixed_ot_amount=Decimal(str(r.normalized.get("fixed_ot_amount") or 0)),
                         bonus=Decimal(str(r.normalized.get("bonus") or 0)),
                         visa_provision=Decimal(str(r.normalized.get("visa_provision") or 0)),
-                        air_ticket_provision=Decimal(str(r.normalized.get("air_ticket_provision") or 0)),
+                        air_ticket_provision=Decimal(
+                            str(r.normalized.get("air_ticket_provision") or 0)
+                        ),
                         uniform_provision=Decimal(str(r.normalized.get("uniform_provision") or 0)),
                         medical_provision=Decimal(str(r.normalized.get("medical_provision") or 0)),
-                        accommodation_provision=Decimal(str(r.normalized.get("accommodation_provision") or 0)),
+                        accommodation_provision=Decimal(
+                            str(r.normalized.get("accommodation_provision") or 0)
+                        ),
                         transportation_provision=trans_dec,
                     )
                     session.add(new_line)

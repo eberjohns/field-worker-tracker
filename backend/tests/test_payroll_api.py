@@ -38,25 +38,39 @@ from fw.modules.payroll.models import (
 )
 
 
-async def _cleanup_period(session: AsyncSession, period_start: date, period_end: date, country: str = "AE") -> None:
+async def _cleanup_period(
+    session: AsyncSession, period_start: date, period_end: date, country: str = "AE"
+) -> None:
     run_ids = (
-        await session.execute(
-            select(PayrollRun.id).where(
-                PayrollRun.period_start == period_start,
-                PayrollRun.period_end == period_end,
-                PayrollRun.country == country,
+        (
+            await session.execute(
+                select(PayrollRun.id).where(
+                    PayrollRun.period_start == period_start,
+                    PayrollRun.period_end == period_end,
+                    PayrollRun.country == country,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     if run_ids:
         rec_ids = (
-            await session.execute(
-                select(PayrollRecord.id).where(PayrollRecord.payroll_run_id.in_(run_ids))
+            (
+                await session.execute(
+                    select(PayrollRecord.id).where(PayrollRecord.payroll_run_id.in_(run_ids))
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         if rec_ids:
-            await session.execute(delete(JobCostAllocation).where(JobCostAllocation.payroll_record_id.in_(rec_ids)))
-        await session.execute(delete(PayrollRecord).where(PayrollRecord.payroll_run_id.in_(run_ids)))
+            await session.execute(
+                delete(JobCostAllocation).where(JobCostAllocation.payroll_record_id.in_(rec_ids))
+            )
+        await session.execute(
+            delete(PayrollRecord).where(PayrollRecord.payroll_run_id.in_(run_ids))
+        )
         await session.execute(delete(PayrollRun).where(PayrollRun.id.in_(run_ids)))
         await session.commit()
 
@@ -102,7 +116,9 @@ async def _create_test_user(
     return user, token
 
 
-async def _setup_group_zone_worksite(session: AsyncSession, country: str = "AE") -> tuple[Worksite, JobItem]:
+async def _setup_group_zone_worksite(
+    session: AsyncSession, country: str = "AE"
+) -> tuple[Worksite, JobItem]:
     unique_suffix = uuid4().hex[:6]
     group = Group(id=uuid4(), code=f"GRP_{unique_suffix}", name="Landscape Group", is_active=True)
     zone = Zone(id=uuid4(), code=f"ZN_{unique_suffix}", name="Dubai North", is_active=True)
@@ -148,7 +164,9 @@ async def test_payroll_draft_generation_and_rerun(db_session: AsyncSession):
     """Test generating a draft payroll run and re-running it increments run_no."""
     await _cleanup_period(db_session, date(2026, 10, 1), date(2026, 10, 31))
     emp = await _create_test_employee(db_session, f"T_{uuid4().hex[:6]}", "Ahmed Khan")
-    admin_emp = await _create_test_employee(db_session, f"ADM_{uuid4().hex[:6]}", "Admin User", role="ADMIN")
+    admin_emp = await _create_test_employee(
+        db_session, f"ADM_{uuid4().hex[:6]}", "Admin User", role="ADMIN"
+    )
     _, admin_token = await _create_test_user(db_session, admin_emp, "ADMIN")
 
     # Give employee a salary structure
@@ -211,7 +229,9 @@ async def test_unapproved_overtime_issues_and_approval(db_session: AsyncSession)
     """Test unapproved overtime is flagged in issues, and approving locks the month."""
     await _cleanup_period(db_session, date(2026, 5, 1), date(2026, 5, 31))
     emp = await _create_test_employee(db_session, f"T_{uuid4().hex[:6]}", "Rashid Ali")
-    admin_emp = await _create_test_employee(db_session, f"ADM_{uuid4().hex[:6]}", "Payroll Admin", role="ADMIN")
+    admin_emp = await _create_test_employee(
+        db_session, f"ADM_{uuid4().hex[:6]}", "Payroll Admin", role="ADMIN"
+    )
     _, admin_token = await _create_test_user(db_session, admin_emp, "ADMIN")
 
     salary = EmployeeSalary(
@@ -241,7 +261,7 @@ async def test_unapproved_overtime_issues_and_approval(db_session: AsyncSession)
         input_hash="hash123",
         calculated_at=datetime.now(UTC),
         worked_minutes=600,  # 10 hours
-        ot1_minutes=120,     # 2 hours overtime
+        ot1_minutes=120,  # 2 hours overtime
         review_reasons=["OVERTIME_PENDING"],
     )
     db_session.add(calc)
@@ -296,7 +316,9 @@ async def test_unapproved_overtime_issues_and_approval(db_session: AsyncSession)
         )
         assert resp2.status_code == 201
         run2_data = resp2.json()
-        worker2_rec = next((r for r in run2_data["records"] if r["employee_id"] == str(emp.id)), None)
+        worker2_rec = next(
+            (r for r in run2_data["records"] if r["employee_id"] == str(emp.id)), None
+        )
         assert worker2_rec is not None
         # 120 minutes = 2.0 hours
         assert Decimal(str(worker2_rec["ot1_hours"])) == Decimal("2.00")
@@ -324,7 +346,9 @@ async def test_approved_run_immutability(db_session: AsyncSession):
     """Verify that after approval, later events or changes do not alter approved payroll."""
     await _cleanup_period(db_session, date(2026, 9, 1), date(2026, 9, 30))
     emp = await _create_test_employee(db_session, f"T_{uuid4().hex[:6]}", "Farooq Tariq")
-    admin_emp = await _create_test_employee(db_session, f"ADM_{uuid4().hex[:6]}", "System Admin", role="ADMIN")
+    admin_emp = await _create_test_employee(
+        db_session, f"ADM_{uuid4().hex[:6]}", "System Admin", role="ADMIN"
+    )
     _, admin_token = await _create_test_user(db_session, admin_emp, "ADMIN")
 
     sal = EmployeeSalary(
@@ -361,7 +385,9 @@ async def test_approved_run_immutability(db_session: AsyncSession):
         assert rerun_fail.status_code == 409
 
         # Verify approved records are immutable in database
-        stmt = select(PayrollRecord).where(PayrollRecord.payroll_run_id == run_id, PayrollRecord.employee_id == emp.id)
+        stmt = select(PayrollRecord).where(
+            PayrollRecord.payroll_run_id == run_id, PayrollRecord.employee_id == emp.id
+        )
         res = await db_session.execute(stmt)
         record = res.scalar_one()
         assert record.gross_pay == Decimal("1500.00")
@@ -375,9 +401,15 @@ async def test_role_based_scoping(db_session: AsyncSession):
     await _create_test_employee(db_session, f"W1_{uuid4().hex[:6]}", "Worker One")
     await _create_test_employee(db_session, f"W2_{uuid4().hex[:6]}", "Worker Two")
 
-    eng_emp = await _create_test_employee(db_session, f"ENG_{uuid4().hex[:6]}", "Site Engineer", role="ENGINEER")
-    sup_emp = await _create_test_employee(db_session, f"SUP_{uuid4().hex[:6]}", "Supervisor", role="SUPERVISOR")
-    admin_emp = await _create_test_employee(db_session, f"ADM_{uuid4().hex[:6]}", "Admin", role="ADMIN")
+    eng_emp = await _create_test_employee(
+        db_session, f"ENG_{uuid4().hex[:6]}", "Site Engineer", role="ENGINEER"
+    )
+    sup_emp = await _create_test_employee(
+        db_session, f"SUP_{uuid4().hex[:6]}", "Supervisor", role="SUPERVISOR"
+    )
+    admin_emp = await _create_test_employee(
+        db_session, f"ADM_{uuid4().hex[:6]}", "Admin", role="ADMIN"
+    )
 
     _, eng_token = await _create_test_user(db_session, eng_emp, "ENGINEER")
     _, sup_token = await _create_test_user(db_session, sup_emp, "SUPERVISOR")
@@ -571,7 +603,10 @@ async def test_salary_revisions_and_side_by_side_diff(db_session: AsyncSession):
         diff_data = diff_resp.json()
         assert diff_data["new_grades_count"] == 1
         assert diff_data["updated_grades_count"] == 1
-        assert any(d["grade_code"] == "GE" and d["field_name"] == "Basic Salary" and d["is_changed"] for d in diff_data["diffs"])
+        assert any(
+            d["grade_code"] == "GE" and d["field_name"] == "Basic Salary" and d["is_changed"]
+            for d in diff_data["diffs"]
+        )
 
 
 @pytest.mark.asyncio
@@ -622,6 +657,7 @@ async def test_auto_draft_check_runner(db_session: AsyncSession):
 async def test_salary_revision_template_export_and_preview_file(db_session: AsyncSession):
     """Test downloading real .xlsx template and previewing uploaded .xlsx with side-by-side diff."""
     import io
+
     import openpyxl
 
     admin = await _create_test_employee(db_session, f"ADM_{uuid4().hex[:6]}", "Admin", role="ADMIN")
@@ -664,7 +700,10 @@ async def test_salary_revision_template_export_and_preview_file(db_session: Asyn
             headers={"Authorization": f"Bearer {admin_token}"},
         )
         assert t_resp.status_code == 200
-        assert "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" in t_resp.headers["content-type"]
+        assert (
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            in t_resp.headers["content-type"]
+        )
         xlsx_content = t_resp.content
         assert len(xlsx_content) > 0
 
@@ -708,11 +747,14 @@ async def test_salary_revision_template_export_and_preview_file(db_session: Asyn
         assert len(diff_data["preview_lines"]) == 2
         # Check field diff
         ge_basic_diff = next(
-            (d for d in diff_data["diffs"] if d["grade_code"] == "GE" and d["field_name"] == "Basic Salary"),
+            (
+                d
+                for d in diff_data["diffs"]
+                if d["grade_code"] == "GE" and d["field_name"] == "Basic Salary"
+            ),
             None,
         )
         assert ge_basic_diff is not None
         assert ge_basic_diff["is_changed"] is True
         assert Decimal(str(ge_basic_diff["old_value"])) == Decimal("1200.00")
         assert Decimal(str(ge_basic_diff["new_value"])) == Decimal("1400.00")
-

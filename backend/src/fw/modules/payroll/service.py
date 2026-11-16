@@ -1,10 +1,10 @@
 """Payroll Service implementing month-end runs, approvals, revisions, and budget costing."""
 
-from collections.abc import Mapping
 import csv
+import io
+from collections.abc import Mapping
 from datetime import UTC, date, datetime
 from decimal import Decimal
-import io
 from uuid import UUID
 
 import openpyxl
@@ -530,13 +530,14 @@ class PayrollService:
 
                 # Shortfall minutes
                 if calc.shortfall_minutes and calc.shortfall_minutes > 0:
-                    shortfall_hours += round_money(Decimal(str(calc.shortfall_minutes)) / Decimal("60"))
+                    shortfall_hours += round_money(
+                        Decimal(str(calc.shortfall_minutes)) / Decimal("60")
+                    )
 
                 # Overtime: ONLY calculate if approved
                 # (review_status == 'APPROVED' or auto-approved when review_reasons is empty)
-                is_approved = (
-                    rec.review_status == "APPROVED"
-                    or (not calc.review_reasons and rec.review_status != "REJECTED")
+                is_approved = rec.review_status == "APPROVED" or (
+                    not calc.review_reasons and rec.review_status != "REJECTED"
                 )
                 if is_approved:
                     if calc.ot1_minutes and calc.ot1_minutes > 0:
@@ -652,8 +653,10 @@ class PayrollService:
             records_to_create.append(rec)
 
             # Job cost allocations: proportional allocation by worked minutes
-            worksite_minutes = await PayrollRepository.get_allocated_minutes_per_worksite_for_employee(
-                session, emp.id, payload.period_start, payload.period_end
+            worksite_minutes = (
+                await PayrollRepository.get_allocated_minutes_per_worksite_for_employee(
+                    session, emp.id, payload.period_start, payload.period_end
+                )
             )
             total_emp_minutes = sum(worksite_minutes.values())
             for ws_id, minutes in worksite_minutes.items():
@@ -766,7 +769,9 @@ class PayrollService:
                     fixed_ot_amount=Decimal(str(snap.get("fixed_ot_amount", 0))),
                     bonus=Decimal(str(snap.get("bonus", 0))),
                     telephone_allowance=Decimal(str(snap.get("telephone_allowance", 0))),
-                    housing_transport_allowance=Decimal(str(snap.get("housing_transport_allowance", 0))),
+                    housing_transport_allowance=Decimal(
+                        str(snap.get("housing_transport_allowance", 0))
+                    ),
                     ot1_rate=Decimal(str(snap.get("ot1_rate", 0))),
                     ot2_rate=Decimal(str(snap.get("ot2_rate", 0))),
                     ot1_amount=r.ot1_amount,
@@ -953,7 +958,8 @@ class PayrollService:
                 "locked_attendance_records_count": locked_count,
                 "approved_at": str(now),
             },
-            reason=reason or f"Approved payroll run #{run.run_no} for period {run.period_start} to {run.period_end}",
+            reason=reason
+            or f"Approved payroll run #{run.run_no} for period {run.period_start} to {run.period_end}",
         )
 
         return PayrollRunRead(
@@ -1331,9 +1337,48 @@ class PayrollService:
                 row_idx += 1
         else:
             sample_data = [
-                ("GE", "General Employees / Helpers", 1200.0, 150.0, 100.0, 0.0, 100.0, 75.0, 25.0, 50.0, 300.0, 0.0),
-                ("S1", "Skilled Technicians Level 1", 1800.0, 250.0, 150.0, 50.0, 100.0, 75.0, 25.0, 50.0, 350.0, 0.0),
-                ("SUP", "Site Supervisors", 2800.0, 400.0, 200.0, 100.0, 120.0, 100.0, 30.0, 75.0, 500.0, 0.0),
+                (
+                    "GE",
+                    "General Employees / Helpers",
+                    1200.0,
+                    150.0,
+                    100.0,
+                    0.0,
+                    100.0,
+                    75.0,
+                    25.0,
+                    50.0,
+                    300.0,
+                    0.0,
+                ),
+                (
+                    "S1",
+                    "Skilled Technicians Level 1",
+                    1800.0,
+                    250.0,
+                    150.0,
+                    50.0,
+                    100.0,
+                    75.0,
+                    25.0,
+                    50.0,
+                    350.0,
+                    0.0,
+                ),
+                (
+                    "SUP",
+                    "Site Supervisors",
+                    2800.0,
+                    400.0,
+                    200.0,
+                    100.0,
+                    120.0,
+                    100.0,
+                    30.0,
+                    75.0,
+                    500.0,
+                    0.0,
+                ),
             ]
             for s in sample_data:
                 for col_idx, val in enumerate(s, start=1):
@@ -1388,7 +1433,11 @@ class PayrollService:
                     candidate = wb[s_name]
                     for r in list(candidate.iter_rows(max_row=10, values_only=True)):
                         str_cells = [str(c).strip().lower() for c in r if c is not None]
-                        if len(str_cells) >= 3 and any("grade" in c for c in str_cells) and any("basic" in c or "salary" in c for c in str_cells):
+                        if (
+                            len(str_cells) >= 3
+                            and any("grade" in c for c in str_cells)
+                            and any("basic" in c or "salary" in c for c in str_cells)
+                        ):
                             ws = candidate
                             break
                     if ws is not None:
@@ -1406,18 +1455,30 @@ class PayrollService:
             header_row_idx = 0
             headers: list[str] = []
             for idx, r in enumerate(rows):
-                str_cells = [str(c).strip().lower().replace(" ", "_").replace("-", "_") for c in r if c is not None]
-                if len(str_cells) >= 3 and any("grade" in c for c in str_cells) and any("basic" in c or "salary" in c for c in str_cells):
+                str_cells = [
+                    str(c).strip().lower().replace(" ", "_").replace("-", "_")
+                    for c in r
+                    if c is not None
+                ]
+                if (
+                    len(str_cells) >= 3
+                    and any("grade" in c for c in str_cells)
+                    and any("basic" in c or "salary" in c for c in str_cells)
+                ):
                     header_row_idx = idx
                     headers = [
-                        str(c).strip().lower().replace(" ", "_").replace("-", "_") if c is not None else ""
+                        str(c).strip().lower().replace(" ", "_").replace("-", "_")
+                        if c is not None
+                        else ""
                         for c in r
                     ]
                     break
 
             if not headers:
                 headers = [
-                    str(c).strip().lower().replace(" ", "_").replace("-", "_") if c is not None else ""
+                    str(c).strip().lower().replace(" ", "_").replace("-", "_")
+                    if c is not None
+                    else ""
                     for c in rows[0]
                 ]
                 header_row_idx = 0
@@ -1481,19 +1542,30 @@ class PayrollService:
                     grade_group_title=str(title).strip() if title else None,
                     basic_salary=to_dec(find_field(d, "basic_salary", "basic")),
                     special_allowance=to_dec(find_field(d, "special_allowance", "special")),
-                    fixed_ot_amount=to_dec(find_field(d, "fixed_ot_amount", "fixed_ot", "ot_amount")),
+                    fixed_ot_amount=to_dec(
+                        find_field(d, "fixed_ot_amount", "fixed_ot", "ot_amount")
+                    ),
                     bonus=to_dec(find_field(d, "bonus")),
                     visa_provision=to_dec(find_field(d, "visa_provision", "visa")),
-                    air_ticket_provision=to_dec(find_field(d, "air_ticket_provision", "air_ticket", "ticket")),
+                    air_ticket_provision=to_dec(
+                        find_field(d, "air_ticket_provision", "air_ticket", "ticket")
+                    ),
                     uniform_provision=to_dec(find_field(d, "uniform_provision", "uniform")),
                     medical_provision=to_dec(find_field(d, "medical_provision", "medical")),
-                    accommodation_provision=to_dec(find_field(d, "accommodation_provision", "accommodation")),
-                    transportation_provision=to_dec(find_field(d, "transportation_provision", "transportation")),
+                    accommodation_provision=to_dec(
+                        find_field(d, "accommodation_provision", "accommodation")
+                    ),
+                    transportation_provision=to_dec(
+                        find_field(d, "transportation_provision", "transportation")
+                    ),
                 )
             )
 
         if not lines:
-            raise AppError(code="INVALID_DATA", message="No valid grade lines found in file. Please ensure 'Grade Code' column is present.")
+            raise AppError(
+                code="INVALID_DATA",
+                message="No valid grade lines found in file. Please ensure 'Grade Code' column is present.",
+            )
 
         return lines
 
@@ -1646,7 +1718,9 @@ class PayrollService:
                     is_over_budget=is_over,
                     is_under_budget=is_under,
                     manual_budget_override=ws.budget_amount,
-                    is_custom_budget_override=bool(ws.budget_amount and ws.budget_amount > Decimal("0.00")),
+                    is_custom_budget_override=bool(
+                        ws.budget_amount and ws.budget_amount > Decimal("0.00")
+                    ),
                 )
             )
 

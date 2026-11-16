@@ -82,11 +82,7 @@ def calculate_per_month_provision(
     leave_salary: Decimal | int | float | str,
 ) -> Decimal:
     """Calculate per-month provision: provisions + gratuity + leave_salary."""
-    total = (
-        Decimal(str(provisions_sum))
-        + Decimal(str(gratuity))
-        + Decimal(str(leave_salary))
-    )
+    total = Decimal(str(provisions_sum)) + Decimal(str(gratuity)) + Decimal(str(leave_salary))
     return round_money(total)
 
 
@@ -164,4 +160,3 @@ def calculate_revision_planned_hourly_cost(
     with_overhead = total_base * (Decimal("1.00") + hr_oh_rate)
     hourly = with_overhead / divisor
     return round_money(hourly)
-

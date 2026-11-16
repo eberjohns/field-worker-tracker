@@ -310,5 +310,3 @@ class WorksiteBudgetVsActualItem(BaseModel):
     is_under_budget: bool = False
     manual_budget_override: Decimal | None = None
     is_custom_budget_override: bool = False
-
-

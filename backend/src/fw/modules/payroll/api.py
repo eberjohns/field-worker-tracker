@@ -1,9 +1,9 @@
 """FastAPI router for Month-End Payroll, Salary Revisions, and Job Budget."""
 
 import email
-from email import policy
 import io
 from datetime import date
+from email import policy
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, status
@@ -185,7 +185,9 @@ async def export_salary_revision_template(
     session: AsyncSession = Depends(get_db),
 ) -> StreamingResponse:
     """Download professionally formatted Excel (.xlsx) template pre-populated with revision lines."""
-    xlsx_bytes = await PayrollService.export_salary_revision_template(session=session, revision_code=code)
+    xlsx_bytes = await PayrollService.export_salary_revision_template(
+        session=session, revision_code=code
+    )
     filename = f"salary_revision_{code}_template.xlsx"
     return StreamingResponse(
         io.BytesIO(xlsx_bytes),
@@ -304,7 +306,9 @@ async def get_budget_vs_actual(
 @router.put("/payroll/worksites/{worksite_id}/revision")
 async def update_worksite_revision(
     worksite_id: UUID,
-    revision_code: str | None = Query(None, description="Salary revision code to bind, or empty/null to clear"),
+    revision_code: str | None = Query(
+        None, description="Salary revision code to bind, or empty/null to clear"
+    ),
     session: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role("ADMIN")),
 ):
@@ -314,10 +318,11 @@ async def update_worksite_revision(
     ws = await session.get(Worksite, worksite_id)
     if not ws:
         raise AppError("WORKSITE_NOT_FOUND", "Worksite not found", status_code=404)
-    ws.salary_revision_code = revision_code.strip() if revision_code and revision_code.strip() else None
+    ws.salary_revision_code = (
+        revision_code.strip() if revision_code and revision_code.strip() else None
+    )
     await session.commit()
     return {"worksite_id": str(worksite_id), "salary_revision_code": ws.salary_revision_code}
-
 
 
 # --- Automated Background Runner ---
