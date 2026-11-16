@@ -132,3 +132,4 @@ Content-Type: application/json
   - **RPO (Recovery Point Objective)**: <= 15 minutes (continuous WAL archiving).
   - **RTO (Recovery Time Objective)**: <= 4 hours.
 - **Restore Drills**: Executed quarterly using `tools/backup_restore_drill.py`. The Phase 13 pre-go-live drill restored a full database image, validated 100% table parity across 9 tables, verified 0 invalid PostGIS geometries, and completed in **4.49 seconds**.
+

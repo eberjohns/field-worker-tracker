@@ -12,3 +12,4 @@ Field Worker Tracker follows semantic versioning `v<MAJOR>.<MINOR>.<PATCH>`:
 | **v1.0.0** | 2026-11-16 | `feature/phase-13-hardening` | `023dbd4` | Synchronized targets |
 | **v1.0.1** | 2026-11-16 | `feature/phase-13-hardening` | `8963bff` | Commit on 'feature/phase-13-hardening' |
 | **v1.0.2** | 2026-11-16 | `feature/phase-13-hardening` | `8963bff` | Commit on 'feature/phase-13-hardening' |
+| **v1.0.3** | 2026-11-16 | `feature/phase-13-hardening` | `9bda02b` | Commit on 'feature/phase-13-hardening' |

@@ -80,3 +80,31 @@ If the post-deployment smoke test fails or error rate spikes above 0.5%:
 3. If data corruption occurred, initiate PITR restore per **Runbook 02**.
 4. Log an incident ticket and notify the engineering team.
 
+---
+
+## 6. Reverse Proxy Selection: Caddy vs. Nginx
+
+The application backend (FastAPI/Uvicorn) and frontend (React SPA) are proxy-agnostic and adhere to standard HTTP/1.1 and ASGI reverse-proxy specifications. **Switching between Caddy and Nginx requires zero changes to application code.**
+
+### Option A: Caddy (Default)
+- **Use case**: Automatic Let's Encrypt / ZeroSSL certificate management with zero manual TLS configuration.
+- **Command**:
+  ```bash
+  docker compose -f docker-compose.prod.yml up -d
+  ```
+
+### Option B: Nginx
+- **Use case**: Environments with pre-existing enterprise TLS certificates, custom Edge SSL terminators, or strict IT enterprise Nginx mandates.
+- **Configuration**: `infra/nginx/nginx.conf`
+- **Command**:
+  ```bash
+  # Start stack with Nginx instead of Caddy proxy
+  docker compose -f docker-compose.prod.yml --profile nginx up -d api worker nginx migrator
+  ```
+- **Key Nginx Directives Required by FWT**:
+  1. `proxy_buffering off;` and `proxy_cache off;` on `/api/v1/live/stream` for real-time Server-Sent Events (SSE) tracking.
+  2. `client_max_body_size 12M;` to support up to 10 MB bulk Excel file imports (`/api/v1/imports/upload`).
+  3. `try_files $uri $uri/ /index.html;` for React SPA client-side routing.
+  4. Forwarded headers: `X-Forwarded-For`, `X-Forwarded-Proto`, and `Host`.
+
+
