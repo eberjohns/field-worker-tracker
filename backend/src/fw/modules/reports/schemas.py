@@ -114,4 +114,3 @@ class GeneratedReportFilterParams(BaseModel):
     period: str | None = None  # e.g. "2026-10"
     kind: str | None = None  # MONTH_END | ON_DEMAND
     status: str | None = None  # DRAFT | APPROVED
-

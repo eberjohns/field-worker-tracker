@@ -288,7 +288,13 @@ REPORTS_REGISTRY: dict[str, ReportSpec] = {
         columns=DAILY_ATTENDANCE_COLS,
         supported_formats=["xlsx", "csv", "pdf"],
         handler_module="fw.modules.reports.handlers.daily_attendance",
-        filter_schema={"date_from": True, "date_to": True, "worksite_id": True, "supervisor_id": True, "country": True},
+        filter_schema={
+            "date_from": True,
+            "date_to": True,
+            "worksite_id": True,
+            "supervisor_id": True,
+            "country": True,
+        },
     ),
     "monthly-attendance": ReportSpec(
         key="monthly-attendance",
@@ -324,7 +330,13 @@ REPORTS_REGISTRY: dict[str, ReportSpec] = {
         columns=SITE_VISITS_COLS,
         supported_formats=["xlsx", "csv"],
         handler_module="fw.modules.reports.handlers.site_visits",
-        filter_schema={"date_from": True, "date_to": True, "worksite_id": True, "employee_id": True, "country": True},
+        filter_schema={
+            "date_from": True,
+            "date_to": True,
+            "worksite_id": True,
+            "employee_id": True,
+            "country": True,
+        },
     ),
     "employee-utilization": ReportSpec(
         key="employee-utilization",

@@ -28,7 +28,9 @@ async def fetch_provisions_staff_cost(
         _, last_day = calendar.monthrange(filters.year, filters.month)
         p_start = date(filters.year, filters.month, 1)
         p_end = date(filters.year, filters.month, last_day)
-        run_stmt = run_stmt.where(PayrollRun.period_start == p_start, PayrollRun.period_end == p_end)
+        run_stmt = run_stmt.where(
+            PayrollRun.period_start == p_start, PayrollRun.period_end == p_end
+        )
     elif filters.country:
         run_stmt = run_stmt.where(PayrollRun.country == filters.country)
 

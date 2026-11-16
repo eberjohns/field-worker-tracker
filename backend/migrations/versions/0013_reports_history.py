@@ -134,4 +134,3 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_table("report_exports")
     op.drop_table("generated_reports")
-

@@ -86,7 +86,9 @@ async def fetch_project_attendance_summary(
         sched_man_hours = round(sum(float(s.assigned_hours or 8.0) for s in w_sched), 1)
 
         deployed_worker_ids = {v.employee_id for v in w_visits}
-        deployed_worker_days = len({(v.employee_id, v.work_date) for v in w_visits if v.counts_as_completed})
+        deployed_worker_days = len(
+            {(v.employee_id, v.work_date) for v in w_visits if v.counts_as_completed}
+        )
         actual_man_hours = round(sum(v.duration_minutes for v in w_visits) / 60.0, 1)
 
         pres_count = deployed_worker_days

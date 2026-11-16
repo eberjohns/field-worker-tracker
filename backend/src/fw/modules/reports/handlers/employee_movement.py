@@ -82,7 +82,9 @@ async def fetch_employee_movement(
         if v.place_type == "SITE" and v.worksite_id and v.worksite_id in site_map:
             ws = site_map[v.worksite_id]
             place_name = f"{ws.job_number} - {ws.job_name}"
-        elif v.place_type == "ACCOMMODATION" and v.accommodation_id and v.accommodation_id in acc_map:
+        elif (
+            v.place_type == "ACCOMMODATION" and v.accommodation_id and v.accommodation_id in acc_map
+        ):
             place_name = acc_map[v.accommodation_id].name
         elif v.place_type == "ACCOMMODATION":
             place_name = "Accommodation"

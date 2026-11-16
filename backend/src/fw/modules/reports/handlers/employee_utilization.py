@@ -65,7 +65,9 @@ async def fetch_employee_utilization(
         util_pct = round((productive / shift_span * 100.0), 1) if shift_span > 0 else 0.0
         scheduled_min = calc.standard_hours_minutes
         worked_min = calc.worked_minutes
-        sched_vs_worked_pct = round((worked_min / scheduled_min * 100.0), 1) if scheduled_min > 0 else 0.0
+        sched_vs_worked_pct = (
+            round((worked_min / scheduled_min * 100.0), 1) if scheduled_min > 0 else 0.0
+        )
 
         rows.append(
             {

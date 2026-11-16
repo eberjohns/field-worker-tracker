@@ -1,9 +1,8 @@
 """Comprehensive test suite for Phase 12 Reports, Background Exports, and Generated Reports History."""
 
-from datetime import date, datetime, time, UTC
-from decimal import Decimal
 import io
-from uuid import UUID, uuid4
+from datetime import UTC, date, datetime, time
+from uuid import uuid4
 
 import openpyxl
 import pytest
@@ -12,35 +11,38 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.main import app
-from fw.modules.identity import AuthService, hash_password
 from fw.modules.attendance.models import (
     AttendanceCalculation,
     AttendanceRecord,
-    SiteVisit,
 )
+from fw.modules.identity import AuthService, hash_password
 from fw.modules.identity.models import User
-from fw.modules.jobs.models import JobItem, Worksite
-from fw.modules.org.models import Employee, Group, Zone
+from fw.modules.org.models import Employee
 from fw.modules.payroll.models import (
-    EmployeeSalary,
     JobCostAllocation,
     PayrollRecord,
     PayrollRun,
 )
-from fw.modules.reports.models import GeneratedReport, ReportExport
-from fw.modules.reports.registry import MONTH_END_REPORT_KEYS, REPORTS_REGISTRY
+from fw.modules.reports.models import GeneratedReport
+from fw.modules.reports.registry import MONTH_END_REPORT_KEYS
 
 
 async def _cleanup_test_data(session: AsyncSession, period_start: date | None = None) -> None:
     """Safely clean up test period data without wiping development database."""
     if period_start:
+        await session.execute(
+            delete(GeneratedReport).where(GeneratedReport.period_start == period_start)
+        )
         runs = (
-            await session.execute(select(PayrollRun).where(PayrollRun.period_start == period_start))
-        ).scalars().all()
-        for r in runs:
-            await session.execute(
-                delete(GeneratedReport).where(GeneratedReport.payroll_run_id == r.id)
+            (
+                await session.execute(
+                    select(PayrollRun).where(PayrollRun.period_start == period_start)
+                )
             )
+            .scalars()
+            .all()
+        )
+        for r in runs:
             await session.execute(
                 delete(JobCostAllocation).where(
                     JobCostAllocation.payroll_record_id.in_(
@@ -111,7 +113,9 @@ async def test_list_available_reports_role_isolation(
     )
 
     # 1. Admin gets all 15 reports
-    resp_adm = await client.get("/api/v1/reports", headers={"Authorization": f"Bearer {admin_token}"})
+    resp_adm = await client.get(
+        "/api/v1/reports", headers={"Authorization": f"Bearer {admin_token}"}
+    )
     assert resp_adm.status_code == 200
     adm_keys = {r["key"] for r in resp_adm.json()}
     assert len(adm_keys) == 15
@@ -153,10 +157,14 @@ async def test_salary_and_cost_reports_forbidden_for_non_admin(
     )
 
     for cost_key in ["payroll", "provisions-staff-cost", "job-costing"]:
-        res1 = await client.get(f"/api/v1/reports/{cost_key}", headers={"Authorization": f"Bearer {eng_token}"})
+        res1 = await client.get(
+            f"/api/v1/reports/{cost_key}", headers={"Authorization": f"Bearer {eng_token}"}
+        )
         assert res1.status_code == 403
 
-        res2 = await client.get(f"/api/v1/reports/{cost_key}", headers={"Authorization": f"Bearer {sup_token}"})
+        res2 = await client.get(
+            f"/api/v1/reports/{cost_key}", headers={"Authorization": f"Bearer {sup_token}"}
+        )
         assert res2.status_code == 403
 
 
@@ -234,9 +242,7 @@ async def test_daily_attendance_query_and_calculations(
 
 
 @pytest.mark.asyncio
-async def test_excel_export_and_inspection(
-    client: AsyncClient, db_session: AsyncSession
-) -> None:
+async def test_excel_export_and_inspection(client: AsyncClient, db_session: AsyncSession) -> None:
     """Verify that export to Excel produces a valid workbook with single header and Filters sheet."""
     uid = uuid4().hex[:6]
     _, _, adm_token = await _create_employee_with_user(
@@ -281,9 +287,7 @@ async def test_excel_export_and_inspection(
 
 
 @pytest.mark.asyncio
-async def test_pdf_export_daily_attendance(
-    client: AsyncClient, db_session: AsyncSession
-) -> None:
+async def test_pdf_export_daily_attendance(client: AsyncClient, db_session: AsyncSession) -> None:
     """Verify PDF export produces valid PDF bytes."""
     uid = uuid4().hex[:6]
     _, _, adm_token = await _create_employee_with_user(

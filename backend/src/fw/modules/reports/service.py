@@ -304,7 +304,9 @@ class ReportService:
 
             # Name: <Company>_<Report>_<Country>_<Period>_generated-<datetime>.xlsx
             report_title_slug = re.sub(
-                r"[^A-Za-z0-9\-]", "", spec.name.replace(" / ", "-").replace("/", "-").replace(" ", "-")
+                r"[^A-Za-z0-9\-]",
+                "",
+                spec.name.replace(" / ", "-").replace("/", "-").replace(" ", "-"),
             )
             file_name = f"{company_clean}_{report_title_slug}_{country}_{period_str}_generated-{ts_str}.xlsx"
             if is_approval:
@@ -482,7 +484,6 @@ class ReportService:
             # Self-healing: if file missing from disk, re-generate dynamically
             try:
                 from fw.modules.reports.formatters.excel import generate_excel_report
-                from fw.modules.reports.handlers import HANDLERS
                 from fw.modules.reports.registry import get_report_definition
 
                 spec = get_report_definition(r.report_key)
@@ -496,17 +497,28 @@ class ReportService:
                     month=r.period_start.month if r.period_start else None,
                 )
                 rows = await handler(session=session, filters=fp, scoped_ids=None)
-                applied = r.params or {"country": r.country, "period": f"{r.period_start} to {r.period_end}"}
+                applied = r.params or {
+                    "country": r.country,
+                    "period": f"{r.period_start} to {r.period_end}",
+                }
                 content = generate_excel_report(spec.columns, rows, applied, title=spec.name)
                 await storage.save(r.file_ref, content)
             except Exception as e:
                 logger.warning("on_demand_regeneration_failed", error=str(e), file_ref=r.file_ref)
-                raise AppError(code="NOT_FOUND", message="Archived report file not found on storage", status_code=404)
+                raise AppError(
+                    code="NOT_FOUND",
+                    message="Archived report file not found on storage",
+                    status_code=404,
+                ) from e
         else:
             try:
                 content = await storage.read(r.file_ref)
-            except FileNotFoundError:
-                raise AppError(code="NOT_FOUND", message="Archived report file not found on storage", status_code=404)
+            except FileNotFoundError as e:
+                raise AppError(
+                    code="NOT_FOUND",
+                    message="Archived report file not found on storage",
+                    status_code=404,
+                ) from e
 
         mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         return content, r.file_name, mime

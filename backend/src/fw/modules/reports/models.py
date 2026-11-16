@@ -37,12 +37,12 @@ class GeneratedReport(Base):
     )
 
     id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
-    report_key: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
-    country: Mapped[str] = mapped_column(String(10), default="AE", nullable=False, index=True)
+    report_key: Mapped[str] = mapped_column(String(50), nullable=False)
+    country: Mapped[str] = mapped_column(String(10), default="AE", nullable=False)
     period_start: Mapped[date | None] = mapped_column(Date, nullable=True)
     period_end: Mapped[date | None] = mapped_column(Date, nullable=True)
     kind: Mapped[str] = mapped_column(
-        String(30), default="MONTH_END", nullable=False, index=True
+        String(30), default="MONTH_END", nullable=False
     )  # MONTH_END | ON_DEMAND
     params: Mapped[dict[str, Any]] = mapped_column(
         JSONB, default=dict, server_default=text("'{}'::jsonb"), nullable=False
@@ -92,7 +92,7 @@ class ReportExport(Base):
     )
 
     id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
-    report_key: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    report_key: Mapped[str] = mapped_column(String(50), nullable=False)
     format: Mapped[str] = mapped_column(String(10), default="xlsx", nullable=False)
     status: Mapped[str] = mapped_column(
         String(30), default="PENDING", nullable=False
@@ -104,7 +104,6 @@ class ReportExport(Base):
         PG_UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
-        index=True,
     )
     file_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     file_ref: Mapped[str | None] = mapped_column(String(500), nullable=True)

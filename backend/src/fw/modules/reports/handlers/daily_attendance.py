@@ -69,9 +69,17 @@ async def fetch_daily_attendance(
             if calc and calc.planned_accommodation_departure
             else ("-" if has_acc else "n/a")
         )
-        pl_first = calc.planned_first_site_start.strftime("%H:%M") if calc and calc.planned_first_site_start else "-"
+        pl_first = (
+            calc.planned_first_site_start.strftime("%H:%M")
+            if calc and calc.planned_first_site_start
+            else "-"
+        )
         pl_break = calc.planned_break_minutes if calc else 0
-        pl_last = calc.planned_last_site_end.strftime("%H:%M") if calc and calc.planned_last_site_end else "-"
+        pl_last = (
+            calc.planned_last_site_end.strftime("%H:%M")
+            if calc and calc.planned_last_site_end
+            else "-"
+        )
         pl_acc_end = (
             calc.planned_accommodation_return.strftime("%H:%M")
             if calc and calc.planned_accommodation_return
@@ -86,9 +94,13 @@ async def fetch_daily_attendance(
             if calc and calc.accommodation_departure_at
             else ("-" if has_acc else "n/a")
         )
-        act_first = calc.first_site_entry_at.strftime("%H:%M") if calc and calc.first_site_entry_at else "-"
+        act_first = (
+            calc.first_site_entry_at.strftime("%H:%M") if calc and calc.first_site_entry_at else "-"
+        )
         act_break = calc.break_minutes_used if calc else 0
-        act_last = calc.last_site_exit_at.strftime("%H:%M") if calc and calc.last_site_exit_at else "-"
+        act_last = (
+            calc.last_site_exit_at.strftime("%H:%M") if calc and calc.last_site_exit_at else "-"
+        )
         act_acc_end = (
             calc.accommodation_return_at.strftime("%H:%M")
             if calc and calc.accommodation_return_at

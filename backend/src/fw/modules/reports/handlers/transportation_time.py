@@ -60,7 +60,11 @@ async def fetch_transportation_time(
         commute_out = 0
         if calc.accommodation_departure_at and calc.first_site_entry_at:
             commute_out = max(
-                0, int((calc.first_site_entry_at - calc.accommodation_departure_at).total_seconds() / 60)
+                0,
+                int(
+                    (calc.first_site_entry_at - calc.accommodation_departure_at).total_seconds()
+                    / 60
+                ),
             )
 
         commute_back = 0
