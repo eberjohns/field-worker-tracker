@@ -1,5 +1,6 @@
 """Tests for Phase 13 Hardening, Archive, Retention, DSAR, and Consent Withdrawal."""
 
+import socket
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
@@ -27,6 +28,20 @@ from fw.modules.org import Employee, RegisteredDevice
 from fw.modules.sync import ConsentRecord, SyncChange
 
 
+def is_db_available() -> bool:
+    try:
+        with socket.create_connection(("127.0.0.1", 5432), timeout=0.5):
+            return True
+    except OSError:
+        return False
+
+
+db_required = pytest.mark.skipif(
+    not is_db_available(),
+    reason="Database integration tests require PostgreSQL running on localhost:5432",
+)
+
+
 @pytest.mark.asyncio
 async def test_crypto_aes256_gcm_encrypt_decrypt():
     """Verify AES-256-GCM encryption, decryption, checksums, and tamper detection."""
@@ -52,6 +67,7 @@ async def test_crypto_aes256_gcm_encrypt_decrypt():
         decrypt_payload(encrypted, "wrong-secret-key-999")
 
 
+@db_required
 @pytest.mark.asyncio
 async def test_archive_creation_verification_and_purge():
     """Test full cycle of yearly archiving, sample integrity verification, and event purge."""
@@ -153,6 +169,7 @@ async def test_archive_creation_verification_and_purge():
         assert gap_check is None
 
 
+@db_required
 @pytest.mark.asyncio
 async def test_retention_purge_and_employee_anonymisation():
     """Test routine retention schedule cleanup and statutory employee anonymisation."""
@@ -223,6 +240,7 @@ async def test_retention_purge_and_employee_anonymisation():
         assert refreshed.anonymised_at is not None
 
 
+@db_required
 @pytest.mark.asyncio
 async def test_consent_withdrawal_and_event_rejection():
     """Verify worker consent withdrawal stops tracking and rejects incoming event batches."""
@@ -322,6 +340,7 @@ async def test_consent_withdrawal_and_event_rejection():
             assert res_ingest.json()["code"] == "CONSENT_WITHDRAWN"
 
 
+@db_required
 @pytest.mark.asyncio
 async def test_employee_dsar_export():
     """Verify multi-sheet DSAR Excel export generates complete data workbook."""
@@ -369,6 +388,7 @@ async def test_employee_dsar_export():
         assert len(excel_bytes) > 1000  # Valid multi-sheet Excel file
 
 
+@db_required
 @pytest.mark.asyncio
 async def test_archive_api_endpoints_and_exports():
     """Verify Admin archive, retention, DSAR, and directory export HTTP endpoints."""
