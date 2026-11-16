@@ -23,7 +23,7 @@ def upgrade() -> None:
     op.create_table(
         "salary_revisions",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("code", sa.String(50), nullable=False, unique=True),
+        sa.Column("code", sa.String(50), nullable=False),
         sa.Column("name", sa.String(255), nullable=False),
         sa.Column("country", sa.String(10), nullable=False, server_default="AE"),
         sa.Column("effective_from", sa.Date(), nullable=False),
@@ -43,7 +43,7 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
         ),
     )
-    op.create_index("ix_salary_revisions_code", "salary_revisions", ["code"])
+    op.create_index("ix_salary_revisions_code", "salary_revisions", ["code"], unique=True)
 
     # 2. salary_revision_lines
     op.create_table(
@@ -65,8 +65,12 @@ def upgrade() -> None:
         sa.Column("air_ticket_provision", sa.Numeric(14, 2), nullable=False, server_default="0.00"),
         sa.Column("uniform_provision", sa.Numeric(14, 2), nullable=False, server_default="0.00"),
         sa.Column("medical_provision", sa.Numeric(14, 2), nullable=False, server_default="0.00"),
-        sa.Column("accommodation_provision", sa.Numeric(14, 2), nullable=False, server_default="0.00"),
-        sa.Column("transportation_provision", sa.Numeric(14, 2), nullable=True, server_default="0.00"),
+        sa.Column(
+            "accommodation_provision", sa.Numeric(14, 2), nullable=False, server_default="0.00"
+        ),
+        sa.Column(
+            "transportation_provision", sa.Numeric(14, 2), nullable=True, server_default="0.00"
+        ),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -81,8 +85,15 @@ def upgrade() -> None:
         ),
         sa.UniqueConstraint("revision_id", "grade_code", name="uq_salary_revision_lines_rev_grade"),
     )
-    op.create_index("ix_salary_revision_lines_revision", "salary_revision_lines", ["revision_id"])
-    op.create_index("ix_salary_revision_lines_grade", "salary_revision_lines", ["grade_code"])
+    op.create_index(
+        "ix_salary_revision_lines_revision_id", "salary_revision_lines", ["revision_id"]
+    )
+    op.create_index("ix_salary_revision_lines_grade_code", "salary_revision_lines", ["grade_code"])
+    op.create_index(
+        "ix_salary_revision_lines_lookup",
+        "salary_revision_lines",
+        ["revision_id", "grade_code"],
+    )
 
     # 3. payroll_runs
     op.create_table(
@@ -158,7 +169,9 @@ def upgrade() -> None:
         sa.Column("paid_leave_hours", sa.Numeric(6, 1), nullable=False, server_default="0.0"),
         sa.Column("unpaid_leave_hours", sa.Numeric(6, 1), nullable=False, server_default="0.0"),
         sa.Column("shortfall_hours", sa.Numeric(6, 1), nullable=False, server_default="0.0"),
-        sa.Column("missed_hours_deduction", sa.Numeric(14, 2), nullable=False, server_default="0.00"),
+        sa.Column(
+            "missed_hours_deduction", sa.Numeric(14, 2), nullable=False, server_default="0.00"
+        ),
         sa.Column("ot1_hours", sa.Numeric(6, 2), nullable=False, server_default="0.00"),
         sa.Column("ot2_hours", sa.Numeric(6, 2), nullable=False, server_default="0.00"),
         sa.Column("salary_portion", sa.Numeric(14, 2), nullable=False, server_default="0.00"),
@@ -172,7 +185,9 @@ def upgrade() -> None:
         sa.Column("per_month_provision", sa.Numeric(14, 2), nullable=False, server_default="0.00"),
         sa.Column("total_staff_cost", sa.Numeric(14, 2), nullable=False, server_default="0.00"),
         sa.Column("hr_oh_amount", sa.Numeric(14, 2), nullable=False, server_default="0.00"),
-        sa.Column("final_total_staff_cost", sa.Numeric(14, 2), nullable=False, server_default="0.00"),
+        sa.Column(
+            "final_total_staff_cost", sa.Numeric(14, 2), nullable=False, server_default="0.00"
+        ),
         sa.Column(
             "snapshot",
             postgresql.JSONB(astext_type=sa.Text()),
@@ -191,7 +206,9 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("now()"),
         ),
-        sa.UniqueConstraint("payroll_run_id", "employee_id", name="uq_payroll_records_run_employee"),
+        sa.UniqueConstraint(
+            "payroll_run_id", "employee_id", name="uq_payroll_records_run_employee"
+        ),
     )
     op.create_index("ix_payroll_records_run", "payroll_records", ["payroll_run_id"])
     op.create_index("ix_payroll_records_employee", "payroll_records", ["employee_id"])
@@ -221,8 +238,16 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
         ),
     )
-    op.create_index("ix_job_cost_allocations_record", "job_cost_allocations", ["payroll_record_id"])
-    op.create_index("ix_job_cost_allocations_worksite", "job_cost_allocations", ["worksite_id"])
+    op.create_index(
+        "ix_job_cost_allocations_payroll_record_id",
+        "job_cost_allocations",
+        ["payroll_record_id"],
+    )
+    op.create_index(
+        "ix_job_cost_allocations_worksite_id",
+        "job_cost_allocations",
+        ["worksite_id"],
+    )
 
     # 6. Add salary_revision_code to worksites
     op.add_column("worksites", sa.Column("salary_revision_code", sa.String(50), nullable=True))
@@ -235,4 +260,3 @@ def downgrade() -> None:
     op.drop_table("payroll_runs")
     op.drop_table("salary_revision_lines")
     op.drop_table("salary_revisions")
-
