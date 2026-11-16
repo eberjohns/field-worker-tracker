@@ -17,7 +17,7 @@ The system is built **phase by phase**. Each phase is independent, ends with som
 | [08](PHASE-08-events-and-attendance.md) | Events and attendance | PHASE-07 | done |
 | [09](PHASE-09-live-map-pending-alerts.md) | Live map, pending visits, alerts and documents | PHASE-08 | done |
 | [10](PHASE-10-transport.md) | Drivers and transport runs | PHASE-07 (needs Phase 05 for schedules) | not started |
-| [11](PHASE-11-payroll-and-budget.md) | Month-end payroll and job budget | PHASE-08 | not started |
+| [11](PHASE-11-payroll-and-budget.md) | Month-end payroll and job budget | PHASE-08 | done |
 | [12](PHASE-12-reports-and-generated-history.md) | Reports and the Generated Reports section | PHASE-11 | not started |
 | [13](PHASE-13-hardening-and-go-live.md) | Hardening, archive, backup and go-live | all | not started |
 
