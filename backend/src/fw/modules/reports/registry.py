@@ -1,6 +1,7 @@
 """Unified Registry of Reports with typed columns, permissions, and formatters."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 
 from fw.modules.reports.schemas import ReportColumn, ReportDefinition
 
@@ -16,6 +17,7 @@ class ReportSpec:
     columns: list[ReportColumn]
     supported_formats: list[str]
     handler_module: str
+    filter_schema: dict[str, Any] = field(default_factory=dict)
 
 
 # 1. daily-attendance (D3 layout)
@@ -286,6 +288,7 @@ REPORTS_REGISTRY: dict[str, ReportSpec] = {
         columns=DAILY_ATTENDANCE_COLS,
         supported_formats=["xlsx", "csv", "pdf"],
         handler_module="fw.modules.reports.handlers.daily_attendance",
+        filter_schema={"date_from": True, "date_to": True, "worksite_id": True, "supervisor_id": True, "country": True},
     ),
     "monthly-attendance": ReportSpec(
         key="monthly-attendance",
@@ -297,6 +300,7 @@ REPORTS_REGISTRY: dict[str, ReportSpec] = {
         columns=MONTHLY_ATTENDANCE_COLS,
         supported_formats=["xlsx", "csv"],
         handler_module="fw.modules.reports.handlers.monthly_attendance",
+        filter_schema={"year": True, "month": True, "country": True},
     ),
     "employee-movement": ReportSpec(
         key="employee-movement",
@@ -308,6 +312,7 @@ REPORTS_REGISTRY: dict[str, ReportSpec] = {
         columns=EMPLOYEE_MOVEMENT_COLS,
         supported_formats=["xlsx", "csv"],
         handler_module="fw.modules.reports.handlers.employee_movement",
+        filter_schema={"date_from": True, "date_to": True, "employee_id": True, "country": True},
     ),
     "site-visits": ReportSpec(
         key="site-visits",
@@ -319,6 +324,7 @@ REPORTS_REGISTRY: dict[str, ReportSpec] = {
         columns=SITE_VISITS_COLS,
         supported_formats=["xlsx", "csv"],
         handler_module="fw.modules.reports.handlers.site_visits",
+        filter_schema={"date_from": True, "date_to": True, "worksite_id": True, "employee_id": True, "country": True},
     ),
     "employee-utilization": ReportSpec(
         key="employee-utilization",
@@ -330,6 +336,7 @@ REPORTS_REGISTRY: dict[str, ReportSpec] = {
         columns=EMPLOYEE_UTILIZATION_COLS,
         supported_formats=["xlsx", "csv"],
         handler_module="fw.modules.reports.handlers.employee_utilization",
+        filter_schema={"year": True, "month": True, "country": True},
     ),
     "transportation-time": ReportSpec(
         key="transportation-time",
@@ -341,6 +348,7 @@ REPORTS_REGISTRY: dict[str, ReportSpec] = {
         columns=TRANSPORTATION_TIME_COLS,
         supported_formats=["xlsx", "csv"],
         handler_module="fw.modules.reports.handlers.transportation_time",
+        filter_schema={"date_from": True, "date_to": True, "country": True},
     ),
     "late-early-departure": ReportSpec(
         key="late-early-departure",
@@ -352,6 +360,7 @@ REPORTS_REGISTRY: dict[str, ReportSpec] = {
         columns=LATE_EARLY_DEPARTURE_COLS,
         supported_formats=["xlsx", "csv"],
         handler_module="fw.modules.reports.handlers.late_early_departure",
+        filter_schema={"date_from": True, "date_to": True, "country": True},
     ),
     "project-attendance-summary": ReportSpec(
         key="project-attendance-summary",
@@ -363,6 +372,7 @@ REPORTS_REGISTRY: dict[str, ReportSpec] = {
         columns=PROJECT_ATTENDANCE_SUMMARY_COLS,
         supported_formats=["xlsx", "csv"],
         handler_module="fw.modules.reports.handlers.project_attendance_summary",
+        filter_schema={"date_from": True, "date_to": True, "worksite_id": True, "country": True},
     ),
     "pending-visits": ReportSpec(
         key="pending-visits",
@@ -374,6 +384,7 @@ REPORTS_REGISTRY: dict[str, ReportSpec] = {
         columns=PENDING_VISITS_COLS,
         supported_formats=["xlsx", "csv"],
         handler_module="fw.modules.reports.handlers.pending_visits",
+        filter_schema={"date_from": True, "date_to": True, "worksite_id": True, "country": True},
     ),
     "staffing-gaps": ReportSpec(
         key="staffing-gaps",
@@ -385,6 +396,7 @@ REPORTS_REGISTRY: dict[str, ReportSpec] = {
         columns=STAFFING_GAPS_COLS,
         supported_formats=["xlsx", "csv"],
         handler_module="fw.modules.reports.handlers.staffing_gaps",
+        filter_schema={"date_from": True, "date_to": True, "country": True},
     ),
     "document-expiry": ReportSpec(
         key="document-expiry",
@@ -396,6 +408,7 @@ REPORTS_REGISTRY: dict[str, ReportSpec] = {
         columns=DOCUMENT_EXPIRY_COLS,
         supported_formats=["xlsx", "csv"],
         handler_module="fw.modules.reports.handlers.document_expiry",
+        filter_schema={"days_ahead": True, "country": True},
     ),
     "weekly-roster": ReportSpec(
         key="weekly-roster",
@@ -407,6 +420,7 @@ REPORTS_REGISTRY: dict[str, ReportSpec] = {
         columns=WEEKLY_ROSTER_COLS,
         supported_formats=["xlsx", "csv"],
         handler_module="fw.modules.reports.handlers.weekly_roster",
+        filter_schema={"date_from": True, "date_to": True, "country": True},
     ),
     "payroll": ReportSpec(
         key="payroll",
@@ -418,6 +432,7 @@ REPORTS_REGISTRY: dict[str, ReportSpec] = {
         columns=PAYROLL_COLS,
         supported_formats=["xlsx", "csv", "pdf"],
         handler_module="fw.modules.reports.handlers.payroll",
+        filter_schema={"year": True, "month": True, "payroll_run_id": True, "country": True},
     ),
     "provisions-staff-cost": ReportSpec(
         key="provisions-staff-cost",
@@ -429,6 +444,7 @@ REPORTS_REGISTRY: dict[str, ReportSpec] = {
         columns=PROVISIONS_STAFF_COST_COLS,
         supported_formats=["xlsx", "csv"],
         handler_module="fw.modules.reports.handlers.provisions_staff_cost",
+        filter_schema={"year": True, "month": True, "country": True},
     ),
     "job-costing": ReportSpec(
         key="job-costing",
@@ -440,6 +456,7 @@ REPORTS_REGISTRY: dict[str, ReportSpec] = {
         columns=JOB_COSTING_COLS,
         supported_formats=["xlsx", "csv"],
         handler_module="fw.modules.reports.handlers.job_costing",
+        filter_schema={"year": True, "month": True, "worksite_id": True, "country": True},
     ),
 }
 
@@ -473,6 +490,7 @@ def get_report_definition(key: str) -> ReportDefinition:
         is_cost_report=spec.is_cost_report,
         columns=spec.columns,
         supported_formats=spec.supported_formats,
+        filter_schema=spec.filter_schema,
     )
 
 
@@ -492,6 +510,7 @@ def list_reports_for_role(role: str) -> list[ReportDefinition]:
                     is_cost_report=spec.is_cost_report,
                     columns=spec.columns,
                     supported_formats=spec.supported_formats,
+                    filter_schema=spec.filter_schema,
                 )
             )
     return result

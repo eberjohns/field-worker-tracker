@@ -215,3 +215,4 @@ export async function fetchGeneratedReports(
   }
   return res.json();
 }
+

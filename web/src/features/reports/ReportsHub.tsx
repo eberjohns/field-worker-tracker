@@ -316,107 +316,145 @@ export const ReportsHub: React.FC = () => {
               </div>
 
               {/* Dynamic Filter Controls */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 items-end">
-                {/* Date range for daily/movements/visits */}
-                {Boolean(selectedReport.filter_schema["date_from"]) && (
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">
-                      From Date
-                    </label>
-                    <input
-                      type="date"
-                      value={filterParams.date_from || ""}
-                      onChange={(e) =>
-                        setFilterParams((prev) => ({ ...prev, date_from: e.target.value }))
-                      }
-                      className="w-full text-xs px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                )}
-                {Boolean(selectedReport.filter_schema["date_to"]) && (
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">
-                      To Date
-                    </label>
-                    <input
-                      type="date"
-                      value={filterParams.date_to || ""}
-                      onChange={(e) =>
-                        setFilterParams((prev) => ({ ...prev, date_to: e.target.value }))
-                      }
-                      className="w-full text-xs px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                )}
+              {(() => {
+                const schema = selectedReport.filter_schema || {};
+                const isMonthly = Boolean(
+                  schema["year"] ||
+                    schema["month"] ||
+                    ["monthly-attendance", "payroll", "provisions-staff-cost", "job-costing", "employee-utilization"].includes(
+                      selectedReport.key
+                    )
+                );
+                const isExpiry = Boolean(
+                  schema["days_ahead"] || selectedReport.key === "document-expiry"
+                );
+                const isDateRange = !isMonthly && !isExpiry;
 
-                {/* Year & Month for monthly/payroll */}
-                {Boolean(selectedReport.filter_schema["year"]) && (
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">Year</label>
-                    <select
-                      value={filterParams.year || 2026}
-                      onChange={(e) =>
-                        setFilterParams((prev) => ({ ...prev, year: Number(e.target.value) }))
-                      }
-                      className="w-full text-xs px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value={2026}>2026</option>
-                      <option value={2025}>2025</option>
-                    </select>
-                  </div>
-                )}
-                {Boolean(selectedReport.filter_schema["month"]) && (
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">Month</label>
-                    <select
-                      value={filterParams.month || 11}
-                      onChange={(e) =>
-                        setFilterParams((prev) => ({ ...prev, month: Number(e.target.value) }))
-                      }
-                      className="w-full text-xs px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                        <option key={m} value={m}>
-                          {new Date(2026, m - 1).toLocaleString("default", { month: "long" })}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {/* Country */}
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Country</label>
-                  <select
-                    value={filterParams.country || "AE"}
-                    onChange={(e) =>
-                      setFilterParams((prev) => ({ ...prev, country: e.target.value }))
-                    }
-                    className="w-full text-xs px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="AE">United Arab Emirates (AE)</option>
-                    <option value="SA">Saudi Arabia (SA)</option>
-                    <option value="QA">Qatar (QA)</option>
-                    <option value="OM">Oman (OM)</option>
-                  </select>
-                </div>
-
-                {/* Run Button */}
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleRunReport}
-                    disabled={runningReport}
-                    className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition disabled:opacity-50 shadow-sm"
-                  >
-                    {runningReport ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <RefreshCw className="w-3.5 h-3.5" />
+                return (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 items-end">
+                    {/* Date range for daily/movements/visits */}
+                    {isDateRange && (
+                      <>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700 mb-1">
+                            From Date
+                          </label>
+                          <input
+                            type="date"
+                            value={filterParams.date_from || ""}
+                            onChange={(e) =>
+                              setFilterParams((prev) => ({ ...prev, date_from: e.target.value }))
+                            }
+                            className="w-full text-xs px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700 mb-1">
+                            To Date
+                          </label>
+                          <input
+                            type="date"
+                            value={filterParams.date_to || ""}
+                            onChange={(e) =>
+                              setFilterParams((prev) => ({ ...prev, date_to: e.target.value }))
+                            }
+                            className="w-full text-xs px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                      </>
                     )}
-                    <span>Run Preview</span>
-                  </button>
-                </div>
-              </div>
+
+                    {/* Year & Month for monthly/payroll */}
+                    {isMonthly && (
+                      <>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700 mb-1">Year</label>
+                          <select
+                            value={filterParams.year || 2026}
+                            onChange={(e) =>
+                              setFilterParams((prev) => ({ ...prev, year: Number(e.target.value) }))
+                            }
+                            className="w-full text-xs px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value={2026}>2026</option>
+                            <option value={2025}>2025</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700 mb-1">Month</label>
+                          <select
+                            value={filterParams.month || 11}
+                            onChange={(e) =>
+                              setFilterParams((prev) => ({ ...prev, month: Number(e.target.value) }))
+                            }
+                            className="w-full text-xs px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                              <option key={m} value={m}>
+                                {new Date(2026, m - 1).toLocaleString("default", { month: "long" })}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </>
+                    )}
+
+                    {/* Lead Days for Document Expiry */}
+                    {isExpiry && (
+                      <div>
+                        <label className="block text-xs font-medium text-slate-700 mb-1">
+                          Expiry Horizon
+                        </label>
+                        <select
+                          value={filterParams.days_ahead || 30}
+                          onChange={(e) =>
+                            setFilterParams((prev) => ({ ...prev, days_ahead: Number(e.target.value) }))
+                          }
+                          className="w-full text-xs px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value={30}>Next 30 Days</option>
+                          <option value={60}>Next 60 Days</option>
+                          <option value={90}>Next 90 Days</option>
+                          <option value={180}>Next 180 Days</option>
+                        </select>
+                      </div>
+                    )}
+
+                    {/* Country */}
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700 mb-1">Country</label>
+                      <select
+                        value={filterParams.country || "AE"}
+                        onChange={(e) =>
+                          setFilterParams((prev) => ({ ...prev, country: e.target.value }))
+                        }
+                        className="w-full text-xs px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="AE">United Arab Emirates (AE)</option>
+                        <option value="SA">Saudi Arabia (SA)</option>
+                        <option value="QA">Qatar (QA)</option>
+                        <option value="OM">Oman (OM)</option>
+                      </select>
+                    </div>
+
+                    {/* Run Button */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleRunReport}
+                        disabled={runningReport}
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition disabled:opacity-50 shadow-sm"
+                      >
+                        {runningReport ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <RefreshCw className="w-3.5 h-3.5" />
+                        )}
+                        <span>Run Preview</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Export Status Notification Banner */}
               {exportMessage && (

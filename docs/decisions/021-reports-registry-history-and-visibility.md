@@ -35,3 +35,4 @@ Phase 12 delivers the system-wide reporting subsystem, background export infrast
 
 **Related ADRs:** ADR-001 (Modular Monolith), ADR-005 (Immutable Events), ADR-018 (Attendance Immutability), ADR-020 (Month-End Payroll).  
 **Affected Docs:** `docs/12-reports.md`, `docs/07-data-model.md`, `docs/08-api-spec.md`, `docs/10-ui-views.md`, `docs/decisions/decision-register.md`.
+
