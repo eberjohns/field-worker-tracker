@@ -2,6 +2,9 @@
 All notable changes. Format: Keep a Changelog. Mobile-contract changes are also logged in `docs/09-mobile-sync-contract.md`.
 
 ## [Unreleased]
+### Changed
+- Mobile Contract Documentation (`docs/09-mobile-sync-contract.md`, v1.1.1): Full alignment audit against implemented mobile APIs — documented `POST /api/v1/mobile/consent/withdraw`, corrected `GET /api/v1/mobile/me/payroll` (`WorkerMobilePayrollSlip`) response schema, added complete request/response JSON examples for every endpoint, documented server-side PostGIS verification verdicts and flags, clarified password strength rules and planned `/mobile/me/scorecard` status, added a complete HTTP error code matrix, and added 9 end-to-end operational scenarios.
+
 ### Added
 - System-Wide Refinements and Patches:
   - Base Planner Sunday Quota Overflow & Target Styling Reset: When using "Fill Active Working Days", if a worker's weekly rest day falls within target days (e.g. Friday), automatically schedules Sunday to satisfy the required 6-day quota. Automatically disables cyan target styling on slot cells once planned quota has been reached.
