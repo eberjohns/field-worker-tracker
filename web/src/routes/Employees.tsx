@@ -58,6 +58,7 @@ export const Employees: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("");
+  const [staffGrades, setStaffGrades] = useState<string[]>([]);
   const [accommodationFilter, setAccommodationFilter] = useState<string>("");
   const [groupBySupervisor, setGroupBySupervisor] = useState(true);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -139,7 +140,13 @@ export const Employees: React.FC = () => {
       const params = new URLSearchParams();
       params.set("limit", "1000");
       if (search) params.set("q", search);
-      if (roleFilter) params.set("role", roleFilter);
+      if (roleFilter.startsWith("sgd:")) {
+        params.set("sgd", roleFilter.substring(4));
+      } else if (roleFilter.startsWith("role:")) {
+        params.set("role", roleFilter.substring(5));
+      } else if (roleFilter) {
+        params.set("role", roleFilter);
+      }
       if (accommodationFilter === "assigned") params.set("has_accommodation", "true");
       else if (accommodationFilter === "unassigned") params.set("has_accommodation", "false");
       else if (accommodationFilter) params.set("accommodation_id", accommodationFilter);
@@ -328,6 +335,20 @@ export const Employees: React.FC = () => {
       console.error("Failed to load accommodations:", err);
     }
   };
+
+  useEffect(() => {
+    const fetchStaffGrades = async () => {
+      try {
+        const res = await fetch("/api/v1/settings/staff-grades", {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (res.ok) setStaffGrades(await res.json());
+      } catch (err) {
+        console.error("Failed to load staff grades:", err);
+      }
+    };
+    fetchStaffGrades();
+  }, [token]);
 
   useEffect(() => {
     fetchEmployees();
@@ -858,12 +879,23 @@ export const Employees: React.FC = () => {
             onChange={(e) => setRoleFilter(e.target.value)}
             className="border border-slate-200 rounded-lg text-sm px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
-            <option value="">All Roles</option>
-            <option value="ADMIN">Admin</option>
-            <option value="ENGINEER">Engineer</option>
-            <option value="SUPERINTENDENT">Superintendent</option>
-            <option value="SUPERVISOR">Supervisor</option>
-            <option value="WORKER">Worker</option>
+            <option value="">All Roles & Staff Grades</option>
+            <optgroup label="System Roles">
+              <option value="role:ADMIN">Admin</option>
+              <option value="role:ENGINEER">Engineer</option>
+              <option value="role:SUPERINTENDENT">Superintendent</option>
+              <option value="role:SUPERVISOR">Supervisor</option>
+              <option value="role:WORKER">Worker</option>
+            </optgroup>
+            {staffGrades.length > 0 && (
+              <optgroup label="Staff Grade Descriptions">
+                {staffGrades.map((g) => (
+                  <option key={`sgd:${g}`} value={`sgd:${g}`}>
+                    {g}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
         </div>
 
@@ -939,7 +971,15 @@ export const Employees: React.FC = () => {
                           return false;
                         }
                       }
-                      if (roleFilter && m.role !== roleFilter) return false;
+                      if (roleFilter) {
+                        if (roleFilter.startsWith("sgd:")) {
+                          if (m.staff_grade_description !== roleFilter.substring(4)) return false;
+                        } else if (roleFilter.startsWith("role:")) {
+                          if (m.role !== roleFilter.substring(5)) return false;
+                        } else if (m.role !== roleFilter) {
+                          return false;
+                        }
+                      }
                       if (accommodationFilter === "assigned" && !m.accommodation_id) return false;
                       if (accommodationFilter === "unassigned" && m.accommodation_id) return false;
                       if (
@@ -1173,7 +1213,15 @@ export const Employees: React.FC = () => {
                                 return false;
                               }
                             }
-                            if (roleFilter && m.role !== roleFilter) return false;
+                            if (roleFilter) {
+                        if (roleFilter.startsWith("sgd:")) {
+                          if (m.staff_grade_description !== roleFilter.substring(4)) return false;
+                        } else if (roleFilter.startsWith("role:")) {
+                          if (m.role !== roleFilter.substring(5)) return false;
+                        } else if (m.role !== roleFilter) {
+                          return false;
+                        }
+                      }
                             if (accommodationFilter === "assigned" && !m.accommodation_id) return false;
                             if (accommodationFilter === "unassigned" && m.accommodation_id) return false;
                             if (

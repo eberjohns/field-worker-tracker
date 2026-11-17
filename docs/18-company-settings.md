@@ -95,3 +95,4 @@ Settings can be managed and reviewed via two mechanisms:
    - Administrators can download the comprehensive Excel import template from `/imports`.
    - The `Company_Settings` sheet is pre-populated with example rows for all catalog settings above.
    - Re-uploading this sheet applies effective-dated updates to settings idempotently.
+

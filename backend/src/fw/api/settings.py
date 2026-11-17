@@ -61,7 +61,7 @@ async def list_staff_grades(
 async def update_setting(
     key: str,
     payload: CompanySettingUpdate,
-    current_user: User = Depends(require_role("ADMIN")),
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
     session: AsyncSession = Depends(get_db),
 ) -> CompanySettingRead:
     row = await SettingsService.set_setting(
@@ -328,7 +328,7 @@ async def list_public_holidays(
 )
 async def create_public_holiday(
     payload: PublicHolidayCreate,
-    current_user: User = Depends(require_role("ADMIN")),
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
     session: AsyncSession = Depends(get_db),
 ) -> PublicHolidayRead:
     holiday = await SettingsService.create_public_holiday(
@@ -354,7 +354,7 @@ async def create_public_holiday(
 @router.delete("/public-holidays/{holiday_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_public_holiday(
     holiday_id: UUID,
-    current_user: User = Depends(require_role("ADMIN")),
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
     session: AsyncSession = Depends(get_db),
 ) -> None:
     await SettingsService.delete_public_holiday(session=session, holiday_id=holiday_id)
@@ -388,7 +388,7 @@ async def list_consent_policies(
 )
 async def create_consent_policy(
     payload: ConsentPolicyCreate,
-    current_user: User = Depends(require_role("ADMIN")),
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
     session: AsyncSession = Depends(get_db),
 ) -> ConsentPolicyRead:
     policy = await SettingsService.create_consent_policy(

@@ -538,11 +538,32 @@ export const Settings: React.FC = () => {
     }
   };
 
+  const parseRoleList = (val: any): string[] => {
+    if (!val) return [];
+    if (Array.isArray(val)) return val.map((x) => String(x).trim()).filter(Boolean);
+    if (typeof val === "string") {
+      const trimmed = val.trim();
+      if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) {
+            return parsed.map((x) => String(x).trim()).filter(Boolean);
+          }
+        } catch {
+          // fallback
+        }
+      }
+      return trimmed.split(",").map((x) => x.trim()).filter(Boolean);
+    }
+    return [];
+  };
+
   const handleToggleBudgetRole = async (roleName: string) => {
     const budgetSetting = settings.find((s) => s.setting_key === "budget_only_staff_types");
-    const currentList: string[] = Array.isArray(budgetSetting?.value) ? budgetSetting.value : [];
-    const nextList = currentList.includes(roleName)
-      ? currentList.filter((r) => r !== roleName)
+    const currentList = parseRoleList(budgetSetting?.value);
+    const isSelected = currentList.some((r) => r.toLowerCase() === roleName.toLowerCase());
+    const nextList = isSelected
+      ? currentList.filter((r) => r.toLowerCase() !== roleName.toLowerCase())
       : [...currentList, roleName];
 
     try {
@@ -554,17 +575,20 @@ export const Settings: React.FC = () => {
         },
         body: JSON.stringify({
           value: nextList,
-          country: null,
-          effective_from: new Date().toISOString().split("T")[0],
+          country: countryFilter !== "ALL" ? countryFilter : null,
+          effective_from: asOfDate || new Date().toISOString().split("T")[0],
           unit: "list",
         }),
       });
       if (res.ok) {
         setStatusMessage("Budget-only staff types updated.");
-        fetchSettings();
+        await fetchSettings();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setErrorMessage(err.detail || "Failed to update budget-only roles.");
       }
-    } catch {
-      setErrorMessage("Failed to update budget-only roles.");
+    } catch (err: any) {
+      setErrorMessage(err.message || "Failed to update budget-only roles.");
     }
   };
 
@@ -1214,10 +1238,8 @@ export const Settings: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-2">
               {staffGrades.map((role) => {
                 const budgetSetting = settings.find((s) => s.setting_key === "budget_only_staff_types");
-                const currentList: string[] = Array.isArray(budgetSetting?.value)
-                  ? budgetSetting.value
-                  : [];
-                const isChecked = currentList.includes(role);
+                const currentList = parseRoleList(budgetSetting?.value);
+                const isChecked = currentList.some((r) => r.toLowerCase() === role.toLowerCase());
 
                 return (
                   <label
@@ -1231,7 +1253,7 @@ export const Settings: React.FC = () => {
                     <input
                       type="checkbox"
                       checked={isChecked}
-                      disabled={user?.role !== "ADMIN"}
+                      disabled={user?.role !== "ADMIN" && user?.role !== "ENGINEER"}
                       onChange={() => handleToggleBudgetRole(role)}
                       className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
                     />

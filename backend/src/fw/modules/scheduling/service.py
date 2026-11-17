@@ -2,6 +2,7 @@
 
 import calendar
 import io
+import json
 from collections import defaultdict
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
@@ -256,12 +257,27 @@ class SchedulingService:
                     CompanySettingValue.country.is_(None),
                 ),
             )
-            .order_by(CompanySettingValue.effective_from.desc())
+            .order_by(
+                CompanySettingValue.country.desc().nulls_last(),
+                CompanySettingValue.effective_from.desc(),
+            )
             .limit(1)
         )
         val = (await self.session.execute(stmt)).scalar_one_or_none()
-        if val and isinstance(val, list):
-            return {str(x).strip().lower() for x in val}
+        if val is None:
+            return set()
+        if isinstance(val, list):
+            return {str(x).strip().lower() for x in val if x}
+        if isinstance(val, str):
+            trimmed = val.strip()
+            if trimmed.startswith("[") and trimmed.endswith("]"):
+                try:
+                    parsed = json.loads(trimmed)
+                    if isinstance(parsed, list):
+                        return {str(x).strip().lower() for x in parsed if x}
+                except Exception:
+                    pass
+            return {x.strip().lower() for x in trimmed.split(",") if x.strip()}
         return set()
 
     async def get_public_holidays(self, country: str, from_date: date, to_date: date) -> set[date]:
@@ -1085,6 +1101,7 @@ class SchedulingService:
         job_item_id: UUID | None = None,
         target_date: date | None = None,
         weekday: str | None = None,
+        all_roles: bool = False,
     ) -> list[CandidateRecommendationRead]:
         """Rank worker candidates for a job assignment with permanent exclusivity and capacity."""
         if occurrence_id:
@@ -1254,6 +1271,8 @@ class SchedulingService:
         candidates: list[CandidateWorker] = []
         for emp in employees:
             is_budget = (emp.staff_grade_description or "").strip().lower() in budget_staff_types
+            if is_budget:
+                continue
             base_std = base_std_map.get(emp.id, Decimal("8.0"))
 
             sup_info = emp_to_supervisor.get(emp.id)
@@ -1363,7 +1382,7 @@ class SchedulingService:
                 )
             )
 
-        ranked = rank_candidates_for_job(candidates, job_target, t_date)
+        ranked = rank_candidates_for_job(candidates, job_target, t_date, all_roles=all_roles)
 
         return [
             CandidateRecommendationRead(

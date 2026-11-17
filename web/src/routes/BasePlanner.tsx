@@ -101,6 +101,7 @@ export const BasePlanner: React.FC = () => {
   const [candidates, setCandidates] = useState<CandidateRecommendation[]>([]);
   const [candidateSearch, setCandidateSearch] = useState<string>("");
   const [filterToSupervisorCrew, setFilterToSupervisorCrew] = useState<boolean>(true);
+  const [showAllRoles, setShowAllRoles] = useState<boolean>(false);
   const [loadingCandidates, setLoadingCandidates] = useState<boolean>(false);
   const [savingSlot, setSavingSlot] = useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
@@ -226,11 +227,19 @@ export const BasePlanner: React.FC = () => {
       setSelectedQuarterWeek(1);
     }
 
-    // Fetch candidate recommendations for this specific weekday
+    setShowAllRoles(false);
+    fetchCandidatesForSlot(it.job_item_id, dow, false);
+  };
+
+  const fetchCandidatesForSlot = async (
+    jobItemId: string,
+    dow: string,
+    allRoles: boolean = showAllRoles
+  ) => {
     setLoadingCandidates(true);
     try {
       const cRes = await fetch(
-        `/api/v1/job-items/${it.job_item_id}/recommendations?weekday=${dow}`,
+        `/api/v1/job-items/${jobItemId}/recommendations?weekday=${dow}&all_roles=${allRoles}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       if (cRes.ok) {
@@ -1031,18 +1040,36 @@ export const BasePlanner: React.FC = () => {
                     </h4>
                   </div>
 
-                  {/* Supervisor Crew Filter Toggle inside Modal */}
-                  {selectedSupervisorId && (
-                    <label className="text-xs font-medium text-indigo-700 flex items-center gap-1.5 cursor-pointer bg-indigo-50 px-2 py-1 rounded border border-indigo-200">
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-medium text-slate-700 flex items-center gap-1.5 cursor-pointer bg-slate-50 px-2 py-1 rounded border border-slate-200">
                       <input
                         type="checkbox"
-                        checked={filterToSupervisorCrew}
-                        onChange={(e) => setFilterToSupervisorCrew(e.target.checked)}
-                        className="rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
+                        checked={showAllRoles}
+                        onChange={(e) => {
+                          const next = e.target.checked;
+                          setShowAllRoles(next);
+                          if (activeSlot) {
+                            fetchCandidatesForSlot(activeSlot.item.job_item_id, activeSlot.weekday, next);
+                          }
+                        }}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
                       />
-                      <span>Filter to Selected Supervisor's Crew</span>
+                      <span>Show all workforce roles</span>
                     </label>
-                  )}
+
+                    {/* Supervisor Crew Filter Toggle inside Modal */}
+                    {selectedSupervisorId && (
+                      <label className="text-xs font-medium text-indigo-700 flex items-center gap-1.5 cursor-pointer bg-indigo-50 px-2 py-1 rounded border border-indigo-200">
+                        <input
+                          type="checkbox"
+                          checked={filterToSupervisorCrew}
+                          onChange={(e) => setFilterToSupervisorCrew(e.target.checked)}
+                          className="rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
+                        />
+                        <span>Filter to Crew</span>
+                      </label>
+                    )}
+                  </div>
                 </div>
 
                 {/* Candidate Search Box */}

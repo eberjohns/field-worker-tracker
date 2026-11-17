@@ -1,9 +1,9 @@
 {
-  "version": "1.2.0",
+  "version": "1.2.1",
   "major": 1,
   "minor": 2,
-  "patch": 0,
+  "patch": 1,
   "last_branch": "fix/system-refinements-and-patches",
-  "last_commit": "6207ec9",
-  "updated_at": "2026-11-17T05:32:31.212302+00:00"
+  "last_commit": "8ac0df1",
+  "updated_at": "2026-11-17T06:44:18.415018+00:00"
 }
