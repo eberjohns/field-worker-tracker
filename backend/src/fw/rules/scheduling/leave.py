@@ -52,24 +52,26 @@ def validate_leave_dates(
     today_work_date: date,
     is_admin: bool = False,
     min_notice_days: int = 3,
+    bypass_notice: bool = False,
 ) -> tuple[bool, str | None]:
     """Validate leave request date boundaries and notice requirements.
 
     - to_date must be on or after from_date.
-    - Non-admin users must submit leave with at least `min_notice_days` notice.
-    - Admin users can record leaves for any date, including the past.
+    - All users (including admins) require at least `min_notice_days` advance notice.
+    - Admin users can bypass the notice check only when explicitly confirmed (bypass_notice=True).
     """
     if to_date < from_date:
         return False, f"End date ({to_date}) cannot be before start date ({from_date})."
 
-    if not is_admin:
-        notice_days = (from_date - today_work_date).days
-        if notice_days < min_notice_days:
-            return (
-                False,
-                f"Leave request requires at least {min_notice_days} days notice. "
-                f"Earliest allowed start date is {today_work_date + timedelta(days=min_notice_days)}.",
-            )
+    notice_days = (from_date - today_work_date).days
+    if notice_days < min_notice_days:
+        if is_admin and bypass_notice:
+            return True, None
+        return (
+            False,
+            f"Leave request requires at least {min_notice_days} days notice. "
+            f"Earliest allowed start date is {today_work_date + timedelta(days=min_notice_days)}.",
+        )
 
     return True, None
 

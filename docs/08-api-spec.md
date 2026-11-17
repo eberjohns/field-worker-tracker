@@ -49,6 +49,7 @@ Roles: A = Admin, E = Engineer, S = Superintendent, V = Supervisor. "scope" = li
 | GET/POST/DELETE | /employees/{id}/provision-overrides | A | |
 | GET | /employees/{id}/devices | A | registered devices, last seen, sync lag |
 | POST | /devices/{id}/revoke | A | revoke/reset registration |
+| POST | /employees/{id}/reset-password | A | Reset worker password to default; auto-provisions User account if not yet created |
 
 ### Users and accounts
 `GET /users`, `PATCH /users/{id}` (active/role), `POST /users/{id}/reset-password` (**Admin only**: sets the user back to the company default password and forces a change; applies to workers too).

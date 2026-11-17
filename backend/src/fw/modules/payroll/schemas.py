@@ -272,9 +272,13 @@ class WorkerMobilePayrollSlip(BaseModel):
     payroll_record_id: UUID
     payroll_run_id: UUID
     month_label: str  # e.g. "October 2026"
+    period: str | None = None  # e.g. "2026-10"
     period_start: date
     period_end: date
     status: str
+    employee_tally_id: str | None = None
+    employee_name: str | None = None
+    currency: str | None = "AED"
     standard_hours: Decimal
     worked_hours: Decimal
     paid_leave_hours: Decimal

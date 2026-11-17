@@ -275,6 +275,7 @@ class JobsService:
             is_outdoor=outdoor,
             country=payload.country.upper(),
             contract_group_ref=payload.contract_group_ref,
+            salary_revision_code=payload.salary_revision_code,
             start_date=payload.start_date,
             end_date=payload.end_date,
             budget_amount=payload.budget_amount,
@@ -287,7 +288,12 @@ class JobsService:
             action="CREATE_WORKSITE",
             entity_type="worksite",
             entity_id=str(ws.id),
-            diff={"job_number": ws.job_number, "job_name": ws.job_name, "country": ws.country},
+            diff={
+                "job_number": ws.job_number,
+                "job_name": ws.job_name,
+                "country": ws.country,
+                "salary_revision_code": ws.salary_revision_code,
+            },
             actor_user_id=actor_user_id,
             actor_role=actor_role,
         )
@@ -333,6 +339,14 @@ class JobsService:
                 "new": payload.contract_group_ref,
             }
             ws.contract_group_ref = payload.contract_group_ref
+        if payload.salary_revision_code is not None:
+            new_rev = payload.salary_revision_code.strip() if payload.salary_revision_code else None
+            if new_rev != ws.salary_revision_code:
+                diff["salary_revision_code"] = {
+                    "old": ws.salary_revision_code,
+                    "new": new_rev,
+                }
+                ws.salary_revision_code = new_rev
         if payload.budget_amount is not None:
             diff["budget_amount"] = {
                 "old": str(ws.budget_amount),

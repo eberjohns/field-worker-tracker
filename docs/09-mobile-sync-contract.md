@@ -27,6 +27,7 @@ All users (workers included) log in with **username = worker ID** and a **passwo
   "must_change_password": true, "employee": { "employee_id": "uuid", "tally_id": "1193", "name": "Shanto Miah", "role": "WORKER" } }
 ```
 - While `must_change_password` is true the only allowed call is `POST /mobile/auth/change-password` `{ "old_password", "new_password" }`. Other calls return `403 PASSWORD_CHANGE_REQUIRED`.
+- **Voluntary Password Changes**: Authenticated workers can also call `POST /mobile/auth/change-password` at any time from the app's Profile / Settings view to update their password. Requirements: `new_password` must meet password strength rules (at least 8 chars, 1 uppercase, 1 digit, 1 special character) and cannot match company default password.
 - The **first successful login binds the account to that device**. Login from another device returns `403 DEVICE_MISMATCH` and is logged; Admin resets the binding.
 - Errors: `INVALID_CREDENTIALS` (401), `DEVICE_MISMATCH` (403), `ACCOUNT_LOCKED` (403: default password not changed in time, or too many failures; ask Admin), `ACCOUNT_DISABLED` (403).
 ### POST `/mobile/auth/refresh` `{ "refresh_token" }`; POST `/mobile/auth/logout` (204). Reuse of an old refresh token revokes the session.
@@ -194,7 +195,8 @@ Client rules: delete an event from the local queue on `ACCEPTED` or `DUPLICATE`;
 
 ## 8. On-demand data (not synced)
 - `GET /mobile/me/scorecard?week_start=2026-11-02` -> assigned hours, completed work count, worked minutes, status per day (supplied by the backend).
-- `GET /mobile/me/payroll?period=2026-10` -> the worker's own finalized payroll slip:
+- `GET /mobile/me/payroll` -> returns a list of all approved monthly payroll slips for the worker (`list[WorkerMobilePayrollSlip]`), sorted newest first.
+- `GET /mobile/me/payroll?period=2026-10` -> returns the worker's own finalized payroll slip for the requested month:
   ```json
   {
     "period": "2026-10",
@@ -239,5 +241,6 @@ Store tokens in the OS secure store. Do not log tokens or coordinates in plain l
 | draft | 1 | Login by employee ID + password with forced first change and device binding (activation code removed); new entities `DAY_PLAN` and `TRANSPORT_RUN`; planned times moved from SETTINGS to DAY_PLAN |
 | draft | 1 | PROFILE `is_driver` replaces `work_time_rule`; `device_model` on registration; `GET /mobile/policy/location`; SETTINGS `upcoming` array; `deployment_type` on schedule item summary |
 | 2026-11-15 | 1 | Added `GET /mobile/me/payroll` finalized payslip response payload schema (Phase 11) |
+| 2026-11-17 | 1.1 | Added voluntary worker password changes via `POST /mobile/auth/change-password` and list support for `GET /mobile/me/payroll` (without period filter) |
 | draft | 1 | LOCATION_DISABLED/ENABLED uploaded immediately; `source` gains `FOLLOW_UP` (unknown values treated as PLANNED) |
 | 2026-11-08 | 1.0.0 | Phase 07 baseline release: Auth (`/mobile/auth/login`, forced password change, single-device binding, mismatch handling), consent (`/mobile/auth/consent`), heartbeat (`/mobile/auth/heartbeat`), change log synchronization (`/mobile/sync/snapshot`, `/mobile/sync/changes` with delta coalescing, `/mobile/sync/ack`), location events batch ingestion (`/mobile/events/batch`), openapi-mobile.json, and standalone Mobile Tester Proxy (`tools/mobile-proxy/`). |

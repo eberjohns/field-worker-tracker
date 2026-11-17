@@ -20,6 +20,7 @@ Start with `phases/README.md` to build. Reference documents are numbered; design
 | 14 | [nonfunctional](14-nonfunctional.md) | Security, retention, backup, hosting |
 | 15 | [dev-process](15-dev-process.md) | Working method, git, definition of done |
 | 17 | [dependencies](17-dependencies.md) | Dependency register |
+| 18 | [company-settings](18-company-settings.md) | Effective-dated company settings, defaults & catalog |
 
 ## Design documents (`design/`)
 [D1 planner](design/D1-planner.md) | [D2 leave and reassignment](design/D2-leave-and-reassignment.md) | [D3 time rules and attendance table](design/D3-time-rules-and-attendance-report.md) | [D4 month-end and reports](design/D4-month-end-and-reports.md) | [D5 transport](design/D5-transport-and-drivers.md) | [D6 import and setup](design/D6-import-and-setup.md)

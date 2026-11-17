@@ -3,6 +3,20 @@ All notable changes. Format: Keep a Changelog. Mobile-contract changes are also 
 
 ## [Unreleased]
 ### Added
+- System-Wide Refinements and Patches:
+  - Mobile Payslips API: Added `GET /api/v1/mobile/me/payroll` with optional `period=YYYY-MM` filter, returning formatted payslips with earnings, deductions, currency, and period. Exported to `openapi-mobile.json`.
+  - Voluntary Worker Password Change: Added `POST /api/v1/mobile/auth/change-password` allowing workers to update their passwords directly from the mobile app after validating their old password.
+  - Mobile Proxy Enhancements: Added Payslips card on Worker Profile tab, added Change Password interactive modal on Profile tab, and fixed CAMP geofence event emission to cleanly report `ENTRY` and `EXIT` for accommodation camps.
+  - Dedicated Employee Password Reset: Added `POST /api/v1/employees/{employee_id}/reset-password` endpoint that auto-provisions a `User` record if one does not already exist, resets to company default password, and clears lockouts.
+  - Employee Phone & Email Persistence: Fixed bulk import pipeline to persist `phone` and `email` to database, and updated Employee Detail view to render both contact fields with editing permissions for Admin and Engineer roles.
+  - Human-Readable Audit Trail: Enriched audit trail diffs on Employee Detail page with human-readable labels for UUIDs (`actor_name`, `entity_label`, friendly field key formatting).
+  - Planned Attendance Schedule Fallback: In attendance daily calculation, populated baseline 5-point schedule fallbacks from company settings (`default_accommodation_start`, `default_first_site_start`, `default_break_minutes`, `default_last_site_end`, `default_accommodation_end`) when no matching `TimeRule` specifies hours.
+  - Budget-Only Staff Types Handling: Excluded budget-only positions (`budget_only_staff_types`) from `BasePlanner` and `OperationalPlanner` views. In `get_budget_vs_actual` and Job Costing reports, credited actual cost as equal to pro-rated planned cost so contract budgets account for budgeted roles without false variance skew.
+  - Leave Request 3-Day Notice & Admin Bypass: Enforced 3-day advance notice rule across all user roles, with an explicit `bypass_notice` confirmation checkbox for administrators.
+  - Salary Revision Precedence & Worksites Filter: Implemented resolution precedence (Worksite `salary_revision_code` > Company Setting `default_salary_revision_code` > latest active revision). Exposed `salary_revision_code` in worksite CRUD APIs, added salary revision filter toolbar to Worksites view, and enabled editing in Worksite Detail.
+  - Company Settings Pre-fill & Documentation: Pre-filled all company settings catalog defaults in the bulk import template (`Company_Settings` sheet) and authored comprehensive reference documentation `docs/18-company-settings.md`.
+
+### Added
 - PHASE-13 (Hardening, Archive, Backup, Privacy and Go-Live):
   - Database Migration `0014_archive_and_retention.py`:
     - Created `archive_records` table (`id`, `year`, `file_name`, `file_path`, `file_size_bytes`, `sha256_checksum`, `encryption_algo`, `record_count`, `status`, `archived_at`, `verified_at`, `purged_at`, `purged_record_count`, `details`).

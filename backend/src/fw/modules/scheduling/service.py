@@ -2275,7 +2275,13 @@ class SchedulingService:
 
         ws_rows: list[BasePlannerWorksiteRow] = []
         for ws in worksites:
-            active_items = [it for it in ws.items if it.is_active]
+            budget_types = await self.get_budget_only_staff_types(ws.country)
+            active_items = [
+                it
+                for it in ws.items
+                if it.is_active
+                and (it.staff_grade_description or "").strip().lower() not in budget_types
+            ]
             if not active_items:
                 continue
 
@@ -2605,7 +2611,13 @@ class SchedulingService:
         ws_rows: list[OperationalWorksiteRow] = []
 
         for ws in worksites:
-            active_items = [it for it in ws.items if it.is_active]
+            budget_types = await self.get_budget_only_staff_types(ws.country)
+            active_items = [
+                it
+                for it in ws.items
+                if it.is_active
+                and (it.staff_grade_description or "").strip().lower() not in budget_types
+            ]
             if not active_items:
                 continue
 
@@ -3300,6 +3312,13 @@ class SchedulingService:
                 status_code=403,
             )
 
+        if payload.bypass_notice and not is_admin:
+            raise AppError(
+                code="FORBIDDEN",
+                message="Only administrators can bypass the 3-day notice rule.",
+                status_code=403,
+            )
+
         # 1. Date boundaries and notice validation
         ok_dates, err_dates = validate_leave_dates(
             from_date=payload.from_date,
@@ -3307,6 +3326,7 @@ class SchedulingService:
             today_work_date=today,
             is_admin=is_admin,
             min_notice_days=3,
+            bypass_notice=payload.bypass_notice,
         )
         if not ok_dates:
             raise AppError(

@@ -27,6 +27,7 @@ from fw.modules.identity.models import User
 from fw.modules.jobs.models import JobItem, Worksite
 from fw.modules.org.models import Accommodation, Employee, EmployeeReportingLine
 from fw.modules.scheduling.models import LeaveRequest, ScheduledWork
+from fw.modules.settings import SettingsService
 from fw.modules.settings.models import PublicHoliday, TimeRule
 from fw.rules.attendance import (
     DailyCalculationInputs,
@@ -41,6 +42,7 @@ from fw.rules.time_rules import (
     TimeRuleDefinition,
     WorkerContext,
     resolve_time_schedule,
+    time_diff_minutes,
 )
 
 logger = structlog.get_logger(__name__)
@@ -159,6 +161,90 @@ class AttendanceService:
             manager_links=mgr_links,
         )
         resolved_schedule = resolve_time_schedule(rule_defs, worker_ctx, work_date)
+
+        # Fallback to company settings / defaults if time rules did not specify 5-point schedule
+        if resolved_schedule.first_site_start is None or resolved_schedule.last_site_end is None:
+            raw_acc_start = (
+                await SettingsService.get_setting(
+                    session, "default_accommodation_start", country=country
+                )
+                or "05:00"
+            )
+            raw_first_start = (
+                await SettingsService.get_setting(
+                    session, "default_first_site_start", country=country
+                )
+                or "06:00"
+            )
+            raw_break_min = (
+                await SettingsService.get_setting(
+                    session, "default_break_minutes", country=country
+                )
+                or 30
+            )
+            raw_last_end = (
+                await SettingsService.get_setting(
+                    session, "default_last_site_end", country=country
+                )
+                or "15:30"
+            )
+            raw_acc_end = (
+                await SettingsService.get_setting(
+                    session, "default_accommodation_end", country=country
+                )
+                or "17:00"
+            )
+
+            def _parse_time(v: Any, default_t: time) -> time:
+                if isinstance(v, time):
+                    return v
+                if isinstance(v, str):
+                    try:
+                        parts = v.strip().split(":")
+                        return time(int(parts[0]), int(parts[1]))
+                    except Exception:
+                        pass
+                return default_t
+
+            if resolved_schedule.first_site_start is None:
+                resolved_schedule.first_site_start = _parse_time(raw_first_start, time(6, 0))
+            if resolved_schedule.last_site_end is None:
+                resolved_schedule.last_site_end = _parse_time(raw_last_end, time(15, 30))
+            if not resolved_schedule.break_minutes:
+                try:
+                    resolved_schedule.break_minutes = int(raw_break_min)
+                except Exception:
+                    resolved_schedule.break_minutes = 30
+
+            if worker_ctx.has_accommodation:
+                if resolved_schedule.accommodation_start is None:
+                    resolved_schedule.accommodation_start = _parse_time(raw_acc_start, time(5, 0))
+                if resolved_schedule.accommodation_end is None:
+                    resolved_schedule.accommodation_end = _parse_time(raw_acc_end, time(17, 0))
+
+            # Recalculate planned total and worked minutes
+            if (
+                worker_ctx.has_accommodation
+                and resolved_schedule.accommodation_start
+                and resolved_schedule.accommodation_end
+            ):
+                resolved_schedule.planned_total_minutes = time_diff_minutes(
+                    resolved_schedule.accommodation_start, resolved_schedule.accommodation_end
+                )
+            else:
+                resolved_schedule.planned_total_minutes = time_diff_minutes(
+                    resolved_schedule.first_site_start, resolved_schedule.last_site_end
+                )
+
+            elapsed_site = time_diff_minutes(
+                resolved_schedule.first_site_start, resolved_schedule.last_site_end
+            )
+            resolved_schedule.planned_worked_minutes = max(
+                0, elapsed_site - (resolved_schedule.break_minutes or 0)
+            )
+
+            if not resolved_schedule.winning_rule_name:
+                resolved_schedule.winning_rule_name = "Company Default Settings"
 
         # 5. Load scheduled work for today
         sw_q = select(ScheduledWork).where(

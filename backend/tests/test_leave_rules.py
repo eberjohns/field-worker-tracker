@@ -36,10 +36,19 @@ def test_validate_leave_dates_notice_non_admin():
 
 def test_validate_leave_dates_admin_past_allowed():
     today = date(2026, 11, 10)
-    # Admin recording past leave (e.g. yesterday or last week)
-    ok, err = validate_leave_dates(date(2026, 11, 1), date(2026, 11, 5), today, is_admin=True)
-    assert ok
-    assert err is None
+    # Admin recording short-notice or past leave without bypass is rejected
+    ok, err = validate_leave_dates(
+        date(2026, 11, 1), date(2026, 11, 5), today, is_admin=True, bypass_notice=False
+    )
+    assert not ok
+    assert "at least 3 days notice" in err
+
+    # Admin recording with explicit bypass confirmed is allowed
+    ok_bypass, err_bypass = validate_leave_dates(
+        date(2026, 11, 1), date(2026, 11, 5), today, is_admin=True, bypass_notice=True
+    )
+    assert ok_bypass
+    assert err_bypass is None
 
 
 def test_check_overlapping_leaves():
