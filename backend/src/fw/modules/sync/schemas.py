@@ -107,6 +107,8 @@ class ProfilePayload(BaseModel):
     employee_id: UUID
     tally_id: str
     name: str
+    phone: str | None = None
+    email: str | None = None
     role: str
     staff_grade_description: str | None = None
     weekly_off_day: str | None = None

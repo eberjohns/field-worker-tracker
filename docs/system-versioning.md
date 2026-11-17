@@ -22,3 +22,7 @@ Field Worker Tracker follows semantic versioning `v<MAJOR>.<MINOR>.<PATCH>`:
 | **v1.2.1** | 2026-11-17 | `fix/system-refinements-and-patches` | `8ac0df1` | Commit on 'fix/system-refinements-and-patches' |
 | **v1.2.2** | 2026-11-17 | `fix/system-refinements-and-patches` | `1d49498` | Commit on 'fix/system-refinements-and-patches' |
 | **v1.2.3** | 2026-11-17 | `fix/system-refinements-and-patches` | `b353530` | Commit on 'fix/system-refinements-and-patches' |
+| **v1.3.0** | 2026-11-17 | `docs/update-mobile-sync-contract` | `b5cbb92` | New branch 'docs/update-mobile-sync-contract' |
+| **v1.3.1** | 2026-11-17 | `docs/update-mobile-sync-contract` | `cd98ac2` | Commit on 'docs/update-mobile-sync-contract' |
+| **v1.3.2** | 2026-11-17 | `docs/update-mobile-sync-contract` | `d2f404e` | Commit on 'docs/update-mobile-sync-contract' |
+| **v1.3.3** | 2026-11-17 | `docs/update-mobile-sync-contract` | `3aea6bd` | Commit on 'docs/update-mobile-sync-contract' |

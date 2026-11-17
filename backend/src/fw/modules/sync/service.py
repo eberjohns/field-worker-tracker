@@ -570,6 +570,8 @@ class SyncService:
             employee_id=employee.id,
             tally_id=employee.tally_id,
             name=employee.name,
+            phone=employee.phone,
+            email=employee.email,
             role=employee.role or "WORKER",
             staff_grade_description=employee.staff_grade_description,
             weekly_off_day=employee.weekly_off_day or "FRIDAY",
