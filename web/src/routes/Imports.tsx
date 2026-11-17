@@ -38,10 +38,27 @@ interface ImportBatch {
     counts?: Record<string, number>;
     sheet_counts?: Record<string, Record<string, number>>;
     can_commit?: boolean;
+    selected_sheets?: string[] | null;
   };
   committed_at: string | null;
   created_at: string;
 }
+
+const MASTER_IMPORT_SHEETS = [
+  "Groups",
+  "Zones",
+  "Accommodations",
+  "Employees",
+  "Employee_Reporting",
+  "Employee_Salary",
+  "Worksites",
+  "Job_Items",
+  "Public_Holidays",
+  "Company_Settings",
+  "Time_Rules",
+  "Salary_Revisions",
+  "Salary_Revision_Lines",
+] as const;
 
 export const Imports: React.FC = () => {
   const { token, user } = useAuth();
@@ -49,6 +66,8 @@ export const Imports: React.FC = () => {
 
   // Upload & preview state
   const [isUploading, setIsUploading] = useState(false);
+  const [importScope, setImportScope] = useState<"ALL" | "SELECTED">("ALL");
+  const [selectedSheets, setSelectedSheets] = useState<string[]>([]);
   const [currentBatch, setCurrentBatch] = useState<ImportBatch | null>(null);
   const [previewRows, setPreviewRows] = useState<ImportRow[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
@@ -88,6 +107,12 @@ export const Imports: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (importScope === "SELECTED" && selectedSheets.length === 0) {
+      setErrorMessage("Please select at least one sheet to import, or switch to 'All Sheets in Workbook'.");
+      e.target.value = "";
+      return;
+    }
+
     setIsUploading(true);
     setErrorMessage(null);
     setSuccessMessage(null);
@@ -95,8 +120,13 @@ export const Imports: React.FC = () => {
     const formData = new FormData();
     formData.append("file", file);
 
+    const querySuffix =
+      importScope === "SELECTED" && selectedSheets.length > 0
+        ? `?sheets=${encodeURIComponent(selectedSheets.join(","))}`
+        : "";
+
     try {
-      const res = await fetch("/api/v1/imports", {
+      const res = await fetch(`/api/v1/imports${querySuffix}`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -105,14 +135,16 @@ export const Imports: React.FC = () => {
       });
 
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail?.message || "Failed to parse import workbook.");
+        const err = await res.json().catch(() => ({}));
+        throw new Error(
+          err.detail?.message || err.detail || err.message || "Failed to parse import workbook."
+        );
       }
 
       const previewData = await res.json();
       setCurrentBatch({
         id: previewData.batch_id,
-        kind: "FULL_WORKBOOK",
+        kind: importScope === "SELECTED" ? "SELECTIVE_SHEETS" : "FULL_WORKBOOK",
         filename: previewData.filename,
         template_version: previewData.template_version,
         status: previewData.status,
@@ -121,11 +153,16 @@ export const Imports: React.FC = () => {
         created_at: new Date().toISOString(),
       });
       setPreviewRows(previewData.rows);
-      setSuccessMessage(`Workbook '${previewData.filename}' parsed successfully. Review preview before committing.`);
+      setSuccessMessage(
+        importScope === "SELECTED"
+          ? `Parsed selected sheet(s) (${selectedSheets.join(", ")}) from '${previewData.filename}'. Review preview before committing.`
+          : `Workbook '${previewData.filename}' parsed successfully. Review preview before committing.`
+      );
     } catch (err: any) {
       setErrorMessage(err.message);
     } finally {
       setIsUploading(false);
+      e.target.value = "";
     }
   };
 
@@ -332,25 +369,118 @@ export const Imports: React.FC = () => {
         <div className="space-y-6">
           {/* Upload Zone */}
           {!currentBatch && (
-            <div className="rounded-xl border-2 border-dashed border-slate-300 bg-white p-12 text-center hover:border-indigo-400 transition-colors">
-              <UploadCloud className="mx-auto h-12 w-12 text-slate-400 mb-4" />
-              <h3 className="text-base font-semibold text-slate-900">Upload Filled Template Workbook</h3>
-              <p className="mt-1 text-sm text-slate-500 max-w-sm mx-auto">
-                Drag and drop your <code className="font-mono text-slate-700">.xlsx</code> workbook or browse to inspect
-                diffs before committing.
-              </p>
-              <div className="mt-6">
-                <label className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 cursor-pointer transition-colors">
-                  <FileSpreadsheet className="h-4 w-4" />
-                  {isUploading ? "Uploading & Analyzing..." : "Select Template File"}
-                  <input
-                    type="file"
-                    accept=".xlsx,.xlsm"
-                    className="hidden"
-                    onChange={handleFileUpload}
-                    disabled={isUploading}
-                  />
-                </label>
+            <div className="space-y-4">
+              {/* Selective Sheet Scope Selector */}
+              <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-sm font-semibold text-slate-900">Import Scope</h4>
+                    <p className="text-xs text-slate-500">
+                      Import all sheets present in your workbook, or select specific sheet(s) by name to import only those tabs.
+                    </p>
+                  </div>
+                  <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+                    <button
+                      type="button"
+                      onClick={() => setImportScope("ALL")}
+                      className={`px-3 py-1.5 rounded-md text-xs font-semibold transition ${
+                        importScope === "ALL"
+                          ? "bg-white text-indigo-700 shadow-xs"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      All Sheets in File
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setImportScope("SELECTED")}
+                      className={`px-3 py-1.5 rounded-md text-xs font-semibold transition ${
+                        importScope === "SELECTED"
+                          ? "bg-white text-indigo-700 shadow-xs"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      Specific Sheet(s)
+                    </button>
+                  </div>
+                </div>
+
+                {importScope === "SELECTED" && (
+                  <div className="pt-2 border-t border-slate-100 space-y-2.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-600 font-medium">
+                        Select sheet(s) to parse ({selectedSheets.length} selected):
+                      </span>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedSheets([...MASTER_IMPORT_SHEETS])}
+                          className="text-indigo-600 hover:underline font-semibold"
+                        >
+                          Select All
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedSheets([])}
+                          className="text-slate-500 hover:underline font-medium"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {MASTER_IMPORT_SHEETS.map((sheetName) => {
+                        const checked = selectedSheets.includes(sheetName);
+                        return (
+                          <button
+                            key={sheetName}
+                            type="button"
+                            onClick={() =>
+                              setSelectedSheets((prev) =>
+                                prev.includes(sheetName)
+                                  ? prev.filter((s) => s !== sheetName)
+                                  : [...prev, sheetName]
+                              )
+                            }
+                            className={`px-2.5 py-1.5 rounded-lg text-xs font-mono font-medium border transition ${
+                              checked
+                                ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs"
+                                : "bg-slate-50 text-slate-700 border-slate-200 hover:border-indigo-300"
+                            }`}
+                          >
+                            {checked ? "✓ " : ""}
+                            {sheetName}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-xl border-2 border-dashed border-slate-300 bg-white p-12 text-center hover:border-indigo-400 transition-colors">
+                <UploadCloud className="mx-auto h-12 w-12 text-slate-400 mb-4" />
+                <h3 className="text-base font-semibold text-slate-900">
+                  {importScope === "SELECTED"
+                    ? "Upload Workbook (Selected Sheets Only)"
+                    : "Upload Filled Template Workbook"}
+                </h3>
+                <p className="mt-1 text-sm text-slate-500 max-w-md mx-auto">
+                  Upload a full master <code className="font-mono text-slate-700">.xlsx</code> workbook or a single-sheet workbook with matching sheet name to inspect diffs before committing.
+                </p>
+                <div className="mt-6">
+                  <label className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 cursor-pointer transition-colors">
+                    <FileSpreadsheet className="h-4 w-4" />
+                    {isUploading ? "Uploading & Analyzing..." : "Select Template File"}
+                    <input
+                      type="file"
+                      accept=".xlsx,.xlsm"
+                      className="hidden"
+                      onChange={handleFileUpload}
+                      disabled={isUploading}
+                    />
+                  </label>
+                </div>
               </div>
             </div>
           )}

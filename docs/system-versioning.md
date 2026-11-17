@@ -26,3 +26,4 @@ Field Worker Tracker follows semantic versioning `v<MAJOR>.<MINOR>.<PATCH>`:
 | **v1.3.1** | 2026-11-17 | `docs/update-mobile-sync-contract` | `cd98ac2` | Commit on 'docs/update-mobile-sync-contract' |
 | **v1.3.2** | 2026-11-17 | `docs/update-mobile-sync-contract` | `d2f404e` | Commit on 'docs/update-mobile-sync-contract' |
 | **v1.3.3** | 2026-11-17 | `docs/update-mobile-sync-contract` | `3aea6bd` | Commit on 'docs/update-mobile-sync-contract' |
+| **v1.4.0** | 2026-11-17 | `fix/hierarchy-imports-payroll-leave-ui` | `45241b5` | New branch 'fix/hierarchy-imports-payroll-leave-ui' |

@@ -4,7 +4,7 @@
 
 Tabs: Groups, Zones, Accommodations, Employees, Employee_Reporting, Employee_Salary, Worksites, Job_Items, Leave (optional), Public_Holidays (optional), Salary_Revisions and Salary_Revision_Lines (job budget only), Company_Settings, Time_Rules.
 
-Cell rules (also on the workbook README and the import preview): a **blank cell keeps the existing value**; **`_` clears** a value; nothing is ever deleted by an import; the import shows new / updated (old -> new) / unchanged / clashes and changes nothing until confirmed.
+Cell rules (also on the workbook README and the import preview): a **blank cell keeps the existing value**; **`_` clears** a value; nothing is ever deleted by an import; the import shows new / updated (old -> new) / unchanged / clashes and changes nothing until confirmed. `Worksites` and `Accommodations` include an optional `boundary_polygon` column (accepting GeoJSON Polygon or WKT `POLYGON((lng lat, ...))`). You may upload either the full workbook, a single-sheet workbook with matching sheet name, or select specific sheet(s) directly on the Imports screen.
 
 - The importer contract is `docs/11-import-pipeline.md`; the screens are in `docs/design/D6-import-and-setup.md`.
 - In the final system the template is **generated from the importer's sheet registry** so they cannot drift; use the `import-column` skill when changing columns, and bump the file name version.

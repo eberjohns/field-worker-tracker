@@ -141,6 +141,14 @@ SHEET_REGISTRY: dict[str, SheetDef] = {
             ColumnDef(
                 "notes", "text", False, "Optional", description="Free text.", example="Capacity 120"
             ),
+            ColumnDef(
+                "boundary_polygon",
+                "text",
+                False,
+                "Optional",
+                description="Optional GeoJSON Polygon or WKT POLYGON((lng lat, ...)). Blank keeps existing boundary.",
+                example="POLYGON((55.3800 25.2900, 55.3810 25.2900, 55.3810 25.2910, 55.3800 25.2910, 55.3800 25.2900))",
+            ),
         ],
         examples=[
             {
@@ -149,6 +157,7 @@ SHEET_REGISTRY: dict[str, SheetDef] = {
                 "address": "Muhaisnah 2, Sonapur",
                 "country": "AE",
                 "notes": "Main staff housing",
+                "boundary_polygon": "POLYGON((55.3800 25.2900, 55.3810 25.2900, 55.3810 25.2910, 55.3800 25.2910, 55.3800 25.2900))",
             },
         ],
     ),
@@ -565,6 +574,14 @@ SHEET_REGISTRY: dict[str, SheetDef] = {
             ),
             ColumnDef(
                 "notes", "text", False, "Optional", description="Free text notes.", example=None
+            ),
+            ColumnDef(
+                "boundary_polygon",
+                "text",
+                False,
+                "Optional",
+                description="Optional GeoJSON Polygon or WKT POLYGON((lng lat, ...)). Blank keeps existing boundary.",
+                example="POLYGON((55.1400 25.0800, 55.1420 25.0800, 55.1420 25.0820, 55.1400 25.0820, 55.1400 25.0800))",
             ),
         ],
     ),

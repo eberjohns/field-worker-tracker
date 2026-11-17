@@ -17,6 +17,8 @@ import {
   Database,
   Trash2,
   Archive,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { ArchiveSettings } from "../features/admin/ArchiveSettings";
 
@@ -121,6 +123,9 @@ export const Settings: React.FC = () => {
   // Reset database state
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [resetConfirmText, setResetConfirmText] = useState("");
+  const [resetAdminPassword, setResetAdminPassword] = useState("");
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [resetModalError, setResetModalError] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
 
   const [countryFilter, setCountryFilter] = useState<string>("ALL");
@@ -599,8 +604,9 @@ export const Settings: React.FC = () => {
   };
 
   const handleResetDatabase = async () => {
-    if (resetConfirmText !== "RESET") return;
+    if (resetConfirmText !== "RESET" || !resetAdminPassword.trim()) return;
     setResetting(true);
+    setResetModalError(null);
     setErrorMessage(null);
     setStatusMessage(null);
     try {
@@ -610,22 +616,29 @@ export const Settings: React.FC = () => {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
+        body: JSON.stringify({
+          confirmation_text: resetConfirmText,
+          admin_password: resetAdminPassword,
+        }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || "Failed to reset database.");
+        throw new Error(err.detail || err.message || "Failed to reset database.");
       }
       const data = await res.json();
       setStatusMessage(data.message || "Database reset to clean bootstrap state successfully.");
       setResetModalOpen(false);
       setResetConfirmText("");
+      setResetAdminPassword("");
+      setShowResetPassword(false);
+      setResetModalError(null);
       fetchSettings();
       fetchTimeRules();
       fetchHolidays();
       fetchConsentPolicies();
       fetchEmployees();
     } catch (err: any) {
-      setErrorMessage(err.message || "Failed to reset database.");
+      setResetModalError(err.message || "Failed to reset database.");
     } finally {
       setResetting(false);
     }
@@ -1844,21 +1857,58 @@ export const Settings: React.FC = () => {
               This action cannot be undone. All imported worksites, employees, attendance occurrences, and salaries will be permanently deleted.
             </p>
             <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-900">
-              Please type <strong className="font-mono font-bold">RESET</strong> in the field below to confirm:
+              Please type <strong className="font-mono font-bold">RESET</strong> and enter your current Admin password to confirm:
             </div>
-            <input
-              type="text"
-              placeholder="Type RESET"
-              value={resetConfirmText}
-              onChange={(e) => setResetConfirmText(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-red-500"
-            />
+            {resetModalError && (
+              <div className="p-2.5 bg-red-100 border border-red-300 rounded-lg text-xs text-red-800 font-medium">
+                {resetModalError}
+              </div>
+            )}
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Confirmation Text *
+                </label>
+                <input
+                  type="text"
+                  placeholder="Type RESET"
+                  value={resetConfirmText}
+                  onChange={(e) => setResetConfirmText(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-red-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Admin Password *
+                </label>
+                <div className="relative">
+                  <input
+                    type={showResetPassword ? "text" : "password"}
+                    placeholder="Enter your current Admin password"
+                    value={resetAdminPassword}
+                    onChange={(e) => setResetAdminPassword(e.target.value)}
+                    className="w-full px-3 pr-10 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowResetPassword((v) => !v)}
+                    aria-label={showResetPassword ? "Hide admin password" : "Show admin password"}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
+                  >
+                    {showResetPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+            </div>
             <div className="flex items-center justify-end gap-3 pt-2">
               <button
                 type="button"
                 onClick={() => {
                   setResetModalOpen(false);
                   setResetConfirmText("");
+                  setResetAdminPassword("");
+                  setShowResetPassword(false);
+                  setResetModalError(null);
                 }}
                 disabled={resetting}
                 className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition"
@@ -1868,7 +1918,7 @@ export const Settings: React.FC = () => {
               <button
                 type="button"
                 onClick={handleResetDatabase}
-                disabled={resetConfirmText !== "RESET" || resetting}
+                disabled={resetConfirmText !== "RESET" || !resetAdminPassword.trim() || resetting}
                 className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-lg shadow-sm flex items-center gap-2 transition"
               >
                 <Trash2 className="w-3.5 h-3.5" />

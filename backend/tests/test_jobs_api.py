@@ -9,7 +9,7 @@ from sqlalchemy import delete, select
 
 from fw.core.db import async_session_factory, engine
 from fw.main import app
-from fw.modules.identity import AuthService, User
+from fw.modules.identity import AuthService, User, hash_password
 from fw.modules.org import Accommodation, Employee, Group, Zone
 
 
@@ -60,7 +60,7 @@ async def admin_client():
                 id=admin_id,
                 employee_id=emp_id,
                 username=emp.tally_id,
-                credential_hash="fakehash",
+                credential_hash=hash_password("Admin@1234"),
                 role="ADMIN",
                 is_active=True,
                 must_change_password=False,
@@ -434,9 +434,37 @@ async def test_update_job_item_with_occurrence_regeneration(admin_client, test_o
 
 @db_required
 async def test_reset_database_endpoint_admin_only(admin_client):
-    """Verify reset-database endpoint requires admin and restores clean bootstrap state."""
+    """Verify reset-database requires admin, confirmation_text, and valid admin password."""
     client = admin_client
-    res = await client.post("/api/v1/settings/reset-database")
+
+    # Ensure the active admin account has a known password before testing reset
+    async with async_session_factory() as session:
+        admin_user = (
+            await session.execute(select(User).where(User.role == "ADMIN").limit(1))
+        ).scalar_one_or_none()
+        assert admin_user is not None
+        admin_user.credential_hash = hash_password("Admin@1234")
+        await session.commit()
+
+    # Wrong confirmation text -> 400
+    bad_confirm = await client.post(
+        "/api/v1/settings/reset-database",
+        json={"confirmation_text": "WRONG", "admin_password": "Admin@1234"},
+    )
+    assert bad_confirm.status_code == 400, bad_confirm.text
+
+    # Wrong admin password -> 403
+    bad_pass = await client.post(
+        "/api/v1/settings/reset-database",
+        json={"confirmation_text": "RESET", "admin_password": "WrongPassword!"},
+    )
+    assert bad_pass.status_code == 403, bad_pass.text
+
+    # Valid confirmation text and admin password -> 200
+    res = await client.post(
+        "/api/v1/settings/reset-database",
+        json={"confirmation_text": "RESET", "admin_password": "Admin@1234"},
+    )
     assert res.status_code == 200, res.text
     data = res.json()
     assert data["status"] == "success"

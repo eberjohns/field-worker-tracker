@@ -23,6 +23,7 @@ from openpyxl.styles import Font, PatternFill
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fw.core.errors import AppError
 from fw.modules.audit import AuditService
 from fw.modules.identity import User, hash_password
 from fw.modules.imports.models import ImportBatch, ImportRow
@@ -56,6 +57,7 @@ from fw.rules.imports import (
     normalize_frequency_text,
     normalize_grade_code,
     normalize_sgd,
+    parse_boundary_polygon,
     parse_cell_value,
     validate_worksite_job_number,
 )
@@ -99,13 +101,28 @@ class ImportService:
         file_bytes: bytes,
         filename: str,
         user_id: UUID,
+        selected_sheets: list[str] | None = None,
     ) -> ImportPreviewResponse:
         """Parse uploaded workbook, compare with database, and store preview rows with field-level diffs."""
         file_hash = hashlib.sha256(file_bytes).hexdigest()
+        wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
+
+        selected_set: set[str] | None = set(selected_sheets) if selected_sheets else None
+        if selected_set is not None:
+            present = [s for s in selected_sheets or [] if s in wb.sheetnames]
+            if not present:
+                raise AppError(
+                    code="SHEET_NOT_FOUND",
+                    message=(
+                        f"None of the selected sheet(s) ({', '.join(selected_sheets or [])}) were found "
+                        f"in '{filename}'. Sheets present in workbook: {', '.join(wb.sheetnames)}."
+                    ),
+                    status_code=422,
+                )
 
         # Check if already uploaded and previewed/committed
         batch = ImportBatch(
-            kind="FULL_WORKBOOK",
+            kind="SELECTIVE_SHEETS" if selected_set is not None else "FULL_WORKBOOK",
             filename=filename,
             file_hash=file_hash,
             template_version="v1.0",
@@ -115,8 +132,6 @@ class ImportService:
         )
         session.add(batch)
         await session.flush()
-
-        wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
 
         total_rows = 0
         counts = {
@@ -178,8 +193,11 @@ class ImportService:
         }
 
         # Pre-collect natural keys present in this workbook for same-file foreign key resolution
+        def _sheet_enabled(name: str) -> bool:
+            return name in wb.sheetnames and (selected_set is None or name in selected_set)
+
         file_groups: set[str] = set()
-        if "Groups" in wb.sheetnames:
+        if _sheet_enabled("Groups"):
             ws_g = wb["Groups"]
             for r_idx in range(5, ws_g.max_row + 1):
                 if ws_g.cell(r_idx, 1).value:
@@ -189,7 +207,7 @@ class ImportService:
                     file_groups.add(str(v).strip())
 
         file_zones: set[str] = set()
-        if "Zones" in wb.sheetnames:
+        if _sheet_enabled("Zones"):
             ws_z = wb["Zones"]
             for r_idx in range(5, ws_z.max_row + 1):
                 if ws_z.cell(r_idx, 1).value:
@@ -199,7 +217,7 @@ class ImportService:
                     file_zones.add(str(v).strip())
 
         file_worksites: set[str] = set()
-        if "Worksites" in wb.sheetnames:
+        if _sheet_enabled("Worksites"):
             ws_w = wb["Worksites"]
             for r_idx in range(5, ws_w.max_row + 1):
                 if ws_w.cell(r_idx, 1).value:
@@ -209,7 +227,7 @@ class ImportService:
                     file_worksites.add(str(v).strip())
 
         file_accommodations: set[str] = set()
-        if "Accommodations" in wb.sheetnames:
+        if _sheet_enabled("Accommodations"):
             ws_acc = wb["Accommodations"]
             for r_idx in range(5, ws_acc.max_row + 1):
                 col_a = ws_acc.cell(r_idx, 1).value
@@ -220,7 +238,7 @@ class ImportService:
                     file_accommodations.add(str(val).strip())
 
         file_employees: set[str] = set()
-        if "Employees" in wb.sheetnames:
+        if _sheet_enabled("Employees"):
             ws_emp = wb["Employees"]
             for r_idx in range(5, ws_emp.max_row + 1):
                 col_a = ws_emp.cell(r_idx, 1).value
@@ -231,7 +249,7 @@ class ImportService:
                     file_employees.add(str(val).strip())
 
         file_revisions: set[str] = set()
-        if "Salary_Revisions" in wb.sheetnames:
+        if _sheet_enabled("Salary_Revisions"):
             ws_sr = wb["Salary_Revisions"]
             for r_idx in range(5, ws_sr.max_row + 1):
                 col_a = ws_sr.cell(r_idx, 1).value
@@ -243,6 +261,9 @@ class ImportService:
 
         # Process each sheet defined in registry
         for sheet_name, sheet_def in SHEET_REGISTRY.items():
+            if selected_set is not None and sheet_name not in selected_set:
+                continue
+
             sheet_counts[sheet_name] = {
                 "total": 0,
                 "new": 0,
@@ -460,6 +481,23 @@ class ImportService:
                 # Accommodations
                 elif sheet_name == "Accommodations":
                     acc_code = normalized_dict["accommodation_code"]["value"]
+                    poly_entry = normalized_dict.get("boundary_polygon", {})
+                    parsed_poly: dict[str, Any] | None = None
+                    if poly_entry.get("action") == "SET" and poly_entry.get("value"):
+                        parsed_poly, poly_err = parse_boundary_polygon(poly_entry["value"])
+                        if poly_err:
+                            row_codes.append("INVALID_POLYGON")
+                            row_messages.append(
+                                {
+                                    "field": "boundary_polygon",
+                                    "code": "INVALID_POLYGON",
+                                    "message": poly_err,
+                                }
+                            )
+                            row_status = "ERROR"
+                        else:
+                            normalized_dict["boundary_polygon"]["value"] = parsed_poly
+
                     if acc_code in existing_accommodations:
                         acc = existing_accommodations[acc_code]
                         if not acc.is_active:
@@ -474,6 +512,13 @@ class ImportService:
                             elif act == "SET" and new_v != old_v:
                                 row_action = "UPDATED"
                                 row_diff[field_name] = {"old": old_v, "new": new_v}
+                        if parsed_poly is not None:
+                            row_action = "UPDATED"
+                            pts_n = max(len(parsed_poly["coordinates"][0]) - 1, 0)
+                            row_diff["boundary_polygon"] = {
+                                "old": "set" if acc.boundary is not None else "unset",
+                                "new": f"polygon ({pts_n} pts)",
+                            }
                         if row_action != "REACTIVATED" and not row_diff:
                             row_action = "UNCHANGED"
 
@@ -713,6 +758,24 @@ class ImportService:
                         )
                         row_status = "ERROR"
 
+                    # Optional boundary polygon validation
+                    ws_poly_entry = normalized_dict.get("boundary_polygon", {})
+                    ws_parsed_poly: dict[str, Any] | None = None
+                    if ws_poly_entry.get("action") == "SET" and ws_poly_entry.get("value"):
+                        ws_parsed_poly, ws_poly_err = parse_boundary_polygon(ws_poly_entry["value"])
+                        if ws_poly_err:
+                            row_codes.append("INVALID_POLYGON")
+                            row_messages.append(
+                                {
+                                    "field": "boundary_polygon",
+                                    "code": "INVALID_POLYGON",
+                                    "message": ws_poly_err,
+                                }
+                            )
+                            row_status = "ERROR"
+                        else:
+                            normalized_dict["boundary_polygon"]["value"] = ws_parsed_poly
+
                     if job_num and job_num in existing_worksites:
                         ws_obj = existing_worksites[job_num]
                         if not ws_obj.is_active:
@@ -746,6 +809,13 @@ class ImportService:
                                     "old": str(old_v) if old_v is not None else None,
                                     "new": str(new_v),
                                 }
+                        if ws_parsed_poly is not None:
+                            row_action = "UPDATED"
+                            pts_n = max(len(ws_parsed_poly["coordinates"][0]) - 1, 0)
+                            row_diff["boundary_polygon"] = {
+                                "old": "set" if ws_obj.boundary is not None else "unset",
+                                "new": f"polygon ({pts_n} pts)",
+                            }
                         if row_action != "REACTIVATED" and not row_diff:
                             row_action = "UNCHANGED"
 
@@ -974,6 +1044,7 @@ class ImportService:
             "counts": counts,
             "sheet_counts": sheet_counts,
             "can_commit": can_commit,
+            "selected_sheets": selected_sheets,
         }
         await session.flush()
 
@@ -1074,6 +1145,7 @@ class ImportService:
         await session.flush()
 
         # 3. Accommodations
+        acc_polygons_to_apply: list[tuple[Accommodation, dict[str, Any]]] = []
         for r in sheet_to_rows.get("Accommodations", []):
             if r.action in ("NEW", "UPDATED", "REACTIVATED"):
                 acc_code = r.normalized.get("accommodation_code")
@@ -1084,16 +1156,28 @@ class ImportService:
                         if field_name in r.normalized:
                             setattr(existing, field_name, r.normalized[field_name])
                     existing.is_active = True
+                    target_acc = existing
                 else:
-                    session.add(
-                        Accommodation(
-                            accommodation_code=acc_code,
-                            name=r.normalized.get("name"),
-                            address=r.normalized.get("address"),
-                        )
+                    target_acc = Accommodation(
+                        accommodation_code=acc_code,
+                        name=r.normalized.get("name"),
+                        address=r.normalized.get("address"),
                     )
+                    session.add(target_acc)
+                poly = r.normalized.get("boundary_polygon")
+                if isinstance(poly, dict):
+                    acc_polygons_to_apply.append((target_acc, poly))
 
         await session.flush()
+
+        for target_acc, poly in acc_polygons_to_apply:
+            await JobsService.update_accommodation_boundary(
+                session=session,
+                accommodation_id=target_acc.id,
+                geojson_dict=poly,
+                actor_user_id=user_id,
+                actor_role="ADMIN",
+            )
 
         # 4. Employees & Documents & Web Roles User Provisioning
         acc_map = {
@@ -1395,6 +1479,7 @@ class ImportService:
         group_map = {g.code: g.id for g in (await session.execute(select(Group))).scalars().all()}
         zone_map = {z.code: z.id for z in (await session.execute(select(Zone))).scalars().all()}
 
+        ws_polygons_to_apply: list[tuple[Worksite, dict[str, Any]]] = []
         for r in sheet_to_rows.get("Worksites", []):
             if r.action in ("NEW", "UPDATED", "REACTIVATED"):
                 j_num = r.normalized.get("job_number")
@@ -1424,25 +1509,38 @@ class ImportService:
                     if "labour_budget_amount" in r.normalized:
                         existing_ws.budget_amount = r.normalized["labour_budget_amount"]
                     existing_ws.is_active = True
+                    target_ws = existing_ws
                 else:
-                    session.add(
-                        Worksite(
-                            job_number=j_num,
-                            job_name=r.normalized.get("job_name", "Untitled Worksite"),
-                            renewal_reference=r.normalized.get("renewal_reference"),
-                            group_id=g_id,
-                            zone_id=z_id,
-                            customer_type=r.normalized.get("customer_type"),
-                            is_outdoor=outdoor,
-                            country=r.normalized.get("country", "AE"),
-                            contract_group_ref=r.normalized.get("contract_group_ref"),
-                            start_date=to_date_obj(r.normalized.get("contract_start_date")),
-                            end_date=to_date_obj(r.normalized.get("contract_end_date")),
-                            budget_amount=r.normalized.get("labour_budget_amount"),
-                        )
+                    target_ws = Worksite(
+                        job_number=j_num,
+                        job_name=r.normalized.get("job_name", "Untitled Worksite"),
+                        renewal_reference=r.normalized.get("renewal_reference"),
+                        group_id=g_id,
+                        zone_id=z_id,
+                        customer_type=r.normalized.get("customer_type"),
+                        is_outdoor=outdoor,
+                        country=r.normalized.get("country", "AE"),
+                        contract_group_ref=r.normalized.get("contract_group_ref"),
+                        start_date=to_date_obj(r.normalized.get("contract_start_date")),
+                        end_date=to_date_obj(r.normalized.get("contract_end_date")),
+                        budget_amount=r.normalized.get("labour_budget_amount"),
                     )
+                    session.add(target_ws)
+
+                ws_poly = r.normalized.get("boundary_polygon")
+                if isinstance(ws_poly, dict):
+                    ws_polygons_to_apply.append((target_ws, ws_poly))
 
         await session.flush()
+
+        for target_ws, ws_poly in ws_polygons_to_apply:
+            await JobsService.update_worksite_boundary(
+                session=session,
+                worksite_id=target_ws.id,
+                geojson_dict=ws_poly,
+                actor_user_id=user_id,
+                actor_role="ADMIN",
+            )
 
         # 11. Job_Items
         ws_id_map = {

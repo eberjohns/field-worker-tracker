@@ -2,13 +2,20 @@ from datetime import UTC, date, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, status
+from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.core.db import get_db
 from fw.core.errors import AppError
 from fw.modules.audit import AuditService
-from fw.modules.identity import User, get_current_user, hash_password, require_role
+from fw.modules.identity import (
+    User,
+    get_current_user,
+    hash_password,
+    require_role,
+    verify_password,
+)
 from fw.modules.org import OrgService, ScopeService
 from fw.modules.settings import (
     CompanySettingRead,
@@ -411,12 +418,34 @@ async def create_consent_policy(
     return ConsentPolicyRead.model_validate(policy)
 
 
+class ResetDatabaseRequest(BaseModel):
+    confirmation_text: str
+    admin_password: str
+
+
 @router.post("/settings/reset-database", response_model=dict[str, str])
 async def reset_database(
+    payload: ResetDatabaseRequest,
     current_user: User = Depends(require_role("ADMIN")),
     session: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     """Reset database to clean bootstrap state. Retains only ADMIN001 and company settings."""
+    if payload.confirmation_text.strip() != "RESET":
+        raise AppError(
+            code="VALIDATION_ERROR",
+            message="Confirmation text must be exactly 'RESET'.",
+            status_code=400,
+        )
+
+    if not payload.admin_password or not verify_password(
+        payload.admin_password, current_user.credential_hash
+    ):
+        raise AppError(
+            code="INVALID_PASSWORD",
+            message="Incorrect admin password. Database reset aborted.",
+            status_code=403,
+        )
+
     # 1. Nullify user reference in audit logs and bypass event immutability for bootstrap reset
     await session.execute(text("UPDATE audit_logs SET actor_user_id = NULL;"))
     await session.execute(text("SET LOCAL fwt.bypass_immutability = 'on';"))

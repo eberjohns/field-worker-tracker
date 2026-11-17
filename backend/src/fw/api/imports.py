@@ -4,13 +4,14 @@ import email
 from email import policy
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.core.db import get_db
 from fw.modules.identity import User, require_role
 from fw.modules.imports import (
+    SHEET_REGISTRY,
     ImportBatch,
     ImportBatchRead,
     ImportCommitResponse,
@@ -43,10 +44,28 @@ async def download_import_template(
 @router.post("", response_model=ImportPreviewResponse, status_code=status.HTTP_201_CREATED)
 async def upload_workbook(
     request: Request,
+    sheets: str | None = Query(
+        None,
+        description="Optional comma-separated list of sheet names to import (e.g. Worksites,Job_Items).",
+    ),
     current_user: User = Depends(require_role("ADMIN")),
     session: AsyncSession = Depends(get_db),
 ) -> ImportPreviewResponse:
     """Upload workbook (multipart or raw bytes) and return safe preview with field-level diffs without committing."""
+    selected_sheets: list[str] | None = None
+    if sheets and sheets.strip():
+        parsed_sheets = [s.strip() for s in sheets.split(",") if s.strip()]
+        unknown = [s for s in parsed_sheets if s not in SHEET_REGISTRY]
+        if unknown:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "code": "INVALID_SHEET_NAME",
+                    "message": f"Unknown sheet name(s): {', '.join(unknown)}. Valid sheets: {', '.join(SHEET_REGISTRY.keys())}",
+                },
+            )
+        selected_sheets = parsed_sheets
+
     content_type = request.headers.get("content-type", "")
     body = await request.body()
 
@@ -97,6 +116,7 @@ async def upload_workbook(
         file_bytes=file_bytes,
         filename=filename,
         user_id=current_user.id,
+        selected_sheets=selected_sheets,
     )
     return preview
 

@@ -393,6 +393,27 @@ class OrgService:
         actor_user_id: UUID,
         actor_role: str,
     ) -> ReportingLineRead:
+        emp = await session.get(Employee, employee_id)
+        if not emp:
+            raise AppError(
+                code="EMPLOYEE_NOT_FOUND", message="Employee not found.", status_code=404
+            )
+        mgr = await session.get(Employee, data.manager_id)
+        if not mgr:
+            raise AppError(code="MANAGER_NOT_FOUND", message="Manager not found.", status_code=404)
+
+        if (
+            emp.role == "ADMIN"
+            or emp.tally_id == "ADMIN001"
+            or mgr.role == "ADMIN"
+            or mgr.tally_id == "ADMIN001"
+        ):
+            raise AppError(
+                code="ADMIN_NOT_IN_HIERARCHY",
+                message="Admin accounts are system superusers and cannot participate in the employee hierarchy.",
+                status_code=400,
+            )
+
         # Load all existing reporting lines for cycle and constraint validation
         query = select(
             EmployeeReportingLine.employee_id,
@@ -403,6 +424,13 @@ class OrgService:
         existing_links = [
             (str(r.employee_id), str(r.manager_id), r.relationship) for r in result.all()
         ]
+
+        if (str(employee_id), str(data.manager_id), data.relationship) in existing_links:
+            raise AppError(
+                code="DUPLICATE_REPORTING_LINE",
+                message="This reporting line already exists.",
+                status_code=409,
+            )
 
         try:
             validate_reporting_link(

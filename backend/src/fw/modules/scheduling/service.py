@@ -3347,6 +3347,7 @@ class SchedulingService:
             is_admin=is_admin,
             min_notice_days=3,
             bypass_notice=payload.bypass_notice,
+            leave_type=payload.leave_type,
         )
         if not ok_dates:
             raise AppError(

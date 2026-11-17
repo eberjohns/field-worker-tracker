@@ -140,3 +140,34 @@ def test_detect_reporting_issues():
 def test_check_date_range():
     assert check_date_range(date(2026, 1, 1), date(2026, 12, 31)) is None
     assert check_date_range(date(2026, 12, 31), date(2026, 1, 1)) == "END_BEFORE_START"
+
+
+def test_parse_boundary_polygon():
+    from fw.rules.imports import parse_boundary_polygon
+
+    # Valid WKT POLYGON
+    poly_wkt, err_wkt = parse_boundary_polygon(
+        "POLYGON((55.14 25.08, 55.15 25.08, 55.15 25.09, 55.14 25.09, 55.14 25.08))"
+    )
+    assert err_wkt is None
+    assert poly_wkt is not None
+    assert poly_wkt["type"] == "Polygon"
+    assert len(poly_wkt["coordinates"][0]) == 5
+
+    # Valid GeoJSON string (auto-closes open ring)
+    poly_geo, err_geo = parse_boundary_polygon(
+        '{"type":"Polygon","coordinates":[[[55.38,25.29],[55.39,25.29],[55.39,25.30]]]}'
+    )
+    assert err_geo is None
+    assert poly_geo is not None
+    assert poly_geo["coordinates"][0][0] == poly_geo["coordinates"][0][-1]
+
+    # Invalid format
+    bad_poly, bad_err = parse_boundary_polygon("NOT A POLYGON")
+    assert bad_poly is None
+    assert bad_err is not None
+
+    # Out-of-bounds coordinates
+    oob_poly, oob_err = parse_boundary_polygon("POLYGON((200 25, 201 25, 201 26, 200 25))")
+    assert oob_poly is None
+    assert oob_err is not None and "out of WGS84 bounds" in oob_err

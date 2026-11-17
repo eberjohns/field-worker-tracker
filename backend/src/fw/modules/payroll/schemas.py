@@ -162,6 +162,7 @@ class PayrollRunCreate(BaseModel):
     period_end: date
     country: str = "AE"
     notes: str | None = None
+    treat_leaves_as_paid: bool = False
 
 
 class PayrollRecordRead(BaseModel):
@@ -228,6 +229,7 @@ class PayrollTotalsSnapshot(BaseModel):
     provisions_total: Decimal = Decimal("0.00")
     total_staff_cost_total: Decimal = Decimal("0.00")
     final_total_staff_cost_total: Decimal = Decimal("0.00")
+    treat_leaves_as_paid: bool = False
 
 
 class PayrollRunRead(BaseModel):

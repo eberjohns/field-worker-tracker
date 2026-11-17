@@ -7,6 +7,7 @@ Per docs/11-import-pipeline.md:
 - Cell rules: blank keeps, `_` clears (CLEAR_ON_REQUIRED on required fields).
 """
 
+import json
 import re
 from datetime import date, datetime, time
 from decimal import Decimal, InvalidOperation
@@ -248,3 +249,104 @@ def parse_cell_value(
         return (raw_val, "SET", None)
 
     return (raw_val, "SET", None)
+
+
+def parse_boundary_polygon(raw_val: Any) -> tuple[dict[str, Any] | None, str | None]:
+    """Parse and validate a GeoJSON or WKT POLYGON string into a normalized GeoJSON Polygon dict.
+
+    Returns:
+        (geojson_polygon_dict, None) on success
+        (None, error_message) on invalid input
+    """
+    if raw_val is None:
+        return None, "Polygon value is empty."
+
+    geom: dict[str, Any]
+    if isinstance(raw_val, dict):
+        geom = raw_val
+    elif isinstance(raw_val, str):
+        s = raw_val.strip()
+        if not s:
+            return None, "Polygon value is empty."
+        if s.startswith("{"):
+            try:
+                parsed = json.loads(s)
+            except json.JSONDecodeError as e:
+                return None, f"Invalid JSON in boundary_polygon: {e}"
+            if not isinstance(parsed, dict):
+                return None, "GeoJSON boundary_polygon must be a JSON object."
+            geom = parsed
+        else:
+            match = re.search(r"POLYGON\s*\(\(\s*(.*?)\s*\)\)", s, re.IGNORECASE | re.DOTALL)
+            if not match:
+                return (
+                    None,
+                    "Unrecognized polygon format. Expected GeoJSON Polygon or WKT POLYGON((lng lat, ...)).",
+                )
+            pts_str = match.group(1).split(",")
+            ring: list[list[float]] = []
+            for p in pts_str:
+                parts = p.strip().split()
+                if len(parts) < 2:
+                    continue
+                try:
+                    lng = float(parts[0])
+                    lat = float(parts[1])
+                except ValueError:
+                    return None, f"Invalid numeric coordinate '{p.strip()}' in WKT polygon."
+                ring.append([lng, lat])
+            if len(ring) < 3:
+                return None, "WKT polygon requires at least 3 distinct points."
+            if ring[0] != ring[-1]:
+                ring.append(ring[0])
+            geom = {"type": "Polygon", "coordinates": [ring]}
+    else:
+        return None, "boundary_polygon must be a GeoJSON or WKT POLYGON string."
+
+    # Unwrap Feature / FeatureCollection if supplied
+    g_type = geom.get("type")
+    if g_type == "Feature":
+        feat_geom = geom.get("geometry")
+        if isinstance(feat_geom, dict):
+            geom = feat_geom
+            g_type = geom.get("type")
+    elif g_type == "FeatureCollection":
+        features = geom.get("features")
+        if isinstance(features, list) and features and isinstance(features[0], dict):
+            first_geom = features[0].get("geometry")
+            if isinstance(first_geom, dict):
+                geom = first_geom
+                g_type = geom.get("type")
+
+    if g_type != "Polygon":
+        return None, f"Expected GeoJSON type 'Polygon', got '{g_type}'."
+
+    coords = geom.get("coordinates")
+    if not isinstance(coords, list) or not coords or not isinstance(coords[0], list):
+        return None, "GeoJSON Polygon must have a non-empty outer coordinate ring."
+
+    outer = coords[0]
+    cleaned_ring: list[list[float]] = []
+    for pt in outer:
+        if not isinstance(pt, list | tuple) or len(pt) < 2:
+            return None, "Each polygon coordinate must be [longitude, latitude]."
+        try:
+            lng = float(pt[0])
+            lat = float(pt[1])
+        except (TypeError, ValueError):
+            return None, "Polygon coordinates must be valid numbers."
+        if not (-180.0 <= lng <= 180.0) or not (-90.0 <= lat <= 90.0):
+            return (
+                None,
+                f"Coordinate [{lng}, {lat}] out of WGS84 bounds (expected [longitude, latitude]).",
+            )
+        cleaned_ring.append([lng, lat])
+
+    if len(cleaned_ring) < 3:
+        return None, "Polygon outer ring requires at least 3 points."
+    if cleaned_ring[0] != cleaned_ring[-1]:
+        cleaned_ring.append(cleaned_ring[0])
+    if len(cleaned_ring) < 4:
+        return None, "Closed polygon ring requires at least 4 coordinates (3 unique vertices)."
+
+    return {"type": "Polygon", "coordinates": [cleaned_ring]}, None
