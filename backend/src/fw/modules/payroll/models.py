@@ -9,6 +9,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     Numeric,
     String,
     Text,
@@ -48,6 +49,7 @@ class EmployeeSalary(Base):
     fixed_ot_amount: Mapped[Decimal] = mapped_column(
         Numeric(14, 2), default=Decimal("0.00"), nullable=False
     )
+    break_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     bonus: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0.00"), nullable=False)
     telephone_allowance: Mapped[Decimal] = mapped_column(
         Numeric(14, 2), default=Decimal("0.00"), nullable=False
@@ -144,6 +146,7 @@ class SalaryRevisionLine(Base):
     fixed_ot_amount: Mapped[Decimal] = mapped_column(
         Numeric(14, 2), default=Decimal("0.00"), nullable=False
     )
+    break_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     bonus: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0.00"), nullable=False)
     visa_provision: Mapped[Decimal] = mapped_column(
         Numeric(14, 2), default=Decimal("0.00"), nullable=False

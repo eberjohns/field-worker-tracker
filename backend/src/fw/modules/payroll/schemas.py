@@ -19,6 +19,7 @@ class EmployeeSalaryRead(BaseModel):
     basic_salary: Decimal
     special_allowance: Decimal
     fixed_ot_amount: Decimal
+    break_minutes: int | None = None
     bonus: Decimal
     telephone_allowance: Decimal
     housing_transport_allowance: Decimal
@@ -33,6 +34,7 @@ class EmployeeSalaryCreate(BaseModel):
     basic_salary: Decimal = Field(..., ge=Decimal("0.00"))
     special_allowance: Decimal = Field(default=Decimal("0.00"), ge=Decimal("0.00"))
     fixed_ot_amount: Decimal = Field(default=Decimal("0.00"), ge=Decimal("0.00"))
+    break_minutes: int | None = None
     bonus: Decimal = Field(default=Decimal("0.00"), ge=Decimal("0.00"))
     telephone_allowance: Decimal = Field(default=Decimal("0.00"), ge=Decimal("0.00"))
     housing_transport_allowance: Decimal = Field(default=Decimal("0.00"), ge=Decimal("0.00"))
@@ -57,6 +59,7 @@ class SalaryStructureListItem(BaseModel):
     standard_hours: Decimal
     salary_portion: Decimal
     basic_salary: Decimal
+    break_minutes: int | None = None
     effective_from: date
     last_change_date: date | None = None
     difference: Decimal = Decimal("0.00")
@@ -71,6 +74,7 @@ class SalaryRevisionLineCreate(BaseModel):
     basic_salary: Decimal = Field(default=Decimal("0.00"), ge=Decimal("0.00"))
     special_allowance: Decimal = Field(default=Decimal("0.00"), ge=Decimal("0.00"))
     fixed_ot_amount: Decimal = Field(default=Decimal("0.00"), ge=Decimal("0.00"))
+    break_minutes: int | None = None
     bonus: Decimal = Field(default=Decimal("0.00"), ge=Decimal("0.00"))
     visa_provision: Decimal = Field(default=Decimal("0.00"), ge=Decimal("0.00"))
     air_ticket_provision: Decimal = Field(default=Decimal("0.00"), ge=Decimal("0.00"))
@@ -89,6 +93,7 @@ class SalaryRevisionLineRead(BaseModel):
     basic_salary: Decimal
     special_allowance: Decimal
     fixed_ot_amount: Decimal
+    break_minutes: int | None = None
     bonus: Decimal
     visa_provision: Decimal
     air_ticket_provision: Decimal

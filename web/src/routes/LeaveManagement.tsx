@@ -533,7 +533,7 @@ export const LeaveManagement: React.FC = () => {
                             Arrange Cover
                           </Link>
                         )}
-                        {(l.status === "REQUESTED" || l.status === "APPROVED") && (
+                        {l.status === "REQUESTED" && (
                           <button
                             onClick={() => handleCancelLeave(l.id)}
                             className="px-2.5 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50 border border-rose-200 rounded-md transition"

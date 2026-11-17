@@ -2691,6 +2691,7 @@ class SchedulingService:
                     public_holidays=holiday_dates,
                     worker_weekly_off_days=worker_weekly_off_days,
                     job_working_days=None,
+                    skip_public_holidays=True,
                 )
 
                 # Filter slots to the displayed 7-day week
@@ -3037,8 +3038,8 @@ class SchedulingService:
                                 ),
                             )
                         )
-                elif not active_leave_type:
-                    # Check base templates if worker is not on approved leave
+                elif not active_leave_type and not is_holiday:
+                    # Check base templates if worker is not on approved leave and date is not a public holiday (DEC-55)
                     emp_templates = templates_by_emp.get(emp.id, [])
                     for t, e in emp_templates:
                         if e.weekday_mask in ("ALL", dow):
@@ -3640,6 +3641,19 @@ class SchedulingService:
         leave = await self.session.get(LeaveRequest, leave_id)
         if not leave:
             raise AppError(code="NOT_FOUND", message="Leave request not found", status_code=404)
+
+        if leave.status == "APPROVED":
+            raise AppError(
+                code="VALIDATION_ERROR",
+                message="Approved leave cannot be cancelled once approved.",
+                status_code=400,
+            )
+        if leave.status != "REQUESTED":
+            raise AppError(
+                code="VALIDATION_ERROR",
+                message=f"Cannot cancel leave with status {leave.status}.",
+                status_code=400,
+            )
 
         # Only requester, scoped engineer, or admin can cancel
         is_admin = current_user.role == "ADMIN"

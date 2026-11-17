@@ -12,6 +12,7 @@ import {
   Calendar,
   TrendingUp,
   Radio,
+  FileText,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
@@ -95,6 +96,7 @@ export const Dashboard: React.FC = () => {
   }, [token, user]);
 
   const coverAlerts = alerts.filter((a) => a.alert_type === "COVER_NEEDED");
+  const docExpiryAlerts = alerts.filter((a) => a.alert_type === "DOC_EXPIRY");
 
   return (
     <div className="space-y-6">
@@ -206,7 +208,7 @@ export const Dashboard: React.FC = () => {
             <h3 className="text-base font-bold text-slate-900">Active Operational Alerts & Pending Actions</h3>
           </div>
           <span className="text-xs font-medium text-slate-400">
-            {coverAlerts.length + (pendingBoundaryCount > 0 ? 1 : 0)} items requiring attention
+            {coverAlerts.length + docExpiryAlerts.length + (pendingBoundaryCount > 0 ? 1 : 0)} items requiring attention
           </span>
         </div>
 
@@ -272,11 +274,65 @@ export const Dashboard: React.FC = () => {
             </div>
           ))}
 
-          {coverAlerts.length === 0 && pendingBoundaryCount === 0 && (
+          {/* Document Expiry Alerts (Admin / Engineer) */}
+          {docExpiryAlerts.map((alert) => {
+            const daysLeft = Number(alert.details?.days_left ?? 0);
+            const isExpired = daysLeft < 0;
+            return (
+              <div
+                key={alert.id}
+                className={`p-4 rounded-lg border space-y-2 ${
+                  isExpired
+                    ? "border-rose-200 bg-rose-50/70"
+                    : "border-amber-200 bg-amber-50/70"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span
+                    className={`inline-flex items-center gap-1.5 text-xs font-bold ${
+                      isExpired ? "text-rose-800" : "text-amber-800"
+                    }`}
+                  >
+                    <FileText className={`h-4 w-4 ${isExpired ? "text-rose-600" : "text-amber-600"}`} />
+                    {alert.title}
+                  </span>
+                  <span
+                    className={`text-2xs font-extrabold px-2 py-0.5 rounded-full ${
+                      isExpired
+                        ? "bg-rose-200 text-rose-900"
+                        : "bg-amber-200 text-amber-900"
+                    }`}
+                  >
+                    {isExpired ? `Expired (${Math.abs(daysLeft)}d ago)` : `${daysLeft}d left`}
+                  </span>
+                </div>
+                <p className={`text-xs ${isExpired ? "text-rose-900" : "text-amber-900"}`}>
+                  {alert.message}
+                </p>
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[11px] text-slate-500">
+                    Expiry: {alert.details?.expiry_date || "N/A"}
+                  </span>
+                  <Link
+                    to="/documents"
+                    className={`inline-flex items-center gap-1 text-xs font-bold hover:underline ${
+                      isExpired ? "text-rose-800" : "text-amber-800"
+                    }`}
+                  >
+                    Manage Documents <ArrowRight className="h-3 w-3" />
+                  </Link>
+                </div>
+              </div>
+            );
+          })}
+
+          {coverAlerts.length === 0 && docExpiryAlerts.length === 0 && pendingBoundaryCount === 0 && (
             <div className="col-span-2 p-8 text-center text-slate-400 space-y-1 bg-slate-50/60 rounded-lg border border-dashed border-slate-200">
               <CheckCircle2 className="h-8 w-8 text-emerald-500 mx-auto" />
               <div className="text-sm font-semibold text-slate-700">All Operations Clear</div>
-              <p className="text-xs text-slate-400">No active leave cover shortages or pending geofence boundaries.</p>
+              <p className="text-xs text-slate-400">
+                No active leave cover shortages, expiring employee documents, or pending geofence boundaries.
+              </p>
             </div>
           )}
         </div>

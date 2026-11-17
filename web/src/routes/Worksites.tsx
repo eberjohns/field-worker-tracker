@@ -15,6 +15,7 @@ import {
   X,
   Download,
   Upload,
+  ArrowUpDown,
 } from "lucide-react";
 import { MapContainer, PolygonEditor } from "../features/map";
 import { Map as MapLibreMap } from "maplibre-gl";
@@ -82,7 +83,7 @@ export const Worksites: React.FC = () => {
   const [mapInstance, setMapInstance] = useState<MapLibreMap | null>(null);
   const [savingAccommodationBoundary, setSavingAccommodationBoundary] = useState(false);
 
-  // Filters
+  // Filters & Sorting
   const [search, setSearch] = useState("");
   const [groupFilter, setGroupFilter] = useState("");
   const [zoneFilter, setZoneFilter] = useState("");
@@ -90,6 +91,8 @@ export const Worksites: React.FC = () => {
   const [revisionFilter, setRevisionFilter] = useState("");
   const [revisions, setRevisions] = useState<{ code: string; name: string; country: string }[]>([]);
   const [boundaryFilter, setBoundaryFilter] = useState<string>("SET");
+  const [sortBy, setSortBy] = useState<"job_number" | "name">("job_number");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
   // Create Modal
   const [modalOpen, setModalOpen] = useState(false);
@@ -281,6 +284,16 @@ export const Worksites: React.FC = () => {
     return true;
   });
 
+  const sortedAndFilteredWorksites = [...filteredWorksites].sort((a, b) => {
+    let cmp = 0;
+    if (sortBy === "job_number") {
+      cmp = a.job_number.localeCompare(b.job_number, undefined, { numeric: true });
+    } else {
+      cmp = a.job_name.localeCompare(b.job_name, undefined, { numeric: true });
+    }
+    return sortOrder === "asc" ? cmp : -cmp;
+  });
+
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6">
       {/* Header */}
@@ -443,6 +456,24 @@ export const Worksites: React.FC = () => {
                   </option>
                 ))}
               </select>
+
+              <div className="flex items-center gap-1.5 border border-slate-300 rounded-md px-2.5 py-1 bg-white">
+                <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
+                <select
+                  value={`${sortBy}_${sortOrder}`}
+                  onChange={(e) => {
+                    const [sb, so] = e.target.value.split("_");
+                    setSortBy(sb as "job_number" | "name");
+                    setSortOrder(so as "asc" | "desc");
+                  }}
+                  className="text-xs bg-transparent border-0 focus:outline-none text-slate-700 cursor-pointer"
+                >
+                  <option value="job_number_asc">Sort: Job # (Asc)</option>
+                  <option value="job_number_desc">Sort: Job # (Desc)</option>
+                  <option value="name_asc">Sort: Name (A → Z)</option>
+                  <option value="name_desc">Sort: Name (Z → A)</option>
+                </select>
+              </div>
             </>
           )}
         </div>
@@ -463,8 +494,40 @@ export const Worksites: React.FC = () => {
             <table className="w-full text-left text-sm border-collapse">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50 text-slate-600 font-semibold text-xs tracking-wider uppercase">
-                  <th className="py-3 px-4">Job Number</th>
-                  <th className="py-3 px-4">Job Name</th>
+                  <th
+                    onClick={() => {
+                      if (sortBy === "job_number") {
+                        setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+                      } else {
+                        setSortBy("job_number");
+                        setSortOrder("asc");
+                      }
+                    }}
+                    className="py-3 px-4 cursor-pointer hover:text-indigo-600 transition select-none"
+                    title="Click to sort by Job Number"
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      Job Number
+                      {sortBy === "job_number" && (sortOrder === "asc" ? " ↑" : " ↓")}
+                    </span>
+                  </th>
+                  <th
+                    onClick={() => {
+                      if (sortBy === "name") {
+                        setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+                      } else {
+                        setSortBy("name");
+                        setSortOrder("asc");
+                      }
+                    }}
+                    className="py-3 px-4 cursor-pointer hover:text-indigo-600 transition select-none"
+                    title="Click to sort by Job Name"
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      Job Name
+                      {sortBy === "name" && (sortOrder === "asc" ? " ↑" : " ↓")}
+                    </span>
+                  </th>
                   <th className="py-3 px-4">Group & Zone</th>
                   <th className="py-3 px-4">Revision</th>
                   <th className="py-3 px-4">Type</th>
@@ -481,14 +544,14 @@ export const Worksites: React.FC = () => {
                       Loading worksites...
                     </td>
                   </tr>
-                ) : filteredWorksites.length === 0 ? (
+                ) : sortedAndFilteredWorksites.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="py-12 text-center text-slate-400">
                       No worksites match your criteria.
                     </td>
                   </tr>
                 ) : (
-                  filteredWorksites.map((ws) => (
+                  sortedAndFilteredWorksites.map((ws) => (
                     <tr
                       key={ws.id}
                       onClick={() => navigate({ to: "/worksites/$worksiteId", params: { worksiteId: ws.id } })}

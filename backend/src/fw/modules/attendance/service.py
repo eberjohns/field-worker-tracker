@@ -24,7 +24,7 @@ from fw.modules.attendance.schemas import (
 )
 from fw.modules.events import MobileEventLog
 from fw.modules.identity.models import User
-from fw.modules.jobs.models import JobItem, Worksite
+from fw.modules.jobs.models import Worksite
 from fw.modules.org.models import Accommodation, Employee, EmployeeReportingLine
 from fw.modules.scheduling.models import LeaveRequest, ScheduledWork
 from fw.modules.settings import SettingsService
@@ -365,20 +365,44 @@ class AttendanceService:
         ]
         constructed_gaps = build_gaps_for_day(events_for_gap, work_date)
 
-        # 9. First site break override check
-        first_break_override: int | None = None
-        first_site_id = constructed_visits[0].worksite_id if constructed_visits else None
-        if first_site_id is not None:
-            ji_q = (
-                select(JobItem.break_override_minutes)
+        # 9. Effective break minutes resolution: Supervisor Group > Salary Structure > Time Rule / Company Default
+        effective_break_minutes: int | None = None
+
+        # Check supervisor group break override
+        sup_stmt = (
+            select(Employee.break_override_minutes)
+            .join(EmployeeReportingLine, EmployeeReportingLine.manager_id == Employee.id)
+            .where(
+                EmployeeReportingLine.employee_id == employee_id,
+                EmployeeReportingLine.relationship == "SUPERVISOR",
+                Employee.break_override_minutes.is_not(None),
+            )
+            .limit(1)
+        )
+        sup_break = (await session.execute(sup_stmt)).scalar_one_or_none()
+        if sup_break is not None and sup_break > 0:
+            effective_break_minutes = sup_break
+        else:
+            # Check active EmployeeSalary break_minutes
+            from fw.modules.payroll.models import EmployeeSalary
+
+            es_stmt = (
+                select(EmployeeSalary.break_minutes)
                 .where(
-                    JobItem.worksite_id == first_site_id,
-                    JobItem.break_override_minutes.is_not(None),
+                    EmployeeSalary.employee_id == employee_id,
+                    EmployeeSalary.effective_from <= work_date,
+                    EmployeeSalary.break_minutes.is_not(None),
                 )
+                .order_by(EmployeeSalary.effective_from.desc())
                 .limit(1)
             )
-            ji_res = await session.execute(ji_q)
-            first_break_override = ji_res.scalar_one_or_none()
+            salary_break = (await session.execute(es_stmt)).scalar_one_or_none()
+            if salary_break is not None and salary_break > 0:
+                effective_break_minutes = salary_break
+            else:
+                effective_break_minutes = resolved_schedule.break_minutes
+
+        resolved_schedule.break_minutes = effective_break_minutes or 30
 
         # 10. Run pure engine calculation
         calc_inputs = DailyCalculationInputs(
@@ -396,7 +420,7 @@ class AttendanceService:
             is_weekly_off=is_weekly_off,
             is_ot2_weekday=is_ot2_weekday,
             has_approved_leave=has_approved_leave,
-            first_site_break_override=first_break_override,
+            first_site_break_override=None,
         )
         calc_result = compute_daily_attendance(calc_inputs)
 

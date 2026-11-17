@@ -20,6 +20,7 @@ interface SalaryItem {
   standard_hours: number;
   salary_portion: number;
   basic_salary: number;
+  break_minutes?: number | null;
   effective_from: string;
   last_change_date: string | null;
   difference: number;
@@ -30,6 +31,7 @@ interface SalaryHistoryRecord {
   effective_from: string;
   standard_hours: number;
   basic_salary: number;
+  break_minutes?: number | null;
   special_allowance: number;
   fixed_ot_amount: number;
   bonus: number;
@@ -61,6 +63,7 @@ export const SalaryStructures: React.FC = () => {
   const [formData, setFormData] = useState({
     effective_from: "",
     standard_hours: 8,
+    break_minutes: 60 as number | null,
     basic_salary: 1200,
     special_allowance: 0,
     fixed_ot_amount: 0,
@@ -119,6 +122,7 @@ export const SalaryStructures: React.FC = () => {
     setFormData({
       effective_from: "",
       standard_hours: emp.standard_hours || 8,
+      break_minutes: emp.break_minutes ?? 60,
       basic_salary: emp.basic_salary || 1200,
       special_allowance: 0,
       fixed_ot_amount: 0,
@@ -227,6 +231,7 @@ export const SalaryStructures: React.FC = () => {
                 <th className="py-3 px-4">Role</th>
                 <th className="py-3 px-4">Country</th>
                 <th className="py-3 px-4">Standard Hours</th>
+                <th className="py-3 px-4">Break</th>
                 <th className="py-3 px-4">Basic Salary</th>
                 <th className="py-3 px-4">Total Fixed Portion</th>
                 <th className="py-3 px-4">Effective From</th>
@@ -246,6 +251,7 @@ export const SalaryStructures: React.FC = () => {
                   </td>
                   <td className="py-3 px-4 font-medium text-xs text-slate-600">{s.country}</td>
                   <td className="py-3 px-4 font-mono text-xs">{s.standard_hours} hrs/day</td>
+                  <td className="py-3 px-4 font-mono text-xs">{s.break_minutes ? `${s.break_minutes}m` : "Default"}</td>
                   <td className="py-3 px-4 font-mono">
                     {Number(s.basic_salary).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </td>
@@ -429,7 +435,7 @@ export const SalaryStructures: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">Standard Hours</label>
                   <input
@@ -439,6 +445,23 @@ export const SalaryStructures: React.FC = () => {
                     onChange={(e) => setFormData({ ...formData, standard_hours: parseFloat(e.target.value) || 8 })}
                     className="w-full border rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-indigo-500"
                     required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Break Duration (Min)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="240"
+                    value={formData.break_minutes ?? ""}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        break_minutes: e.target.value ? parseInt(e.target.value) : null,
+                      })
+                    }
+                    placeholder="e.g. 60"
+                    className="w-full border rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-indigo-500"
                   />
                 </div>
                 <div>

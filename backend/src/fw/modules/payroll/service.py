@@ -164,6 +164,7 @@ class PayrollSalaryService:
             bonus=payload.bonus,
             telephone_allowance=payload.telephone_allowance,
             housing_transport_allowance=payload.housing_transport_allowance,
+            break_minutes=payload.break_minutes,
             created_by_user_id=user_id,
         )
         session.add(row)
@@ -346,6 +347,7 @@ class PayrollSalaryService:
                         standard_hours=salary.standard_hours,
                         salary_portion=portion,
                         basic_salary=salary.basic_salary,
+                        break_minutes=salary.break_minutes,
                         effective_from=salary.effective_from,
                         last_change_date=salary.effective_from,
                         difference=Decimal("0.00"),

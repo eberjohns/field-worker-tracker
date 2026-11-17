@@ -16,6 +16,9 @@ import {
   X,
   Download,
   Upload,
+  Coffee,
+  Edit2,
+  ArrowUpDown,
 } from "lucide-react";
 
 interface Employee {
@@ -29,6 +32,7 @@ interface Employee {
   is_driver: boolean;
   country: string;
   accommodation_id?: string | null;
+  break_override_minutes?: number | null;
   is_active: boolean;
   version: number;
 }
@@ -76,6 +80,15 @@ export const Employees: React.FC = () => {
   // Focus & filter by leader
   const [focusedLeaderId, setFocusedLeaderId] = useState<string | null>(null);
   const [filterLeaderId, setFilterLeaderId] = useState<string | null>(null);
+
+  // Sorting state (DEC-52 / Refinements)
+  const [sortBy, setSortBy] = useState<"name" | "tally">("name");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+
+  // Supervisor crew break override modal
+  const [editingSupervisor, setEditingSupervisor] = useState<Employee | null>(null);
+  const [supervisorBreakMinutes, setSupervisorBreakMinutes] = useState<number | "">("");
+  const [supervisorBreakLoading, setSupervisorBreakLoading] = useState(false);
 
   // Bulk update dialog state
   const [bulkModalOpen, setBulkModalOpen] = useState(false);
@@ -546,6 +559,48 @@ export const Employees: React.FC = () => {
     }
   };
 
+  const handleSaveSupervisorBreak = async () => {
+    if (!editingSupervisor) return;
+    setSupervisorBreakLoading(true);
+    try {
+      const res = await fetch(`/api/v1/employees/${editingSupervisor.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          break_override_minutes:
+            supervisorBreakMinutes === "" ? null : Number(supervisorBreakMinutes),
+          version: editingSupervisor.version,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || err.message || "Failed to update supervisor crew break");
+      }
+      setSuccessToast(`Crew break time updated for ${editingSupervisor.name}`);
+      setTimeout(() => setSuccessToast(null), 5000);
+      setEditingSupervisor(null);
+      await fetchEmployees();
+      await fetchHierarchy();
+    } catch (err: any) {
+      alert(err.message || "Failed to save crew break");
+    } finally {
+      setSupervisorBreakLoading(false);
+    }
+  };
+
+  const sortEmployees = (list: Employee[]) => {
+    return [...list].sort((a, b) => {
+      const cmp =
+        sortBy === "tally"
+          ? a.tally_id.localeCompare(b.tally_id, undefined, { numeric: true })
+          : a.name.localeCompare(b.name, undefined, { numeric: true });
+      return sortOrder === "asc" ? cmp : -cmp;
+    });
+  };
+
   // Filtered supervisor groups based on active leader filter
   const visibleSupervisorGroups = supervisorGroups.filter((g) => {
     if (!filterLeaderId) return true;
@@ -553,6 +608,14 @@ export const Employees: React.FC = () => {
       g.superintendents.some((s) => s.id === filterLeaderId) ||
       g.engineers.some((e) => e.id === filterLeaderId)
     );
+  });
+
+  const sortedSupervisorGroups = [...visibleSupervisorGroups].sort((a, b) => {
+    const cmp =
+      sortBy === "tally"
+        ? a.supervisor.tally_id.localeCompare(b.supervisor.tally_id, undefined, { numeric: true })
+        : a.supervisor.name.localeCompare(b.supervisor.name, undefined, { numeric: true });
+    return sortOrder === "asc" ? cmp : -cmp;
   });
 
   const activeLeader =
@@ -922,6 +985,25 @@ export const Employees: React.FC = () => {
           </select>
         </div>
 
+        {/* Sort Selector */}
+        <div className="flex items-center gap-1.5 border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white">
+          <ArrowUpDown className="h-4 w-4 text-slate-400" />
+          <select
+            value={`${sortBy}_${sortOrder}`}
+            onChange={(e) => {
+              const [sb, so] = e.target.value.split("_");
+              setSortBy(sb as "name" | "tally");
+              setSortOrder(so as "asc" | "desc");
+            }}
+            className="border-none text-sm bg-transparent focus:outline-none text-slate-700 cursor-pointer"
+          >
+            <option value="name_asc">Sort: Name (A → Z)</option>
+            <option value="name_desc">Sort: Name (Z → A)</option>
+            <option value="tally_asc">Sort: Tally ID (Asc)</option>
+            <option value="tally_desc">Sort: Tally ID (Desc)</option>
+          </select>
+        </div>
+
         <button
           onClick={() => {
             fetchEmployees();
@@ -947,8 +1029,40 @@ export const Employees: React.FC = () => {
                 <th className="p-4 w-12">
                   <span className="sr-only">Select</span>
                 </th>
-                <th className="p-4">Tally ID</th>
-                <th className="p-4">Name</th>
+                <th
+                  onClick={() => {
+                    if (sortBy === "tally") {
+                      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+                    } else {
+                      setSortBy("tally");
+                      setSortOrder("asc");
+                    }
+                  }}
+                  className="p-4 cursor-pointer hover:text-indigo-600 transition select-none"
+                  title="Click to sort by Tally ID"
+                >
+                  <span className="inline-flex items-center gap-1">
+                    Tally ID
+                    {sortBy === "tally" && (sortOrder === "asc" ? " ↑" : " ↓")}
+                  </span>
+                </th>
+                <th
+                  onClick={() => {
+                    if (sortBy === "name") {
+                      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+                    } else {
+                      setSortBy("name");
+                      setSortOrder("asc");
+                    }
+                  }}
+                  className="p-4 cursor-pointer hover:text-indigo-600 transition select-none"
+                  title="Click to sort by Name"
+                >
+                  <span className="inline-flex items-center gap-1">
+                    Name
+                    {sortBy === "name" && (sortOrder === "asc" ? " ↑" : " ↓")}
+                  </span>
+                </th>
                 <th className="p-4">Role</th>
                 <th className="p-4">Staff Grade (SGD)</th>
                 <th className="p-4">Grade Code</th>
@@ -962,7 +1076,7 @@ export const Employees: React.FC = () => {
               {groupBySupervisor ? (
                 <>
                   {/* Supervisor Groups */}
-                  {visibleSupervisorGroups.map((group) => {
+                  {sortedSupervisorGroups.map((group) => {
                     const isCollapsed = collapsedGroups[group.supervisor.id];
                     const filteredMembers = group.members.filter((m) => {
                       if (search) {
@@ -992,6 +1106,7 @@ export const Employees: React.FC = () => {
                       }
                       return true;
                     });
+                    const sortedMembers = sortEmployees(filteredMembers);
 
                     return (
                       <React.Fragment key={group.supervisor.id}>
@@ -1086,6 +1201,32 @@ export const Employees: React.FC = () => {
                                   </div>
                                 )}
 
+                                {/* Crew Break Duration Badge & Configuration */}
+                                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-amber-50/90 border border-amber-200 text-amber-900 shadow-2xs">
+                                  <Coffee className="h-3.5 w-3.5 text-amber-600" />
+                                  <span>
+                                    {group.supervisor.break_override_minutes != null
+                                      ? `${group.supervisor.break_override_minutes}m crew break`
+                                      : "Default break"}
+                                  </span>
+                                  {(user?.role === "ADMIN" || user?.role === "ENGINEER") && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEditingSupervisor(group.supervisor);
+                                        setSupervisorBreakMinutes(
+                                          group.supervisor.break_override_minutes ?? ""
+                                        );
+                                      }}
+                                      className="ml-1 p-0.5 text-amber-700 hover:text-amber-950 hover:bg-amber-100 rounded transition"
+                                      title="Configure Supervisor Crew Break Time"
+                                    >
+                                      <Edit2 className="h-3 w-3" />
+                                    </button>
+                                  )}
+                                </div>
+
                                 <span className="px-2.5 py-1 rounded-md text-xs font-medium bg-white border border-slate-200 text-slate-700 shadow-2xs">
                                   {filteredMembers.length} team member
                                   {filteredMembers.length === 1 ? "" : "s"}
@@ -1097,14 +1238,14 @@ export const Employees: React.FC = () => {
 
                         {/* Members inside the supervisor group */}
                         {!isCollapsed &&
-                          (filteredMembers.length === 0 ? (
+                          (sortedMembers.length === 0 ? (
                             <tr>
                               <td colSpan={10} className="px-8 py-3 text-xs text-slate-400 italic">
                                 No matching team members in this supervisor group.
                               </td>
                             </tr>
                           ) : (
-                            filteredMembers.map((m) => {
+                            sortedMembers.map((m) => {
                               const isSelected = selectedIds.includes(m.id);
                               return (
                                 <tr key={m.id} className="hover:bg-slate-50 transition">
@@ -1205,8 +1346,8 @@ export const Employees: React.FC = () => {
                         </td>
                       </tr>
                       {!collapsedGroups["unassigned"] &&
-                        directMembers
-                          .filter((m) => {
+                        sortEmployees(
+                          directMembers.filter((m) => {
                             if (search) {
                               const q = search.toLowerCase();
                               if (!m.name.toLowerCase().includes(q) && !m.tally_id.toLowerCase().includes(q)) {
@@ -1214,14 +1355,14 @@ export const Employees: React.FC = () => {
                               }
                             }
                             if (roleFilter) {
-                        if (roleFilter.startsWith("sgd:")) {
-                          if (m.staff_grade_description !== roleFilter.substring(4)) return false;
-                        } else if (roleFilter.startsWith("role:")) {
-                          if (m.role !== roleFilter.substring(5)) return false;
-                        } else if (m.role !== roleFilter) {
-                          return false;
-                        }
-                      }
+                              if (roleFilter.startsWith("sgd:")) {
+                                if (m.staff_grade_description !== roleFilter.substring(4)) return false;
+                              } else if (roleFilter.startsWith("role:")) {
+                                if (m.role !== roleFilter.substring(5)) return false;
+                              } else if (m.role !== roleFilter) {
+                                return false;
+                              }
+                            }
                             if (accommodationFilter === "assigned" && !m.accommodation_id) return false;
                             if (accommodationFilter === "unassigned" && m.accommodation_id) return false;
                             if (
@@ -1234,7 +1375,7 @@ export const Employees: React.FC = () => {
                             }
                             return true;
                           })
-                          .map((m) => {
+                        ).map((m) => {
                             const isSelected = selectedIds.includes(m.id);
                             return (
                               <tr key={m.id} className="hover:bg-slate-50 transition">
@@ -1305,7 +1446,7 @@ export const Employees: React.FC = () => {
                 </>
               ) : (
                 /* Flat Table */
-                employees.map((emp) => {
+                sortEmployees(employees).map((emp) => {
                   const isSelected = selectedIds.includes(emp.id);
                   return (
                     <tr key={emp.id} className="hover:bg-slate-50 transition">
@@ -1771,6 +1912,71 @@ export const Employees: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Supervisor Crew Break Time Modal */}
+      {editingSupervisor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-lg border border-slate-200 max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Coffee className="h-5 w-5 text-amber-600" />
+                Supervisor Crew Break Time
+              </h3>
+              <button
+                type="button"
+                onClick={() => setEditingSupervisor(null)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-slate-800">
+                {editingSupervisor.name} ({editingSupervisor.tally_id})
+              </p>
+              <p className="text-xs text-slate-500 mt-1">
+                Configure the unpaid daily break duration (in minutes) applied to all field workers in this supervisor's crew.
+              </p>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">
+                Crew Break Duration (Minutes)
+              </label>
+              <input
+                type="number"
+                min="0"
+                max="240"
+                placeholder="e.g. 60 (leave empty for default)"
+                value={supervisorBreakMinutes}
+                onChange={(e) =>
+                  setSupervisorBreakMinutes(e.target.value === "" ? "" : Number(e.target.value))
+                }
+                className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+              />
+              <p className="text-[11px] text-slate-400 mt-1">
+                Attendance calculations prioritize this crew break setting above salary structure defaults.
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setEditingSupervisor(null)}
+                className="px-4 py-2 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-50 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={supervisorBreakLoading}
+                onClick={handleSaveSupervisorBreak}
+                className="px-4 py-2 bg-amber-600 text-white rounded-lg text-xs font-semibold hover:bg-amber-700 disabled:opacity-50 transition shadow-xs"
+              >
+                {supervisorBreakLoading ? "Saving..." : "Save Crew Break"}
+              </button>
+            </div>
           </div>
         </div>
       )}
