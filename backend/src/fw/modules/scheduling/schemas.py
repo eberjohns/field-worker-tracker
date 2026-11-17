@@ -485,6 +485,10 @@ class LeaveRequestCreate(BaseModel):
     from_date: date
     to_date: date
     reason: str
+    bypass_notice: bool = Field(
+        default=False,
+        description="Whether to bypass the 3-day notice rule (Admin confirmation only).",
+    )
 
 
 class LeaveRequestResponse(BaseModel):

@@ -44,6 +44,7 @@ interface WorksiteDetail {
   customer_type: string | null;
   is_outdoor: boolean;
   country: string;
+  salary_revision_code: string | null;
   start_date: string | null;
   end_date: string | null;
   has_boundary: boolean;
@@ -134,6 +135,8 @@ export const WorksiteDetail: React.FC = () => {
   const [editCustomerType, setEditCustomerType] = useState("");
   const [editRenewalRef, setEditRenewalRef] = useState("");
   const [editBudget, setEditBudget] = useState("");
+  const [editSalaryRevisionCode, setEditSalaryRevisionCode] = useState("");
+  const [revisions, setRevisions] = useState<any[]>([]);
   const [editStartDate, setEditStartDate] = useState("");
   const [editEndDate, setEditEndDate] = useState("");
 
@@ -155,8 +158,15 @@ export const WorksiteDetail: React.FC = () => {
       setEditCustomerType(data.customer_type || "");
       setEditRenewalRef(data.renewal_reference || "");
       setEditBudget(data.budget_amount != null ? String(data.budget_amount) : "");
+      setEditSalaryRevisionCode(data.salary_revision_code || "");
       setEditStartDate(data.start_date || "");
       setEditEndDate(data.end_date || "");
+
+      // Fetch revisions
+      fetch("/api/v1/payroll/salary-revisions", { headers })
+        .then((r) => (r.ok ? r.json() : []))
+        .then((revs) => setRevisions(revs))
+        .catch(() => {});
 
       // Fetch occurrences
       const occRes = await fetch(`/api/v1/occurrences?worksite_id=${worksiteId}&limit=500`, { headers });
@@ -218,6 +228,7 @@ export const WorksiteDetail: React.FC = () => {
           job_name: editName.trim(),
           customer_type: editCustomerType.trim() || null,
           renewal_reference: editRenewalRef.trim() || null,
+          salary_revision_code: editSalaryRevisionCode.trim() || null,
           start_date: editStartDate.trim() || null,
           end_date: editEndDate.trim() || null,
           budget_amount: editBudget ? parseFloat(editBudget) : null,
@@ -557,17 +568,36 @@ export const WorksiteDetail: React.FC = () => {
                     />
                   </div>
                 </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Annual Operating Budget (AED / year)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={editBudget}
-                    onChange={(e) => setEditBudget(e.target.value)}
-                    className="w-full px-3 py-1.5 border border-slate-300 rounded focus:ring-1 focus:ring-indigo-500"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Annual Operating Budget (AED / year)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={editBudget}
+                      onChange={(e) => setEditBudget(e.target.value)}
+                      className="w-full px-3 py-1.5 border border-slate-300 rounded focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Salary Revision
+                    </label>
+                    <select
+                      value={editSalaryRevisionCode}
+                      onChange={(e) => setEditSalaryRevisionCode(e.target.value)}
+                      className="w-full px-3 py-1.5 border border-slate-300 rounded focus:ring-1 focus:ring-indigo-500 bg-white"
+                    >
+                      <option value="">Default (Inherited)</option>
+                      {revisions.map((r) => (
+                        <option key={r.code} value={r.code}>
+                          {r.code} - {r.name} ({r.country})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
                 <div className="flex justify-end gap-2 pt-2">
                   <button
@@ -623,6 +653,18 @@ export const WorksiteDetail: React.FC = () => {
                   <span className="text-slate-400 block mb-0.5">Customer Type</span>
                   <span className="font-semibold text-slate-800">
                     {worksite.customer_type || "Standard"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block mb-0.5">Salary Revision</span>
+                  <span className="font-semibold text-slate-800">
+                    {worksite.salary_revision_code ? (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-mono bg-purple-50 text-purple-700 border border-purple-200">
+                        {worksite.salary_revision_code}
+                      </span>
+                    ) : (
+                      <span className="text-slate-400 italic font-normal">Default (Inherited)</span>
+                    )}
                   </span>
                 </div>
                 <div>

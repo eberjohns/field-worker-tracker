@@ -40,6 +40,7 @@ export const EmployeeDetail: React.FC = () => {
   const [editWeeklyOff, setEditWeeklyOff] = useState("");
   const [editBreakOverride, setEditBreakOverride] = useState<number | "">("");
   const [editPhone, setEditPhone] = useState("");
+  const [editEmail, setEditEmail] = useState("");
   const [editAccommodationId, setEditAccommodationId] = useState("");
 
   // Add document state
@@ -114,6 +115,7 @@ export const EmployeeDetail: React.FC = () => {
         setEditWeeklyOff(empData.weekly_off_day || "");
         setEditBreakOverride(empData.break_override_minutes ?? "");
         setEditPhone(empData.phone || "");
+        setEditEmail(empData.email || "");
         setEditAccommodationId(empData.accommodation_id || "");
       }
 
@@ -165,10 +167,9 @@ export const EmployeeDetail: React.FC = () => {
         weekly_off_day: editWeeklyOff || null,
         break_override_minutes: editBreakOverride !== "" ? Number(editBreakOverride) : null,
         accommodation_id: editAccommodationId || null,
+        phone: editPhone || null,
+        email: editEmail || null,
       };
-      if (user?.role === "ADMIN") {
-        payload.phone = editPhone || null;
-      }
 
       const res = await fetch(`/api/v1/employees/${employeeId}`, {
         method: "PATCH",
@@ -193,27 +194,19 @@ export const EmployeeDetail: React.FC = () => {
   };
 
   const handleResetPassword = async () => {
-    if (!window.confirm("Reset this user's password to company default?")) return;
+    if (!window.confirm("Reset this worker's password to company default?")) return;
     setStatusMessage(null);
     setErrorMessage(null);
 
     try {
-      // Find user id by employee
-      const usersRes = await fetch("/api/v1/users", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const users = await usersRes.json();
-      const targetUser = users.find((u: any) => u.employee_id === employee.id);
-
-      if (!targetUser) throw new Error("Linked user account not found");
-
-      const res = await fetch(`/api/v1/users/${targetUser.id}/reset-password`, {
+      const res = await fetch(`/api/v1/employees/${employee.id}/reset-password`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error("Failed to reset password");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || data.detail || "Failed to reset password");
 
-      setStatusMessage("Password reset to company default successfully.");
+      setStatusMessage(data.message || "Password reset to company default successfully.");
     } catch (err: any) {
       setErrorMessage(err.message);
     }
@@ -263,6 +256,41 @@ export const EmployeeDetail: React.FC = () => {
   if (loading || !employee) {
     return <div className="p-12 text-center text-slate-500">Loading employee details...</div>;
   }
+
+  const renderDiff = (diff: Record<string, any>, labels: Record<string, string> = {}) => {
+    const entries = Object.entries(diff || {});
+    if (entries.length === 0) return <span className="text-slate-400 text-xs">—</span>;
+
+    return (
+      <div className="space-y-1 text-xs">
+        {entries.map(([key, val]) => {
+          const friendlyLabel = labels[key];
+          const displayKey = key
+            .replace(/_/g, " ")
+            .replace(/\bid\b/i, "ID")
+            .replace(/\b\w/g, (c) => c.toUpperCase());
+
+          return (
+            <div key={key} className="flex flex-col sm:flex-row sm:items-baseline gap-1 text-[11px] leading-tight">
+              <span className="font-semibold text-slate-600 shrink-0">{displayKey}:</span>
+              {friendlyLabel ? (
+                <span
+                  className="font-medium text-indigo-800 bg-indigo-50/90 px-1.5 py-0.5 rounded border border-indigo-200/80 break-words"
+                  title={String(val)}
+                >
+                  {friendlyLabel}
+                </span>
+              ) : (
+                <span className="font-mono text-slate-800 break-words">
+                  {typeof val === "object" ? JSON.stringify(val) : String(val)}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -480,17 +508,29 @@ export const EmployeeDetail: React.FC = () => {
                 </select>
               </div>
 
-              {user?.role === "ADMIN" && (
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Phone Number</label>
-                  <input
-                    type="text"
-                    value={editPhone}
-                    onChange={(e) => setEditPhone(e.target.value)}
-                    className="w-full border border-slate-300 rounded-lg p-2 text-sm"
-                  />
-                </div>
-              )}
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Phone Number</label>
+                <input
+                  type="text"
+                  value={editPhone}
+                  onChange={(e) => setEditPhone(e.target.value)}
+                  placeholder="e.g. +971501234567"
+                  disabled={!["ADMIN", "ENGINEER"].includes(user?.role || "")}
+                  className="w-full border border-slate-300 rounded-lg p-2 text-sm disabled:bg-slate-50 disabled:text-slate-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Email Address</label>
+                <input
+                  type="email"
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  placeholder="e.g. worker@example.com"
+                  disabled={!["ADMIN", "ENGINEER"].includes(user?.role || "")}
+                  className="w-full border border-slate-300 rounded-lg p-2 text-sm disabled:bg-slate-50 disabled:text-slate-500"
+                />
+              </div>
             </div>
 
             <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
@@ -857,14 +897,24 @@ export const EmployeeDetail: React.FC = () => {
           ) : (
             <div className="space-y-3">
               {auditLogs.map((log) => (
-                <div key={log.id} className="p-3 border border-slate-100 rounded-lg bg-slate-50 text-xs">
-                  <div className="flex items-center justify-between text-slate-500 mb-1">
-                    <span className="font-semibold text-slate-700">{log.action}</span>
+                <div key={log.id} className="p-3 border border-slate-200 rounded-lg bg-slate-50/50 text-xs space-y-2">
+                  <div className="flex items-center justify-between text-slate-500 pb-1 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200">{log.action}</span>
+                      {log.actor_name && (
+                        <span className="text-slate-600">by <strong className="text-slate-800">{log.actor_name}</strong></span>
+                      )}
+                    </div>
                     <span>{new Date(log.created_at).toLocaleString()}</span>
                   </div>
-                  <pre className="p-2 bg-white rounded border border-slate-200 font-mono text-[11px] overflow-x-auto text-slate-800">
-                    {JSON.stringify(log.diff, null, 2)}
-                  </pre>
+                  {log.entity_label && (
+                    <div className="text-[11px] text-indigo-700 font-medium">
+                      Target: {log.entity_label}
+                    </div>
+                  )}
+                  <div className="p-2 bg-white rounded border border-slate-200">
+                    {renderDiff(log.diff, log.diff_labels || {})}
+                  </div>
                 </div>
               ))}
             </div>

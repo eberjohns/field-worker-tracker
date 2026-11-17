@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { CoverageResponse, CoverageItemRow, CoverageDayCell } from "./types";
-import { Building2, Search, Users, CheckCircle2, Plus } from "lucide-react";
+import { Building2, Search, Users, CheckCircle2, Plus, ArrowUpDown } from "lucide-react";
 
 interface CoverageViewProps {
   coverage: CoverageResponse;
@@ -10,6 +10,7 @@ interface CoverageViewProps {
 export const CoverageView: React.FC<CoverageViewProps> = ({ coverage, onSlotClick }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [gradeFilter, setGradeFilter] = useState("");
+  const [worksiteSortOrder, setWorksiteSortOrder] = useState<"asc" | "desc">("asc");
 
   const daysHeader = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -36,6 +37,11 @@ export const CoverageView: React.FC<CoverageViewProps> = ({ coverage, onSlotClic
     })
     .filter((ws) => ws.items.length > 0);
 
+  const sortedWorksites = [...filteredWorksites].sort((a, b) => {
+    const cmp = a.job_number.localeCompare(b.job_number, undefined, { numeric: true });
+    return worksiteSortOrder === "asc" ? cmp : -cmp;
+  });
+
   return (
     <div className="flex-1 flex flex-col bg-slate-50 overflow-hidden">
       {/* Subheader Filters */}
@@ -58,6 +64,15 @@ export const CoverageView: React.FC<CoverageViewProps> = ({ coverage, onSlotClic
             onChange={(e) => setGradeFilter(e.target.value)}
             className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 w-40"
           />
+          <button
+            type="button"
+            onClick={() => setWorksiteSortOrder((prev) => (prev === "asc" ? "desc" : "asc"))}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition"
+            title="Toggle Worksite Job Number Sorting Order"
+          >
+            <ArrowUpDown className="h-3.5 w-3.5 text-slate-500" />
+            <span>Job # {worksiteSortOrder === "asc" ? "(Asc)" : "(Desc)"}</span>
+          </button>
         </div>
 
         {/* Visual Legend */}
@@ -120,7 +135,7 @@ export const CoverageView: React.FC<CoverageViewProps> = ({ coverage, onSlotClic
               </tr>
             </thead>
             <tbody>
-              {filteredWorksites.map((worksite) => (
+              {sortedWorksites.map((worksite) => (
                 <React.Fragment key={worksite.worksite_id}>
                   {/* Worksite Banner Row */}
                   <tr className="bg-slate-100/80 border-y border-slate-200">

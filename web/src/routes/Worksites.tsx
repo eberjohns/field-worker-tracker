@@ -15,6 +15,7 @@ import {
   X,
   Download,
   Upload,
+  ArrowUpDown,
 } from "lucide-react";
 import { MapContainer, PolygonEditor } from "../features/map";
 import { Map as MapLibreMap } from "maplibre-gl";
@@ -31,6 +32,7 @@ interface Worksite {
   customer_type: string | null;
   is_outdoor: boolean;
   country: string;
+  salary_revision_code: string | null;
   start_date: string | null;
   end_date: string | null;
   has_boundary: boolean;
@@ -81,12 +83,16 @@ export const Worksites: React.FC = () => {
   const [mapInstance, setMapInstance] = useState<MapLibreMap | null>(null);
   const [savingAccommodationBoundary, setSavingAccommodationBoundary] = useState(false);
 
-  // Filters
+  // Filters & Sorting
   const [search, setSearch] = useState("");
   const [groupFilter, setGroupFilter] = useState("");
   const [zoneFilter, setZoneFilter] = useState("");
   const [countryFilter, setCountryFilter] = useState("");
+  const [revisionFilter, setRevisionFilter] = useState("");
+  const [revisions, setRevisions] = useState<{ code: string; name: string; country: string }[]>([]);
   const [boundaryFilter, setBoundaryFilter] = useState<string>("SET");
+  const [sortBy, setSortBy] = useState<"job_number" | "name">("job_number");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
   // Create Modal
   const [modalOpen, setModalOpen] = useState(false);
@@ -139,11 +145,12 @@ export const Worksites: React.FC = () => {
       if (boundaryFilter === "SET") params.set("has_boundary", "true");
       if (boundaryFilter === "UNSET") params.set("has_boundary", "false");
 
-      const [wsRes, gRes, zRes, accRes] = await Promise.all([
+      const [wsRes, gRes, zRes, accRes, revRes] = await Promise.all([
         fetch(`/api/v1/worksites?${params.toString()}`, { headers }),
         fetch("/api/v1/groups", { headers }),
         fetch("/api/v1/zones", { headers }),
         fetch("/api/v1/accommodations", { headers }),
+        fetch("/api/v1/payroll/salary-revisions", { headers }),
       ]);
 
       if (wsRes.ok) {
@@ -157,6 +164,9 @@ export const Worksites: React.FC = () => {
       }
       if (accRes.ok) {
         setAccommodations(await accRes.json());
+      }
+      if (revRes && revRes.ok) {
+        setRevisions(await revRes.json());
       }
     } catch (err) {
       console.error(err);
@@ -261,6 +271,27 @@ export const Worksites: React.FC = () => {
     if (boundaryFilter === "SET" && !acc.has_boundary) return false;
     if (boundaryFilter === "UNSET" && acc.has_boundary) return false;
     return true;
+  });
+
+  const filteredWorksites = worksites.filter((ws) => {
+    if (revisionFilter) {
+      if (revisionFilter === "UNASSIGNED") {
+        if (ws.salary_revision_code) return false;
+      } else if (ws.salary_revision_code !== revisionFilter) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  const sortedAndFilteredWorksites = [...filteredWorksites].sort((a, b) => {
+    let cmp = 0;
+    if (sortBy === "job_number") {
+      cmp = a.job_number.localeCompare(b.job_number, undefined, { numeric: true });
+    } else {
+      cmp = a.job_name.localeCompare(b.job_name, undefined, { numeric: true });
+    }
+    return sortOrder === "asc" ? cmp : -cmp;
   });
 
   return (
@@ -401,15 +432,49 @@ export const Worksites: React.FC = () => {
           </select>
 
           {activeTab === "worksites" && (
-            <select
-              value={countryFilter}
-              onChange={(e) => setCountryFilter(e.target.value)}
-              className="text-sm border border-slate-300 rounded-md py-1.5 px-3 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
-            >
-              <option value="">All Countries</option>
-              <option value="AE">UAE (AE)</option>
-              <option value="SA">KSA (SA)</option>
-            </select>
+            <>
+              <select
+                value={countryFilter}
+                onChange={(e) => setCountryFilter(e.target.value)}
+                className="text-sm border border-slate-300 rounded-md py-1.5 px-3 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+              >
+                <option value="">All Countries</option>
+                <option value="AE">UAE (AE)</option>
+                <option value="SA">KSA (SA)</option>
+              </select>
+
+              <select
+                value={revisionFilter}
+                onChange={(e) => setRevisionFilter(e.target.value)}
+                className="text-sm border border-slate-300 rounded-md py-1.5 px-3 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+              >
+                <option value="">All Revisions</option>
+                <option value="UNASSIGNED">Unassigned (Default)</option>
+                {revisions.map((r) => (
+                  <option key={r.code} value={r.code}>
+                    {r.code} - {r.name}
+                  </option>
+                ))}
+              </select>
+
+              <div className="flex items-center gap-1.5 border border-slate-300 rounded-md px-2.5 py-1 bg-white">
+                <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
+                <select
+                  value={`${sortBy}_${sortOrder}`}
+                  onChange={(e) => {
+                    const [sb, so] = e.target.value.split("_");
+                    setSortBy(sb as "job_number" | "name");
+                    setSortOrder(so as "asc" | "desc");
+                  }}
+                  className="text-xs bg-transparent border-0 focus:outline-none text-slate-700 cursor-pointer"
+                >
+                  <option value="job_number_asc">Sort: Job # (Asc)</option>
+                  <option value="job_number_desc">Sort: Job # (Desc)</option>
+                  <option value="name_asc">Sort: Name (A → Z)</option>
+                  <option value="name_desc">Sort: Name (Z → A)</option>
+                </select>
+              </div>
+            </>
           )}
         </div>
 
@@ -429,9 +494,42 @@ export const Worksites: React.FC = () => {
             <table className="w-full text-left text-sm border-collapse">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50 text-slate-600 font-semibold text-xs tracking-wider uppercase">
-                  <th className="py-3 px-4">Job Number</th>
-                  <th className="py-3 px-4">Job Name</th>
+                  <th
+                    onClick={() => {
+                      if (sortBy === "job_number") {
+                        setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+                      } else {
+                        setSortBy("job_number");
+                        setSortOrder("asc");
+                      }
+                    }}
+                    className="py-3 px-4 cursor-pointer hover:text-indigo-600 transition select-none"
+                    title="Click to sort by Job Number"
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      Job Number
+                      {sortBy === "job_number" && (sortOrder === "asc" ? " ↑" : " ↓")}
+                    </span>
+                  </th>
+                  <th
+                    onClick={() => {
+                      if (sortBy === "name") {
+                        setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+                      } else {
+                        setSortBy("name");
+                        setSortOrder("asc");
+                      }
+                    }}
+                    className="py-3 px-4 cursor-pointer hover:text-indigo-600 transition select-none"
+                    title="Click to sort by Job Name"
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      Job Name
+                      {sortBy === "name" && (sortOrder === "asc" ? " ↑" : " ↓")}
+                    </span>
+                  </th>
                   <th className="py-3 px-4">Group & Zone</th>
+                  <th className="py-3 px-4">Revision</th>
                   <th className="py-3 px-4">Type</th>
                   <th className="py-3 px-4">Country</th>
                   <th className="py-3 px-4">Boundary Status</th>
@@ -441,19 +539,19 @@ export const Worksites: React.FC = () => {
               <tbody className="divide-y divide-slate-100 text-slate-700">
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-slate-400">
+                    <td colSpan={8} className="py-12 text-center text-slate-400">
                       <RefreshCw className="h-6 w-6 animate-spin mx-auto text-indigo-600 mb-2" />
                       Loading worksites...
                     </td>
                   </tr>
-                ) : worksites.length === 0 ? (
+                ) : sortedAndFilteredWorksites.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-slate-400">
+                    <td colSpan={8} className="py-12 text-center text-slate-400">
                       No worksites match your criteria.
                     </td>
                   </tr>
                 ) : (
-                  worksites.map((ws) => (
+                  sortedAndFilteredWorksites.map((ws) => (
                     <tr
                       key={ws.id}
                       onClick={() => navigate({ to: "/worksites/$worksiteId", params: { worksiteId: ws.id } })}
@@ -479,6 +577,15 @@ export const Worksites: React.FC = () => {
                       <td className="py-3.5 px-4 text-xs text-slate-600">
                         <div>{ws.group_name || "-"}</div>
                         <div className="text-slate-400">{ws.zone_name || "-"}</div>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        {ws.salary_revision_code ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-medium bg-purple-50 text-purple-700 border border-purple-200">
+                            {ws.salary_revision_code}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-slate-400 italic">Default</span>
+                        )}
                       </td>
                       <td className="py-3.5 px-4">
                         {ws.is_outdoor ? (

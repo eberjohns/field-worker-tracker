@@ -267,13 +267,13 @@ Never updated after insert.
 ## Salary and payroll
 
 ### employee_salary (actual pay)
-`employee_id`, `effective_from` date, `standard_hours` numeric(4,1), `basic_salary`, `special_allowance`, `fixed_ot_amount`, `bonus`, `telephone_allowance`, `housing_transport_allowance` (numeric(14,2)), `import_batch_id`, `created_by_user_id`. Unique (employee_id, effective_from). History is kept; the last change date and difference are computed from the last two rows. Gratuity, leave salary, provisions and totals are **not stored** (calculated; snapshotted at payroll approval).
+`employee_id`, `effective_from` date, `standard_hours` numeric(4,1), `basic_salary`, `special_allowance`, `fixed_ot_amount`, `bonus`, `telephone_allowance`, `housing_transport_allowance` (numeric(14,2)), `break_minutes` int nullable (default daily unpaid break duration for explainability in attendance calculation), `import_batch_id`, `created_by_user_id`. Unique (employee_id, effective_from). History is kept; the last change date and difference are computed from the last two rows. Gratuity, leave salary, provisions and totals are **not stored** (calculated; snapshotted at payroll approval).
 
 ### salary_revisions (job budget only)
 `code` unique, `name`, `country`, `effective_from`, `effective_to` nullable, `status`, `notes`. A revision may contain only the grades that changed.
 
 ### salary_revision_lines (job budget only)
-`revision_id`, `grade_code` (base code, year suffix stripped), `grade_group_title`, `basic_salary`, `special_allowance`, `fixed_ot_amount`, `bonus`, `visa_provision`, `air_ticket_provision`, `uniform_provision`, `medical_provision`, `accommodation_provision`, `transportation_provision` (nullable). Unique (revision_id, grade_code). Used only to price job items in the budget.
+`revision_id`, `grade_code` (base code, year suffix stripped), `grade_group_title`, `basic_salary`, `special_allowance`, `fixed_ot_amount`, `bonus`, `visa_provision`, `air_ticket_provision`, `uniform_provision`, `medical_provision`, `accommodation_provision`, `transportation_provision` (nullable), `break_minutes` int nullable. Unique (revision_id, grade_code). Used only to price job items in the budget.
 
 ### payroll_runs
 `period_start`, `period_end`, `country`, `status` (DRAFT | APPROVED), `run_no` (re-runs of the same period), `created_by` (system or user), `scheduled_for`, `approved_by_user_id`, `approved_at`, `calculation_version`. Only one APPROVED run per (period, country); DRAFT runs are replaced by re-runs (history kept).

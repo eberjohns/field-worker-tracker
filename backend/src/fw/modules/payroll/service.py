@@ -164,6 +164,7 @@ class PayrollSalaryService:
             bonus=payload.bonus,
             telephone_allowance=payload.telephone_allowance,
             housing_transport_allowance=payload.housing_transport_allowance,
+            break_minutes=payload.break_minutes,
             created_by_user_id=user_id,
         )
         session.add(row)
@@ -346,6 +347,7 @@ class PayrollSalaryService:
                         standard_hours=salary.standard_hours,
                         salary_portion=portion,
                         basic_salary=salary.basic_salary,
+                        break_minutes=salary.break_minutes,
                         effective_from=salary.effective_from,
                         last_change_date=salary.effective_from,
                         difference=Decimal("0.00"),
@@ -1004,21 +1006,30 @@ class PayrollService:
     async def get_worker_approved_slips(
         session: AsyncSession,
         employee_id: UUID,
+        period: str | None = None,
     ) -> list[WorkerMobilePayrollSlip]:
         """Fetch worker's own approved monthly payroll slips (employer provisions stripped)."""
-        records = await PayrollRepository.get_worker_approved_records(session, employee_id)
+        records = await PayrollRepository.get_worker_approved_records(
+            session, employee_id, period=period
+        )
         slips: list[WorkerMobilePayrollSlip] = []
 
         for r in records:
             month_str = r.payroll_run.period_start.strftime("%B %Y")
+            period_code = r.payroll_run.period_start.strftime("%Y-%m")
+            currency = "SAR" if (r.employee and r.employee.country == "SA") else "AED"
             slips.append(
                 WorkerMobilePayrollSlip(
                     payroll_record_id=r.id,
                     payroll_run_id=r.payroll_run_id,
                     month_label=month_str,
+                    period=period_code,
                     period_start=r.payroll_run.period_start,
                     period_end=r.payroll_run.period_end,
                     status=r.payroll_run.status,
+                    employee_tally_id=r.employee.tally_id if r.employee else None,
+                    employee_name=r.employee.name if r.employee else None,
+                    currency=currency,
                     standard_hours=r.standard_hours,
                     worked_hours=r.worked_hours,
                     paid_leave_hours=r.paid_leave_hours,
@@ -1649,6 +1660,15 @@ class PayrollService:
             # 2. Compute annual planned man-hours and labor budget from job items
             annual_man_hours = Decimal("0.0")
             annual_labor_budget = Decimal("0.00")
+            budget_only_annual_cost = Decimal("0.00")
+
+            # Load budget-only staff types for this country
+            raw_budget_types = await SettingsService.get_setting(
+                session, "budget_only_staff_types", country=ws.country, default=[]
+            )
+            budget_only_types: set[str] = set()
+            if isinstance(raw_budget_types, list):
+                budget_only_types = {str(x).strip().lower() for x in raw_budget_types}
 
             for item in ws.items:
                 if not item.is_active:
@@ -1678,7 +1698,13 @@ class PayrollService:
                     grade,
                     grade_hourly_rates.get(base_grade, Decimal("10.00")),
                 )
-                annual_labor_budget += round_money(item_annual_hours * rate)
+                item_annual_cost = round_money(item_annual_hours * rate)
+                annual_labor_budget += item_annual_cost
+
+                # If staff grade is budget-only, track its planned cost so actual cost
+                # can be credited equally (since no field attendance is tracked for it)
+                if (item.staff_grade_description or "").strip().lower() in budget_only_types:
+                    budget_only_annual_cost += item_annual_cost
 
             # Manual override wins if set on the worksite
             if ws.budget_amount and ws.budget_amount > Decimal("0.00"):
@@ -1693,6 +1719,7 @@ class PayrollService:
                 elapsed_days = 0
             fraction = min(Decimal("1.0"), Decimal(str(elapsed_days)) / Decimal("365.0"))
             prorated_budget = round_money(contract_annual_budget * fraction)
+            budget_only_prorated_cost = round_money(budget_only_annual_cost * fraction)
 
             # 4. Compute cumulative actual cost allocated from job_cost_allocations
             from sqlalchemy import func, select
@@ -1707,7 +1734,10 @@ class PayrollService:
                 )
             )
             act_res = await session.execute(act_stmt)
-            actual_cost = Decimal(str(act_res.scalar() or "0.00"))
+            raw_field_actual = Decimal(str(act_res.scalar() or "0.00"))
+            # For budget-only staff positions, actual cost equals planned cost
+            # so overall job costing preserves pure operational variance without false skew
+            actual_cost = raw_field_actual + budget_only_prorated_cost
 
             variance = actual_cost - prorated_budget
             variance_pct = (

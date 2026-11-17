@@ -63,6 +63,7 @@ export const AssignModal: React.FC<AssignModalProps> = ({
   const [filterOnlySelectedCrew, setFilterOnlySelectedCrew] = useState<boolean>(
     Boolean(selectedSupervisorId)
   );
+  const [showAllRoles, setShowAllRoles] = useState<boolean>(false);
 
   // Active Job Item and Date resolution
   const activeJobItem =
@@ -133,8 +134,12 @@ export const AssignModal: React.FC<AssignModalProps> = ({
 
       setLoadingCandidates(true);
       try {
+        const queryParams = new URLSearchParams({
+          date: activeDate,
+          all_roles: String(showAllRoles),
+        });
         const res = await fetch(
-          `/api/v1/job-items/${jId}/recommendations?date=${activeDate}`,
+          `/api/v1/job-items/${jId}/recommendations?${queryParams.toString()}`,
           { headers: authHeaders }
         );
         if (res.ok) {
@@ -152,7 +157,7 @@ export const AssignModal: React.FC<AssignModalProps> = ({
     };
 
     fetchRecommendations();
-  }, [isOpen, activeJobItem?.job_item_id, activeJobItem?.id, initialJobItemId, activeDate]);
+  }, [isOpen, activeJobItem?.job_item_id, activeJobItem?.id, initialJobItemId, activeDate, showAllRoles]);
 
   if (!isOpen) return null;
 
@@ -514,6 +519,16 @@ export const AssignModal: React.FC<AssignModalProps> = ({
               </div>
 
               <div className="flex items-center gap-2">
+                <label className="flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200 select-none">
+                  <input
+                    type="checkbox"
+                    checked={showAllRoles}
+                    onChange={(e) => setShowAllRoles(e.target.checked)}
+                    className="rounded text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
+                  />
+                  <span className="font-semibold text-slate-800">Show all workforce roles</span>
+                </label>
+
                 {selectedSupervisorId && (
                   <label className="flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200 select-none">
                     <input

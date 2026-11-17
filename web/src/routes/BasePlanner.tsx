@@ -15,6 +15,7 @@ import {
   Calendar,
   AlertTriangle,
   Pin,
+  ArrowUpDown,
 } from "lucide-react";
 import {
   BasePlannerResponse,
@@ -71,6 +72,7 @@ export const BasePlanner: React.FC = () => {
   // Supervisor filter
   const [supervisorsList, setSupervisorsList] = useState<SupervisorOption[]>([]);
   const [selectedSupervisorId, setSelectedSupervisorId] = useState<string>("");
+  const [worksiteSortOrder, setWorksiteSortOrder] = useState<"asc" | "desc">("asc");
 
   // Slot Assignment Modal state
   const [activeSlot, setActiveSlot] = useState<{
@@ -101,6 +103,7 @@ export const BasePlanner: React.FC = () => {
   const [candidates, setCandidates] = useState<CandidateRecommendation[]>([]);
   const [candidateSearch, setCandidateSearch] = useState<string>("");
   const [filterToSupervisorCrew, setFilterToSupervisorCrew] = useState<boolean>(true);
+  const [showAllRoles, setShowAllRoles] = useState<boolean>(false);
   const [loadingCandidates, setLoadingCandidates] = useState<boolean>(false);
   const [savingSlot, setSavingSlot] = useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
@@ -185,7 +188,9 @@ export const BasePlanner: React.FC = () => {
           const match = e.weekday_mask.match(/W(\d)_/);
           if (match) weeks.add(Number(match[1]));
         }
-        setSelectedWeeksOfMonth(weeks.size > 0 ? Array.from(weeks) : [1]);
+        const maxAllowed = Math.min(4, Math.max(1, Number(it.occurrences_per_period) || 1));
+        const loadedWeeks = weeks.size > 0 ? Array.from(weeks).slice(0, maxAllowed) : [1];
+        setSelectedWeeksOfMonth(loadedWeeks);
       } else {
         setSelectedWeeksOfMonth([1]);
       }
@@ -226,11 +231,19 @@ export const BasePlanner: React.FC = () => {
       setSelectedQuarterWeek(1);
     }
 
-    // Fetch candidate recommendations for this specific weekday
+    setShowAllRoles(false);
+    fetchCandidatesForSlot(it.job_item_id, dow, false);
+  };
+
+  const fetchCandidatesForSlot = async (
+    jobItemId: string,
+    dow: string,
+    allRoles: boolean = showAllRoles
+  ) => {
     setLoadingCandidates(true);
     try {
       const cRes = await fetch(
-        `/api/v1/job-items/${it.job_item_id}/recommendations?weekday=${dow}`,
+        `/api/v1/job-items/${jobItemId}/recommendations?weekday=${dow}&all_roles=${allRoles}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       if (cRes.ok) {
@@ -315,14 +328,16 @@ export const BasePlanner: React.FC = () => {
       }[] = [];
 
       if (fillWorkingDays) {
-        // Convenience Fill: Copy these workers to MON, TUE, WED, THU, FRI, SAT explicitly!
-        // Automatically skips any day that is the worker's weekly rest day!
+        // Convenience Fill: Fulfill required weekly working days quota (default 6 days).
+        // Automatically skips the worker's weekly rest day, and overflows to Sunday if needed.
         const workingDays = ["MON", "TUE", "WED", "THU", "FRI", "SAT"];
-        for (const d of workingDays) {
-          slotEntries.forEach((se, idx) => {
-            if (isSameWeekday(se.weekly_off_day, d)) {
-              return; // Skip worker on their weekly off day
-            }
+        const neededDays = Math.min(6, Math.max(1, Number(it.occurrences_per_period) || 6));
+        slotEntries.forEach((se, idx) => {
+          const assignedDays = workingDays.filter((d) => !isSameWeekday(se.weekly_off_day, d));
+          if (assignedDays.length < neededDays && !isSameWeekday(se.weekly_off_day, "SUN")) {
+            assignedDays.push("SUN");
+          }
+          assignedDays.forEach((d) => {
             newEntries.push({
               employee_id: se.employee_id,
               weekday_mask: d,
@@ -330,7 +345,7 @@ export const BasePlanner: React.FC = () => {
               sequence: idx + 1,
             });
           });
-        }
+        });
       } else if (isMonthly) {
         // Monthly Cadence: generate W{week}_{dow}
         for (const w of selectedWeeksOfMonth) {
@@ -416,9 +431,10 @@ export const BasePlanner: React.FC = () => {
       const aPinned = pinnedWorksites.has(a.worksite_id);
       const bPinned = pinnedWorksites.has(b.worksite_id);
       if (aPinned !== bPinned) return aPinned ? -1 : 1;
-      return a.job_number.localeCompare(b.job_number);
+      const cmp = a.job_number.localeCompare(b.job_number, undefined, { numeric: true });
+      return worksiteSortOrder === "asc" ? cmp : -cmp;
     });
-  }, [worksites, searchQuery, pinnedWorksites]);
+  }, [worksites, searchQuery, pinnedWorksites, worksiteSortOrder]);
 
   // Quota calculation helper for modal
   const quotaStatusInModal = useMemo(() => {
@@ -537,6 +553,17 @@ export const BasePlanner: React.FC = () => {
                 className="w-full pl-9 pr-4 py-2 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
               />
             </div>
+
+            {/* Worksite Sort Toggle */}
+            <button
+              type="button"
+              onClick={() => setWorksiteSortOrder((prev) => (prev === "asc" ? "desc" : "asc"))}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-sm transition"
+              title="Toggle Worksite Job Number Sorting Order"
+            >
+              <ArrowUpDown className="h-3.5 w-3.5 text-slate-500" />
+              <span>Job # {worksiteSortOrder === "asc" ? "(Asc)" : "(Desc)"}</span>
+            </button>
           </div>
         </div>
 
@@ -723,6 +750,7 @@ export const BasePlanner: React.FC = () => {
                             {/* 7 Weekday Slot Cells */}
                             {WEEKDAYS.map((dow) => {
                               const isRecommended = recommendedWeekdays.includes(dow);
+                              const showTargetUI = isRecommended && !isQuotaMet;
 
                               // Find workers scheduled for this weekday (weekly, or periodic cadence prefix)
                               const matchingEntries = (it.template?.entries || []).filter((e) => {
@@ -738,13 +766,13 @@ export const BasePlanner: React.FC = () => {
                                   key={dow}
                                   onClick={() => handleCellClick(ws, it, dow)}
                                   className={`px-2 py-2 border-l border-slate-200 cursor-pointer transition-colors relative hover:bg-indigo-50/60 ${
-                                    isRecommended ? "ring-1 ring-inset ring-cyan-400" : ""
+                                    showTargetUI ? "ring-1 ring-inset ring-cyan-400" : ""
                                   }`}
                                 >
                                   <div className="space-y-1 min-h-[52px] flex flex-col justify-between">
                                     {/* Top status */}
                                     <div className="flex items-center justify-between text-[9px]">
-                                      {isRecommended ? (
+                                      {showTargetUI ? (
                                         <span className="text-cyan-700 font-bold">Target</span>
                                       ) : (
                                         <span></span>
@@ -859,38 +887,69 @@ export const BasePlanner: React.FC = () => {
               )}
 
               {/* Periodic Cadence Selection: Monthly or Quarterly (Option B) */}
-              {activeSlot.item.frequency_unit === "MONTH" && (
-                <div className="p-3.5 rounded-lg bg-indigo-50/50 border border-indigo-100 space-y-2">
-                  <label className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
-                    <Calendar className="h-3.5 w-3.5 text-indigo-600" />
-                    Target Weeks of the Month:
-                  </label>
-                  <p className="text-[11px] text-slate-500">
-                    Select which week(s) of the month this recurring visit should take place:
-                  </p>
-                  <div className="flex flex-wrap items-center gap-3 pt-1">
-                    {[1, 2, 3, 4].map((wk) => (
-                      <label key={wk} className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={selectedWeeksOfMonth.includes(wk)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedWeeksOfMonth((prev) => [...prev, wk]);
-                            } else {
-                              if (selectedWeeksOfMonth.length > 1) {
-                                setSelectedWeeksOfMonth((prev) => prev.filter((w) => w !== wk));
-                              }
-                            }
-                          }}
-                          className="rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
-                        />
-                        <span>Week {wk}</span>
-                      </label>
-                    ))}
+              {activeSlot.item.frequency_unit === "MONTH" && (() => {
+                const maxAllowedWeeks = Math.min(
+                  4,
+                  Math.max(1, Number(activeSlot.item.occurrences_per_period) || 1)
+                );
+                return (
+                  <div className="p-3.5 rounded-lg bg-indigo-50/50 border border-indigo-100 space-y-2">
+                    <label className="text-xs font-bold text-indigo-900 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <Calendar className="h-3.5 w-3.5 text-indigo-600" />
+                        Target Weeks of the Month:
+                      </span>
+                      <span className="text-2xs font-semibold px-2 py-0.5 rounded bg-indigo-100 text-indigo-800">
+                        Max {maxAllowedWeeks} week{maxAllowedWeeks > 1 ? "s" : ""} (Quota)
+                      </span>
+                    </label>
+                    <p className="text-[11px] text-slate-500">
+                      Select which week(s) of the month this recurring visit should take place (selected {selectedWeeksOfMonth.length} of {maxAllowedWeeks}):
+                    </p>
+                    <div className="flex flex-wrap items-center gap-3 pt-1">
+                      {[1, 2, 3, 4].map((wk) => {
+                        const isChecked = selectedWeeksOfMonth.includes(wk);
+                        const isMaxReached = selectedWeeksOfMonth.length >= maxAllowedWeeks;
+                        const isDisabled = !isChecked && isMaxReached && maxAllowedWeeks > 1;
+
+                        return (
+                          <label
+                            key={wk}
+                            className={`flex items-center gap-1.5 text-xs font-semibold transition ${
+                              isDisabled
+                                ? "text-slate-400 cursor-not-allowed opacity-60"
+                                : "text-slate-700 cursor-pointer"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              disabled={isDisabled}
+                              onChange={(e) => {
+                                if (maxAllowedWeeks === 1) {
+                                  setSelectedWeeksOfMonth([wk]);
+                                } else {
+                                  if (e.target.checked) {
+                                    if (selectedWeeksOfMonth.length < maxAllowedWeeks) {
+                                      setSelectedWeeksOfMonth((prev) => [...prev, wk]);
+                                    }
+                                  } else {
+                                    if (selectedWeeksOfMonth.length > 1) {
+                                      setSelectedWeeksOfMonth((prev) => prev.filter((w) => w !== wk));
+                                    }
+                                  }
+                                }
+                              }}
+                              className="rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 disabled:opacity-50"
+                            />
+                            <span>Week {wk}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {activeSlot.item.frequency_unit === "QUARTER" && (
                 <div className="p-3.5 rounded-lg bg-indigo-50/50 border border-indigo-100 space-y-3">
@@ -1031,18 +1090,36 @@ export const BasePlanner: React.FC = () => {
                     </h4>
                   </div>
 
-                  {/* Supervisor Crew Filter Toggle inside Modal */}
-                  {selectedSupervisorId && (
-                    <label className="text-xs font-medium text-indigo-700 flex items-center gap-1.5 cursor-pointer bg-indigo-50 px-2 py-1 rounded border border-indigo-200">
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-medium text-slate-700 flex items-center gap-1.5 cursor-pointer bg-slate-50 px-2 py-1 rounded border border-slate-200">
                       <input
                         type="checkbox"
-                        checked={filterToSupervisorCrew}
-                        onChange={(e) => setFilterToSupervisorCrew(e.target.checked)}
-                        className="rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
+                        checked={showAllRoles}
+                        onChange={(e) => {
+                          const next = e.target.checked;
+                          setShowAllRoles(next);
+                          if (activeSlot) {
+                            fetchCandidatesForSlot(activeSlot.item.job_item_id, activeSlot.weekday, next);
+                          }
+                        }}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
                       />
-                      <span>Filter to Selected Supervisor's Crew</span>
+                      <span>Show all workforce roles</span>
                     </label>
-                  )}
+
+                    {/* Supervisor Crew Filter Toggle inside Modal */}
+                    {selectedSupervisorId && (
+                      <label className="text-xs font-medium text-indigo-700 flex items-center gap-1.5 cursor-pointer bg-indigo-50 px-2 py-1 rounded border border-indigo-200">
+                        <input
+                          type="checkbox"
+                          checked={filterToSupervisorCrew}
+                          onChange={(e) => setFilterToSupervisorCrew(e.target.checked)}
+                          className="rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
+                        />
+                        <span>Filter to Crew</span>
+                      </label>
+                    )}
+                  </div>
                 </div>
 
                 {/* Candidate Search Box */}

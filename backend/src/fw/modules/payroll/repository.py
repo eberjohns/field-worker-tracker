@@ -4,7 +4,7 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, extract, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -69,14 +69,29 @@ class PayrollRepository:
     ) -> SalaryRevision | None:
         """Find the active salary revision.
 
-        If revision_code is explicitly assigned to the worksite, return it.
-        Otherwise return the latest active revision for the country.
+        Precedence:
+        1. Explicit worksite revision_code
+        2. Company setting 'default_salary_revision_code' for country
+        3. Latest active revision for country
         """
+        # 1. Worksite-specific revision code
         if revision_code:
             rev = await PayrollRepository.get_revision_by_code(session, revision_code)
             if rev and rev.status == "ACTIVE":
                 return rev
 
+        # 2. Company setting default_salary_revision_code
+        from fw.modules.settings.service import SettingsService
+
+        def_rev_code = await SettingsService.get_setting(
+            session, "default_salary_revision_code", country=country
+        )
+        if def_rev_code and isinstance(def_rev_code, str):
+            rev = await PayrollRepository.get_revision_by_code(session, def_rev_code.strip())
+            if rev and rev.status == "ACTIVE":
+                return rev
+
+        # 3. Latest active revision for country
         stmt = (
             select(SalaryRevision)
             .where(SalaryRevision.country == country, SalaryRevision.status == "ACTIVE")
@@ -196,8 +211,9 @@ class PayrollRepository:
     async def get_worker_approved_records(
         session: AsyncSession,
         employee_id: UUID,
+        period: str | None = None,
     ) -> list[PayrollRecord]:
-        """Fetch all approved monthly payroll records for a worker."""
+        """Fetch all approved monthly payroll records for a worker, optionally filtered by period YYYY-MM."""
         stmt = (
             select(PayrollRecord)
             .join(PayrollRun, PayrollRecord.payroll_run_id == PayrollRun.id)
@@ -211,6 +227,18 @@ class PayrollRepository:
             )
             .order_by(PayrollRun.period_start.desc())
         )
+        if period:
+            try:
+                parts = period.split("-")
+                p_year = int(parts[0])
+                p_month = int(parts[1])
+                stmt = stmt.where(
+                    extract("year", PayrollRun.period_start) == p_year,
+                    extract("month", PayrollRun.period_start) == p_month,
+                )
+            except (ValueError, IndexError):
+                pass
+
         res = await session.execute(stmt)
         return list(res.scalars().all())
 

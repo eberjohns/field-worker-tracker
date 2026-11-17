@@ -399,6 +399,32 @@
                   </div>
                 </div>
 
+                <!-- Change Password Card -->
+                <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs text-3xs space-y-2">
+                  <div class="flex justify-between items-center">
+                    <span class="text-3xs font-bold uppercase text-slate-400">Change Password</span>
+                    <button id="phoneBtnTogglePwdForm" type="button" class="text-indigo-600 hover:text-indigo-800 font-bold text-3xs">Change</button>
+                  </div>
+                  <form id="phoneChangePwdForm" class="space-y-1.5 hidden">
+                    <div>
+                      <label class="text-slate-500 block text-3xs">Current Password</label>
+                      <input id="phoneInputOldPwd" type="password" placeholder="Current password" class="w-full text-3xs border border-slate-300 rounded px-2 py-1 font-mono text-slate-900 focus:outline-none focus:border-indigo-600">
+                    </div>
+                    <div>
+                      <label class="text-slate-500 block text-3xs">New Password</label>
+                      <input id="phoneInputNewPwd" type="password" placeholder="Min 8 chars, 1 upper, 1 num" class="w-full text-3xs border border-slate-300 rounded px-2 py-1 font-mono text-slate-900 focus:outline-none focus:border-indigo-600">
+                    </div>
+                    <div>
+                      <label class="text-slate-500 block text-3xs">Confirm New Password</label>
+                      <input id="phoneInputConfirmPwd" type="password" placeholder="Repeat new password" class="w-full text-3xs border border-slate-300 rounded px-2 py-1 font-mono text-slate-900 focus:outline-none focus:border-indigo-600">
+                    </div>
+                    <button id="phoneBtnSubmitPwd" type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1 rounded text-3xs">
+                      Save New Password
+                    </button>
+                    <div id="phoneChangePwdMsg" class="text-3xs hidden"></div>
+                  </form>
+                </div>
+
                 <button id="phoneBtnLogout" class="w-full bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 font-bold text-2xs py-2 rounded-lg">
                   Sign Out from Device
                 </button>

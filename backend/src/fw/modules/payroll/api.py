@@ -135,13 +135,54 @@ async def list_payroll_records(
     return detail.records
 
 
-@router.get("/mobile/me/payroll", response_model=list[WorkerMobilePayrollSlip])
-@router.get("/payroll/my-records", response_model=list[WorkerMobilePayrollSlip])
+@router.get(
+    "/mobile/me/payroll",
+    response_model=WorkerMobilePayrollSlip | list[WorkerMobilePayrollSlip],
+    tags=["mobile", "payroll"],
+)
+async def get_mobile_payroll(
+    period: str | None = Query(None, pattern=r"^\d{4}-\d{2}$"),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> WorkerMobilePayrollSlip | list[WorkerMobilePayrollSlip]:
+    """Worker's own approved monthly payroll records (employer provisions stripped).
+
+    If period=YYYY-MM is provided, returns that specific month's approved slip (or 404).
+    If period is omitted, returns the list of all approved slips.
+    """
+    if not current_user.employee_id:
+        raise AppError(
+            code="NO_EMPLOYEE_LINKED",
+            message="User account is not linked to an employee profile.",
+            status_code=400,
+        )
+
+    slips = await PayrollService.get_worker_approved_slips(
+        session=session,
+        employee_id=current_user.employee_id,
+        period=period,
+    )
+    if period:
+        if not slips:
+            raise AppError(
+                code="PAYROLL_NOT_FOUND",
+                message=f"No approved payroll slip found for period '{period}'.",
+                status_code=404,
+            )
+        return slips[0]
+    return slips
+
+
+@router.get(
+    "/payroll/my-records",
+    response_model=list[WorkerMobilePayrollSlip],
+    tags=["payroll"],
+)
 async def get_my_payroll_records(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> list[WorkerMobilePayrollSlip]:
-    """Worker's own approved monthly payroll records (employer provisions stripped)."""
+    """Worker's own approved monthly payroll records for web view."""
     if not current_user.employee_id:
         raise AppError(
             code="NO_EMPLOYEE_LINKED",

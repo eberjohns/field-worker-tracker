@@ -20,6 +20,7 @@ class WorksiteBase(BaseModel):
     is_outdoor: bool | None = None
     country: str = Field(..., max_length=2)
     contract_group_ref: str | None = None
+    salary_revision_code: str | None = None
     start_date: date | None = None
     end_date: date | None = None
     budget_amount: Decimal | None = None
@@ -37,6 +38,7 @@ class WorksiteUpdate(BaseModel):
     customer_type: str | None = None
     is_outdoor: bool | None = None
     contract_group_ref: str | None = None
+    salary_revision_code: str | None = None
     start_date: date | None = None
     end_date: date | None = None
     budget_amount: Decimal | None = None
@@ -59,6 +61,7 @@ class WorksiteResponse(BaseModel):
     is_outdoor: bool
     country: str
     contract_group_ref: str | None = None
+    salary_revision_code: str | None = None
     start_date: date | None = None
     end_date: date | None = None
     has_boundary: bool

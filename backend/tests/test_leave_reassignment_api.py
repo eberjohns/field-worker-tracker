@@ -477,21 +477,37 @@ async def test_overlapping_leave_refused_and_cancelling_restores_slots():
         assert res2.status_code == 400
         assert "overlaps with existing APPROVED leave" in str(res2.json()["detail"])
 
-        # 3. Cancel first leave
+        # 3. Cancelling an approved leave is strictly forbidden
         cancel_res = await ac.post(
             f"/api/v1/leave-requests/{leave1_id}/cancel",
             headers={"Authorization": f"Bearer {eng_token}"},
         )
-        assert cancel_res.status_code == 200
-        assert cancel_res.json()["status"] == "CANCELLED"
+        assert cancel_res.status_code == 400
+        assert "Approved leave cannot be cancelled" in cancel_res.json()["detail"]
 
-        # 4. Now the second leave is allowed
+        # 4. Now test that a REQUESTED (pending) leave CAN be cancelled
         res3 = await ac.post(
             "/api/v1/leave-requests",
-            json=payload_overlap,
+            json={
+                "employee_id": str(data["w2"].id),
+                "leave_type": "ANNUAL",
+                "from_date": str(leave_start),
+                "to_date": str(leave_end),
+                "reason": "Pending annual leave",
+            },
             headers={"Authorization": f"Bearer {sup_token}"},
         )
         assert res3.status_code == 201
+        leave2_id = res3.json()["id"]
+        assert res3.json()["status"] == "REQUESTED"
+
+        # Cancelling the requested leave succeeds
+        cancel_req_res = await ac.post(
+            f"/api/v1/leave-requests/{leave2_id}/cancel",
+            headers={"Authorization": f"Bearer {sup_token}"},
+        )
+        assert cancel_req_res.status_code == 200
+        assert cancel_req_res.json()["status"] == "CANCELLED"
 
 
 @db_required

@@ -627,3 +627,119 @@ def test_build_roster_excel_bytes():
     assert ws["L4"].value == "WEEKLY-OFF"
     assert ws["M4"].value == "45.0 / 48.0"
     assert ws["N4"].value == "Deira Bus"
+
+
+def test_rank_candidates_all_roles_and_budget_only_exclusion():
+    """Verify that budget-only workers are strictly excluded, and all_roles enables cross-grade candidates."""
+    target_job = TargetJobItem(
+        job_item_id="item-1",
+        worksite_id="ws-1",
+        planned_grade_code="G1C",
+        staff_grade_description="Gardner Helper",
+        deployment_type="REMOTE",
+        required_hours=Decimal("8.0"),
+    )
+
+    w_exact = CandidateWorker(
+        employee_id="w1",
+        name="Exact Worker",
+        tally_id="T01",
+        is_active=True,
+        join_date=date(2025, 1, 1),
+        employment_end_date=None,
+        grade_code="G1C",
+        staff_grade_description="Gardner Helper",
+        weekly_off_day="SUN",
+        standard_hours=Decimal("8.0"),
+        is_on_leave=False,
+        is_budget_only=False,
+        worked_at_site_recently=False,
+        shares_supervisor=False,
+        weekly_allocated_hours=Decimal("0.0"),
+        today_allocated_hours=Decimal("0.0"),
+    )
+
+    w_same_group = CandidateWorker(
+        employee_id="w2",
+        name="Same Group Worker",
+        tally_id="T02",
+        is_active=True,
+        join_date=date(2025, 1, 1),
+        employment_end_date=None,
+        grade_code="G1B",
+        staff_grade_description="Gardner Handwatering",
+        weekly_off_day="SUN",
+        standard_hours=Decimal("8.0"),
+        is_on_leave=False,
+        is_budget_only=False,
+        worked_at_site_recently=False,
+        shares_supervisor=False,
+        weekly_allocated_hours=Decimal("0.0"),
+        today_allocated_hours=Decimal("0.0"),
+    )
+
+    w_other_role = CandidateWorker(
+        employee_id="w3",
+        name="Driver Worker",
+        tally_id="T03",
+        is_active=True,
+        join_date=date(2025, 1, 1),
+        employment_end_date=None,
+        grade_code="DRV1",
+        staff_grade_description="Driver Heavy",
+        weekly_off_day="SUN",
+        standard_hours=Decimal("8.0"),
+        is_on_leave=False,
+        is_budget_only=False,
+        worked_at_site_recently=False,
+        shares_supervisor=False,
+        weekly_allocated_hours=Decimal("0.0"),
+        today_allocated_hours=Decimal("0.0"),
+    )
+
+    w_budget_only = CandidateWorker(
+        employee_id="w4",
+        name="Budget HSE",
+        tally_id="T04",
+        is_active=True,
+        join_date=date(2025, 1, 1),
+        employment_end_date=None,
+        grade_code="ENG1",
+        staff_grade_description="HSE Engineer",
+        weekly_off_day="SUN",
+        standard_hours=Decimal("8.0"),
+        is_on_leave=False,
+        is_budget_only=True,
+        worked_at_site_recently=False,
+        shares_supervisor=False,
+        weekly_allocated_hours=Decimal("0.0"),
+        today_allocated_hours=Decimal("0.0"),
+    )
+
+    candidates = [w_exact, w_same_group, w_other_role, w_budget_only]
+
+    # Test 1: all_roles=False -> only exact and same grade group match, budget-only excluded
+    ranked_default = rank_candidates_for_job(
+        candidates, target_job, target_date=date(2026, 11, 2), all_roles=False
+    )
+    ranked_ids = [sc.worker.employee_id for sc in ranked_default]
+    assert "w1" in ranked_ids
+    assert "w2" in ranked_ids
+    assert "w3" not in ranked_ids
+    assert "w4" not in ranked_ids
+    assert ranked_default[0].worker.employee_id == "w1"  # Exact match top
+    assert ranked_default[0].exact_staff_type_match is True
+
+    # Test 2: all_roles=True -> cross-role w3 is included, but budget-only w4 is STILL strictly excluded
+    ranked_all = rank_candidates_for_job(
+        candidates, target_job, target_date=date(2026, 11, 2), all_roles=True
+    )
+    all_ids = [sc.worker.employee_id for sc in ranked_all]
+    assert "w1" in all_ids
+    assert "w2" in all_ids
+    assert "w3" in all_ids
+    assert "w4" not in all_ids  # Budget-only must NEVER appear in recommendations
+
+    # Verify w3 has cross-role warning and lower ranking than w1 and w2
+    w3_scored = next(sc for sc in ranked_all if sc.worker.employee_id == "w3")
+    assert any("Cross-role" in w for w in w3_scored.warnings)

@@ -69,6 +69,7 @@ def rank_candidates_for_job(
     candidates: list[CandidateWorker],
     job: TargetJobItem,
     target_date: date,
+    all_roles: bool = False,
 ) -> list[ScoredCandidate]:
     """Rank worker candidates for a job assignment on target_date.
 
@@ -76,14 +77,15 @@ def rank_candidates_for_job(
     - Active and employed on target_date
     - Accessible in user's scope
     - Not on approved leave
-    - Not budget-only
-    - Grade group matches the job item planned grade group
+    - Never budget-only roles (strictly excluded from scheduling)
+    - If all_roles=False: Grade group matches the job item planned grade group or exact role match
 
     Sorting order:
     1. Exact staff type match first
-    2. Worked at this worksite in last 14 days
-    3. Shares same supervisor
-    4. Most free hours in the target week
+    2. Same grade group
+    3. Worked at this worksite in last 14 days
+    4. Shares same supervisor
+    5. Most free hours in the target week
     """
     job_group = extract_grade_group(job.planned_grade_code)
     job_sgd = (job.staff_grade_description or "").strip().lower()
@@ -91,7 +93,7 @@ def rank_candidates_for_job(
     scored_list: list[ScoredCandidate] = []
 
     for w in candidates:
-        # Base hard filters
+        # Base hard filters (budget-only workers are never scheduled)
         if not w.is_scope_accessible or not w.is_active or w.is_on_leave or w.is_budget_only:
             continue
 
@@ -106,8 +108,8 @@ def rank_candidates_for_job(
         grade_group_match = bool(worker_group and job_group and worker_group == job_group)
         exact_staff_type = bool(worker_sgd and job_sgd and worker_sgd == job_sgd)
 
-        # Eligible candidates must match either the exact staff grade description or the grade group
-        if not (exact_staff_type or grade_group_match):
+        # Unless all_roles is requested, filter to matching staff grade description or grade group
+        if not all_roles and not (exact_staff_type or grade_group_match):
             continue
 
         reasons: list[str] = []
@@ -117,6 +119,9 @@ def rank_candidates_for_job(
             reasons.append("Exact staff type match")
         elif grade_group_match:
             reasons.append(f"Same grade group ({worker_group})")
+        else:
+            reasons.append(f"Other role/grade group ({worker_group or 'No Grade'})")
+            warnings.append(f"Cross-role assignment: {w.staff_grade_description or 'No role'}")
 
         if w.shares_supervisor:
             crew_label = f" ({w.supervisor_name})" if w.supervisor_name else ""

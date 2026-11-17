@@ -25,6 +25,7 @@ import {
   Clock,
   Download,
   Upload,
+  ArrowUpDown,
 } from "lucide-react";
 import {
   OperationalCoverageResponse,
@@ -128,6 +129,7 @@ export const OperationalPlanner: React.FC = () => {
   });
 
   const [loading, setLoading] = useState<boolean>(true);
+  const [worksiteSortOrder, setWorksiteSortOrder] = useState<"asc" | "desc">("asc");
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [exportingRoster, setExportingRoster] = useState<boolean>(false);
@@ -273,6 +275,7 @@ export const OperationalPlanner: React.FC = () => {
   const [candidates, setCandidates] = useState<CandidateRecommendation[]>([]);
   const [candidateSearch, setCandidateSearch] = useState<string>("");
   const [filterToSupervisorCrew, setFilterToSupervisorCrew] = useState<boolean>(true);
+  const [showAllRoles, setShowAllRoles] = useState<boolean>(false);
   const [loadingCandidates, setLoadingCandidates] = useState<boolean>(false);
   const [savingShift, setSavingShift] = useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
@@ -658,12 +661,21 @@ export const OperationalPlanner: React.FC = () => {
     setStagedBaseRemovals(new Map());
     setRemovingBaseWorkerId(null);
     setBaseRemovalReasonInput("");
+    setShowAllRoles(false);
 
     // Load candidate recommendations for this item
+    fetchCellCandidates(it.job_item_id, cell.work_date, false);
+  };
+
+  const fetchCellCandidates = async (
+    jobItemId: string,
+    workDate: string,
+    allRoles: boolean = showAllRoles
+  ) => {
     setLoadingCandidates(true);
     try {
       const res = await fetch(
-        `/api/v1/job-items/${it.job_item_id}/recommendations?date=${cell.work_date}`,
+        `/api/v1/job-items/${jobItemId}/recommendations?date=${workDate}&all_roles=${allRoles}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       if (res.ok) {
@@ -889,9 +901,10 @@ export const OperationalPlanner: React.FC = () => {
       const aPinned = pinnedWorksites.has(a.worksite_id);
       const bPinned = pinnedWorksites.has(b.worksite_id);
       if (aPinned !== bPinned) return aPinned ? -1 : 1;
-      return a.job_number.localeCompare(b.job_number);
+      const cmp = a.job_number.localeCompare(b.job_number, undefined, { numeric: true });
+      return worksiteSortOrder === "asc" ? cmp : -cmp;
     });
-  }, [coverageData, searchQuery, pinnedWorksites]);
+  }, [coverageData, searchQuery, pinnedWorksites, worksiteSortOrder]);
 
   // Unique job numbers for Worker Roster filter dropdown
   const availableJobNumbers = useMemo(() => {
@@ -1254,16 +1267,27 @@ export const OperationalPlanner: React.FC = () => {
 
             {/* Worksite Search (Coverage View) */}
             {activeLens === "COVERAGE" && (
-              <div className="relative w-56">
-                <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search worksite..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
-                />
-              </div>
+              <>
+                <div className="relative w-56">
+                  <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search worksite..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setWorksiteSortOrder((prev) => (prev === "asc" ? "desc" : "asc"))}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-sm transition"
+                  title="Toggle Worksite Job Number Sorting Order"
+                >
+                  <ArrowUpDown className="h-3.5 w-3.5 text-slate-500" />
+                  <span>Job # {worksiteSortOrder === "asc" ? "(Asc)" : "(Desc)"}</span>
+                </button>
+              </>
             )}
 
             {/* Reassignments History Toggle Button */}
@@ -2613,16 +2637,37 @@ export const OperationalPlanner: React.FC = () => {
                   </div>
                 )}
 
-                {/* Candidate Search */}
-                <div className="relative">
-                  <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Search candidate by name, ID or grade..."
-                    value={candidateSearch}
-                    onChange={(e) => setCandidateSearch(e.target.value)}
-                    className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
+                {/* Candidate Search & All Roles Toggle */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Search candidate by name, ID or grade..."
+                      value={candidateSearch}
+                      onChange={(e) => setCandidateSearch(e.target.value)}
+                      className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <label className="flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer bg-slate-50 px-2 py-1.5 rounded-lg border border-slate-200 select-none whitespace-nowrap">
+                    <input
+                      type="checkbox"
+                      checked={showAllRoles}
+                      onChange={(e) => {
+                        const next = e.target.checked;
+                        setShowAllRoles(next);
+                        if (selectedCell) {
+                          fetchCellCandidates(
+                            selectedCell.item.job_item_id,
+                            selectedCell.cell.work_date,
+                            next
+                          );
+                        }
+                      }}
+                      className="rounded text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
+                    />
+                    <span className="font-semibold text-slate-800">All roles</span>
+                  </label>
                 </div>
 
                 {/* Candidate List */}

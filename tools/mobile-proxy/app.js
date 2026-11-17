@@ -1105,16 +1105,21 @@
     const confInterval = state.synced.settings?.confirmation_polling_interval_s || 300;
 
     if (detectedZone !== state.currentZone) {
-      if (detectedZone === 'WORKSITE_POLYGON') {
-        queueEvent('ENTRY', activeWorksiteId, simulatedTime);
+      if (detectedZone === 'CAMP') {
+        queueEvent('ENTRY', null, simulatedTime, true);
+        state.route.lastPingSimSecs = currentSimSecs;
+      } else if (state.currentZone === 'CAMP' && detectedZone !== 'CAMP') {
+        queueEvent('EXIT', null, simulatedTime, true);
+      } else if (detectedZone === 'WORKSITE_POLYGON') {
+        queueEvent('ENTRY', activeWorksiteId, simulatedTime, false);
         state.route.lastPingSimSecs = currentSimSecs;
       } else if (state.currentZone === 'WORKSITE_POLYGON' && detectedZone !== 'WORKSITE_POLYGON') {
-        queueEvent('EXIT', state.currentWorksiteId, simulatedTime);
+        queueEvent('EXIT', state.currentWorksiteId, simulatedTime, false);
       }
-    } else if (detectedZone === 'WORKSITE_POLYGON') {
-      // Periodic ping inside worksite
+    } else if (detectedZone === 'WORKSITE_POLYGON' || detectedZone === 'CAMP') {
+      // Periodic ping inside worksite or accommodation
       if (currentSimSecs > 0 && currentSimSecs - state.route.lastPingSimSecs >= confInterval) {
-        queueEvent('PING', activeWorksiteId, simulatedTime);
+        queueEvent('PING', detectedZone === 'CAMP' ? null : activeWorksiteId, simulatedTime, detectedZone === 'CAMP');
         state.route.lastPingSimSecs = currentSimSecs;
       }
     }
@@ -1196,7 +1201,7 @@
   }
 
   // Queue Event (Conforming strictly to EventBatchRequest & MobileEventItem schemas)
-  async function queueEvent(type, worksiteId = null, recordedAt = null) {
+  async function queueEvent(type, worksiteId = null, recordedAt = null, isCamp = false) {
     const timestamp = getSimulatedTimestamp(recordedAt);
     const evt = {
       event_id: crypto.randomUUID(),
@@ -1206,8 +1211,8 @@
       longitude: Number(state.workerLocation.lng.toFixed(6)),
       accuracy_meters: 4.5,
       is_mock_location: false,
-      job_id: worksiteId || state.currentWorksiteId || (state.synced.jobs[0]?.job_id || null),
-      accommodation_id: state.synced.accommodation?.accommodation_id || null,
+      job_id: isCamp ? null : (worksiteId || state.currentWorksiteId || (state.synced.jobs[0]?.job_id || null)),
+      accommodation_id: isCamp ? (state.synced.accommodation?.accommodation_id || null) : null,
     };
 
     state.eventsQueue.push(evt);
@@ -1371,11 +1376,12 @@
     const listEl = document.getElementById('phonePayslipsList');
     if (!listEl || !state.authToken) return;
     try {
-      const res = await fetch('/api/v1/payroll/my-records', {
+      const res = await fetch('/api/v1/mobile/me/payroll', {
         headers: { Authorization: `Bearer ${state.authToken}` },
       });
       if (res.ok) {
-        const slips = await res.json();
+        const data = await res.json();
+        const slips = Array.isArray(data) ? data : [data];
         if (slips.length === 0) {
           listEl.innerHTML = '<div class="text-slate-400 text-center py-2">No approved payslips available yet</div>';
           return;
@@ -1385,16 +1391,16 @@
             (s) => `
           <div class="bg-slate-50 p-2 rounded-lg border border-slate-100 space-y-1">
             <div class="flex justify-between items-center">
-              <span class="font-bold text-slate-800">${s.period_start} → ${s.period_end}</span>
-              <span class="px-1.5 py-0.2 bg-emerald-100 text-emerald-800 rounded font-bold text-3xs">APPROVED</span>
+              <span class="font-bold text-slate-800">${s.period || s.month_label || (s.period_start + ' → ' + s.period_end)}</span>
+              <span class="px-1.5 py-0.2 bg-emerald-100 text-emerald-800 rounded font-bold text-3xs">${s.status || 'APPROVED'}</span>
             </div>
             <div class="flex justify-between text-slate-600">
-              <span>Salary: $${Number(s.salary_portion).toFixed(2)}</span>
-              <span>Worked: ${s.actual_worked_hours}h</span>
+              <span>Salary: ${s.currency || 'AED'} ${Number(s.salary_portion || 0).toFixed(2)}</span>
+              <span>Worked: ${s.worked_hours || 0}h</span>
             </div>
             <div class="flex justify-between text-slate-600">
-              <span>OT: $${(Number(s.ot1_amount) + Number(s.ot2_amount)).toFixed(2)}</span>
-              <span class="font-bold text-indigo-700">Net: $${Number(s.net_pay).toFixed(2)}</span>
+              <span>OT: ${s.currency || 'AED'} ${(Number(s.ot1_amount || 0) + Number(s.ot2_amount || 0)).toFixed(2)}</span>
+              <span class="font-bold text-indigo-700">Net: ${s.currency || 'AED'} ${Number(s.net_pay || 0).toFixed(2)}</span>
             </div>
           </div>
         `
@@ -2064,11 +2070,62 @@
     });
 
     // Manual Event Buttons
-    document.getElementById('phoneBtnEntry').addEventListener('click', () => queueEvent('ENTRY'));
-    document.getElementById('phoneBtnPing').addEventListener('click', () => queueEvent('PING'));
-    document.getElementById('phoneBtnExit').addEventListener('click', () => queueEvent('EXIT'));
+    document.getElementById('phoneBtnEntry').addEventListener('click', () => queueEvent('ENTRY', null, null, state.currentZone === 'CAMP'));
+    document.getElementById('phoneBtnPing').addEventListener('click', () => queueEvent('PING', null, null, state.currentZone === 'CAMP'));
+    document.getElementById('phoneBtnExit').addEventListener('click', () => queueEvent('EXIT', null, null, state.currentZone === 'CAMP'));
     document.getElementById('phoneBtnLocOff').addEventListener('click', () => queueEvent('LOCATION_DISABLED'));
     document.getElementById('phoneBtnLocOn').addEventListener('click', () => queueEvent('LOCATION_ENABLED'));
+
+    // Voluntary Change Password Controls
+    const btnTogglePwd = document.getElementById('phoneBtnTogglePwdForm');
+    const pwdForm = document.getElementById('phoneChangePwdForm');
+    const pwdMsg = document.getElementById('phoneChangePwdMsg');
+    if (btnTogglePwd && pwdForm) {
+      btnTogglePwd.addEventListener('click', () => {
+        pwdForm.classList.toggle('hidden');
+        btnTogglePwd.innerText = pwdForm.classList.contains('hidden') ? 'Change' : 'Close';
+        if (pwdMsg) pwdMsg.classList.add('hidden');
+      });
+    }
+
+    if (pwdForm) {
+      pwdForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const oldPwd = document.getElementById('phoneInputOldPwd').value.trim();
+        const newPwd = document.getElementById('phoneInputNewPwd').value.trim();
+        const confirmPwd = document.getElementById('phoneInputConfirmPwd').value.trim();
+
+        if (!oldPwd || !newPwd) {
+          alert('Please enter both current and new password.');
+          return;
+        }
+        if (newPwd !== confirmPwd) {
+          alert('New passwords do not match.');
+          return;
+        }
+
+        try {
+          await api('/mobile/auth/change-password', {
+            method: 'POST',
+            body: {
+              old_password: oldPwd,
+              new_password: newPwd,
+            },
+          });
+          pwdMsg.innerText = '✓ Password changed successfully.';
+          pwdMsg.className = 'text-3xs text-emerald-600 font-semibold mt-1 block';
+          pwdMsg.classList.remove('hidden');
+          document.getElementById('phoneInputOldPwd').value = '';
+          document.getElementById('phoneInputNewPwd').value = '';
+          document.getElementById('phoneInputConfirmPwd').value = '';
+          showToast('✓ Password updated successfully.');
+        } catch (err) {
+          pwdMsg.innerText = `✗ ${err.message || 'Failed to update password'}`;
+          pwdMsg.className = 'text-3xs text-rose-600 font-semibold mt-1 block';
+          pwdMsg.classList.remove('hidden');
+        }
+      });
+    }
 
     // Flush Batch (POST /api/v1/mobile/events/batch)
     document.getElementById('phoneBtnFlushBatch').addEventListener('click', () => {

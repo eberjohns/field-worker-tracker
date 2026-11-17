@@ -2,6 +2,7 @@
 
 import calendar
 import io
+import json
 from collections import defaultdict
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
@@ -256,12 +257,27 @@ class SchedulingService:
                     CompanySettingValue.country.is_(None),
                 ),
             )
-            .order_by(CompanySettingValue.effective_from.desc())
+            .order_by(
+                CompanySettingValue.country.desc().nulls_last(),
+                CompanySettingValue.effective_from.desc(),
+            )
             .limit(1)
         )
         val = (await self.session.execute(stmt)).scalar_one_or_none()
-        if val and isinstance(val, list):
-            return {str(x).strip().lower() for x in val}
+        if val is None:
+            return set()
+        if isinstance(val, list):
+            return {str(x).strip().lower() for x in val if x}
+        if isinstance(val, str):
+            trimmed = val.strip()
+            if trimmed.startswith("[") and trimmed.endswith("]"):
+                try:
+                    parsed = json.loads(trimmed)
+                    if isinstance(parsed, list):
+                        return {str(x).strip().lower() for x in parsed if x}
+                except Exception:
+                    pass
+            return {x.strip().lower() for x in trimmed.split(",") if x.strip()}
         return set()
 
     async def get_public_holidays(self, country: str, from_date: date, to_date: date) -> set[date]:
@@ -1085,6 +1101,7 @@ class SchedulingService:
         job_item_id: UUID | None = None,
         target_date: date | None = None,
         weekday: str | None = None,
+        all_roles: bool = False,
     ) -> list[CandidateRecommendationRead]:
         """Rank worker candidates for a job assignment with permanent exclusivity and capacity."""
         if occurrence_id:
@@ -1254,6 +1271,8 @@ class SchedulingService:
         candidates: list[CandidateWorker] = []
         for emp in employees:
             is_budget = (emp.staff_grade_description or "").strip().lower() in budget_staff_types
+            if is_budget:
+                continue
             base_std = base_std_map.get(emp.id, Decimal("8.0"))
 
             sup_info = emp_to_supervisor.get(emp.id)
@@ -1363,7 +1382,7 @@ class SchedulingService:
                 )
             )
 
-        ranked = rank_candidates_for_job(candidates, job_target, t_date)
+        ranked = rank_candidates_for_job(candidates, job_target, t_date, all_roles=all_roles)
 
         return [
             CandidateRecommendationRead(
@@ -2275,7 +2294,13 @@ class SchedulingService:
 
         ws_rows: list[BasePlannerWorksiteRow] = []
         for ws in worksites:
-            active_items = [it for it in ws.items if it.is_active]
+            budget_types = await self.get_budget_only_staff_types(ws.country)
+            active_items = [
+                it
+                for it in ws.items
+                if it.is_active
+                and (it.staff_grade_description or "").strip().lower() not in budget_types
+            ]
             if not active_items:
                 continue
 
@@ -2605,7 +2630,13 @@ class SchedulingService:
         ws_rows: list[OperationalWorksiteRow] = []
 
         for ws in worksites:
-            active_items = [it for it in ws.items if it.is_active]
+            budget_types = await self.get_budget_only_staff_types(ws.country)
+            active_items = [
+                it
+                for it in ws.items
+                if it.is_active
+                and (it.staff_grade_description or "").strip().lower() not in budget_types
+            ]
             if not active_items:
                 continue
 
@@ -2660,6 +2691,7 @@ class SchedulingService:
                     public_holidays=holiday_dates,
                     worker_weekly_off_days=worker_weekly_off_days,
                     job_working_days=None,
+                    skip_public_holidays=True,
                 )
 
                 # Filter slots to the displayed 7-day week
@@ -3006,8 +3038,8 @@ class SchedulingService:
                                 ),
                             )
                         )
-                elif not active_leave_type:
-                    # Check base templates if worker is not on approved leave
+                elif not active_leave_type and not is_holiday:
+                    # Check base templates if worker is not on approved leave and date is not a public holiday (DEC-55)
                     emp_templates = templates_by_emp.get(emp.id, [])
                     for t, e in emp_templates:
                         if e.weekday_mask in ("ALL", dow):
@@ -3300,6 +3332,13 @@ class SchedulingService:
                 status_code=403,
             )
 
+        if payload.bypass_notice and not is_admin:
+            raise AppError(
+                code="FORBIDDEN",
+                message="Only administrators can bypass the 3-day notice rule.",
+                status_code=403,
+            )
+
         # 1. Date boundaries and notice validation
         ok_dates, err_dates = validate_leave_dates(
             from_date=payload.from_date,
@@ -3307,6 +3346,7 @@ class SchedulingService:
             today_work_date=today,
             is_admin=is_admin,
             min_notice_days=3,
+            bypass_notice=payload.bypass_notice,
         )
         if not ok_dates:
             raise AppError(
@@ -3601,6 +3641,19 @@ class SchedulingService:
         leave = await self.session.get(LeaveRequest, leave_id)
         if not leave:
             raise AppError(code="NOT_FOUND", message="Leave request not found", status_code=404)
+
+        if leave.status == "APPROVED":
+            raise AppError(
+                code="VALIDATION_ERROR",
+                message="Approved leave cannot be cancelled once approved.",
+                status_code=400,
+            )
+        if leave.status != "REQUESTED":
+            raise AppError(
+                code="VALIDATION_ERROR",
+                message=f"Cannot cancel leave with status {leave.status}.",
+                status_code=400,
+            )
 
         # Only requester, scoped engineer, or admin can cancel
         is_admin = current_user.role == "ADMIN"

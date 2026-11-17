@@ -76,6 +76,7 @@ export const LeaveManagement: React.FC = () => {
     reason: "",
   });
   const [recordSubmitting, setRecordSubmitting] = useState(false);
+  const [bypassNotice, setBypassNotice] = useState(false);
   const [recordError, setRecordError] = useState<string | null>(null);
 
   // Import Modal State
@@ -133,7 +134,7 @@ export const LeaveManagement: React.FC = () => {
 
   // Notice period warning check for record form
   const getNoticeWarning = () => {
-    if (!recordForm.from_date || user?.role === "ADMIN") return null;
+    if (!recordForm.from_date) return null;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const from = new Date(recordForm.from_date);
@@ -152,9 +153,15 @@ export const LeaveManagement: React.FC = () => {
     }
 
     const warning = getNoticeWarning();
-    if (warning && user?.role !== "ADMIN") {
-      setRecordError(warning);
-      return;
+    if (warning) {
+      if (user?.role !== "ADMIN") {
+        setRecordError(warning);
+        return;
+      }
+      if (!bypassNotice) {
+        setRecordError("Please check the confirmation box to bypass the 3-day notice rule for this short-notice leave.");
+        return;
+      }
     }
 
     setRecordSubmitting(true);
@@ -164,10 +171,14 @@ export const LeaveManagement: React.FC = () => {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       };
+      const payload = {
+        ...recordForm,
+        bypass_notice: user?.role === "ADMIN" && bypassNotice,
+      };
       const res = await fetch("/api/v1/leave-requests", {
         method: "POST",
         headers,
-        body: JSON.stringify(recordForm),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
@@ -178,6 +189,7 @@ export const LeaveManagement: React.FC = () => {
       }
 
       setRecordModalOpen(false);
+      setBypassNotice(false);
       setRecordForm({
         employee_id: "",
         leave_type: "ANNUAL",
@@ -521,7 +533,7 @@ export const LeaveManagement: React.FC = () => {
                             Arrange Cover
                           </Link>
                         )}
-                        {(l.status === "REQUESTED" || l.status === "APPROVED") && (
+                        {l.status === "REQUESTED" && (
                           <button
                             onClick={() => handleCancelLeave(l.id)}
                             className="px-2.5 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50 border border-rose-200 rounded-md transition"
@@ -614,9 +626,22 @@ export const LeaveManagement: React.FC = () => {
               </div>
 
               {getNoticeWarning() && (
-                <div className="p-2.5 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
-                  {getNoticeWarning()}
+                <div className="space-y-2">
+                  <div className="p-2.5 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+                    <span className="text-xs">{getNoticeWarning()}</span>
+                  </div>
+                  {user?.role === "ADMIN" && (
+                    <label className="flex items-center gap-2 text-xs font-semibold text-amber-900 bg-amber-50/70 p-2.5 rounded-lg border border-amber-200 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={bypassNotice}
+                        onChange={(e) => setBypassNotice(e.target.checked)}
+                        className="rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+                      />
+                      <span>Emergency / Short-notice leave (Confirm Admin bypass)</span>
+                    </label>
+                  )}
                 </div>
               )}
 

@@ -5,12 +5,14 @@ from uuid import UUID
 import xlsxwriter
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.core.db import get_db
 from fw.core.errors import AppError
 from fw.modules.archive.dsar import generate_employee_dsar_excel
-from fw.modules.identity import User, get_current_user, require_role
+from fw.modules.audit import AuditService
+from fw.modules.identity import User, UserService, get_current_user, hash_password, require_role
 from fw.modules.org import (
     Employee,
     EmployeeBulkUpdateRequest,
@@ -174,6 +176,64 @@ async def admin_withdraw_consent(
     )
     await SyncService.withdraw_consent(session=session, employee_id=employee_id, reason=reason)
     return {"status": "CONSENT_WITHDRAWN", "employee_id": str(employee_id)}
+
+
+@router.post("/{employee_id}/reset-password")
+async def reset_employee_password(
+    employee_id: UUID,
+    current_user: User = Depends(require_role("ADMIN")),
+    session: AsyncSession = Depends(get_db),
+):
+    """Admin resets an employee's user/device password to company default.
+    Auto-provisions the user account if not yet created.
+    """
+    employee = await session.get(Employee, employee_id)
+    if not employee:
+        raise AppError(code="NOT_FOUND", message="Employee not found.", status_code=404)
+
+    default_pwd = await SyncService.get_default_password(session)
+
+    # Find linked user
+    user_q = select(User).where(
+        or_(User.employee_id == employee.id, User.username == employee.tally_id)
+    )
+    user_res = await session.execute(user_q)
+    user = user_res.scalars().first()
+
+    if user:
+        await UserService.reset_password_to_default(
+            session=session,
+            user_id=user.id,
+            default_password=default_pwd,
+        )
+    else:
+        user = User(
+            username=employee.tally_id,
+            credential_hash=hash_password(default_pwd),
+            role=employee.role or "WORKER",
+            employee_id=employee.id,
+            must_change_password=True,
+            is_active=True,
+        )
+        session.add(user)
+        await session.flush()
+
+    await AuditService.log_action(
+        session=session,
+        action="RESET_PASSWORD",
+        entity_type="employee",
+        entity_id=str(employee.id),
+        diff={"tally_id": employee.tally_id, "username": user.username, "reset_to_default": True},
+        actor_user_id=current_user.id,
+        actor_role=current_user.role,
+    )
+    await session.commit()
+    return {
+        "status": "PASSWORD_RESET",
+        "employee_id": str(employee.id),
+        "username": user.username,
+        "message": "Password reset to company default successfully.",
+    }
 
 
 @router.post("", response_model=EmployeeRead, status_code=201)

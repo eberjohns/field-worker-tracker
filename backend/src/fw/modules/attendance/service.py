@@ -24,9 +24,10 @@ from fw.modules.attendance.schemas import (
 )
 from fw.modules.events import MobileEventLog
 from fw.modules.identity.models import User
-from fw.modules.jobs.models import JobItem, Worksite
+from fw.modules.jobs.models import Worksite
 from fw.modules.org.models import Accommodation, Employee, EmployeeReportingLine
 from fw.modules.scheduling.models import LeaveRequest, ScheduledWork
+from fw.modules.settings import SettingsService
 from fw.modules.settings.models import PublicHoliday, TimeRule
 from fw.rules.attendance import (
     DailyCalculationInputs,
@@ -41,6 +42,7 @@ from fw.rules.time_rules import (
     TimeRuleDefinition,
     WorkerContext,
     resolve_time_schedule,
+    time_diff_minutes,
 )
 
 logger = structlog.get_logger(__name__)
@@ -95,24 +97,28 @@ class AttendanceService:
         except Exception:
             pass
 
-        # 3. Load employee standard hours from salary structure (or fallback)
+        # 3. Load employee standard hours and break minutes from salary structure (or fallback)
         standard_hours = 8.0
+        salary_break_minutes: int | None = None
         try:
             from sqlalchemy import text
 
             sal_res = await session.execute(
                 text(
                     """
-                    SELECT standard_hours FROM employee_salary
+                    SELECT standard_hours, break_minutes FROM employee_salary
                     WHERE employee_id = :emp_id AND effective_from <= :w_date
                     ORDER BY effective_from DESC LIMIT 1
                     """
                 ),
                 {"emp_id": employee_id, "w_date": work_date},
             )
-            sal_val = sal_res.scalar()
-            if sal_val is not None:
-                standard_hours = float(sal_val)
+            sal_row = sal_res.first()
+            if sal_row is not None:
+                if sal_row[0] is not None:
+                    standard_hours = float(sal_row[0])
+                if sal_row[1] is not None:
+                    salary_break_minutes = int(sal_row[1])
         except Exception:
             pass
 
@@ -159,6 +165,86 @@ class AttendanceService:
             manager_links=mgr_links,
         )
         resolved_schedule = resolve_time_schedule(rule_defs, worker_ctx, work_date)
+
+        # Fallback to company settings / defaults if time rules did not specify 5-point schedule
+        if resolved_schedule.first_site_start is None or resolved_schedule.last_site_end is None:
+            raw_acc_start = (
+                await SettingsService.get_setting(
+                    session, "default_accommodation_start", country=country
+                )
+                or "05:00"
+            )
+            raw_first_start = (
+                await SettingsService.get_setting(
+                    session, "default_first_site_start", country=country
+                )
+                or "06:00"
+            )
+            raw_break_min = (
+                await SettingsService.get_setting(session, "default_break_minutes", country=country)
+                or 30
+            )
+            raw_last_end = (
+                await SettingsService.get_setting(session, "default_last_site_end", country=country)
+                or "15:30"
+            )
+            raw_acc_end = (
+                await SettingsService.get_setting(
+                    session, "default_accommodation_end", country=country
+                )
+                or "17:00"
+            )
+
+            def _parse_time(v: Any, default_t: time) -> time:
+                if isinstance(v, time):
+                    return v
+                if isinstance(v, str):
+                    try:
+                        parts = v.strip().split(":")
+                        return time(int(parts[0]), int(parts[1]))
+                    except Exception:
+                        pass
+                return default_t
+
+            if resolved_schedule.first_site_start is None:
+                resolved_schedule.first_site_start = _parse_time(raw_first_start, time(6, 0))
+            if resolved_schedule.last_site_end is None:
+                resolved_schedule.last_site_end = _parse_time(raw_last_end, time(15, 30))
+            if not resolved_schedule.break_minutes:
+                try:
+                    resolved_schedule.break_minutes = int(raw_break_min)
+                except Exception:
+                    resolved_schedule.break_minutes = 30
+
+            if worker_ctx.has_accommodation:
+                if resolved_schedule.accommodation_start is None:
+                    resolved_schedule.accommodation_start = _parse_time(raw_acc_start, time(5, 0))
+                if resolved_schedule.accommodation_end is None:
+                    resolved_schedule.accommodation_end = _parse_time(raw_acc_end, time(17, 0))
+
+            # Recalculate planned total and worked minutes
+            if (
+                worker_ctx.has_accommodation
+                and resolved_schedule.accommodation_start
+                and resolved_schedule.accommodation_end
+            ):
+                resolved_schedule.planned_total_minutes = time_diff_minutes(
+                    resolved_schedule.accommodation_start, resolved_schedule.accommodation_end
+                )
+            else:
+                resolved_schedule.planned_total_minutes = time_diff_minutes(
+                    resolved_schedule.first_site_start, resolved_schedule.last_site_end
+                )
+
+            elapsed_site = time_diff_minutes(
+                resolved_schedule.first_site_start, resolved_schedule.last_site_end
+            )
+            resolved_schedule.planned_worked_minutes = max(
+                0, elapsed_site - (resolved_schedule.break_minutes or 0)
+            )
+
+            if not resolved_schedule.winning_rule_name:
+                resolved_schedule.winning_rule_name = "Company Default Settings"
 
         # 5. Load scheduled work for today
         sw_q = select(ScheduledWork).where(
@@ -279,20 +365,29 @@ class AttendanceService:
         ]
         constructed_gaps = build_gaps_for_day(events_for_gap, work_date)
 
-        # 9. First site break override check
-        first_break_override: int | None = None
-        first_site_id = constructed_visits[0].worksite_id if constructed_visits else None
-        if first_site_id is not None:
-            ji_q = (
-                select(JobItem.break_override_minutes)
-                .where(
-                    JobItem.worksite_id == first_site_id,
-                    JobItem.break_override_minutes.is_not(None),
-                )
-                .limit(1)
+        # 9. Effective break minutes resolution: Supervisor Group > Salary Structure > Time Rule / Company Default
+        effective_break_minutes: int | None = None
+
+        # Check supervisor group break override
+        sup_stmt = (
+            select(Employee.break_override_minutes)
+            .join(EmployeeReportingLine, EmployeeReportingLine.manager_id == Employee.id)
+            .where(
+                EmployeeReportingLine.employee_id == employee_id,
+                EmployeeReportingLine.relationship == "SUPERVISOR",
+                Employee.break_override_minutes.is_not(None),
             )
-            ji_res = await session.execute(ji_q)
-            first_break_override = ji_res.scalar_one_or_none()
+            .limit(1)
+        )
+        sup_break = (await session.execute(sup_stmt)).scalar_one_or_none()
+        if sup_break is not None and sup_break > 0:
+            effective_break_minutes = sup_break
+        elif salary_break_minutes is not None and salary_break_minutes > 0:
+            effective_break_minutes = salary_break_minutes
+        else:
+            effective_break_minutes = resolved_schedule.break_minutes
+
+        resolved_schedule.break_minutes = effective_break_minutes or 30
 
         # 10. Run pure engine calculation
         calc_inputs = DailyCalculationInputs(
@@ -310,7 +405,7 @@ class AttendanceService:
             is_weekly_off=is_weekly_off,
             is_ot2_weekday=is_ot2_weekday,
             has_approved_leave=has_approved_leave,
-            first_site_break_override=first_break_override,
+            first_site_break_override=None,
         )
         calc_result = compute_daily_attendance(calc_inputs)
 

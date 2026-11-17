@@ -123,6 +123,7 @@ def resolve_base_template_slots(
     worker_weekly_off_days: dict[UUID, str],  # employee_id -> "FRI", "SUN", etc.
     job_working_days: set[str]
     | None = None,  # retained for backward compatibility, not used as hard drop
+    skip_public_holidays: bool = False,
 ) -> list[ResolvedTemplateSlot]:
     """Resolve a Base Roster Template into daily slots across a list of calendar dates.
 
@@ -133,6 +134,7 @@ def resolve_base_template_slots(
         public_holidays: Dates that are recognized company/state public holidays.
         worker_weekly_off_days: Mapping of employee_id to their weekly rest day ("MON".."SUN").
         job_working_days: Kept for API compatibility; no hard drop is performed.
+        skip_public_holidays: When True, skips generating template slots on recognized public holidays.
 
     Returns:
         List of ResolvedTemplateSlot objects.
@@ -142,6 +144,9 @@ def resolve_base_template_slots(
     for d in target_dates:
         dow = INT_TO_WEEKDAY[d.weekday()]
         is_holiday = d in public_holidays
+
+        if is_holiday and skip_public_holidays:
+            continue
 
         # Find all entries matching this date
         matching_entries = [e for e in entries if is_entry_matching_date(e.weekday_mask, d)]

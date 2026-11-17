@@ -1125,6 +1125,8 @@ class ImportService:
                         "country",
                         "weekly_off_day",
                         "is_driver",
+                        "phone",
+                        "email",
                     ):
                         if f in r.normalized:
                             setattr(emp, f, r.normalized[f])
@@ -1145,6 +1147,8 @@ class ImportService:
                         country=r.normalized.get("country", "AE"),
                         weekly_off_day=r.normalized.get("weekly_off_day"),
                         is_driver=bool(r.normalized.get("is_driver", False)),
+                        phone=r.normalized.get("phone"),
+                        email=r.normalized.get("email"),
                         accommodation_id=acc_id,
                         join_date=to_date_obj(r.normalized.get("join_date")),
                         employment_end_date=to_date_obj(r.normalized.get("employment_end_date")),

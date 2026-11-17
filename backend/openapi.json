@@ -6,13 +6,53 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/health/liveness": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Liveness check alias",
+        "operationId": "health_health_liveness_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "head": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Liveness check alias",
+        "operationId": "health_health_liveness_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": [
           "Health"
         ],
         "summary": "Liveness check",
-        "operationId": "health_health_head",
+        "operationId": "health_health_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -31,7 +71,7 @@
           "Health"
         ],
         "summary": "Liveness check",
-        "operationId": "health_health_head",
+        "operationId": "health_health_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -46,13 +86,59 @@
         }
       }
     },
+    "/health/readiness": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Readiness check alias",
+        "operationId": "health_ready_health_readiness_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service not ready"
+          }
+        }
+      },
+      "head": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Readiness check alias",
+        "operationId": "health_ready_health_readiness_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service not ready"
+          }
+        }
+      }
+    },
     "/health/ready": {
       "get": {
         "tags": [
           "Health"
         ],
         "summary": "Readiness check",
-        "operationId": "health_ready_health_ready_head",
+        "operationId": "health_ready_health_ready_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -74,7 +160,7 @@
           "Health"
         ],
         "summary": "Readiness check",
-        "operationId": "health_ready_health_ready_head",
+        "operationId": "health_ready_health_ready_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -844,6 +930,64 @@
             }
           }
         },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/employees/{employee_id}/reset-password": {
+      "post": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "Reset Employee Password",
+        "description": "Admin resets an employee's user/device password to company default.\nAuto-provisions the user account if not yet created.",
+        "operationId": "reset_employee_password_api_v1_employees__employee_id__reset_password_post",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Employee Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -5578,13 +5722,94 @@
         }
       }
     },
+    "/api/v1/mobile/me/payroll": {
+      "get": {
+        "tags": [
+          "payroll",
+          "mobile",
+          "payroll"
+        ],
+        "summary": "Get Mobile Payroll",
+        "description": "Worker's own approved monthly payroll records (employer provisions stripped).\n\nIf period=YYYY-MM is provided, returns that specific month's approved slip (or 404).\nIf period is omitted, returns the list of all approved slips.",
+        "operationId": "get_mobile_payroll_api_v1_mobile_me_payroll_get",
+        "parameters": [
+          {
+            "name": "period",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Period"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/WorkerMobilePayrollSlip"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/WorkerMobilePayrollSlip"
+                      }
+                    }
+                  ],
+                  "title": "Response Get Mobile Payroll Api V1 Mobile Me Payroll Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/payroll/my-records": {
       "get": {
         "tags": [
+          "payroll",
           "payroll"
         ],
         "summary": "Get My Payroll Records",
-        "description": "Worker's own approved monthly payroll records (employer provisions stripped).",
+        "description": "Worker's own approved monthly payroll records for web view.",
         "operationId": "get_my_payroll_records_api_v1_payroll_my_records_get",
         "parameters": [
           {
@@ -5615,60 +5840,6 @@
                     "$ref": "#/components/schemas/WorkerMobilePayrollSlip"
                   },
                   "title": "Response Get My Payroll Records Api V1 Payroll My Records Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/mobile/me/payroll": {
-      "get": {
-        "tags": [
-          "payroll"
-        ],
-        "summary": "Get My Payroll Records",
-        "description": "Worker's own approved monthly payroll records (employer provisions stripped).",
-        "operationId": "get_my_payroll_records_api_v1_mobile_me_payroll_get",
-        "parameters": [
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/WorkerMobilePayrollSlip"
-                  },
-                  "title": "Response Get My Payroll Records Api V1 Mobile Me Payroll Get"
                 }
               }
             }
@@ -8212,6 +8383,16 @@
             }
           },
           {
+            "name": "all_roles",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "All Roles"
+            }
+          },
+          {
             "name": "authorization",
             "in": "header",
             "required": false,
@@ -8306,6 +8487,16 @@
                 }
               ],
               "title": "Weekday"
+            }
+          },
+          {
+            "name": "all_roles",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "All Roles"
             }
           },
           {
@@ -19234,6 +19425,12 @@
           "reason": {
             "type": "string",
             "title": "Reason"
+          },
+          "bypass_notice": {
+            "type": "boolean",
+            "title": "Bypass Notice",
+            "description": "Whether to bypass the 3-day notice rule (Admin confirmation only).",
+            "default": false
           }
         },
         "type": "object",
@@ -26317,6 +26514,17 @@
             "type": "string",
             "title": "Month Label"
           },
+          "period": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period"
+          },
           "period_start": {
             "type": "string",
             "format": "date",
@@ -26330,6 +26538,40 @@
           "status": {
             "type": "string",
             "title": "Status"
+          },
+          "employee_tally_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Tally Id"
+          },
+          "employee_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Name"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency",
+            "default": "AED"
           },
           "standard_hours": {
             "type": "string",
@@ -26625,6 +26867,17 @@
             ],
             "title": "Contract Group Ref"
           },
+          "salary_revision_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Salary Revision Code"
+          },
           "start_date": {
             "anyOf": [
               {
@@ -26761,6 +27014,17 @@
               }
             ],
             "title": "Contract Group Ref"
+          },
+          "salary_revision_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Salary Revision Code"
           },
           "start_date": {
             "anyOf": [
@@ -26975,6 +27239,17 @@
             ],
             "title": "Contract Group Ref"
           },
+          "salary_revision_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Salary Revision Code"
+          },
           "start_date": {
             "anyOf": [
               {
@@ -27152,6 +27427,17 @@
               }
             ],
             "title": "Contract Group Ref"
+          },
+          "salary_revision_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Salary Revision Code"
           },
           "start_date": {
             "anyOf": [
