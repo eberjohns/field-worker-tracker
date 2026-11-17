@@ -180,13 +180,17 @@
     };
 
     const startTime = performance.now();
+    const fetchOptions = { ...options, headers };
+    if (fetchOptions.body && typeof fetchOptions.body !== 'string') {
+      fetchOptions.body = JSON.stringify(fetchOptions.body);
+    }
     let reqBody = null;
-    if (options.body) {
-      try { reqBody = JSON.parse(options.body); } catch { reqBody = options.body; }
+    if (fetchOptions.body) {
+      try { reqBody = JSON.parse(fetchOptions.body); } catch { reqBody = fetchOptions.body; }
     }
 
     try {
-      const res = await fetch(url, { ...options, headers });
+      const res = await fetch(url, fetchOptions);
       const latencyMs = Math.round(performance.now() - startTime);
       const data = await res.json().catch(() => null);
 
@@ -2107,10 +2111,10 @@
         try {
           await api('/mobile/auth/change-password', {
             method: 'POST',
-            body: {
+            body: JSON.stringify({
               old_password: oldPwd,
               new_password: newPwd,
-            },
+            }),
           });
           pwdMsg.innerText = '✓ Password changed successfully.';
           pwdMsg.className = 'text-3xs text-emerald-600 font-semibold mt-1 block';

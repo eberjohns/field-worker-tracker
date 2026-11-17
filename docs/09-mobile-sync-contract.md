@@ -488,6 +488,8 @@ When an urgent change occurs (e.g., reassignment or cancellation), the server ma
   "employee_id": "8a1f3d90-2b4e-4b72-a111-9c002e4b1100",
   "tally_id": "1193",
   "name": "Shanto Miah",
+  "phone": "+971509876543",
+  "email": "shanto.miah@company.com",
   "role": "WORKER",
   "staff_grade_description": "Gardener Expert",
   "weekly_off_day": "FRIDAY",
