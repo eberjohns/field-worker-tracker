@@ -6,6 +6,7 @@
   const state = {
     apiUrl: 'http://localhost:8000/api/v1',
     token: localStorage.getItem('fwt_mobile_token') || null,
+    refreshToken: localStorage.getItem('fwt_mobile_refresh_token') || null,
     worker: null,
     device: {
       identifier: 'DEV_SIM_1193_A',
@@ -1873,7 +1874,7 @@
       boundaryModal.classList.add('hidden');
     });
 
-    // Sign In Action (Handles First-Time Password Change Gracefully)
+    // Sign In Action (Authenticates with exact entered password; handles mandatory first-login change)
     document.getElementById('phoneBtnLogin').addEventListener('click', async () => {
       const tally_id = document.getElementById('phoneInputTally').value.trim();
       const password = document.getElementById('phoneInputPwd').value.trim();
@@ -1883,54 +1884,28 @@
       }
 
       try {
-        let res;
-        let activePwd = password;
-        try {
-          res = await api('/mobile/auth/login', {
-            method: 'POST',
-            body: JSON.stringify({
-              tally_id,
-              password: activePwd,
-              device: {
-                device_identifier: state.device.identifier,
-                platform: state.device.platform,
-                device_model: state.device.model,
-                app_version: state.device.app_version,
-                os_version: state.device.os_version,
-              },
-            }),
-          });
-        } catch (loginErr) {
-          // If the worker was already enrolled on a previous run, fallback to permanent password
-          if (password === 'Welcome123!') {
-            try {
-              res = await api('/mobile/auth/login', {
-                method: 'POST',
-                body: JSON.stringify({
-                  tally_id,
-                  password: 'WorkerPermanent123!',
-                  device: {
-                    device_identifier: state.device.identifier,
-                    platform: state.device.platform,
-                    device_model: state.device.model,
-                    app_version: state.device.app_version,
-                    os_version: state.device.os_version,
-                  },
-                }),
-              });
-              activePwd = 'WorkerPermanent123!';
-              showToast('✓ Signed in with enrolled permanent password.');
-            } catch {
-              throw loginErr;
-            }
-          } else {
-            throw loginErr;
-          }
-        }
+        const res = await api('/mobile/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({
+            tally_id,
+            password,
+            device: {
+              device_identifier: state.device.identifier,
+              platform: state.device.platform,
+              device_model: state.device.model,
+              app_version: state.device.app_version,
+              os_version: state.device.os_version,
+            },
+          }),
+        });
 
         state.token = res.access_token;
+        state.refreshToken = res.refresh_token || null;
         state.worker = res.employee;
         localStorage.setItem('fwt_mobile_token', state.token);
+        if (state.refreshToken) {
+          localStorage.setItem('fwt_mobile_refresh_token', state.refreshToken);
+        }
 
         // If user must change password on first login, automatically complete it to unblock sync
         if (res.must_change_password) {
@@ -1938,7 +1913,7 @@
             await api('/mobile/auth/change-password', {
               method: 'POST',
               body: JSON.stringify({
-                old_password: activePwd,
+                old_password: password,
                 new_password: 'WorkerPermanent123!',
               }),
             });
@@ -1958,8 +1933,12 @@
               }),
             });
             state.token = relogin.access_token;
+            state.refreshToken = relogin.refresh_token || state.refreshToken;
             localStorage.setItem('fwt_mobile_token', state.token);
-            showToast('✓ Permanent password enrolled for new worker.');
+            if (state.refreshToken) {
+              localStorage.setItem('fwt_mobile_refresh_token', state.refreshToken);
+            }
+            showToast('✓ First-login password enrolled as WorkerPermanent123!');
           } catch (pwdErr) {
             console.warn('Password change skipped or failed:', pwdErr);
           }
@@ -1977,11 +1956,18 @@
     // Logout Action
     document.getElementById('phoneBtnLogout').addEventListener('click', async () => {
       try {
-        await api('/mobile/auth/logout', { method: 'POST' });
+        if (state.refreshToken) {
+          await api('/mobile/auth/logout', {
+            method: 'POST',
+            body: JSON.stringify({ refresh_token: state.refreshToken }),
+          });
+        }
       } catch {}
       state.token = null;
+      state.refreshToken = null;
       state.worker = null;
       localStorage.removeItem('fwt_mobile_token');
+      localStorage.removeItem('fwt_mobile_refresh_token');
       setAuthenticatedState(false);
     });
 
