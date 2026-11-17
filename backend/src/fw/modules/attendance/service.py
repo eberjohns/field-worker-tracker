@@ -97,24 +97,28 @@ class AttendanceService:
         except Exception:
             pass
 
-        # 3. Load employee standard hours from salary structure (or fallback)
+        # 3. Load employee standard hours and break minutes from salary structure (or fallback)
         standard_hours = 8.0
+        salary_break_minutes: int | None = None
         try:
             from sqlalchemy import text
 
             sal_res = await session.execute(
                 text(
                     """
-                    SELECT standard_hours FROM employee_salary
+                    SELECT standard_hours, break_minutes FROM employee_salary
                     WHERE employee_id = :emp_id AND effective_from <= :w_date
                     ORDER BY effective_from DESC LIMIT 1
                     """
                 ),
                 {"emp_id": employee_id, "w_date": work_date},
             )
-            sal_val = sal_res.scalar()
-            if sal_val is not None:
-                standard_hours = float(sal_val)
+            sal_row = sal_res.first()
+            if sal_row is not None:
+                if sal_row[0] is not None:
+                    standard_hours = float(sal_row[0])
+                if sal_row[1] is not None:
+                    salary_break_minutes = int(sal_row[1])
         except Exception:
             pass
 
@@ -177,15 +181,11 @@ class AttendanceService:
                 or "06:00"
             )
             raw_break_min = (
-                await SettingsService.get_setting(
-                    session, "default_break_minutes", country=country
-                )
+                await SettingsService.get_setting(session, "default_break_minutes", country=country)
                 or 30
             )
             raw_last_end = (
-                await SettingsService.get_setting(
-                    session, "default_last_site_end", country=country
-                )
+                await SettingsService.get_setting(session, "default_last_site_end", country=country)
                 or "15:30"
             )
             raw_acc_end = (
@@ -382,25 +382,10 @@ class AttendanceService:
         sup_break = (await session.execute(sup_stmt)).scalar_one_or_none()
         if sup_break is not None and sup_break > 0:
             effective_break_minutes = sup_break
+        elif salary_break_minutes is not None and salary_break_minutes > 0:
+            effective_break_minutes = salary_break_minutes
         else:
-            # Check active EmployeeSalary break_minutes
-            from fw.modules.payroll.models import EmployeeSalary
-
-            es_stmt = (
-                select(EmployeeSalary.break_minutes)
-                .where(
-                    EmployeeSalary.employee_id == employee_id,
-                    EmployeeSalary.effective_from <= work_date,
-                    EmployeeSalary.break_minutes.is_not(None),
-                )
-                .order_by(EmployeeSalary.effective_from.desc())
-                .limit(1)
-            )
-            salary_break = (await session.execute(es_stmt)).scalar_one_or_none()
-            if salary_break is not None and salary_break > 0:
-                effective_break_minutes = salary_break
-            else:
-                effective_break_minutes = resolved_schedule.break_minutes
+            effective_break_minutes = resolved_schedule.break_minutes
 
         resolved_schedule.break_minutes = effective_break_minutes or 30
 

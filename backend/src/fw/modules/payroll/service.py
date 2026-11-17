@@ -1009,7 +1009,9 @@ class PayrollService:
         period: str | None = None,
     ) -> list[WorkerMobilePayrollSlip]:
         """Fetch worker's own approved monthly payroll slips (employer provisions stripped)."""
-        records = await PayrollRepository.get_worker_approved_records(session, employee_id, period=period)
+        records = await PayrollRepository.get_worker_approved_records(
+            session, employee_id, period=period
+        )
         slips: list[WorkerMobilePayrollSlip] = []
 
         for r in records:

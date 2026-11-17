@@ -41,7 +41,7 @@ def test_validate_leave_dates_admin_past_allowed():
         date(2026, 11, 1), date(2026, 11, 5), today, is_admin=True, bypass_notice=False
     )
     assert not ok
-    assert "at least 3 days notice" in err
+    assert err is not None and "at least 3 days notice" in err
 
     # Admin recording with explicit bypass confirmed is allowed
     ok_bypass, err_bypass = validate_leave_dates(

@@ -4422,6 +4422,17 @@
             "title": "Fixed Ot Amount",
             "default": "0.00"
           },
+          "break_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Break Minutes"
+          },
           "bonus": {
             "anyOf": [
               {
@@ -4586,6 +4597,17 @@
           "fixed_ot_amount": {
             "type": "string",
             "title": "Fixed Ot Amount"
+          },
+          "break_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Break Minutes"
           },
           "bonus": {
             "type": "string",
@@ -6376,6 +6398,12 @@
           "reason": {
             "type": "string",
             "title": "Reason"
+          },
+          "bypass_notice": {
+            "type": "boolean",
+            "title": "Bypass Notice",
+            "description": "Whether to bypass the 3-day notice rule (Admin confirmation only).",
+            "default": false
           }
         },
         "type": "object",
@@ -10981,6 +11009,17 @@
             "title": "Fixed Ot Amount",
             "default": "0.00"
           },
+          "break_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Break Minutes"
+          },
           "bonus": {
             "anyOf": [
               {
@@ -11114,6 +11153,17 @@
             "title": "Fixed Ot Amount",
             "default": "0.00"
           },
+          "break_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Break Minutes"
+          },
           "bonus": {
             "type": "string",
             "title": "Bonus",
@@ -11243,6 +11293,17 @@
           "fixed_ot_amount": {
             "type": "string",
             "title": "Fixed Ot Amount"
+          },
+          "break_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Break Minutes"
           },
           "bonus": {
             "type": "string",
@@ -11425,6 +11486,17 @@
           "basic_salary": {
             "type": "string",
             "title": "Basic Salary"
+          },
+          "break_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Break Minutes"
           },
           "effective_from": {
             "type": "string",
@@ -13812,6 +13884,17 @@
             ],
             "title": "Contract Group Ref"
           },
+          "salary_revision_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Salary Revision Code"
+          },
           "start_date": {
             "anyOf": [
               {
@@ -13948,6 +14031,17 @@
               }
             ],
             "title": "Contract Group Ref"
+          },
+          "salary_revision_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Salary Revision Code"
           },
           "start_date": {
             "anyOf": [
@@ -14162,6 +14256,17 @@
             ],
             "title": "Contract Group Ref"
           },
+          "salary_revision_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Salary Revision Code"
+          },
           "start_date": {
             "anyOf": [
               {
@@ -14339,6 +14444,17 @@
               }
             ],
             "title": "Contract Group Ref"
+          },
+          "salary_revision_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Salary Revision Code"
           },
           "start_date": {
             "anyOf": [

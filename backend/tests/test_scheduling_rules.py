@@ -743,4 +743,3 @@ def test_rank_candidates_all_roles_and_budget_only_exclusion():
     # Verify w3 has cross-role warning and lower ranking than w1 and w2
     w3_scored = next(sc for sc in ranked_all if sc.worker.employee_id == "w3")
     assert any("Cross-role" in w for w in w3_scored.warnings)
-
