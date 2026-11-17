@@ -134,6 +134,7 @@ class ImportService:
         await session.flush()
 
         total_rows = 0
+        skipped_comment_rows = 0
         counts = {
             "NEW": 0,
             "UPDATED": 0,
@@ -287,6 +288,7 @@ class ImportService:
                 for r_idx in range(5, ws.max_row + 1):
                     col_a = ws.cell(r_idx, 1).value
                     if col_a is not None and str(col_a).strip() != "":
+                        skipped_comment_rows += 1
                         continue
                     vals = [ws.cell(r_idx, c).value for c in range(2, len(sheet_def.columns) + 2)]
                     if not any(v is not None and str(v).strip() != "" for v in vals):
@@ -328,6 +330,7 @@ class ImportService:
                 col_a = ws.cell(r_idx, 1).value
                 if col_a is not None and str(col_a).strip() != "":
                     # Skip comment or example row
+                    skipped_comment_rows += 1
                     continue
                 row_dict: dict[str, Any] = {}
                 has_any_val = False
@@ -1038,9 +1041,10 @@ class ImportService:
                 session.add(ir)
 
         # Batch summary
-        can_commit = counts["ERROR"] == 0
+        can_commit = counts["ERROR"] == 0 and total_rows > 0
         batch.summary = {
             "total_rows": total_rows,
+            "skipped_comment_rows": skipped_comment_rows,
             "counts": counts,
             "sheet_counts": sheet_counts,
             "can_commit": can_commit,

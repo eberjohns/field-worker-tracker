@@ -35,6 +35,7 @@ interface ImportBatch {
   status: string;
   summary: {
     total_rows?: number;
+    skipped_comment_rows?: number;
     counts?: Record<string, number>;
     sheet_counts?: Record<string, Record<string, number>>;
     can_commit?: boolean;
@@ -142,6 +143,8 @@ export const Imports: React.FC = () => {
       }
 
       const previewData = await res.json();
+      setStatusFilter("ALL");
+      setSheetFilter("ALL");
       setCurrentBatch({
         id: previewData.batch_id,
         kind: importScope === "SELECTED" ? "SELECTIVE_SHEETS" : "FULL_WORKBOOK",
@@ -153,11 +156,15 @@ export const Imports: React.FC = () => {
         created_at: new Date().toISOString(),
       });
       setPreviewRows(previewData.rows);
-      setSuccessMessage(
-        importScope === "SELECTED"
-          ? `Parsed selected sheet(s) (${selectedSheets.join(", ")}) from '${previewData.filename}'. Review preview before committing.`
-          : `Workbook '${previewData.filename}' parsed successfully. Review preview before committing.`
-      );
+      if ((previewData.summary?.total_rows ?? 0) > 0) {
+        setSuccessMessage(
+          importScope === "SELECTED"
+            ? `Parsed selected sheet(s) (${selectedSheets.join(", ")}) from '${previewData.filename}'. Review preview before committing.`
+            : `Workbook '${previewData.filename}' parsed successfully. Review preview before committing.`
+        );
+      } else {
+        setSuccessMessage(null);
+      }
     } catch (err: any) {
       setErrorMessage(err.message);
     } finally {
@@ -490,7 +497,7 @@ export const Imports: React.FC = () => {
             <div className="space-y-6">
               <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="font-semibold text-slate-900 text-lg">{currentBatch.filename}</span>
                     <span
                       className={`px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase ${
@@ -503,6 +510,11 @@ export const Imports: React.FC = () => {
                     >
                       {currentBatch.status}
                     </span>
+                    {currentBatch.summary.selected_sheets && currentBatch.summary.selected_sheets.length > 0 && (
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">
+                        Sheets: {currentBatch.summary.selected_sheets.join(", ")}
+                      </span>
+                    )}
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-4 text-sm text-slate-500">
                     <span>Total Rows: {currentBatch.summary.total_rows ?? 0}</span>
@@ -522,10 +534,18 @@ export const Imports: React.FC = () => {
                     <span className="text-red-700 font-medium">
                       Errors: {currentBatch.summary.counts?.ERROR ?? 0}
                     </span>
+                    {(currentBatch.summary.skipped_comment_rows ?? 0) > 0 && (
+                      <>
+                        <span>•</span>
+                        <span className="text-slate-500">
+                          Skipped (EXAMPLE / Col A): {currentBatch.summary.skipped_comment_rows}
+                        </span>
+                      </>
+                    )}
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   {(currentBatch.summary.counts?.ERROR ?? 0) > 0 && (
                     <button
                       onClick={handleDownloadErrors}
@@ -539,9 +559,9 @@ export const Imports: React.FC = () => {
                   {currentBatch.status !== "COMMITTED" && (
                     <button
                       onClick={handleCommit}
-                      disabled={isCommitting || !currentBatch.summary.can_commit}
+                      disabled={isCommitting || !currentBatch.summary.can_commit || (currentBatch.summary.total_rows ?? 0) === 0}
                       className={`inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-lg shadow-sm text-white transition-all ${
-                        currentBatch.summary.can_commit
+                        currentBatch.summary.can_commit && (currentBatch.summary.total_rows ?? 0) > 0
                           ? "bg-indigo-600 hover:bg-indigo-700 cursor-pointer"
                           : "bg-slate-300 cursor-not-allowed opacity-70"
                       }`}
@@ -556,8 +576,49 @@ export const Imports: React.FC = () => {
                     Re-upload
                     <input type="file" accept=".xlsx,.xlsm" className="hidden" onChange={handleFileUpload} />
                   </label>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentBatch(null);
+                      setPreviewRows([]);
+                      setStatusFilter("ALL");
+                      setSheetFilter("ALL");
+                      setErrorMessage(null);
+                      setSuccessMessage(null);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 cursor-pointer"
+                  >
+                    New Upload / Change Scope
+                  </button>
                 </div>
               </div>
+
+              {(currentBatch.summary.total_rows ?? 0) === 0 && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 flex items-start gap-3">
+                  <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+                  <div className="space-y-1">
+                    <p className="font-semibold">No importable data rows were found in this workbook.</p>
+                    {(currentBatch.summary.skipped_comment_rows ?? 0) > 0 ? (
+                      <p>
+                        <span className="font-semibold">{currentBatch.summary.skipped_comment_rows}</span> row(s) were
+                        skipped because <span className="font-semibold">Column A</span> contains text (such as{" "}
+                        <code className="font-mono bg-white px-1 py-0.5 rounded border border-amber-200">EXAMPLE</code>{" "}
+                        or <code className="font-mono bg-white px-1 py-0.5 rounded border border-amber-200">#</code>).
+                        To import data, add your rows starting at row 5 with{" "}
+                        <span className="font-semibold underline">Column A left blank</span> (or clear{" "}
+                        <code className="font-mono bg-white px-1 py-0.5 rounded border border-amber-200">EXAMPLE</code>{" "}
+                        from Column A).
+                      </p>
+                    ) : (
+                      <p>
+                        Ensure your data starts at row 5 in the selected sheet(s) with{" "}
+                        <span className="font-semibold underline">Column A left blank</span>, then re-upload.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Filter Bar */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200">
@@ -616,7 +677,9 @@ export const Imports: React.FC = () => {
                       {filteredRows.length === 0 ? (
                         <tr>
                           <td colSpan={7} className="py-8 text-center text-slate-400">
-                            No rows matching selected filter.
+                            {previewRows.length === 0
+                              ? "No data rows parsed. Leave Column A blank on rows you want to import (rows marked EXAMPLE or # are skipped)."
+                              : "No rows matching selected filter."}
                           </td>
                         </tr>
                       ) : (

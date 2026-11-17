@@ -1,9 +1,9 @@
 {
-  "version": "1.4.0",
+  "version": "1.4.1",
   "major": 1,
   "minor": 4,
-  "patch": 0,
+  "patch": 1,
   "last_branch": "fix/hierarchy-imports-payroll-leave-ui",
-  "last_commit": "45241b5",
-  "updated_at": "2026-11-17T19:34:00.503056+00:00"
+  "last_commit": "faf2a61",
+  "updated_at": "2026-11-17T19:52:19.761741+00:00"
 }
