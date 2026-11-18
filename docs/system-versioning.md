@@ -36,3 +36,4 @@ Field Worker Tracker follows semantic versioning `v<MAJOR>.<MINOR>.<PATCH>`:
 | **v1.5.4** | 2026-11-18 | `feat/batch3-roles-undo-tally-deactivation` | `4146c3e` | Commit on 'feat/batch3-roles-undo-tally-deactivation' |
 | **v1.6.0** | 2026-11-18 | `fix/batch4-client-alignment` | `7b1416a` | Bumped minor to v1.6.0 |
 | **v1.6.1** | 2026-11-18 | `fix/batch4-client-alignment` | `7b1416a` | Commit on 'fix/batch4-client-alignment' |
+| **v1.6.2** | 2026-11-18 | `fix/batch4-client-alignment` | `0b5e30a` | Commit on 'fix/batch4-client-alignment' |

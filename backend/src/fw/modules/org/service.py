@@ -832,6 +832,12 @@ class OrgService:
                     f"Worker {emp.tally_id} ({emp.name}) has direct {line.relationship} link to "
                     f"{mgr.tally_id} ({mgr.name}). Workers inherit leadership through their supervisor."
                 )
+            elif line.relationship == "SUPERVISOR" and emp.role != "WORKER":
+                violation_code = "INVALID_LINK_SUBJECT"
+                violation_msg = (
+                    f"Supervisor reporting line has subordinate {emp.tally_id} ({emp.name}) with role {emp.role}. "
+                    f"Only workers have a supervisor."
+                )
             elif line.relationship == "SUPERVISOR" and mgr.role != "SUPERVISOR":
                 violation_code = "SUPERVISOR_LINK_ROLE_MISMATCH"
                 violation_msg = (

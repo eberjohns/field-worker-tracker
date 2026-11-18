@@ -157,6 +157,27 @@ class PayrollSalaryService:
             datetime.now(UTC).date()
         )
 
+        break_mins = payload.break_minutes
+        if break_mins is None:
+            from fw.modules.org.models import EmployeeReportingLine
+
+            sup_stmt = (
+                select(Employee.break_override_minutes)
+                .join(
+                    EmployeeReportingLine,
+                    EmployeeReportingLine.manager_id == Employee.id,
+                )
+                .where(
+                    EmployeeReportingLine.employee_id == employee_id,
+                    EmployeeReportingLine.relationship == "SUPERVISOR",
+                    EmployeeReportingLine.is_active == True,
+                )
+                .limit(1)
+            )
+            sup_break = (await session.execute(sup_stmt)).scalar_one_or_none()
+            if sup_break and sup_break > 0:
+                break_mins = sup_break
+
         row = EmployeeSalary(
             employee_id=employee_id,
             effective_from=effective_date,
@@ -167,7 +188,7 @@ class PayrollSalaryService:
             bonus=payload.bonus,
             telephone_allowance=payload.telephone_allowance,
             housing_transport_allowance=payload.housing_transport_allowance,
-            break_minutes=payload.break_minutes,
+            break_minutes=break_mins,
             created_by_user_id=user_id,
         )
         session.add(row)
@@ -243,6 +264,25 @@ class PayrollSalaryService:
             existing.housing_transport_allowance = data.housing_transport_allowance
             if data.break_minutes is not None:
                 existing.break_minutes = data.break_minutes
+            elif existing.break_minutes is None:
+                from fw.modules.org.models import EmployeeReportingLine
+
+                sup_stmt = (
+                    select(Employee.break_override_minutes)
+                    .join(
+                        EmployeeReportingLine,
+                        EmployeeReportingLine.manager_id == Employee.id,
+                    )
+                    .where(
+                        EmployeeReportingLine.employee_id == employee_id,
+                        EmployeeReportingLine.relationship == "SUPERVISOR",
+                        EmployeeReportingLine.is_active == True,
+                    )
+                    .limit(1)
+                )
+                sup_break = (await session.execute(sup_stmt)).scalar_one_or_none()
+                if sup_break and sup_break > 0:
+                    existing.break_minutes = sup_break
             if data.change_source is not None:
                 existing.change_source = data.change_source
             if batch_id:
@@ -250,6 +290,27 @@ class PayrollSalaryService:
             target = existing
             action = "UPDATE"
         else:
+            break_mins = data.break_minutes
+            if break_mins is None:
+                from fw.modules.org.models import EmployeeReportingLine
+
+                sup_stmt = (
+                    select(Employee.break_override_minutes)
+                    .join(
+                        EmployeeReportingLine,
+                        EmployeeReportingLine.manager_id == Employee.id,
+                    )
+                    .where(
+                        EmployeeReportingLine.employee_id == employee_id,
+                        EmployeeReportingLine.relationship == "SUPERVISOR",
+                        EmployeeReportingLine.is_active == True,
+                    )
+                    .limit(1)
+                )
+                sup_break = (await session.execute(sup_stmt)).scalar_one_or_none()
+                if sup_break and sup_break > 0:
+                    break_mins = sup_break
+
             target = EmployeeSalary(
                 employee_id=employee_id,
                 effective_from=effective_from,
@@ -257,7 +318,7 @@ class PayrollSalaryService:
                 basic_salary=data.basic_salary,
                 special_allowance=data.special_allowance,
                 fixed_ot_amount=data.fixed_ot_amount,
-                break_minutes=data.break_minutes,
+                break_minutes=break_mins,
                 bonus=data.bonus,
                 telephone_allowance=data.telephone_allowance,
                 housing_transport_allowance=data.housing_transport_allowance,
@@ -404,6 +465,35 @@ class PayrollSalaryService:
         if not worker:
             return
 
+        # Query all salary rows for worker
+        stmt = (
+            select(EmployeeSalary)
+            .where(EmployeeSalary.employee_id == worker_id)
+            .order_by(EmployeeSalary.effective_from.asc())
+        )
+        res = await session.execute(stmt)
+        all_salaries = list(res.scalars().all())
+
+        same_date_row = next((s for s in all_salaries if s.effective_from == effective_from), None)
+        future_rows = [s for s in all_salaries if s.effective_from > effective_from]
+        prior_rows = [s for s in all_salaries if s.effective_from < effective_from]
+        row_in_force = same_date_row or (prior_rows[-1] if prior_rows else None)
+
+        future_needs_update = any(s.break_minutes != break_minutes for s in future_rows)
+
+        # Idempotency and baseline check
+        if row_in_force:
+            if same_date_row:
+                if same_date_row.break_minutes == break_minutes and not future_needs_update:
+                    return
+            else:
+                if row_in_force.break_minutes == break_minutes and not future_needs_update:
+                    return
+        else:
+            # Worker has no salary row on or before effective date: only update future rows (if any) and return; do not invent amounts.
+            if not future_needs_update:
+                return
+
         # Check c: Locked period check via PayrollRun
         pay_run_stmt = select(PayrollRun.id).where(
             PayrollRun.country == worker.country,
@@ -434,60 +524,36 @@ class PayrollSalaryService:
                 status_code=422,
             )
 
-        # Query all salary rows for worker
-        stmt = (
-            select(EmployeeSalary)
-            .where(EmployeeSalary.employee_id == worker_id)
-            .order_by(EmployeeSalary.effective_from.asc())
-        )
-        res = await session.execute(stmt)
-        all_salaries = list(res.scalars().all())
-
-        same_date_row = next((s for s in all_salaries if s.effective_from == effective_from), None)
-        future_rows = [s for s in all_salaries if s.effective_from > effective_from]
-        prior_rows = [s for s in all_salaries if s.effective_from < effective_from]
-
         if same_date_row:
             same_date_row.break_minutes = break_minutes
-            same_date_row.change_source = "CREW_BREAK"
+            if same_date_row.change_source == "CREW_BREAK":
+                same_date_row.change_source = "CREW_BREAK"
         elif prior_rows:
             latest_prior = prior_rows[-1]
-            new_sal = EmployeeSalary(
-                employee_id=worker_id,
-                effective_from=effective_from,
-                standard_hours=latest_prior.standard_hours,
-                basic_salary=latest_prior.basic_salary,
-                special_allowance=latest_prior.special_allowance,
-                fixed_ot_amount=latest_prior.fixed_ot_amount,
-                bonus=latest_prior.bonus,
-                telephone_allowance=latest_prior.telephone_allowance,
-                housing_transport_allowance=latest_prior.housing_transport_allowance,
-                break_minutes=break_minutes,
-                change_source="CREW_BREAK",
-                created_by_user_id=actor_user_id,
-            )
-            session.add(new_sal)
+            if latest_prior.break_minutes != break_minutes:
+                new_sal = EmployeeSalary(
+                    employee_id=worker_id,
+                    effective_from=effective_from,
+                    standard_hours=latest_prior.standard_hours,
+                    basic_salary=latest_prior.basic_salary,
+                    special_allowance=latest_prior.special_allowance,
+                    fixed_ot_amount=latest_prior.fixed_ot_amount,
+                    bonus=latest_prior.bonus,
+                    telephone_allowance=latest_prior.telephone_allowance,
+                    housing_transport_allowance=latest_prior.housing_transport_allowance,
+                    break_minutes=break_minutes,
+                    change_source="CREW_BREAK",
+                    created_by_user_id=actor_user_id,
+                )
+                session.add(new_sal)
         else:
-            # Baseline salary row
-            new_sal = EmployeeSalary(
-                employee_id=worker_id,
-                effective_from=effective_from,
-                standard_hours=Decimal("8.0"),
-                basic_salary=Decimal("0.00"),
-                special_allowance=Decimal("0.00"),
-                fixed_ot_amount=Decimal("0.00"),
-                bonus=Decimal("0.00"),
-                telephone_allowance=Decimal("0.00"),
-                housing_transport_allowance=Decimal("0.00"),
-                break_minutes=break_minutes,
-                change_source="CREW_BREAK",
-                created_by_user_id=actor_user_id,
-            )
-            session.add(new_sal)
+            # Worker has no salary row on or before effective date. Do not invent amounts!
+            pass
 
         # Update all future rows
         for fut in future_rows:
-            fut.break_minutes = break_minutes
+            if fut.break_minutes != break_minutes:
+                fut.break_minutes = break_minutes
 
         await session.flush()
 

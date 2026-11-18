@@ -75,6 +75,20 @@ def test_invalid_link_subject() -> None:
     assert exc.value.code == "INVALID_LINK_SUBJECT"
 
 
+def test_supervisor_cannot_report_to_supervisor() -> None:
+    """SUPERVISOR links whose subject has role SUPERVISOR must be rejected with INVALID_LINK_SUBJECT."""
+    with pytest.raises(HierarchyRuleViolation) as exc:
+        validate_reporting_link(
+            [],
+            "sup-1",
+            "sup-2",
+            "SUPERVISOR",
+            employee_role="SUPERVISOR",
+            manager_role="SUPERVISOR",
+        )
+    assert exc.value.code == "INVALID_LINK_SUBJECT"
+
+
 def test_hierarchy_role_mismatch_for_leadership() -> None:
     """Manager role must match SUPERINTENDENT/ENGINEER relationship."""
     with pytest.raises(HierarchyRuleViolation) as exc:

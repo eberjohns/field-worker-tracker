@@ -999,7 +999,14 @@ export const EmployeeDetail: React.FC = () => {
                 Effective-dated salary portions and historical revisions.
               </p>
             </div>
-            {salaryHistory?.last_change_difference !== null && salaryHistory?.last_change_difference !== undefined && (
+            {salaryHistory?.current_salary?.change_source === "CREW_BREAK" ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-400">Last change:</span>
+                <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-blue-100 text-blue-800">
+                  Break change
+                </span>
+              </div>
+            ) : salaryHistory?.last_change_difference !== null && salaryHistory?.last_change_difference !== undefined && (
               <div className="flex items-center gap-2">
                 <span className="text-xs text-slate-400">Last change:</span>
                 <span
@@ -1088,11 +1095,19 @@ export const EmployeeDetail: React.FC = () => {
                 {salaryHistory.history.map((rev: any) => (
                   <div key={rev.id} className="p-3 flex items-center justify-between hover:bg-slate-50">
                     <div className="space-y-0.5">
-                      <div className="font-semibold text-slate-900">
-                        Effective {rev.effective_from}
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-slate-900">
+                          Effective {rev.effective_from}
+                        </span>
+                        {rev.change_source === "CREW_BREAK" && (
+                          <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-bold">
+                            Break change
+                          </span>
+                        )}
                       </div>
                       <div className="text-slate-400 text-[11px]">
                         Basic: {rev.basic_salary} • Standard: {rev.standard_hours} hrs
+                        {rev.break_minutes ? ` • Break: ${rev.break_minutes}m` : ""}
                       </div>
                     </div>
 
@@ -1100,7 +1115,9 @@ export const EmployeeDetail: React.FC = () => {
                       <span className="font-bold text-slate-800 text-sm">
                         {rev.salary_portion}
                       </span>
-                      {rev.difference !== 0 ? (
+                      {rev.change_source === "CREW_BREAK" ? (
+                        <span className="text-slate-400 text-xs">-</span>
+                      ) : rev.difference !== 0 ? (
                         <span
                           className={`px-2 py-0.5 rounded font-semibold ${
                             rev.difference > 0 ? "text-emerald-700 bg-emerald-50" : "text-red-700 bg-red-50"

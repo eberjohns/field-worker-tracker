@@ -164,6 +164,25 @@ class ImportService:
             (r.employee_id, r.manager_id, r.relationship): r
             for r in (await session.execute(select(EmployeeReportingLine))).scalars().all()
         }
+        existing_active_supervisors = {
+            r.employee_id: r
+            for r in (
+                await session.execute(
+                    select(EmployeeReportingLine).where(
+                        EmployeeReportingLine.relationship == "SUPERVISOR",
+                        EmployeeReportingLine.is_active == True,  # noqa: E712
+                    )
+                )
+            ).scalars().all()
+        }
+        emp_id_to_tally = {e.id: e.tally_id for e in existing_employees.values()}
+        active_db_reporting_links: list[tuple[str, str, str]] = [
+            (emp_id_to_tally[r.employee_id], emp_id_to_tally[r.manager_id], r.relationship)
+            for r in existing_reporting.values()
+            if getattr(r, "is_active", True)
+            and r.employee_id in emp_id_to_tally
+            and r.manager_id in emp_id_to_tally
+        ]
         existing_salaries = {
             (s.employee_id, s.effective_from): s
             for s in (await session.execute(select(EmployeeSalary))).scalars().all()
@@ -615,20 +634,27 @@ class ImportService:
                         row_status = "ERROR"
 
                     emp_role = (
-                        existing_employees[emp_tally].role
-                        if emp_tally in existing_employees
-                        else file_employees_roles.get(emp_tally)
+                        file_employees_roles.get(emp_tally)
+                        if emp_tally in file_employees_roles
+                        else (existing_employees[emp_tally].role if emp_tally in existing_employees else None)
                     )
                     mgr_role = (
-                        existing_employees[mgr_tally].role
-                        if mgr_tally in existing_employees
-                        else file_employees_roles.get(mgr_tally)
+                        file_employees_roles.get(mgr_tally)
+                        if mgr_tally in file_employees_roles
+                        else (existing_employees[mgr_tally].role if mgr_tally in existing_employees else None)
                     )
+
+                    # Links for validation: active DB links, excluding any supervisor link being replaced for this employee
+                    links_for_validation = [
+                        link
+                        for link in active_db_reporting_links
+                        if not (rel == "SUPERVISOR" and link[0] == emp_tally and link[2] == "SUPERVISOR")
+                    ]
 
                     if emp_exists and mgr_exists and rel:
                         try:
                             validate_reporting_link(
-                                existing_links=[],
+                                existing_links=links_for_validation,
                                 employee_id=emp_tally,
                                 manager_id=mgr_tally,
                                 relationship=rel,
@@ -646,7 +672,36 @@ class ImportService:
                             )
                             row_status = "ERROR"
 
-                    if emp_tally in existing_employees and mgr_tally in existing_employees:
+                    if rel == "SUPERVISOR" and emp_tally in existing_employees:
+                        emp_obj = existing_employees[emp_tally]
+                        active_sup = existing_active_supervisors.get(emp_obj.id)
+                        if active_sup:
+                            old_mgr = next((e for e in existing_employees.values() if e.id == active_sup.manager_id), None)
+                            old_mgr_tally = old_mgr.tally_id if old_mgr else str(active_sup.manager_id)
+                            if old_mgr_tally == mgr_tally:
+                                row_action = "UNCHANGED"
+                            else:
+                                row_action = "UPDATED"
+                                row_diff["manager_tally_id"] = {
+                                    "old": old_mgr_tally,
+                                    "new": mgr_tally,
+                                    "description": f"supervisor {old_mgr_tally} -> {mgr_tally}",
+                                }
+                        else:
+                            rep_key = (
+                                (emp_obj.id, existing_employees[mgr_tally].id, rel)
+                                if mgr_tally in existing_employees
+                                else None
+                            )
+                            if rep_key and rep_key in existing_reporting:
+                                existing_line = existing_reporting[rep_key]
+                                if getattr(existing_line, "is_active", True):
+                                    row_action = "UNCHANGED"
+                                else:
+                                    row_action = "REACTIVATED"
+                            else:
+                                row_action = "NEW"
+                    elif emp_tally in existing_employees and mgr_tally in existing_employees:
                         emp_obj = existing_employees[emp_tally]
                         mgr_obj = existing_employees[mgr_tally]
                         if emp_obj and mgr_obj and rel:
@@ -655,6 +710,12 @@ class ImportService:
                                 existing_line = existing_reporting[rep_key]
                                 if getattr(existing_line, "is_active", True):
                                     row_action = "UNCHANGED"
+                                else:
+                                    row_action = "REACTIVATED"
+                            else:
+                                row_action = "NEW"
+                    else:
+                        row_action = "NEW"
 
                 # Employee_Salary
                 elif sheet_name == "Employee_Salary":
@@ -1347,6 +1408,34 @@ class ImportService:
             if emp_t in emp_id_map and mgr_t in emp_id_map and rel:
                 e_id = emp_id_map[emp_t]
                 m_id = emp_id_map[mgr_t]
+                if rel == "SUPERVISOR":
+                    # Check for an existing active supervisor link for this worker
+                    old_sup_stmt = select(EmployeeReportingLine).where(
+                        EmployeeReportingLine.employee_id == e_id,
+                        EmployeeReportingLine.relationship == "SUPERVISOR",
+                        EmployeeReportingLine.is_active == True,  # noqa: E712
+                    )
+                    old_sup_line = (await session.execute(old_sup_stmt)).scalar_one_or_none()
+                    if old_sup_line and old_sup_line.manager_id != m_id:
+                        old_sup_line.is_active = False
+                        old_sup_line.deactivated_at = datetime.now(UTC)
+                        old_sup_line.deactivated_by = user_id
+                        await session.flush()
+                        await AuditService.log_action(
+                            session=session,
+                            actor_user_id=user_id,
+                            actor_role=actor_role,
+                            action="REPORTING_LINE_DEACTIVATED",
+                            entity_type="employee_reporting_lines",
+                            entity_id=str(old_sup_line.id),
+                            diff={
+                                "employee_id": str(e_id),
+                                "old_manager_id": str(old_sup_line.manager_id),
+                                "reason": "SUPERVISOR_REPLACED_VIA_IMPORT",
+                            },
+                            reason="Supervisor replaced via import",
+                        )
+
                 rep_stmt = select(EmployeeReportingLine).where(
                     EmployeeReportingLine.employee_id == e_id,
                     EmployeeReportingLine.manager_id == m_id,
@@ -1369,18 +1458,6 @@ class ImportService:
                     existing_rep.deactivated_by = None
                     existing_rep.notes = notes
 
-                if rel == "SUPERVISOR":
-                    mgr_obj = emp_obj_map.get(m_id)
-                    if mgr_obj and mgr_obj.break_override_minutes and mgr_obj.break_override_minutes > 0:
-                        await PayrollSalaryService.propagate_crew_break_to_worker(
-                            session=session,
-                            worker_id=e_id,
-                            break_minutes=mgr_obj.break_override_minutes,
-                            effective_from=date.today(),
-                            actor_user_id=user_id,
-                            actor_role=actor_role,
-                        )
-
         await session.flush()
 
         # 6. Employee_Salary
@@ -1391,6 +1468,14 @@ class ImportService:
                 eff = to_date_obj(r.normalized.get("effective_from"))
                 if not eff:
                     eff = compute_next_payroll_month_start(date.today())
+
+                raw_break = r.normalized.get("break_minutes")
+                break_mins = None
+                if raw_break is not None:
+                    try:
+                        break_mins = int(raw_break)
+                    except (ValueError, TypeError):
+                        break_mins = None
 
                 sal_data = EmployeeSalaryCreate(
                     effective_from=eff,
@@ -1403,6 +1488,7 @@ class ImportService:
                     housing_transport_allowance=Decimal(
                         str(r.normalized.get("housing_transport_allowance", 0.00))
                     ),
+                    break_minutes=break_mins,
                 )
                 await PayrollSalaryService.create_or_update_salary(
                     session=session,
@@ -1412,6 +1498,28 @@ class ImportService:
                     actor_role=actor_role,
                     batch_id=batch.id,
                 )
+
+        await session.flush()
+
+        # Propagate crew breaks to workers linked in Employee_Reporting AFTER Employee_Salary is committed
+        for r in sheet_to_rows.get("Employee_Reporting", []):
+            rel = r.normalized.get("relationship")
+            if rel == "SUPERVISOR":
+                e_t = r.normalized.get("employee_tally_id")
+                m_t = r.normalized.get("manager_tally_id")
+                if e_t in emp_id_map and m_t in emp_id_map:
+                    e_id = emp_id_map[e_t]
+                    m_id = emp_id_map[m_t]
+                    mgr_obj = emp_obj_map.get(m_id)
+                    if mgr_obj and mgr_obj.break_override_minutes and mgr_obj.break_override_minutes > 0:
+                        await PayrollSalaryService.propagate_crew_break_to_worker(
+                            session=session,
+                            worker_id=e_id,
+                            break_minutes=mgr_obj.break_override_minutes,
+                            effective_from=date.today(),
+                            actor_user_id=user_id,
+                            actor_role=actor_role,
+                        )
 
         await session.flush()
 

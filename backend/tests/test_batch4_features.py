@@ -377,7 +377,14 @@ async def test_crew_break_locked_period_guardrail():
             relationship="SUPERVISOR",
             is_active=True,
         )
-        session.add(rep)
+        sal = EmployeeSalary(
+            employee_id=w.id,
+            effective_from=date(2025, 1, 1),
+            standard_hours=Decimal("8.0"),
+            basic_salary=Decimal("1200.00"),
+            break_minutes=30,
+        )
+        session.add_all([rep, sal])
 
         # Approved payroll run for Jan 2026
         prun = PayrollRun(
@@ -432,7 +439,14 @@ async def test_worker_newly_linked_inherits_supervisor_break():
             country="AE",
             is_active=True,
         )
-        session.add_all([sup, w])
+        sal = EmployeeSalary(
+            employee_id=w.id,
+            effective_from=date(2026, 1, 1),
+            standard_hours=Decimal("8.0"),
+            basic_salary=Decimal("1200.00"),
+            break_minutes=30,
+        )
+        session.add_all([sup, w, sal])
         await session.commit()
         sup_id = sup.id
         w_id = w.id
@@ -683,5 +697,285 @@ async def test_hierarchy_violations_audit_excel_and_actions():
             assert any(item["employee_id"] == str(w_id) for item in inbox_data["leave_requests"])
             await eng_client.aclose()
 
+    finally:
+        await client.aclose()
+
+
+@db_required
+@pytest.mark.asyncio
+async def test_propagation_on_worker_with_no_salary_row_creates_none():
+    """Verify that propagate_crew_break_to_worker creates no rows if worker has no salary row."""
+    tag = uuid4().hex[:6].upper()
+    async with async_session_factory() as session:
+        w = Employee(
+            id=uuid4(),
+            tally_id=f"WRK_NOSAL_{tag}",
+            name=f"Worker No Sal {tag}",
+            role="WORKER",
+            country="AE",
+            is_active=True,
+        )
+        session.add(w)
+        await session.commit()
+        w_id = w.id
+
+    async with async_session_factory() as session:
+        await PayrollSalaryService.propagate_crew_break_to_worker(
+            session=session,
+            worker_id=w_id,
+            break_minutes=45,
+            effective_from=date(2026, 11, 1),
+        )
+        await session.commit()
+
+    async with async_session_factory() as session:
+        q = select(EmployeeSalary).where(EmployeeSalary.employee_id == w_id)
+        salaries = (await session.execute(q)).scalars().all()
+        assert len(salaries) == 0, "No salary rows should be created when worker has no salary row!"
+
+
+@db_required
+@pytest.mark.asyncio
+async def test_first_import_and_reimport_crew_break_idempotency():
+    """First import of worker + supervisor-with-crew-break + salary row effective 2026-11-01
+    gives exactly one salary row with imported basic and crew break.
+    Running same import twice creates no new rows.
+    """
+    from fw.modules.imports import generate_import_template_bytes
+
+    tag = uuid4().hex[:6].upper()
+    sup_tally = f"SUP_{tag}"
+    wrk_tally = f"WRK_{tag}"
+
+    # Provision supervisor with crew break in DB
+    async with async_session_factory() as session:
+        sup = Employee(
+            id=uuid4(),
+            tally_id=sup_tally,
+            name=f"Supervisor {tag}",
+            role="SUPERVISOR",
+            country="AE",
+            is_active=True,
+            break_override_minutes=45,
+        )
+        session.add(sup)
+        await session.commit()
+
+    # Build Excel file with Worker in Employees, reporting line, and salary row
+    wb = openpyxl.load_workbook(io.BytesIO(generate_import_template_bytes()))
+
+    # Employees sheet
+    ws_emp = wb["Employees"]
+    ws_emp.cell(row=5, column=1, value="")
+    ws_emp.cell(row=5, column=2, value=wrk_tally)
+    ws_emp.cell(row=5, column=3, value=f"Worker {tag}")
+    ws_emp.cell(row=5, column=4, value="WORKER")
+    ws_emp.cell(row=5, column=5, value="G1C")
+    ws_emp.cell(row=5, column=6, value="Gardener Helper")
+    ws_emp.cell(row=5, column=7, value="AE")
+    ws_emp.cell(row=5, column=10, value="")
+
+    # Employee_Reporting sheet
+    ws_rep = wb["Employee_Reporting"]
+    ws_rep.cell(row=5, column=1, value="")
+    ws_rep.cell(row=5, column=2, value=wrk_tally)
+    ws_rep.cell(row=5, column=3, value=sup_tally)
+    ws_rep.cell(row=5, column=4, value="SUPERVISOR")
+
+    # Employee_Salary sheet (effective 2026-11-01, basic 1500.00, break_minutes omitted)
+    ws_sal = wb["Employee_Salary"]
+    ws_sal.cell(row=5, column=1, value="")
+    ws_sal.cell(row=5, column=2, value=wrk_tally)
+    ws_sal.cell(row=5, column=3, value="2026-11-01")
+    ws_sal.cell(row=5, column=4, value="8.0")
+    ws_sal.cell(row=5, column=5, value="1500.00")
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    file_bytes = buf.getvalue()
+
+    client = await get_admin_client()
+    try:
+        # Pass 1: First upload and commit
+        files = {
+            "file": (
+                "import_batch4.xlsx",
+                file_bytes,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        }
+        res1 = await client.post(
+            "/api/v1/imports?sheets=Employees,Employee_Reporting,Employee_Salary",
+            files=files,
+        )
+        assert res1.status_code == 201
+        batch1 = res1.json()
+        assert batch1["status"] == "PREVIEWED"
+        assert batch1["can_commit"] is True
+
+        com1 = await client.post(f"/api/v1/imports/{batch1['batch_id']}/commit")
+        assert com1.status_code == 200
+
+        # Verify DB state after Pass 1: exactly 1 salary row with basic 1500.00 and break 45
+        async with async_session_factory() as session:
+            emp = (await session.execute(select(Employee).where(Employee.tally_id == wrk_tally))).scalar_one()
+            sal_rows = (
+                await session.execute(
+                    select(EmployeeSalary).where(EmployeeSalary.employee_id == emp.id)
+                )
+            ).scalars().all()
+            assert len(sal_rows) == 1, f"Expected exactly 1 salary row, got {len(sal_rows)}"
+            assert sal_rows[0].basic_salary == Decimal("1500.00")
+            assert sal_rows[0].break_minutes == 45
+            assert sal_rows[0].effective_from == date(2026, 11, 1)
+
+        # Pass 2: Re-run the exact same import
+        files2 = {
+            "file": (
+                "import_batch4.xlsx",
+                file_bytes,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        }
+        res2 = await client.post(
+            "/api/v1/imports?sheets=Employees,Employee_Reporting,Employee_Salary",
+            files=files2,
+        )
+        assert res2.status_code == 201
+        batch2 = res2.json()
+        com2 = await client.post(f"/api/v1/imports/{batch2['batch_id']}/commit")
+        assert com2.status_code == 200
+
+        # Verify DB state after Pass 2: still exactly 1 salary row
+        async with async_session_factory() as session:
+            emp = (await session.execute(select(Employee).where(Employee.tally_id == wrk_tally))).scalar_one()
+            sal_rows = (
+                await session.execute(
+                    select(EmployeeSalary).where(EmployeeSalary.employee_id == emp.id)
+                )
+            ).scalars().all()
+            assert len(sal_rows) == 1, f"Running same import twice should create no new rows, got {len(sal_rows)}"
+            assert sal_rows[0].basic_salary == Decimal("1500.00")
+            assert sal_rows[0].break_minutes == 45
+    finally:
+        await client.aclose()
+
+
+@db_required
+@pytest.mark.asyncio
+async def test_reimport_worker_with_new_supervisor():
+    """When a worker's supervisor changes via import:
+    - Preview shows action UPDATE (old supervisor -> new supervisor)
+    - Commit deactivates old active supervisor link (is_active=False, deactivated_at/by, audit log)
+    - Re-import succeeds without error!
+    """
+    from fw.modules.imports import generate_import_template_bytes
+
+    tag = uuid4().hex[:6].upper()
+    sup1_tally = f"SUP1_{tag}"
+    sup2_tally = f"SUP2_{tag}"
+    wrk_tally = f"WRK_SW_{tag}"
+
+    # Provision supervisor 1 and worker with active reporting link
+    async with async_session_factory() as session:
+        sup1 = Employee(
+            id=uuid4(),
+            tally_id=sup1_tally,
+            name=f"Supervisor One {tag}",
+            role="SUPERVISOR",
+            country="AE",
+            is_active=True,
+        )
+        sup2 = Employee(
+            id=uuid4(),
+            tally_id=sup2_tally,
+            name=f"Supervisor Two {tag}",
+            role="SUPERVISOR",
+            country="AE",
+            is_active=True,
+        )
+        w = Employee(
+            id=uuid4(),
+            tally_id=wrk_tally,
+            name=f"Worker Switch {tag}",
+            role="WORKER",
+            country="AE",
+            is_active=True,
+        )
+        session.add_all([sup1, sup2, w])
+        await session.flush()
+
+        rep = EmployeeReportingLine(
+            employee_id=w.id,
+            manager_id=sup1.id,
+            relationship="SUPERVISOR",
+            is_active=True,
+        )
+        session.add(rep)
+        await session.commit()
+        w_id = w.id
+        sup1_id = sup1.id
+        sup2_id = sup2.id
+        old_rep_id = rep.id
+
+    wb = openpyxl.load_workbook(io.BytesIO(generate_import_template_bytes()))
+
+    # Re-import Employee_Reporting with new supervisor SUP2
+    ws_rep = wb["Employee_Reporting"]
+    ws_rep.cell(row=5, column=1, value="")
+    ws_rep.cell(row=5, column=2, value=wrk_tally)
+    ws_rep.cell(row=5, column=3, value=sup2_tally)
+    ws_rep.cell(row=5, column=4, value="SUPERVISOR")
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    file_bytes = buf.getvalue()
+
+    client = await get_admin_client()
+    try:
+        files = {
+            "file": (
+                "switch_sup.xlsx",
+                file_bytes,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        }
+        res = await client.post("/api/v1/imports?sheets=Employee_Reporting", files=files)
+        assert res.status_code == 201
+        data = res.json()
+        assert data["status"] == "PREVIEWED"
+        assert data["can_commit"] is True
+
+        # Check preview rows for Employee_Reporting
+        rep_rows_res = await client.get(
+            f"/api/v1/imports/{data['batch_id']}/preview?sheet=Employee_Reporting"
+        )
+        assert rep_rows_res.status_code == 200
+        rep_rows = rep_rows_res.json()["rows"]
+        assert len(rep_rows) == 1
+        assert rep_rows[0]["action"] == "UPDATED"
+
+        # Commit switch
+        commit_res = await client.post(f"/api/v1/imports/{data['batch_id']}/commit")
+        assert commit_res.status_code == 200
+        assert commit_res.json()["status"] == "COMMITTED"
+
+        # Verify DB state:
+        # - Old line is deactivated
+        # - New line is active
+        async with async_session_factory() as session:
+            old_line = await session.get(EmployeeReportingLine, old_rep_id)
+            assert old_line is not None
+            assert old_line.is_active is False
+            assert old_line.deactivated_at is not None
+
+            new_line_q = select(EmployeeReportingLine).where(
+                EmployeeReportingLine.employee_id == w_id,
+                EmployeeReportingLine.manager_id == sup2_id,
+                EmployeeReportingLine.relationship == "SUPERVISOR",
+                EmployeeReportingLine.is_active == True,
+            )
+            new_line = (await session.execute(new_line_q)).scalar_one_or_none()
+            assert new_line is not None
     finally:
         await client.aclose()

@@ -61,15 +61,15 @@ def validate_reporting_link(
         )
 
     if norm_rel == "SUPERVISOR":
+        if emp_role is not None and emp_role != "WORKER":
+            raise HierarchyRuleViolation(
+                code="INVALID_LINK_SUBJECT",
+                message=f"Only workers can report to a supervisor, but employee role is {emp_role}.",
+            )
         if mgr_role is not None and mgr_role != "SUPERVISOR":
             raise HierarchyRuleViolation(
                 code="SUPERVISOR_LINK_ROLE_MISMATCH",
                 message=f"Manager must have role SUPERVISOR for a supervisor reporting line (got {mgr_role}).",
-            )
-        if emp_role is not None and emp_role in ("SUPERINTENDENT", "ENGINEER"):
-            raise HierarchyRuleViolation(
-                code="INVALID_LINK_SUBJECT",
-                message=f"{emp_role.capitalize()} accounts cannot report to a supervisor.",
             )
 
     if norm_rel == "SUPERINTENDENT" and mgr_role is not None and mgr_role != "SUPERINTENDENT":
