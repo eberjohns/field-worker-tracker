@@ -181,11 +181,9 @@ async def test_late_upload_never_overwrites_newer_position():
 async def test_active_offline_states_follow_live_active_window_minutes():
     """Verify checklist requirement: Active/offline states follow live_active_window_minutes."""
     async with async_session_factory() as session:
-        admin_emp = _make_employee("Admin Staff", role="ADMIN")
-        session.add(admin_emp)
-        await session.flush()
-        admin = _make_user(admin_emp, role="ADMIN")
-        session.add(admin)
+        from fw.modules.identity import UserService
+
+        admin = await UserService.get_or_create_system_admin(session)
 
         emp_active = _make_employee("Active Worker")
         emp_offline = _make_employee("Offline Worker")
@@ -501,13 +499,12 @@ async def test_expiring_documents_list_and_alerts():
     """Verify checklist requirement: Expiring documents list and alert at configured lead days."""
     async with async_session_factory() as session:
         today = datetime.now(UTC).date()
-        admin_emp = _make_employee("Admin Staff", role="ADMIN")
-        session.add(admin_emp)
-        await session.flush()
-        admin = _make_user(admin_emp, role="ADMIN")
+        from fw.modules.identity import UserService
+
+        admin = await UserService.get_or_create_system_admin(session)
 
         emp = _make_employee("Doc Worker")
-        session.add_all([admin, emp])
+        session.add(emp)
         await session.flush()
 
         # Document expiring in 15 days (default lead days 30)

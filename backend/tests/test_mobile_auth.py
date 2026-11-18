@@ -164,10 +164,7 @@ async def test_mobile_login_device_binding_and_password_workflow():
 async def test_admin_device_reset_allows_rebinding():
     transport = ASGITransport(app=app)
     emp_id = uuid4()
-    admin_emp_id = uuid4()
-    admin_user_id = uuid4()
     tally_id = f"WRK{str(uuid4())[:6]}"
-    admin_tally_id = f"ADM{str(uuid4())[:6]}"
 
     async with async_session_factory() as session:
         emp = Employee(
@@ -179,28 +176,11 @@ async def test_admin_device_reset_allows_rebinding():
             is_active=True,
         )
         session.add(emp)
-
-        admin_emp = Employee(
-            id=admin_emp_id,
-            tally_id=admin_tally_id,
-            name="Admin Employee",
-            role="ADMIN",
-            country="AE",
-            is_active=True,
-        )
-        session.add(admin_emp)
         await session.flush()
 
-        admin = User(
-            id=admin_user_id,
-            username=admin_tally_id,
-            credential_hash="fakehash",
-            role="ADMIN",
-            is_active=True,
-            must_change_password=False,
-            employee_id=admin_emp_id,
-        )
-        session.add(admin)
+        from fw.modules.identity import UserService
+
+        admin = await UserService.get_or_create_system_admin(session)
         await session.commit()
 
     admin_token = AuthService.create_access_token(admin)
@@ -276,9 +256,7 @@ async def test_admin_device_reset_allows_rebinding():
             await session.execute(
                 delete(RegisteredDevice).where(RegisteredDevice.employee_id == emp_id)
             )
-            await session.execute(delete(User).where(User.id == admin_user_id))
             await session.execute(delete(User).where(User.employee_id == emp_id))
             await session.execute(delete(Employee).where(Employee.id == emp_id))
-            await session.execute(delete(Employee).where(Employee.id == admin_emp_id))
             await session.commit()
         await engine.dispose()

@@ -13,7 +13,7 @@ class UserRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    employee_id: UUID
+    employee_id: UUID | None = None
     username: str
     role: str
     is_active: bool

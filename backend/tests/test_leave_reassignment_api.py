@@ -49,31 +49,10 @@ async def cleanup_db():
 async def get_test_data():
     """Seed test hierarchy, worksite, job item, and base template."""
     async with async_session_factory() as session:
-        # Admin user
-        admin = (
-            await session.execute(select(User).where(User.username == "ADMIN001"))
-        ).scalar_one_or_none()
-        if not admin:
-            admin_emp = Employee(
-                id=uuid4(),
-                tally_id="ADM_P6",
-                name="Admin P6",
-                role="ADMIN",
-                country="AE",
-                is_active=True,
-            )
-            session.add(admin_emp)
-            await session.flush()
-            admin = User(
-                id=uuid4(),
-                employee_id=admin_emp.id,
-                username="ADMIN001",
-                credential_hash="hash",
-                role="ADMIN",
-                is_active=True,
-                must_change_password=False,
-            )
-            session.add(admin)
+        # Single standalone system ADMIN001
+        from fw.modules.identity import UserService
+
+        admin = await UserService.get_or_create_system_admin(session)
 
         # Engineer 1 (ENG_P6_1)
         eng1_emp = (

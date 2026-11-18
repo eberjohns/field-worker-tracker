@@ -120,8 +120,24 @@ async def seed_data(session: AsyncSession) -> None:
         await session.flush()
         return emp
 
-    # Personas:
-    await create_person("ADMIN001", "System Administrator", "ADMIN", grade_code="G7A")
+    # Standalone System Admin (ADMIN001) — never stored in employees table
+    existing_admin = (
+        await session.execute(select(User).where(User.role == "ADMIN"))
+    ).scalar_one_or_none()
+    if not existing_admin:
+        session.add(
+            User(
+                employee_id=None,
+                username="ADMIN001",
+                credential_hash=hash_password(DEFAULT_PASSWORD),
+                role="ADMIN",
+                must_change_password=False,
+                password_changed_at=now,
+            )
+        )
+        await session.flush()
+
+    # Operational Personas:
     engineer = await create_person("ENG001", "Ahmed Al-Mansoor", "ENGINEER", grade_code="G5A")
     supt1 = await create_person("SUPT001", "Rashid Tariq", "SUPERINTENDENT", grade_code="G4B")
     supt2 = await create_person("SUPT002", "Faisal Khan", "SUPERINTENDENT", grade_code="G4B")

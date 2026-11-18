@@ -89,7 +89,7 @@ erDiagram
 | tally_id | text | **unique**, not null (business key) |
 | name | text | not null |
 | phone, email | text | nullable; email required for web roles |
-| role | text | role enum, not null |
+| role | text | operational role enum (`WORKER`, `SUPERVISOR`, `SUPERINTENDENT`, `ENGINEER`), not null — `ADMIN` is forbidden in `employees` (ADR-023) |
 | grade_code | text | salary label, e.g. G2B26 |
 | staff_grade_description | text | matching label; controlled list |
 | accommodation_id | uuid FK accommodations | nullable |
@@ -108,7 +108,7 @@ Replaces single supervisor/superintendent/engineer columns. One row per link: `e
 `employee_id`, `old_grade_code`, `new_grade_code`, `effective_from` date, `changed_by_user_id`, `reason`.
 
 ### users
-`employee_id` FK (unique), `username` (= employee ID, unique), `credential_hash` (Argon2id), `role`, `is_active`, `must_change_password` bool, `password_changed_at`, `failed_attempts`, `locked_until`, `last_login_at`. Every user starts with the company default password and must change it at first login; an account that still has the default after `default_password_max_days` is locked. Only Admin resets a user (back to the default).
+`employee_id` FK (unique, **nullable exclusively for `role = 'ADMIN'`**), `username` (`ADMIN001` for standalone admin; employee `tally_id` for operational users, unique), `credential_hash` (Argon2id), `role`, `is_active`, `must_change_password` bool, `password_changed_at`, `failed_attempts`, `locked_until`, `last_login_at`. Constraints (ADR-023): `CHECK ((role = 'ADMIN' AND employee_id IS NULL) OR (role <> 'ADMIN' AND employee_id IS NOT NULL))` and partial unique index `uq_users_single_admin ON users ((true)) WHERE role = 'ADMIN'` guaranteeing a single standalone System Admin. Every operational user starts with the company default password and must change it at first login; an account that still has the default after `default_password_max_days` is locked. Only Admin resets a user (back to the default).
 
 ### user_sessions
 `id` uuid PK, `user_id` FK users(id) ON DELETE CASCADE, `token_hash` string(128) unique, `expires_at` timestamptz, `revoked_at` timestamptz nullable, `created_at` timestamptz. Used for refresh token rotation and revocation (ADR-011).

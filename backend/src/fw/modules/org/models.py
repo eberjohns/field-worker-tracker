@@ -71,7 +71,7 @@ class Employee(ModelBase):
     __tablename__ = "employees"
     __table_args__ = (
         CheckConstraint(
-            "role IN ('WORKER', 'SUPERVISOR', 'SUPERINTENDENT', 'ENGINEER', 'ADMIN')",
+            "role IN ('WORKER', 'SUPERVISOR', 'SUPERINTENDENT', 'ENGINEER')",
             name="check_employees_role_valid",
         ),
         CheckConstraint(

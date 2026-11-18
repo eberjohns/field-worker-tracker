@@ -1,9 +1,9 @@
 {
-  "version": "1.5.0",
+  "version": "1.5.1",
   "major": 1,
   "minor": 5,
-  "patch": 0,
+  "patch": 1,
   "last_branch": "feat/batch3-roles-undo-tally-deactivation",
-  "last_commit": "91893ef",
-  "updated_at": "2026-11-18T08:20:18.688375+00:00"
+  "last_commit": "d24b202",
+  "updated_at": "2026-11-18T16:50:15.504405+00:00"
 }

@@ -62,6 +62,13 @@ async def _create_employee_with_user(
     role: str = "WORKER",
     country: str = "AE",
 ) -> tuple[Employee, User, str]:
+    if role == "ADMIN":
+        from fw.modules.identity import UserService
+
+        user = await UserService.get_or_create_system_admin(session)
+        await session.commit()
+        return None, user, AuthService.create_access_token(user)  # type: ignore[return-value]
+
     emp = Employee(
         id=uuid4(),
         tally_id=tally_id,

@@ -393,30 +393,22 @@ async def test_employee_dsar_export():
 async def test_archive_api_endpoints_and_exports():
     """Verify Admin archive, retention, DSAR, and directory export HTTP endpoints."""
     async with async_session_factory() as session:
-        # Create admin user
-        admin_id = uuid4()
+        # Use single standalone system ADMIN001 + create a worker employee for DSAR/consent tests
+        from fw.modules.identity import UserService
+
+        admin_user = await UserService.get_or_create_system_admin(session)
+        admin_id = admin_user.id
+
         admin_emp_id = uuid4()
-        admin_emp = Employee(
+        target_emp = Employee(
             id=admin_emp_id,
-            tally_id=f"ADM_{admin_id.hex[:6]}",
-            name="Admin User",
-            role="ADMIN",
+            tally_id=f"WRK_{admin_emp_id.hex[:6]}",
+            name="DSAR Target Worker",
+            role="WORKER",
             country="AE",
             is_active=True,
         )
-        session.add(admin_emp)
-        await session.flush()
-
-        admin_user = User(
-            id=admin_id,
-            username=f"ADM_{admin_id.hex[:6]}",
-            employee_id=admin_emp_id,
-            role="ADMIN",
-            credential_hash="mock",
-            is_active=True,
-            must_change_password=False,
-        )
-        session.add(admin_user)
+        session.add(target_emp)
         await session.commit()
 
         settings = get_settings()

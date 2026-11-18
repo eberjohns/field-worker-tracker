@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 
 export interface UserProfile {
   id: string;
-  employee_id: string;
+  employee_id: string | null;
   username: string;
   role: "ADMIN" | "ENGINEER" | "SUPERINTENDENT" | "SUPERVISOR" | "WORKER";
   is_active: boolean;

@@ -14,7 +14,7 @@ from sqlalchemy import delete, func, select
 
 from fw.core.db import async_session_factory, engine
 from fw.main import app
-from fw.modules.identity import AuthService, User
+from fw.modules.identity import AuthService
 from fw.modules.jobs import JobItem, Worksite
 from fw.modules.org import Employee, Group, Zone
 from fw.modules.scheduling import ScheduledWork, StandingAssignment
@@ -42,35 +42,10 @@ async def admin_client():
         pytest.skip("PostgreSQL not available on localhost:5432")
 
     async with async_session_factory() as session:
-        user = (
-            await session.execute(select(User).where(User.username == "ADMIN001"))
-        ).scalar_one_or_none()
+        from fw.modules.identity import UserService
 
-        if not user:
-            admin_id = uuid4()
-            emp_id = uuid4()
-            emp = Employee(
-                id=emp_id,
-                tally_id=f"ADM{str(uuid4())[:6]}",
-                name="Admin User",
-                role="ADMIN",
-                country="AE",
-                is_active=True,
-            )
-            session.add(emp)
-            await session.flush()
-
-            user = User(
-                id=admin_id,
-                employee_id=emp_id,
-                username="ADMIN001",
-                credential_hash="fakehash",
-                role="ADMIN",
-                is_active=True,
-                must_change_password=False,
-            )
-            session.add(user)
-            await session.commit()
+        user = await UserService.get_or_create_system_admin(session)
+        await session.commit()
 
         token = AuthService.create_access_token(user)
 

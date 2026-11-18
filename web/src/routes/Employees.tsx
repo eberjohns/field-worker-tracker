@@ -980,7 +980,6 @@ export const Employees: React.FC = () => {
           >
             <option value="">All Roles & Staff Grades</option>
             <optgroup label="System Roles">
-              <option value="role:ADMIN">Admin</option>
               <option value="role:ENGINEER">Engineer</option>
               <option value="role:SUPERINTENDENT">Superintendent</option>
               <option value="role:SUPERVISOR">Supervisor</option>

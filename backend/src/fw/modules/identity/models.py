@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -9,7 +9,13 @@ from fw.core.db import Base
 
 
 class User(Base):
-    """User account linked to an employee (docs/07-data-model.md)."""
+    """User account.
+
+    The single system ADMIN (ADMIN001) is a standalone account (employee_id IS NULL)
+    enforced by DB constraints and a partial unique index so Admin never enters operational
+    employee tables (scheduling, attendance, payroll, salary, reports). All non-ADMIN
+    users are linked 1:1 to an Employee row.
+    """
 
     __tablename__ = "users"
     __table_args__ = (
@@ -17,14 +23,24 @@ class User(Base):
             "role IN ('WORKER', 'SUPERVISOR', 'SUPERINTENDENT', 'ENGINEER', 'ADMIN')",
             name="check_users_role_valid",
         ),
+        CheckConstraint(
+            "(role = 'ADMIN' AND employee_id IS NULL) OR (role <> 'ADMIN' AND employee_id IS NOT NULL)",
+            name="check_users_admin_standalone",
+        ),
+        Index(
+            "uq_users_single_admin",
+            text("(true)"),
+            unique=True,
+            postgresql_where=text("role = 'ADMIN'"),
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
-    employee_id: Mapped[UUID] = mapped_column(
+    employee_id: Mapped[UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("employees.id", ondelete="RESTRICT"),
         unique=True,
-        nullable=False,
+        nullable=True,
         index=True,
     )
     username: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)

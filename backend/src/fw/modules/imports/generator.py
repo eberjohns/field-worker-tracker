@@ -167,7 +167,7 @@ def generate_import_template_bytes() -> bytes:
     ws_lists = wb.create_sheet(title="Lists")
     ws_lists.views.sheetView[0].showGridLines = True
     lists_data: dict[str, list[str]] = {
-        "role": ["WORKER", "SUPERVISOR", "SUPERINTENDENT", "ENGINEER", "ADMIN"],
+        "role": ["WORKER", "SUPERVISOR", "SUPERINTENDENT", "ENGINEER"],
         "weekday": ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"],
         "yes_no": ["Y", "N"],
         "relationship": ["SUPERVISOR", "SUPERINTENDENT", "ENGINEER"],

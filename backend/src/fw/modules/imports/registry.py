@@ -190,7 +190,7 @@ SHEET_REGISTRY: dict[str, SheetDef] = {
                 "text",
                 True,
                 "Required",
-                enum_values=["WORKER", "SUPERVISOR", "SUPERINTENDENT", "ENGINEER", "ADMIN"],
+                enum_values=["WORKER", "SUPERVISOR", "SUPERINTENDENT", "ENGINEER"],
                 description="System role.",
                 example="WORKER",
             ),

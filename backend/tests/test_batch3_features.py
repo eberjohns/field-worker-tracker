@@ -17,7 +17,7 @@ from sqlalchemy import delete, or_, select
 from fw.core.db import async_session_factory, engine
 from fw.main import app
 from fw.modules.audit import AuditLog
-from fw.modules.identity import AuthService, User, UserSession, hash_password
+from fw.modules.identity import AuthService, User, UserService, UserSession, hash_password
 from fw.modules.jobs import JobItem, JobOccurrence, Worksite
 from fw.modules.org import Employee, EmployeeReportingLine, Group, Zone
 from fw.modules.scheduling import (
@@ -57,27 +57,8 @@ async def seed_batch3_context():
     """Seed isolated entities for Batch 3 tests (fresh suffix per run)."""
     tag = uuid4().hex[:6].upper()
     async with async_session_factory() as session:
-        # Admin user with known password for password-verified lifecycle actions
-        admin_emp = Employee(
-            id=uuid4(),
-            tally_id=f"ADM_B3_{tag}",
-            name=f"Admin B3 {tag}",
-            role="ADMIN",
-            country="AE",
-            is_active=True,
-        )
-        session.add(admin_emp)
-        await session.flush()
-        admin_user = User(
-            id=uuid4(),
-            employee_id=admin_emp.id,
-            username=f"ADM_B3_{tag}",
-            credential_hash=hash_password(ADMIN_PW),
-            role="ADMIN",
-            is_active=True,
-            must_change_password=False,
-        )
-        session.add(admin_user)
+        # Single standalone system ADMIN001 (never stored in employees table)
+        admin_user = await UserService.get_or_create_system_admin(session, password=ADMIN_PW)
 
         # Engineer
         eng_emp = Employee(
@@ -268,7 +249,7 @@ async def seed_batch3_context():
             "supt_token": AuthService.create_access_token(supt_user),
             "sup_token": AuthService.create_access_token(sup_user),
             "w1_token": AuthService.create_access_token(w1_user),
-            "admin_emp_id": admin_emp.id,
+            "admin_user_id": admin_user.id,
             "eng_emp_id": eng_emp.id,
             "supt_emp_id": supt_emp.id,
             "sup_emp_id": sup_emp.id,
@@ -285,7 +266,6 @@ async def seed_batch3_context():
 
 async def teardown_batch3_context(ctx: dict, extra_emp_ids: list | None = None):
     emp_ids = [
-        ctx["admin_emp_id"],
         ctx["eng_emp_id"],
         ctx["supt_emp_id"],
         ctx["sup_emp_id"],
@@ -941,5 +921,119 @@ async def test_admin_deactivation_login_block_staffing_gap_and_clean_reactivatio
             )
             assert res_ws_react.status_code == 200
             assert res_ws_react.json()["is_active"] is True
+    finally:
+        await teardown_batch3_context(ctx)
+
+
+@db_required
+@pytest.mark.asyncio
+async def test_single_standalone_admin_guardrails():
+    """Verify DB and API guardrails enforce a single standalone ADMIN001 outside employees."""
+    from sqlalchemy.exc import IntegrityError
+
+    ctx = await seed_batch3_context()
+    try:
+        # 1. Verify standalone ADMIN001 has no employee record & no ADMIN exists in employees
+        async with async_session_factory() as session:
+            admins = (
+                (await session.execute(select(User).where(User.role == "ADMIN"))).scalars().all()
+            )
+            assert len(admins) == 1
+            assert admins[0].employee_id is None
+            admin_emps = (
+                (await session.execute(select(Employee).where(Employee.role == "ADMIN")))
+                .scalars()
+                .all()
+            )
+            assert len(admin_emps) == 0
+
+        # 2. DB guardrail: inserting a second ADMIN user fails with IntegrityError
+        async with async_session_factory() as session:
+            session.add(
+                User(
+                    id=uuid4(),
+                    employee_id=None,
+                    username=f"SECOND_ADM_{ctx['tag']}",
+                    credential_hash="hash",
+                    role="ADMIN",
+                    is_active=True,
+                )
+            )
+            with pytest.raises(IntegrityError):
+                await session.flush()
+            await session.rollback()
+
+        # 3. DB guardrail: inserting an Employee with role='ADMIN' fails with IntegrityError
+        async with async_session_factory() as session:
+            session.add(
+                Employee(
+                    id=uuid4(),
+                    tally_id=f"BAD_ADM_{ctx['tag']}",
+                    name="Illegal Admin Emp",
+                    role="ADMIN",
+                    country="AE",
+                    is_active=True,
+                )
+            )
+            with pytest.raises(IntegrityError):
+                await session.flush()
+            await session.rollback()
+
+        # 4. API guardrails: POST /employees blocks role=ADMIN & tally_id=ADMIN001
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            admin_headers = {"Authorization": f"Bearer {ctx['admin_token']}"}
+
+            r_role = await client.post(
+                "/api/v1/employees",
+                json={
+                    "tally_id": f"ADM_TRY_{ctx['tag']}",
+                    "name": "Second Admin",
+                    "role": "ADMIN",
+                    "country": "AE",
+                },
+                headers=admin_headers,
+            )
+            assert r_role.status_code == 400
+            assert r_role.json()["code"] == "ADMIN_ROLE_RESERVED"
+
+            r_tally = await client.post(
+                "/api/v1/employees",
+                json={
+                    "tally_id": "ADMIN001",
+                    "name": "Fake Admin001",
+                    "role": "WORKER",
+                    "country": "AE",
+                },
+                headers=admin_headers,
+            )
+            assert r_tally.status_code == 400
+            assert r_tally.json()["code"] == "RESERVED_TALLY_ID"
+
+            # 5. API guardrail: PATCH /users/{w1_user} cannot promote to ADMIN
+            async with async_session_factory() as session:
+                w1_u = (
+                    await session.execute(select(User).where(User.employee_id == ctx["w1_id"]))
+                ).scalar_one()
+                w1_uid, w1_ver = w1_u.id, w1_u.version
+                adm_u = (
+                    await session.execute(select(User).where(User.role == "ADMIN"))
+                ).scalar_one()
+                adm_uid, adm_ver = adm_u.id, adm_u.version
+
+            r_prom = await client.patch(
+                f"/api/v1/users/{w1_uid}",
+                json={"role": "ADMIN", "version": w1_ver},
+                headers=admin_headers,
+            )
+            assert r_prom.status_code == 400
+            assert r_prom.json()["code"] == "ADMIN_ROLE_RESERVED"
+
+            # 6. API guardrail: PATCH /users/{admin} cannot deactivate ADMIN001
+            r_deact = await client.patch(
+                f"/api/v1/users/{adm_uid}",
+                json={"is_active": False, "version": adm_ver},
+                headers=admin_headers,
+            )
+            assert r_deact.status_code == 400
     finally:
         await teardown_batch3_context(ctx)

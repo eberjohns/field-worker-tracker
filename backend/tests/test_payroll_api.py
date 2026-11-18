@@ -82,6 +82,9 @@ async def _create_test_employee(
     role: str = "WORKER",
     country: str = "AE",
 ) -> Employee:
+    if role == "ADMIN":
+        # Standalone system ADMIN001 has no employee record
+        return None  # type: ignore[return-value]
     emp = Employee(
         id=uuid4(),
         tally_id=tally_id,
@@ -99,9 +102,16 @@ async def _create_test_employee(
 
 async def _create_test_user(
     session: AsyncSession,
-    employee: Employee,
+    employee: Employee | None,
     role: str,
 ) -> tuple[User, str]:
+    if role == "ADMIN":
+        from fw.modules.identity import UserService
+
+        user = await UserService.get_or_create_system_admin(session)
+        await session.commit()
+        return user, AuthService.create_access_token(user)
+    assert employee is not None
     user = User(
         id=uuid4(),
         employee_id=employee.id,

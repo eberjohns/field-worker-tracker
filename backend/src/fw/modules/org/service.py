@@ -64,6 +64,9 @@ class ScopeService:
         if user.role == "ADMIN":
             return None
 
+        if user.employee_id is None:
+            return set()
+
         if user.role == "WORKER":
             return {user.employee_id}
 
@@ -315,6 +318,21 @@ class OrgService:
         actor_role: str,
     ) -> Employee:
         clean_tally = data.tally_id.strip()
+        if data.role.strip().upper() == "ADMIN":
+            raise AppError(
+                code="ADMIN_ROLE_RESERVED",
+                message=(
+                    "Cannot create an employee with role ADMIN. "
+                    "The system administrator (ADMIN001) is a single standalone account."
+                ),
+                status_code=400,
+            )
+        if clean_tally.upper() == "ADMIN001":
+            raise AppError(
+                code="RESERVED_TALLY_ID",
+                message="Tally ID 'ADMIN001' is reserved for the standalone system administrator.",
+                status_code=400,
+            )
         check = await OrgService.check_tally_id(session, clean_tally)
         if not check.available:
             raise AppError(
@@ -391,6 +409,16 @@ class OrgService:
                 code="VERSION_CONFLICT",
                 message="Employee record was modified by another request.",
                 status_code=409,
+            )
+
+        if data.role is not None and data.role.strip().upper() == "ADMIN":
+            raise AppError(
+                code="ADMIN_ROLE_RESERVED",
+                message=(
+                    "Cannot assign role ADMIN to an employee. "
+                    "The system administrator (ADMIN001) is a single standalone account."
+                ),
+                status_code=400,
             )
 
         diff: dict[str, Any] = {}

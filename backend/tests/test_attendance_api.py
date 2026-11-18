@@ -39,29 +39,10 @@ async def cleanup_db_engine():
 @pytest.mark.asyncio
 async def test_attendance_api_end_to_end():
     async with async_session_factory() as session:
-        # Create test admin user & engineer user
-        admin_emp_id = uuid4()
-        admin_emp = Employee(
-            id=admin_emp_id,
-            tally_id=f"ADM_{admin_emp_id.hex[:6]}",
-            name="Admin User",
-            role="ADMIN",
-            country="AE",
-        )
-        session.add(admin_emp)
-        await session.flush()
+        # Use single standalone system ADMIN001
+        from fw.modules.identity import UserService
 
-        admin_user_id = uuid4()
-        admin_user = User(
-            id=admin_user_id,
-            employee_id=admin_emp_id,
-            username=f"admin_{admin_emp_id.hex[:6]}",
-            credential_hash=hash_password("AdminPass123!"),
-            role="ADMIN",
-            is_active=True,
-            must_change_password=False,
-        )
-        session.add(admin_user)
+        admin_user = await UserService.get_or_create_system_admin(session)
 
         # Create worker & device
         worker_id = uuid4()
