@@ -11,6 +11,8 @@ import {
   RefreshCw,
   Info,
   Filter,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 interface ImportRow {
@@ -35,13 +37,31 @@ interface ImportBatch {
   status: string;
   summary: {
     total_rows?: number;
+    skipped_comment_rows?: number;
     counts?: Record<string, number>;
     sheet_counts?: Record<string, Record<string, number>>;
     can_commit?: boolean;
+    selected_sheets?: string[] | null;
   };
   committed_at: string | null;
   created_at: string;
 }
+
+const MASTER_IMPORT_SHEETS = [
+  "Groups",
+  "Zones",
+  "Accommodations",
+  "Employees",
+  "Employee_Reporting",
+  "Employee_Salary",
+  "Worksites",
+  "Job_Items",
+  "Public_Holidays",
+  "Company_Settings",
+  "Time_Rules",
+  "Salary_Revisions",
+  "Salary_Revision_Lines",
+] as const;
 
 export const Imports: React.FC = () => {
   const { token, user } = useAuth();
@@ -49,8 +69,14 @@ export const Imports: React.FC = () => {
 
   // Upload & preview state
   const [isUploading, setIsUploading] = useState(false);
+  const [importScope, setImportScope] = useState<"ALL" | "SELECTED">("ALL");
+  const [selectedSheets, setSelectedSheets] = useState<string[]>([]);
   const [currentBatch, setCurrentBatch] = useState<ImportBatch | null>(null);
   const [previewRows, setPreviewRows] = useState<ImportRow[]>([]);
+  const [filteredTotal, setFilteredTotal] = useState<number>(0);
+  const [page, setPage] = useState<number>(0);
+  const [pageSize, setPageSize] = useState<number>(100);
+  const [rowsLoading, setRowsLoading] = useState<boolean>(false);
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [sheetFilter, setSheetFilter] = useState<string>("ALL");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -88,6 +114,12 @@ export const Imports: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (importScope === "SELECTED" && selectedSheets.length === 0) {
+      setErrorMessage("Please select at least one sheet to import, or switch to 'All Sheets in Workbook'.");
+      e.target.value = "";
+      return;
+    }
+
     setIsUploading(true);
     setErrorMessage(null);
     setSuccessMessage(null);
@@ -95,8 +127,13 @@ export const Imports: React.FC = () => {
     const formData = new FormData();
     formData.append("file", file);
 
+    const querySuffix =
+      importScope === "SELECTED" && selectedSheets.length > 0
+        ? `?sheets=${encodeURIComponent(selectedSheets.join(","))}`
+        : "";
+
     try {
-      const res = await fetch("/api/v1/imports", {
+      const res = await fetch(`/api/v1/imports${querySuffix}`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -105,14 +142,19 @@ export const Imports: React.FC = () => {
       });
 
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail?.message || "Failed to parse import workbook.");
+        const err = await res.json().catch(() => ({}));
+        throw new Error(
+          err.detail?.message || err.detail || err.message || "Failed to parse import workbook."
+        );
       }
 
       const previewData = await res.json();
+      setStatusFilter("ALL");
+      setSheetFilter("ALL");
+      setPage(0);
       setCurrentBatch({
         id: previewData.batch_id,
-        kind: "FULL_WORKBOOK",
+        kind: importScope === "SELECTED" ? "SELECTIVE_SHEETS" : "FULL_WORKBOOK",
         filename: previewData.filename,
         template_version: previewData.template_version,
         status: previewData.status,
@@ -120,12 +162,24 @@ export const Imports: React.FC = () => {
         committed_at: null,
         created_at: new Date().toISOString(),
       });
-      setPreviewRows(previewData.rows);
-      setSuccessMessage(`Workbook '${previewData.filename}' parsed successfully. Review preview before committing.`);
+      setPreviewRows((previewData.rows || []).slice(0, pageSize));
+      setFilteredTotal(
+        previewData.filtered_total ?? previewData.summary?.total_rows ?? (previewData.rows || []).length
+      );
+      if ((previewData.summary?.total_rows ?? 0) > 0) {
+        setSuccessMessage(
+          importScope === "SELECTED"
+            ? `Parsed selected sheet(s) (${selectedSheets.join(", ")}) from '${previewData.filename}'. Review preview before committing.`
+            : `Workbook '${previewData.filename}' parsed successfully. Review preview before committing.`
+        );
+      } else {
+        setSuccessMessage(null);
+      }
     } catch (err: any) {
       setErrorMessage(err.message);
     } finally {
       setIsUploading(false);
+      e.target.value = "";
     }
   };
 
@@ -228,20 +282,98 @@ export const Imports: React.FC = () => {
     }
   };
 
-  // Filter rows
-  const filteredRows = previewRows.filter((row) => {
-    if (statusFilter !== "ALL") {
-      if (statusFilter === "NEW" && row.action !== "NEW") return false;
-      if (statusFilter === "UPDATED" && row.action !== "UPDATED") return false;
-      if (statusFilter === "UNCHANGED" && row.action !== "UNCHANGED") return false;
-      if (statusFilter === "WARNINGS" && row.status !== "WARNING") return false;
-      if (statusFilter === "ERRORS" && row.status !== "ERROR") return false;
-    }
-    if (sheetFilter !== "ALL" && row.sheet !== sheetFilter) return false;
-    return true;
-  });
+  const fetchPreviewPage = async (
+    batchId: string,
+    nextStatus: string,
+    nextSheet: string,
+    nextPage: number,
+    nextPageSize: number
+  ) => {
+    setRowsLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("limit", String(nextPageSize));
+      params.set("offset", String(nextPage * nextPageSize));
+      if (nextSheet !== "ALL") {
+        params.set("sheet", nextSheet);
+      }
+      if (nextStatus === "NEW" || nextStatus === "UPDATED" || nextStatus === "UNCHANGED") {
+        params.set("action", nextStatus);
+      } else if (nextStatus === "WARNINGS") {
+        params.set("row_status", "WARNING");
+      } else if (nextStatus === "ERRORS") {
+        params.set("row_status", "ERROR");
+      }
 
-  const availableSheets = Array.from(new Set(previewRows.map((r) => r.sheet)));
+      const res = await fetch(`/api/v1/imports/${batchId}/preview?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPreviewRows(data.rows || []);
+        setFilteredTotal(data.filtered_total ?? (data.rows || []).length);
+      }
+    } catch {
+      // ignore transient network errors
+    } finally {
+      setRowsLoading(false);
+    }
+  };
+
+  const handleStatusFilterChange = (nextStatus: string) => {
+    setStatusFilter(nextStatus);
+    setPage(0);
+    if (currentBatch) {
+      fetchPreviewPage(currentBatch.id, nextStatus, sheetFilter, 0, pageSize);
+    }
+  };
+
+  const handleSheetFilterChange = (nextSheet: string) => {
+    setSheetFilter(nextSheet);
+    setPage(0);
+    if (currentBatch) {
+      fetchPreviewPage(currentBatch.id, statusFilter, nextSheet, 0, pageSize);
+    }
+  };
+
+  const handlePageChange = (nextPage: number) => {
+    setPage(nextPage);
+    if (currentBatch) {
+      fetchPreviewPage(currentBatch.id, statusFilter, sheetFilter, nextPage, pageSize);
+    }
+  };
+
+  const handlePageSizeChange = (nextSize: number) => {
+    setPageSize(nextSize);
+    setPage(0);
+    if (currentBatch) {
+      fetchPreviewPage(currentBatch.id, statusFilter, sheetFilter, 0, nextSize);
+    }
+  };
+
+  // Build full sheet list with exact totals from batch summary
+  const sheetCountsMap = currentBatch?.summary?.sheet_counts || {};
+  const availableSheetsWithCounts: Array<{ name: string; total: number }> = (() => {
+    const entries = Object.entries(sheetCountsMap)
+      .filter(([, sc]) => (sc?.total ?? 0) > 0)
+      .map(([name, sc]) => ({ name, total: sc?.total ?? 0 }));
+    if (entries.length > 0) {
+      const orderIndex = (s: string) => {
+        const idx = (MASTER_IMPORT_SHEETS as readonly string[]).indexOf(s);
+        return idx === -1 ? 999 : idx;
+      };
+      return entries.sort((a, b) => orderIndex(a.name) - orderIndex(b.name));
+    }
+    const uniqueNames = Array.from(new Set(previewRows.map((r) => r.sheet)));
+    return uniqueNames.map((name) => ({
+      name,
+      total: previewRows.filter((r) => r.sheet === name).length,
+    }));
+  })();
+
+  const totalPages = Math.max(1, Math.ceil(filteredTotal / pageSize));
+  const rangeStart = filteredTotal === 0 ? 0 : page * pageSize + 1;
+  const rangeEnd = Math.min(filteredTotal, (page + 1) * pageSize);
 
   return (
     <div className="space-y-6">
@@ -332,25 +464,118 @@ export const Imports: React.FC = () => {
         <div className="space-y-6">
           {/* Upload Zone */}
           {!currentBatch && (
-            <div className="rounded-xl border-2 border-dashed border-slate-300 bg-white p-12 text-center hover:border-indigo-400 transition-colors">
-              <UploadCloud className="mx-auto h-12 w-12 text-slate-400 mb-4" />
-              <h3 className="text-base font-semibold text-slate-900">Upload Filled Template Workbook</h3>
-              <p className="mt-1 text-sm text-slate-500 max-w-sm mx-auto">
-                Drag and drop your <code className="font-mono text-slate-700">.xlsx</code> workbook or browse to inspect
-                diffs before committing.
-              </p>
-              <div className="mt-6">
-                <label className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 cursor-pointer transition-colors">
-                  <FileSpreadsheet className="h-4 w-4" />
-                  {isUploading ? "Uploading & Analyzing..." : "Select Template File"}
-                  <input
-                    type="file"
-                    accept=".xlsx,.xlsm"
-                    className="hidden"
-                    onChange={handleFileUpload}
-                    disabled={isUploading}
-                  />
-                </label>
+            <div className="space-y-4">
+              {/* Selective Sheet Scope Selector */}
+              <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-sm font-semibold text-slate-900">Import Scope</h4>
+                    <p className="text-xs text-slate-500">
+                      Import all sheets present in your workbook, or select specific sheet(s) by name to import only those tabs.
+                    </p>
+                  </div>
+                  <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+                    <button
+                      type="button"
+                      onClick={() => setImportScope("ALL")}
+                      className={`px-3 py-1.5 rounded-md text-xs font-semibold transition ${
+                        importScope === "ALL"
+                          ? "bg-white text-indigo-700 shadow-xs"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      All Sheets in File
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setImportScope("SELECTED")}
+                      className={`px-3 py-1.5 rounded-md text-xs font-semibold transition ${
+                        importScope === "SELECTED"
+                          ? "bg-white text-indigo-700 shadow-xs"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      Specific Sheet(s)
+                    </button>
+                  </div>
+                </div>
+
+                {importScope === "SELECTED" && (
+                  <div className="pt-2 border-t border-slate-100 space-y-2.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-600 font-medium">
+                        Select sheet(s) to parse ({selectedSheets.length} selected):
+                      </span>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedSheets([...MASTER_IMPORT_SHEETS])}
+                          className="text-indigo-600 hover:underline font-semibold"
+                        >
+                          Select All
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedSheets([])}
+                          className="text-slate-500 hover:underline font-medium"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {MASTER_IMPORT_SHEETS.map((sheetName) => {
+                        const checked = selectedSheets.includes(sheetName);
+                        return (
+                          <button
+                            key={sheetName}
+                            type="button"
+                            onClick={() =>
+                              setSelectedSheets((prev) =>
+                                prev.includes(sheetName)
+                                  ? prev.filter((s) => s !== sheetName)
+                                  : [...prev, sheetName]
+                              )
+                            }
+                            className={`px-2.5 py-1.5 rounded-lg text-xs font-mono font-medium border transition ${
+                              checked
+                                ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs"
+                                : "bg-slate-50 text-slate-700 border-slate-200 hover:border-indigo-300"
+                            }`}
+                          >
+                            {checked ? "✓ " : ""}
+                            {sheetName}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-xl border-2 border-dashed border-slate-300 bg-white p-12 text-center hover:border-indigo-400 transition-colors">
+                <UploadCloud className="mx-auto h-12 w-12 text-slate-400 mb-4" />
+                <h3 className="text-base font-semibold text-slate-900">
+                  {importScope === "SELECTED"
+                    ? "Upload Workbook (Selected Sheets Only)"
+                    : "Upload Filled Template Workbook"}
+                </h3>
+                <p className="mt-1 text-sm text-slate-500 max-w-md mx-auto">
+                  Upload a full master <code className="font-mono text-slate-700">.xlsx</code> workbook or a single-sheet workbook with matching sheet name to inspect diffs before committing.
+                </p>
+                <div className="mt-6">
+                  <label className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 cursor-pointer transition-colors">
+                    <FileSpreadsheet className="h-4 w-4" />
+                    {isUploading ? "Uploading & Analyzing..." : "Select Template File"}
+                    <input
+                      type="file"
+                      accept=".xlsx,.xlsm"
+                      className="hidden"
+                      onChange={handleFileUpload}
+                      disabled={isUploading}
+                    />
+                  </label>
+                </div>
               </div>
             </div>
           )}
@@ -360,7 +585,7 @@ export const Imports: React.FC = () => {
             <div className="space-y-6">
               <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="font-semibold text-slate-900 text-lg">{currentBatch.filename}</span>
                     <span
                       className={`px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase ${
@@ -373,6 +598,11 @@ export const Imports: React.FC = () => {
                     >
                       {currentBatch.status}
                     </span>
+                    {currentBatch.summary.selected_sheets && currentBatch.summary.selected_sheets.length > 0 && (
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">
+                        Sheets: {currentBatch.summary.selected_sheets.join(", ")}
+                      </span>
+                    )}
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-4 text-sm text-slate-500">
                     <span>Total Rows: {currentBatch.summary.total_rows ?? 0}</span>
@@ -392,10 +622,18 @@ export const Imports: React.FC = () => {
                     <span className="text-red-700 font-medium">
                       Errors: {currentBatch.summary.counts?.ERROR ?? 0}
                     </span>
+                    {(currentBatch.summary.skipped_comment_rows ?? 0) > 0 && (
+                      <>
+                        <span>•</span>
+                        <span className="text-slate-500">
+                          Skipped (EXAMPLE / Col A): {currentBatch.summary.skipped_comment_rows}
+                        </span>
+                      </>
+                    )}
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   {(currentBatch.summary.counts?.ERROR ?? 0) > 0 && (
                     <button
                       onClick={handleDownloadErrors}
@@ -409,9 +647,9 @@ export const Imports: React.FC = () => {
                   {currentBatch.status !== "COMMITTED" && (
                     <button
                       onClick={handleCommit}
-                      disabled={isCommitting || !currentBatch.summary.can_commit}
+                      disabled={isCommitting || !currentBatch.summary.can_commit || (currentBatch.summary.total_rows ?? 0) === 0}
                       className={`inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-lg shadow-sm text-white transition-all ${
-                        currentBatch.summary.can_commit
+                        currentBatch.summary.can_commit && (currentBatch.summary.total_rows ?? 0) > 0
                           ? "bg-indigo-600 hover:bg-indigo-700 cursor-pointer"
                           : "bg-slate-300 cursor-not-allowed opacity-70"
                       }`}
@@ -426,8 +664,51 @@ export const Imports: React.FC = () => {
                     Re-upload
                     <input type="file" accept=".xlsx,.xlsm" className="hidden" onChange={handleFileUpload} />
                   </label>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentBatch(null);
+                      setPreviewRows([]);
+                      setFilteredTotal(0);
+                      setPage(0);
+                      setStatusFilter("ALL");
+                      setSheetFilter("ALL");
+                      setErrorMessage(null);
+                      setSuccessMessage(null);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 cursor-pointer"
+                  >
+                    New Upload / Change Scope
+                  </button>
                 </div>
               </div>
+
+              {(currentBatch.summary.total_rows ?? 0) === 0 && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 flex items-start gap-3">
+                  <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+                  <div className="space-y-1">
+                    <p className="font-semibold">No importable data rows were found in this workbook.</p>
+                    {(currentBatch.summary.skipped_comment_rows ?? 0) > 0 ? (
+                      <p>
+                        <span className="font-semibold">{currentBatch.summary.skipped_comment_rows}</span> row(s) were
+                        skipped because <span className="font-semibold">Column A</span> contains text (such as{" "}
+                        <code className="font-mono bg-white px-1 py-0.5 rounded border border-amber-200">EXAMPLE</code>{" "}
+                        or <code className="font-mono bg-white px-1 py-0.5 rounded border border-amber-200">#</code>).
+                        To import data, add your rows starting at row 5 with{" "}
+                        <span className="font-semibold underline">Column A left blank</span> (or clear{" "}
+                        <code className="font-mono bg-white px-1 py-0.5 rounded border border-amber-200">EXAMPLE</code>{" "}
+                        from Column A).
+                      </p>
+                    ) : (
+                      <p>
+                        Ensure your data starts at row 5 in the selected sheet(s) with{" "}
+                        <span className="font-semibold underline">Column A left blank</span>, then re-upload.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Filter Bar */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200">
@@ -437,7 +718,7 @@ export const Imports: React.FC = () => {
                   {["ALL", "NEW", "UPDATED", "UNCHANGED", "WARNINGS", "ERRORS"].map((filter) => (
                     <button
                       key={filter}
-                      onClick={() => setStatusFilter(filter)}
+                      onClick={() => handleStatusFilterChange(filter)}
                       className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
                         statusFilter === filter
                           ? "bg-slate-900 text-white font-semibold"
@@ -454,13 +735,15 @@ export const Imports: React.FC = () => {
                   <Filter className="h-4 w-4 text-slate-400" />
                   <select
                     value={sheetFilter}
-                    onChange={(e) => setSheetFilter(e.target.value)}
+                    onChange={(e) => handleSheetFilterChange(e.target.value)}
                     className="rounded-lg border border-slate-300 bg-white py-1.5 px-3 text-xs font-medium text-slate-700 shadow-sm focus:border-indigo-500 focus:outline-none"
                   >
-                    <option value="ALL">All Sheets ({previewRows.length})</option>
-                    {availableSheets.map((s) => (
-                      <option key={s} value={s}>
-                        {s} ({previewRows.filter((r) => r.sheet === s).length})
+                    <option value="ALL">
+                      All Sheets ({(currentBatch.summary.total_rows ?? previewRows.length).toLocaleString()})
+                    </option>
+                    {availableSheetsWithCounts.map((s) => (
+                      <option key={s.name} value={s.name}>
+                        {s.name} ({s.total.toLocaleString()})
                       </option>
                     ))}
                   </select>
@@ -483,14 +766,22 @@ export const Imports: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 text-slate-700">
-                      {filteredRows.length === 0 ? (
+                      {rowsLoading ? (
                         <tr>
                           <td colSpan={7} className="py-8 text-center text-slate-400">
-                            No rows matching selected filter.
+                            Loading preview rows...
+                          </td>
+                        </tr>
+                      ) : previewRows.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="py-8 text-center text-slate-400">
+                            {(currentBatch.summary.total_rows ?? 0) === 0
+                              ? "No data rows parsed. Leave Column A blank on rows you want to import (rows marked EXAMPLE or # are skipped)."
+                              : "No rows matching selected filter."}
                           </td>
                         </tr>
                       ) : (
-                        filteredRows.map((r) => {
+                        previewRows.map((r) => {
                           const hasDiff = Object.keys(r.diff).length > 0;
                           return (
                             <tr
@@ -589,6 +880,51 @@ export const Imports: React.FC = () => {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Pagination Bar */}
+                {filteredTotal > 0 && (
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 bg-slate-50 border-t border-slate-200 text-xs text-slate-600">
+                    <div className="flex items-center gap-3">
+                      <span>
+                        Showing <span className="font-semibold text-slate-900">{rangeStart.toLocaleString()}</span>–
+                        <span className="font-semibold text-slate-900">{rangeEnd.toLocaleString()}</span> of{" "}
+                        <span className="font-semibold text-slate-900">{filteredTotal.toLocaleString()}</span> rows
+                      </span>
+                      <select
+                        value={pageSize}
+                        onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                        className="rounded-md border border-slate-300 bg-white py-1 px-2 text-xs text-slate-700"
+                      >
+                        <option value={50}>50 / page</option>
+                        <option value={100}>100 / page</option>
+                        <option value={200}>200 / page</option>
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handlePageChange(Math.max(0, page - 1))}
+                        disabled={page === 0 || rowsLoading}
+                        className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <ChevronLeft className="h-3.5 w-3.5" />
+                        Prev
+                      </button>
+                      <span className="px-2 font-medium text-slate-700">
+                        Page {page + 1} of {totalPages}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handlePageChange(Math.min(totalPages - 1, page + 1))}
+                        disabled={page + 1 >= totalPages || rowsLoading}
+                        className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        Next
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}

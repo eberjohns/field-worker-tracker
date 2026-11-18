@@ -54,7 +54,7 @@ One registry in code (`modules/imports/registry.py`) defines sheets, columns, ty
 | Company_Settings | setting_key + country + effective_from |
 | Time_Rules | rule_name + scope_type + scope_id + start_date |
 
-**Commit order**: 1 Groups, 2 Zones, 3 Accommodations, 4 Employees (also creates document expiry dates), 5 Employee_Reporting, 6 Employee_Salary, 7 Worksites, 8 Job_Items, 9 Leave, 10 Public_Holidays, 11 Salary_Revisions, 12 Salary_Revision_Lines, 13 Company_Settings, 14 Time_Rules. Employees are linked afterwards through Employee_Reporting, so row order never matters. Boundaries are **not** imported (they appear in the boundary setup queue). Salary rows with no `effective_from` take effect from the first day of the next payroll month.
+**Commit order**: 1 Groups, 2 Zones, 3 Accommodations, 4 Employees (also creates document expiry dates), 5 Employee_Reporting, 6 Employee_Salary, 7 Worksites, 8 Job_Items, 9 Leave, 10 Public_Holidays, 11 Salary_Revisions, 12 Salary_Revision_Lines, 13 Company_Settings, 14 Time_Rules. Employees are linked afterwards through Employee_Reporting, so row order never matters. Optional `boundary_polygon` columns (GeoJSON Polygon or WKT `POLYGON((lng lat, ...))`) are supported on both `Worksites` and `Accommodations` — blank cells leave existing boundaries untouched, while sites/camps without polygons appear in the boundary setup queue. Selective sheet imports are supported via `?sheets=SheetA,SheetB` (or by uploading a single-sheet workbook with a matching sheet name). Salary rows with no `effective_from` take effect from the first day of the next payroll month.
 
 ## 4. Normalization rules
 - Trim whitespace, collapse internal spaces, normalize non-breaking spaces. IDs stay text.

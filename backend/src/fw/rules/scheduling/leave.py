@@ -46,6 +46,9 @@ class LeaveRecord:
     status: str
 
 
+URGENT_LEAVE_TYPES = frozenset({LeaveType.EMERGENCY.value, LeaveType.SICK.value})
+
+
 def validate_leave_dates(
     from_date: date,
     to_date: date,
@@ -53,15 +56,20 @@ def validate_leave_dates(
     is_admin: bool = False,
     min_notice_days: int = 3,
     bypass_notice: bool = False,
+    leave_type: str | None = None,
 ) -> tuple[bool, str | None]:
     """Validate leave request date boundaries and notice requirements.
 
     - to_date must be on or after from_date.
-    - All users (including admins) require at least `min_notice_days` advance notice.
+    - EMERGENCY and SICK leave types are exempt from the advance notice period for all roles.
+    - All other leave types require at least `min_notice_days` advance notice (for all roles).
     - Admin users can bypass the notice check only when explicitly confirmed (bypass_notice=True).
     """
     if to_date < from_date:
         return False, f"End date ({to_date}) cannot be before start date ({from_date})."
+
+    if leave_type and leave_type.strip().upper() in URGENT_LEAVE_TYPES:
+        return True, None
 
     notice_days = (from_date - today_work_date).days
     if notice_days < min_notice_days:

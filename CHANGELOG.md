@@ -2,6 +2,16 @@
 All notable changes. Format: Keep a Changelog. Mobile-contract changes are also logged in `docs/09-mobile-sync-contract.md`.
 
 ## [Unreleased]
+### Added
+- System Refinements & Patches (Batch 2):
+  - Editable Employee Hierarchy (Admin-Only): Added interactive reporting-line editor to Employee Detail Hierarchy tab allowing Admin to add/replace a single direct Supervisor and add/remove multiple Superintendents and Engineers; non-admins remain read-only and Admin accounts (`ADMIN`/`ADMIN001`) are strictly excluded from hierarchy links.
+  - Master Excel `boundary_polygon` Column: Added optional `boundary_polygon` column (GeoJSON Polygon or WKT `POLYGON((...))`) to both `Worksites` and `Accommodations` sheets in the master template, preview validator (`INVALID_POLYGON`), and atomic PostGIS commit pipeline (publishing boundary-changed sync events).
+  - Selective Sheet Import: Added optional `sheets` filter parameter to `POST /api/v1/imports` and an Import Scope selector (*All Sheets in File* vs. *Specific Sheet(s)*) on the Master Data Import screen.
+  - Database Reset Admin Password Verification: Updated `POST /api/v1/settings/reset-database` and the Settings Danger Zone modal to require both `RESET` confirmation text and verified current Admin password before clearing tables.
+  - Paid Leave Payroll Run Option: Added `treat_leaves_as_paid` toggle when generating a Draft Payroll Run (`POST /api/v1/payroll/runs` and Payroll modal) so all approved leave hours can be paid without deduction when required, recorded in run/record snapshots for auditability.
+  - Urgent Leave 3-Day Notice Exemption: Exempted `EMERGENCY` and `SICK` leave types from the 3-day advance notice requirement for all roles (`fw.rules.scheduling.leave.validate_leave_dates` and Leave Management UI).
+  - Login Password Visibility Toggle: Added `Eye` / `EyeOff` password visibility toggle buttons to the Login page and Forced Password Change inputs.
+
 ### Changed
 - Mobile Contract Documentation (`docs/09-mobile-sync-contract.md`, v1.1.1): Full alignment audit against implemented mobile APIs — documented `POST /api/v1/mobile/consent/withdraw`, corrected `GET /api/v1/mobile/me/payroll` (`WorkerMobilePayrollSlip`) response schema, added complete request/response JSON examples for every endpoint, documented server-side PostGIS verification verdicts and flags, clarified password strength rules and planned `/mobile/me/scorecard` status, added a complete HTTP error code matrix, and added 9 end-to-end operational scenarios.
 

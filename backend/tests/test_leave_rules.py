@@ -51,6 +51,44 @@ def test_validate_leave_dates_admin_past_allowed():
     assert err_bypass is None
 
 
+def test_validate_leave_dates_urgent_types_exempt_from_notice():
+    today = date(2026, 11, 10)
+    # Same-day EMERGENCY and SICK allowed for non-admin without bypass
+    for urgent_type in ("EMERGENCY", "SICK"):
+        ok, err = validate_leave_dates(
+            date(2026, 11, 10),
+            date(2026, 11, 11),
+            today,
+            is_admin=False,
+            leave_type=urgent_type,
+        )
+        assert ok is True
+        assert err is None
+
+        # End date before start date still rejected even for urgent types
+        ok_bad, err_bad = validate_leave_dates(
+            date(2026, 11, 12),
+            date(2026, 11, 10),
+            today,
+            is_admin=False,
+            leave_type=urgent_type,
+        )
+        assert ok_bad is False
+        assert err_bad is not None and "before start date" in err_bad
+
+    # Non-urgent types still enforce 3-day notice
+    for regular_type in ("ANNUAL", "UNPAID", "OTHER"):
+        ok, err = validate_leave_dates(
+            date(2026, 11, 11),
+            date(2026, 11, 12),
+            today,
+            is_admin=False,
+            leave_type=regular_type,
+        )
+        assert ok is False
+        assert err is not None and "at least 3 days notice" in err
+
+
 def test_check_overlapping_leaves():
     emp_id = uuid.uuid4()
     other_emp_id = uuid.uuid4()

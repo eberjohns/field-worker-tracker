@@ -7,6 +7,7 @@ from fw.rules.imports.normalizer import (
     normalize_grade_code,
     normalize_sgd,
     normalize_text,
+    parse_boundary_polygon,
     parse_cell_value,
 )
 from fw.rules.imports.validator import (
@@ -26,6 +27,7 @@ __all__ = [
     "normalize_grade_code",
     "normalize_sgd",
     "normalize_text",
+    "parse_boundary_polygon",
     "parse_cell_value",
     "validate_worksite_job_number",
 ]

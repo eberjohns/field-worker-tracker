@@ -3,7 +3,7 @@
 import csv
 import io
 from collections.abc import Mapping
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
 
@@ -518,6 +518,16 @@ class PayrollService:
                 Decimal("0.0"),
             )
 
+            emp_leaves = leave_by_emp.get(emp.id, [])
+            approved_leave_dates: set[date] = set()
+            for lv in emp_leaves:
+                start_d = max(lv.from_date, payload.period_start)
+                end_d = min(lv.to_date, payload.period_end)
+                cur_ld = start_d
+                while cur_ld <= end_d:
+                    approved_leave_dates.add(cur_ld)
+                    cur_ld += timedelta(days=1)
+
             emp_att = att_by_emp.get(emp.id, [])
             worked_hours = Decimal("0.0")
             ot1_hours = Decimal("0.0")
@@ -531,11 +541,12 @@ class PayrollService:
                 worked_m = Decimal(str(calc.worked_minutes or 0))
                 worked_hours += round_money(worked_m / Decimal("60"))
 
-                # Shortfall minutes
+                # Shortfall minutes (skip leave days if run treats leaves as paid)
                 if calc.shortfall_minutes and calc.shortfall_minutes > 0:
-                    shortfall_hours += round_money(
-                        Decimal(str(calc.shortfall_minutes)) / Decimal("60")
-                    )
+                    if not (payload.treat_leaves_as_paid and rec.work_date in approved_leave_dates):
+                        shortfall_hours += round_money(
+                            Decimal(str(calc.shortfall_minutes)) / Decimal("60")
+                        )
 
                 # Overtime: ONLY calculate if approved
                 # (review_status == 'APPROVED' or auto-approved when review_reasons is empty)
@@ -549,7 +560,6 @@ class PayrollService:
                         ot2_hours += round_money(Decimal(str(calc.ot2_minutes)) / Decimal("60"))
 
             # Leave hours
-            emp_leaves = leave_by_emp.get(emp.id, [])
             paid_leave_hours = Decimal("0.0")
             unpaid_leave_hours = Decimal("0.0")
 
@@ -560,7 +570,11 @@ class PayrollService:
                 if end_d >= start_d:
                     days_count = Decimal(str((end_d - start_d).days + 1))
                     h = days_count * std_hours
-                    if getattr(lv, "is_paid", False) or lv.leave_type in ("ANNUAL", "SICK"):
+                    if (
+                        payload.treat_leaves_as_paid
+                        or getattr(lv, "is_paid", False)
+                        or lv.leave_type in ("ANNUAL", "SICK")
+                    ):
                         paid_leave_hours += h
                     else:
                         unpaid_leave_hours += h
@@ -606,6 +620,7 @@ class PayrollService:
                     "ot1_multiplier": str(ot1_multiplier),
                     "ot2_multiplier": str(ot2_multiplier),
                     "hr_overhead_rate": str(hr_oh_rate),
+                    "treat_leaves_as_paid": payload.treat_leaves_as_paid,
                     "provisions": {
                         "visa": str(visa_prov),
                         "air_ticket": str(air_prov),
@@ -707,6 +722,7 @@ class PayrollService:
             "provisions_total": str(t_prov),
             "total_staff_cost_total": str(t_staff_cost),
             "final_total_staff_cost_total": str(t_final_cost),
+            "treat_leaves_as_paid": payload.treat_leaves_as_paid,
         }
         run.totals_snapshot = totals_dict
         await session.flush()

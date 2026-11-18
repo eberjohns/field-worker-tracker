@@ -46,6 +46,7 @@ class ImportPreviewResponse(BaseModel):
     can_commit: bool
     summary: dict[str, Any] = Field(default_factory=dict)
     rows: list[ImportRowRead] = Field(default_factory=list)
+    filtered_total: int | None = None
 
 
 class ImportCommitResponse(BaseModel):

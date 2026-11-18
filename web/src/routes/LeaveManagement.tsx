@@ -132,9 +132,12 @@ export const LeaveManagement: React.FC = () => {
     fetchEmployees();
   }, [token]);
 
+  const isUrgentLeaveType =
+    recordForm.leave_type === "EMERGENCY" || recordForm.leave_type === "SICK";
+
   // Notice period warning check for record form
   const getNoticeWarning = () => {
-    if (!recordForm.from_date) return null;
+    if (!recordForm.from_date || isUrgentLeaveType) return null;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const from = new Date(recordForm.from_date);
@@ -624,6 +627,15 @@ export const LeaveManagement: React.FC = () => {
                   />
                 </div>
               </div>
+
+              {isUrgentLeaveType && (
+                <div className="p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                  <span className="text-xs">
+                    Emergency and Sick leaves are exempt from the 3-day advance notice requirement.
+                  </span>
+                </div>
+              )}
 
               {getNoticeWarning() && (
                 <div className="space-y-2">

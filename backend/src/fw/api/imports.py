@@ -4,13 +4,14 @@ import email
 from email import policy
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.core.db import get_db
 from fw.modules.identity import User, require_role
 from fw.modules.imports import (
+    SHEET_REGISTRY,
     ImportBatch,
     ImportBatchRead,
     ImportCommitResponse,
@@ -43,10 +44,28 @@ async def download_import_template(
 @router.post("", response_model=ImportPreviewResponse, status_code=status.HTTP_201_CREATED)
 async def upload_workbook(
     request: Request,
+    sheets: str | None = Query(
+        None,
+        description="Optional comma-separated list of sheet names to import (e.g. Worksites,Job_Items).",
+    ),
     current_user: User = Depends(require_role("ADMIN")),
     session: AsyncSession = Depends(get_db),
 ) -> ImportPreviewResponse:
     """Upload workbook (multipart or raw bytes) and return safe preview with field-level diffs without committing."""
+    selected_sheets: list[str] | None = None
+    if sheets and sheets.strip():
+        parsed_sheets = [s.strip() for s in sheets.split(",") if s.strip()]
+        unknown = [s for s in parsed_sheets if s not in SHEET_REGISTRY]
+        if unknown:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "code": "INVALID_SHEET_NAME",
+                    "message": f"Unknown sheet name(s): {', '.join(unknown)}. Valid sheets: {', '.join(SHEET_REGISTRY.keys())}",
+                },
+            )
+        selected_sheets = parsed_sheets
+
     content_type = request.headers.get("content-type", "")
     body = await request.body()
 
@@ -97,6 +116,7 @@ async def upload_workbook(
         file_bytes=file_bytes,
         filename=filename,
         user_id=current_user.id,
+        selected_sheets=selected_sheets,
     )
     return preview
 
@@ -129,10 +149,13 @@ async def get_import_preview(
     if action:
         stmt = stmt.where(ImportRow.action == action.upper())
 
-    stmt = (
+    count_stmt = select(func.count()).select_from(stmt.subquery())
+    filtered_total = int((await session.execute(count_stmt)).scalar_one() or 0)
+
+    paged_stmt = (
         stmt.order_by(ImportRow.sheet.asc(), ImportRow.row_number.asc()).offset(offset).limit(limit)
     )
-    rows = (await session.execute(stmt)).scalars().all()
+    rows = (await session.execute(paged_stmt)).scalars().all()
 
     can_commit = batch.summary.get("can_commit", False)
     return ImportPreviewResponse(
@@ -143,6 +166,7 @@ async def get_import_preview(
         can_commit=can_commit,
         summary=batch.summary,
         rows=[ImportRowRead.model_validate(r) for r in rows],
+        filtered_total=filtered_total,
     )
 
 

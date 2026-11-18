@@ -47,6 +47,12 @@ export const EmployeeDetail: React.FC = () => {
   const [newDocType, setNewDocType] = useState("VISA");
   const [newDocExpiry, setNewDocExpiry] = useState("");
 
+  // Hierarchy editing state (Admin only)
+  const [allManagers, setAllManagers] = useState<any[]>([]);
+  const [newRelType, setNewRelType] = useState<"SUPERVISOR" | "SUPERINTENDENT" | "ENGINEER">("SUPERVISOR");
+  const [newManagerId, setNewManagerId] = useState("");
+  const [savingHierarchy, setSavingHierarchy] = useState(false);
+
   // Phase 13 DSAR and Consent actions
   const [exportingDsar, setExportingDsar] = useState(false);
   const [withdrawingConsent, setWithdrawingConsent] = useState(false);
@@ -137,13 +143,23 @@ export const EmployeeDetail: React.FC = () => {
       const salRes = await fetch(`/api/v1/employees/${employeeId}/salary`, { headers });
       if (salRes.ok) setSalaryHistory(await salRes.json());
 
-      // 5. Devices (Admin only)
+      // 5. Devices, Audit Logs & Candidate Managers (Admin only)
       if (user?.role === "ADMIN") {
         const devRes = await fetch(`/api/v1/employees/${employeeId}/devices`, { headers });
         if (devRes.ok) setDevices(await devRes.json());
 
         const auditRes = await fetch(`/api/v1/audit-logs?entity_type=employee&entity_id=${employeeId}`, { headers });
         if (auditRes.ok) setAuditLogs(await auditRes.json());
+
+        const mgrsRes = await fetch(`/api/v1/employees?is_active=true&limit=1000`, { headers });
+        if (mgrsRes.ok) {
+          const allEmps = await mgrsRes.json();
+          setAllManagers(
+            allEmps.filter(
+              (m: any) => m.id !== employeeId && m.role !== "ADMIN" && m.tally_id !== "ADMIN001"
+            )
+          );
+        }
       }
     } catch (err) {
       console.error(err);
@@ -225,6 +241,85 @@ export const EmployeeDetail: React.FC = () => {
       }
     } catch (err: any) {
       setErrorMessage(err.message);
+    }
+  };
+
+  const handleAddReportingLine = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newManagerId) return;
+    setSavingHierarchy(true);
+    setStatusMessage(null);
+    setErrorMessage(null);
+    try {
+      const headers = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      };
+
+      // If assigning a SUPERVISOR and a direct supervisor already exists, replace it atomically
+      if (newRelType === "SUPERVISOR") {
+        const existingSup = reportingLines.find(
+          (l) => l.is_direct && l.relationship === "SUPERVISOR"
+        );
+        if (existingSup) {
+          if (existingSup.manager_id === newManagerId) {
+            setErrorMessage("This supervisor is already assigned.");
+            return;
+          }
+          const delRes = await fetch(
+            `/api/v1/employees/${employeeId}/reporting-lines/${existingSup.id}`,
+            { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }
+          );
+          if (!delRes.ok) {
+            const err = await delRes.json().catch(() => ({}));
+            throw new Error(err.detail || err.message || "Failed to replace existing supervisor.");
+          }
+        }
+      }
+
+      const res = await fetch(`/api/v1/employees/${employeeId}/reporting-lines`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          manager_id: newManagerId,
+          relationship: newRelType,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || err.message || "Failed to assign reporting line.");
+      }
+
+      setNewManagerId("");
+      setStatusMessage("Reporting line updated successfully.");
+      await fetchData();
+    } catch (err: any) {
+      setErrorMessage(err.message || "Failed to update hierarchy.");
+    } finally {
+      setSavingHierarchy(false);
+    }
+  };
+
+  const handleRemoveReportingLine = async (lineId: string, managerLabel: string) => {
+    if (!window.confirm(`Remove direct reporting line to ${managerLabel}?`)) return;
+    setSavingHierarchy(true);
+    setStatusMessage(null);
+    setErrorMessage(null);
+    try {
+      const res = await fetch(`/api/v1/employees/${employeeId}/reporting-lines/${lineId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || err.message || "Failed to remove reporting line.");
+      }
+      setStatusMessage("Reporting line removed.");
+      await fetchData();
+    } catch (err: any) {
+      setErrorMessage(err.message || "Failed to remove reporting line.");
+    } finally {
+      setSavingHierarchy(false);
     }
   };
 
@@ -676,70 +771,203 @@ export const EmployeeDetail: React.FC = () => {
         </div>
       )}
 
-      {activeTab === "hierarchy" && (
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm max-w-2xl space-y-6">
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-slate-900">Management Reporting Chain</h3>
-              <span className="text-xs text-slate-500 font-medium">Full Upstream Tree</span>
-            </div>
-            {reportingLines.length === 0 ? (
-              <p className="text-xs text-slate-500">No managers assigned.</p>
-            ) : (
-              <div className="space-y-2.5">
-                {reportingLines.map((line) => {
-                  const relBadgeClass =
-                    line.relationship === "SUPERVISOR"
-                      ? "bg-indigo-100 text-indigo-700 border-indigo-200"
-                      : line.relationship === "SUPERINTENDENT"
-                      ? "bg-purple-100 text-purple-700 border-purple-200"
-                      : "bg-sky-100 text-sky-700 border-sky-200";
+      {activeTab === "hierarchy" && (() => {
+        const canEditHierarchy =
+          user?.role === "ADMIN" && employee?.role !== "ADMIN" && employee?.tally_id !== "ADMIN001";
+        const existingDirectSup = reportingLines.find(
+          (l) => l.is_direct && l.relationship === "SUPERVISOR"
+        );
+        const existingDirectIdsForType = new Set(
+          reportingLines
+            .filter((l) => l.is_direct && l.relationship === newRelType)
+            .map((l) => l.manager_id)
+        );
+        const matchingRoleCandidates = allManagers.filter(
+          (m) => m.role === newRelType && !existingDirectIdsForType.has(m.id)
+        );
+        const otherCandidates = allManagers.filter(
+          (m) => m.role !== newRelType && m.role !== "WORKER" && !existingDirectIdsForType.has(m.id)
+        );
 
-                  return (
-                    <div
-                      key={`${line.id}-${line.manager_id}`}
-                      className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/70 text-sm hover:bg-slate-50 transition"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold text-slate-900">
-                            {line.manager_name || `Manager ID: ${line.manager_id}`}
-                          </span>
-                          {line.manager_tally_id && (
-                            <span className="text-xs text-slate-500 font-mono bg-slate-200/60 px-1.5 py-0.5 rounded">
-                              Tally: {line.manager_tally_id}
-                            </span>
-                          )}
-                          <span className={`px-2 py-0.5 rounded text-xs font-mono font-medium border ${relBadgeClass}`}>
-                            {line.relationship}
-                          </span>
-                        </div>
-                        <div>
-                          {line.is_direct ? (
-                            <span className="px-2 py-0.5 rounded-full text-2xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                              Direct Manager
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded-full text-2xs font-semibold bg-slate-200 text-slate-700 border border-slate-300">
-                              Upstream Chain
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      {!line.is_direct && line.via_name && (
-                        <div className="mt-1.5 text-xs text-slate-500 flex items-center gap-1.5">
-                          <span className="text-slate-400">↳ Reports via:</span>
-                          <span className="font-medium text-slate-700">{line.via_name}</span>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+        return (
+          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm max-w-2xl space-y-6">
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">Management Reporting Chain</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Employees may have at most 1 direct Supervisor and multiple Superintendents or Engineers.
+                  </p>
+                </div>
+                <span className="text-xs text-slate-500 font-medium">Full Upstream Tree</span>
               </div>
+
+              {employee?.role === "ADMIN" || employee?.tally_id === "ADMIN001" ? (
+                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600">
+                  Admin accounts are system superusers and do not belong to the employee reporting hierarchy.
+                </div>
+              ) : reportingLines.length === 0 ? (
+                <p className="text-xs text-slate-500">No managers assigned.</p>
+              ) : (
+                <div className="space-y-2.5">
+                  {reportingLines.map((line) => {
+                    const relBadgeClass =
+                      line.relationship === "SUPERVISOR"
+                        ? "bg-indigo-100 text-indigo-700 border-indigo-200"
+                        : line.relationship === "SUPERINTENDENT"
+                        ? "bg-purple-100 text-purple-700 border-purple-200"
+                        : "bg-sky-100 text-sky-700 border-sky-200";
+
+                    return (
+                      <div
+                        key={`${line.id}-${line.manager_id}`}
+                        className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/70 text-sm hover:bg-slate-50 transition"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Link
+                              to="/employees/$employeeId"
+                              params={{ employeeId: line.manager_id }}
+                              className="font-semibold text-slate-900 hover:text-indigo-600 hover:underline"
+                            >
+                              {line.manager_name || `Manager ID: ${line.manager_id}`}
+                            </Link>
+                            {line.manager_tally_id && (
+                              <span className="text-xs text-slate-500 font-mono bg-slate-200/60 px-1.5 py-0.5 rounded">
+                                Tally: {line.manager_tally_id}
+                              </span>
+                            )}
+                            <span className={`px-2 py-0.5 rounded text-xs font-mono font-medium border ${relBadgeClass}`}>
+                              {line.relationship}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {line.is_direct ? (
+                              <span className="px-2 py-0.5 rounded-full text-2xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                Direct Manager
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full text-2xs font-semibold bg-slate-200 text-slate-700 border border-slate-300">
+                                Upstream Chain
+                              </span>
+                            )}
+                            {canEditHierarchy && line.is_direct && (
+                              <button
+                                type="button"
+                                disabled={savingHierarchy}
+                                onClick={() =>
+                                  handleRemoveReportingLine(
+                                    line.id,
+                                    line.manager_name || line.manager_id
+                                  )
+                                }
+                                title="Remove direct reporting line"
+                                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition disabled:opacity-40"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        {!line.is_direct && line.via_name && (
+                          <div className="mt-1.5 text-xs text-slate-500 flex items-center gap-1.5">
+                            <span className="text-slate-400">↳ Reports via:</span>
+                            <span className="font-medium text-slate-700">{line.via_name}</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Admin-Only Edit Hierarchy Form */}
+            {canEditHierarchy && (
+              <form
+                onSubmit={handleAddReportingLine}
+                className="pt-5 border-t border-slate-200 space-y-3"
+              >
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                  Assign / Update Direct Manager (Admin Only)
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">
+                      Relationship
+                    </label>
+                    <select
+                      value={newRelType}
+                      onChange={(e) => {
+                        setNewRelType(e.target.value as "SUPERVISOR" | "SUPERINTENDENT" | "ENGINEER");
+                        setNewManagerId("");
+                      }}
+                      className="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value="SUPERVISOR">Supervisor (Max 1)</option>
+                      <option value="SUPERINTENDENT">Superintendent (Multiple allowed)</option>
+                      <option value="ENGINEER">Engineer (Multiple allowed)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">
+                      Select Manager
+                    </label>
+                    <select
+                      required
+                      value={newManagerId}
+                      onChange={(e) => setNewManagerId(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value="">-- Choose {newRelType.toLowerCase()} --</option>
+                      {matchingRoleCandidates.length > 0 && (
+                        <optgroup label={`${newRelType}s`}>
+                          {matchingRoleCandidates.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.name} ({m.tally_id})
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {otherCandidates.length > 0 && (
+                        <optgroup label="Other Management Staff">
+                          {otherCandidates.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.name} ({m.tally_id}) — {m.role}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </select>
+                  </div>
+                </div>
+
+                {newRelType === "SUPERVISOR" && existingDirectSup && (
+                  <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    This employee already reports to Supervisor{" "}
+                    <strong>{existingDirectSup.manager_name}</strong>. Saving will replace the current direct supervisor.
+                  </p>
+                )}
+
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={!newManagerId || savingHierarchy}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 disabled:opacity-40 transition"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    {savingHierarchy
+                      ? "Saving..."
+                      : newRelType === "SUPERVISOR" && existingDirectSup
+                      ? "Replace Supervisor"
+                      : `Add ${newRelType.charAt(0) + newRelType.slice(1).toLowerCase()}`}
+                  </button>
+                </div>
+              </form>
             )}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {activeTab === "documents" && (
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm max-w-3xl space-y-6">
