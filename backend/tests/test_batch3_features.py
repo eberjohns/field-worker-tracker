@@ -57,7 +57,12 @@ async def seed_batch3_context():
     """Seed isolated entities for Batch 3 tests (fresh suffix per run)."""
     tag = uuid4().hex[:6].upper()
     async with async_session_factory() as session:
-        # Single standalone system ADMIN001 (never stored in employees table)
+        # Single standalone system ADMIN001 (never stored in employees table);
+        # snapshot existing credential_hash so teardown restores the local developer's password.
+        existing_admin = (
+            await session.execute(select(User).where(User.role == "ADMIN"))
+        ).scalar_one_or_none()
+        prev_admin_hash = existing_admin.credential_hash if existing_admin else None
         admin_user = await UserService.get_or_create_system_admin(session, password=ADMIN_PW)
 
         # Engineer
@@ -250,6 +255,7 @@ async def seed_batch3_context():
             "sup_token": AuthService.create_access_token(sup_user),
             "w1_token": AuthService.create_access_token(w1_user),
             "admin_user_id": admin_user.id,
+            "prev_admin_hash": prev_admin_hash,
             "eng_emp_id": eng_emp.id,
             "supt_emp_id": supt_emp.id,
             "sup_emp_id": sup_emp.id,
@@ -346,6 +352,12 @@ async def teardown_batch3_context(ctx: dict, extra_emp_ids: list | None = None):
             delete(AuditLog).where(AuditLog.entity_id.in_([str(eid) for eid in emp_ids]))
         )
         await session.execute(delete(Employee).where(Employee.id.in_(emp_ids)))
+        if ctx.get("prev_admin_hash"):
+            adm = (
+                await session.execute(select(User).where(User.id == ctx["admin_user_id"]))
+            ).scalar_one_or_none()
+            if adm:
+                adm.credential_hash = ctx["prev_admin_hash"]
         await session.commit()
 
 

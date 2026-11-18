@@ -33,3 +33,4 @@ Field Worker Tracker follows semantic versioning `v<MAJOR>.<MINOR>.<PATCH>`:
 | **v1.5.1** | 2026-11-18 | `feat/batch3-roles-undo-tally-deactivation` | `d24b202` | Commit on 'feat/batch3-roles-undo-tally-deactivation' |
 | **v1.5.2** | 2026-11-18 | `feat/batch3-roles-undo-tally-deactivation` | `5e6d339` | Commit on 'feat/batch3-roles-undo-tally-deactivation' |
 | **v1.5.3** | 2026-11-18 | `feat/batch3-roles-undo-tally-deactivation` | `89ccba4` | Commit on 'feat/batch3-roles-undo-tally-deactivation' |
+| **v1.5.4** | 2026-11-18 | `feat/batch3-roles-undo-tally-deactivation` | `4146c3e` | Commit on 'feat/batch3-roles-undo-tally-deactivation' |
