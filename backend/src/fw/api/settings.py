@@ -58,10 +58,18 @@ async def list_staff_grades(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> list[str]:
-    """Return distinct staff grade descriptions across employees and settings."""
+    """Return deduplicated union of distinct staff grade descriptions across active employees and job items."""
+    from fw.modules.jobs import JobsService
     from fw.modules.org import OrgService
 
-    return await OrgService.get_unique_staff_grades(session)
+    emp_grades = await OrgService.get_unique_staff_grades(session)
+    job_grades = await JobsService.get_unique_staff_grades(session)
+    canonical: dict[str, str] = {}
+    for g in emp_grades + job_grades:
+        key = g.strip().lower()
+        if key and key not in canonical:
+            canonical[key] = g.strip()
+    return sorted(canonical.values(), key=str.lower)
 
 
 @router.put("/settings/{key}", response_model=CompanySettingRead)

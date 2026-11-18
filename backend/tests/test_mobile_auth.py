@@ -47,13 +47,16 @@ async def test_mobile_login_device_binding_and_password_workflow():
         )
         session.add(emp)
         await session.commit()
+        from fw.modules.sync import SyncService
+
+        default_pwd = await SyncService.get_default_password(session)
 
     try:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            # 1. First login with default password "Welcome123!"
+            # 1. First login with unified company default password
             login_payload = {
                 "tally_id": tally_id,
-                "password": "Welcome123!",
+                "password": default_pwd,
                 "device": {
                     "device_identifier": "device-phone-1",
                     "platform": "ANDROID",
@@ -74,7 +77,7 @@ async def test_mobile_login_device_binding_and_password_workflow():
             # 2. Second device attempts login -> Refused with 403 DEVICE_MISMATCH
             mismatch_payload = {
                 "tally_id": tally_id,
-                "password": "Welcome123!",
+                "password": default_pwd,
                 "device": {
                     "device_identifier": "device-phone-2",
                     "platform": "IOS",
@@ -100,7 +103,7 @@ async def test_mobile_login_device_binding_and_password_workflow():
             change_res = await client.post(
                 "/api/v1/mobile/auth/change-password",
                 headers={"Authorization": f"Bearer {token1}"},
-                json={"old_password": "Welcome123!", "new_password": "NewSecretPass123!"},
+                json={"old_password": default_pwd, "new_password": "NewSecretPass123!"},
             )
             assert change_res.status_code == 200
             assert change_res.json()["status"] == "PASSWORD_CHANGED"
@@ -179,8 +182,10 @@ async def test_admin_device_reset_allows_rebinding():
         await session.flush()
 
         from fw.modules.identity import UserService
+        from fw.modules.sync import SyncService
 
         admin = await UserService.get_or_create_system_admin(session)
+        default_pwd = await SyncService.get_default_password(session)
         await session.commit()
 
     admin_token = AuthService.create_access_token(admin)
@@ -192,7 +197,7 @@ async def test_admin_device_reset_allows_rebinding():
                 "/api/v1/mobile/auth/login",
                 json={
                     "tally_id": tally_id,
-                    "password": "Welcome123!",
+                    "password": default_pwd,
                     "device": {
                         "device_identifier": "first-device-id",
                         "platform": "ANDROID",
@@ -206,7 +211,7 @@ async def test_admin_device_reset_allows_rebinding():
                 "/api/v1/mobile/auth/login",
                 json={
                     "tally_id": tally_id,
-                    "password": "Welcome123!",
+                    "password": default_pwd,
                     "device": {
                         "device_identifier": "second-device-id",
                         "platform": "ANDROID",
@@ -240,7 +245,7 @@ async def test_admin_device_reset_allows_rebinding():
                 "/api/v1/mobile/auth/login",
                 json={
                     "tally_id": tally_id,
-                    "password": "Welcome123!",
+                    "password": default_pwd,
                     "device": {
                         "device_identifier": "second-device-id",
                         "platform": "ANDROID",

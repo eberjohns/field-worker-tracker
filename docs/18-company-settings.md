@@ -49,7 +49,7 @@ When resolving a setting for a worker, worksite, or process:
 | `planned_workday_hours` | decimal | `9.0` | hours | Global | GIVEN_BY_CLIENT | Default expected daily operational window including work and unpaid midday break. |
 | `reassignment_min_notice_days` | integer | `3` | days | Global | PROPOSED_DEFAULT | Advance notice required before an operational shift or replacement reassignment can be dispatched. |
 | `occurrence_horizon_months` | integer | `13` | months | Global | PROPOSED_DEFAULT | Number of months into the future for which recurring contract job slots are automatically materialized. |
-| `budget_only_staff_types` | JSON array | `["Project Manager", "HSE Engineer", "QA/QC Engineer", "Irrigation Engineer"]` | list | Global | PROPOSED_DEFAULT | Job staff grades budgeted on contract items but excluded from field occurrence generation and worker planning grids. Actual cost is credited equal to planned cost in job costing. |
+| `budget_only_staff_types` | JSON array | `["Project Manager", "HSE Engineer", "QA/QC Engineer", "Irrigation Engineer"]` | list | Global | PROPOSED_DEFAULT | Job staff grades budgeted on contract items but excluded from field occurrence generation and worker planning grids. Actual cost is credited equal to planned cost in job costing. On Excel import, intersected case-insensitively with resolved staff grades across active employees and job items; any previously saved roles not currently in active records remain visible as removable chips in Settings and apply automatically if matching staff/jobs are added. |
 
 ---
 
@@ -70,7 +70,9 @@ When resolving a setting for a worker, worksite, or process:
 | `approach_polling_interval_s` | integer | `60` | seconds | Global | PROPOSED_DEFAULT | GPS capture interval used by worker mobile devices when approaching within 500m of a scheduled geofence. |
 | `confirmation_polling_interval_s` | integer | `300` | seconds | Global | PROPOSED_DEFAULT | Periodic GPS heartbeat interval used by worker mobile devices during confirmed stationary site visits. |
 | `day_close_delay_minutes` | integer | `120` | minutes | Global | PROPOSED_DEFAULT | Delay in minutes after local midnight (02:00 local time) before daily attendance records are auto-locked. |
+| `alarm_lead_minutes` | integer | `30` | minutes | Global | PROPOSED_DEFAULT | Minutes before planned camp departure (`accommodation_start`) to schedule the mobile morning wake-up alarm (replaces legacy `day_plan_alarm_lead_minutes`). |
 | `pending_visit_reminder_hours` | integer | `24` | hours | Global | PROPOSED_DEFAULT | Delay before unassigned site visits trigger an automated supervisor review alert. |
+| `pending_visit_escalation_days` | integer | `7` | days | Global | PROPOSED_DEFAULT | Days before an open unresolved pending visit escalates to Engineer/Admin review. |
 
 ---
 
@@ -78,7 +80,8 @@ When resolving a setting for a worker, worksite, or process:
 
 | Setting Key | Data Type | Default Value | Unit | Country Scope | Status | Business Description |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `default_password` | string | `Welcome@123` | text | Global | PROPOSED_DEFAULT | Initial password assigned to auto-provisioned user accounts upon import or password reset by administrator. |
+| `company_name` | string | `FWT` | text | Global | PROPOSED_DEFAULT | Short company name prefix used in generated report filenames (`<Company>_<Report>_<Country>_<Period>.xlsx`). |
+| `default_password` | string | `Welcome@123` | text | Global | PROPOSED_DEFAULT | **Single unified** initial password assigned to all operational accounts (web dashboard and mobile worker first-login provisioning) upon onboarding, import, or Admin password reset (DEC-53). |
 | `default_password_max_days` | integer | `7` | days | Global | PROPOSED_DEFAULT | Maximum number of days an auto-provisioned default password remains valid before mandatory password change is enforced. |
 | `schedule_sync_window_days` | integer | `30` | days | Global | PROPOSED_DEFAULT | Future time horizon in days synchronized down to worker mobile devices during cursor synchronization. |
 | `live_active_window_minutes` | integer | `15` | minutes | Global | PROPOSED_DEFAULT | Time window in minutes within which the latest worker location ping is rendered as "Active/Online" on Live Map. |

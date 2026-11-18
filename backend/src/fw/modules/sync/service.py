@@ -116,15 +116,24 @@ class SyncService:
 
     @staticmethod
     async def get_default_password(session: AsyncSession) -> str:
-        query = select(CompanySettingValue).where(
-            CompanySettingValue.setting_key == "mobile_default_password"
+        """Resolve the single unified company default password (web & mobile, DEC-53)."""
+        unified = await SettingsService.get_setting(session, key="default_password", default=None)
+        if unified is not None:
+            if isinstance(unified, dict) and "value" in unified:
+                return str(unified["value"])
+            if str(unified).strip():
+                return str(unified).strip()
+
+        # Legacy fallback if an older DB explicitly seeded mobile_default_password
+        legacy = await SettingsService.get_setting(
+            session, key="mobile_default_password", default=None
         )
-        res = await session.execute(query)
-        setting = res.scalar_one_or_none()
-        if setting and isinstance(setting.value, dict) and "value" in setting.value:
-            return str(setting.value["value"])
-        if setting and isinstance(setting.value, str):
-            return setting.value
+        if legacy is not None:
+            if isinstance(legacy, dict) and "value" in legacy:
+                return str(legacy["value"])
+            if str(legacy).strip():
+                return str(legacy).strip()
+
         return "Welcome123!"
 
     @staticmethod
@@ -590,8 +599,12 @@ class SyncService:
 
         # 3. SETTINGS
         raw_alarm_lead = await SettingsService.get_setting(
-            session, key="day_plan_alarm_lead_minutes", country=employee.country, default=30
+            session, key="alarm_lead_minutes", country=employee.country, default=None
         )
+        if raw_alarm_lead is None:
+            raw_alarm_lead = await SettingsService.get_setting(
+                session, key="day_plan_alarm_lead_minutes", country=employee.country, default=30
+            )
         alarm_lead_minutes = _parse_int_setting(raw_alarm_lead, 30)
 
         raw_geofence_radius = await SettingsService.get_setting(

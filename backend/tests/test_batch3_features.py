@@ -401,10 +401,8 @@ async def test_leave_auto_cover_weekly_off_indication_and_bulk_cover():
     ctx = await seed_batch3_context()
     try:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            # Find next Monday >= today + 7 days so Tue-Thu includes Wednesday (w2's weekly off!)
-            base = date.today() + timedelta(days=7)
-            days_until_mon = (0 - base.weekday()) % 7
-            next_mon = base + timedelta(days=days_until_mon)
+            # Pick a holiday-free Monday-based week well in the future (avoiding Dec 2-3 UAE National Day)
+            next_mon = date(2027, 1, 11)
             tue = next_mon + timedelta(days=1)
             thu = next_mon + timedelta(days=3)
             wed = next_mon + timedelta(days=2)
@@ -1036,4 +1034,65 @@ async def test_single_standalone_admin_guardrails():
             )
             assert r_deact.status_code == 400
     finally:
+        await teardown_batch3_context(ctx)
+
+
+@db_required
+@pytest.mark.asyncio
+async def test_unified_default_password_and_staff_grades_union():
+    """Verify unified default_password for mobile/web and staff-grades union (employees + job_items)."""
+    from fw.modules.settings import SettingsService
+    from fw.modules.sync import SyncService
+
+    ctx = await seed_batch3_context()
+    extra_ji_id = uuid4()
+    unique_job_grade = f"Contract Specialist {ctx['tag']}"
+    try:
+        async with async_session_factory() as session:
+            # Add a JobItem whose staff_grade_description does NOT exist on any Employee
+            session.add(
+                JobItem(
+                    id=extra_ji_id,
+                    worksite_id=ctx["worksite_id"],
+                    sub_item_code="99",
+                    staff_grade_description=unique_job_grade,
+                    planned_grade_code="G5A",
+                    frequency_unit="WEEK",
+                    occurrences_per_period=1,
+                    period_interval=1,
+                    required_staff_count=1,
+                    hours_per_occurrence_per_staff=Decimal("8.0"),
+                    start_date=date.today() - timedelta(days=7),
+                    deployment_type="PERMANENT",
+                    is_active=True,
+                )
+            )
+            await session.commit()
+
+            # Verify SyncService.get_default_password reads unified default_password setting
+            prev = await SettingsService.get_setting(session, key="default_password", default=None)
+            await SettingsService.set_setting(
+                session,
+                key="default_password",
+                value="UnifiedPass!99",
+                effective_from=date(2026, 1, 1),
+            )
+            await session.flush()
+            resolved = await SyncService.get_default_password(session)
+            assert resolved == "UnifiedPass!99"
+            # Roll back setting change so we don't mutate local DB state
+            await session.rollback()
+            _ = prev
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            admin_headers = {"Authorization": f"Bearer {ctx['admin_token']}"}
+            res = await client.get("/api/v1/settings/staff-grades", headers=admin_headers)
+            assert res.status_code == 200
+            grades = res.json()
+            assert "Landscape Gardener" in grades
+            assert unique_job_grade in grades
+    finally:
+        async with async_session_factory() as session:
+            await session.execute(delete(JobItem).where(JobItem.id == extra_ji_id))
+            await session.commit()
         await teardown_batch3_context(ctx)
