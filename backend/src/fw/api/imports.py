@@ -5,7 +5,7 @@ from email import policy
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.core.db import get_db
@@ -149,10 +149,13 @@ async def get_import_preview(
     if action:
         stmt = stmt.where(ImportRow.action == action.upper())
 
-    stmt = (
+    count_stmt = select(func.count()).select_from(stmt.subquery())
+    filtered_total = int((await session.execute(count_stmt)).scalar_one() or 0)
+
+    paged_stmt = (
         stmt.order_by(ImportRow.sheet.asc(), ImportRow.row_number.asc()).offset(offset).limit(limit)
     )
-    rows = (await session.execute(stmt)).scalars().all()
+    rows = (await session.execute(paged_stmt)).scalars().all()
 
     can_commit = batch.summary.get("can_commit", False)
     return ImportPreviewResponse(
@@ -163,6 +166,7 @@ async def get_import_preview(
         can_commit=can_commit,
         summary=batch.summary,
         rows=[ImportRowRead.model_validate(r) for r in rows],
+        filtered_total=filtered_total,
     )
 
 

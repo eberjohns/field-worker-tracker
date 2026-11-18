@@ -11,6 +11,8 @@ import {
   RefreshCw,
   Info,
   Filter,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 interface ImportRow {
@@ -71,6 +73,10 @@ export const Imports: React.FC = () => {
   const [selectedSheets, setSelectedSheets] = useState<string[]>([]);
   const [currentBatch, setCurrentBatch] = useState<ImportBatch | null>(null);
   const [previewRows, setPreviewRows] = useState<ImportRow[]>([]);
+  const [filteredTotal, setFilteredTotal] = useState<number>(0);
+  const [page, setPage] = useState<number>(0);
+  const [pageSize, setPageSize] = useState<number>(100);
+  const [rowsLoading, setRowsLoading] = useState<boolean>(false);
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [sheetFilter, setSheetFilter] = useState<string>("ALL");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -145,6 +151,7 @@ export const Imports: React.FC = () => {
       const previewData = await res.json();
       setStatusFilter("ALL");
       setSheetFilter("ALL");
+      setPage(0);
       setCurrentBatch({
         id: previewData.batch_id,
         kind: importScope === "SELECTED" ? "SELECTIVE_SHEETS" : "FULL_WORKBOOK",
@@ -155,7 +162,10 @@ export const Imports: React.FC = () => {
         committed_at: null,
         created_at: new Date().toISOString(),
       });
-      setPreviewRows(previewData.rows);
+      setPreviewRows((previewData.rows || []).slice(0, pageSize));
+      setFilteredTotal(
+        previewData.filtered_total ?? previewData.summary?.total_rows ?? (previewData.rows || []).length
+      );
       if ((previewData.summary?.total_rows ?? 0) > 0) {
         setSuccessMessage(
           importScope === "SELECTED"
@@ -272,20 +282,98 @@ export const Imports: React.FC = () => {
     }
   };
 
-  // Filter rows
-  const filteredRows = previewRows.filter((row) => {
-    if (statusFilter !== "ALL") {
-      if (statusFilter === "NEW" && row.action !== "NEW") return false;
-      if (statusFilter === "UPDATED" && row.action !== "UPDATED") return false;
-      if (statusFilter === "UNCHANGED" && row.action !== "UNCHANGED") return false;
-      if (statusFilter === "WARNINGS" && row.status !== "WARNING") return false;
-      if (statusFilter === "ERRORS" && row.status !== "ERROR") return false;
-    }
-    if (sheetFilter !== "ALL" && row.sheet !== sheetFilter) return false;
-    return true;
-  });
+  const fetchPreviewPage = async (
+    batchId: string,
+    nextStatus: string,
+    nextSheet: string,
+    nextPage: number,
+    nextPageSize: number
+  ) => {
+    setRowsLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("limit", String(nextPageSize));
+      params.set("offset", String(nextPage * nextPageSize));
+      if (nextSheet !== "ALL") {
+        params.set("sheet", nextSheet);
+      }
+      if (nextStatus === "NEW" || nextStatus === "UPDATED" || nextStatus === "UNCHANGED") {
+        params.set("action", nextStatus);
+      } else if (nextStatus === "WARNINGS") {
+        params.set("row_status", "WARNING");
+      } else if (nextStatus === "ERRORS") {
+        params.set("row_status", "ERROR");
+      }
 
-  const availableSheets = Array.from(new Set(previewRows.map((r) => r.sheet)));
+      const res = await fetch(`/api/v1/imports/${batchId}/preview?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPreviewRows(data.rows || []);
+        setFilteredTotal(data.filtered_total ?? (data.rows || []).length);
+      }
+    } catch {
+      // ignore transient network errors
+    } finally {
+      setRowsLoading(false);
+    }
+  };
+
+  const handleStatusFilterChange = (nextStatus: string) => {
+    setStatusFilter(nextStatus);
+    setPage(0);
+    if (currentBatch) {
+      fetchPreviewPage(currentBatch.id, nextStatus, sheetFilter, 0, pageSize);
+    }
+  };
+
+  const handleSheetFilterChange = (nextSheet: string) => {
+    setSheetFilter(nextSheet);
+    setPage(0);
+    if (currentBatch) {
+      fetchPreviewPage(currentBatch.id, statusFilter, nextSheet, 0, pageSize);
+    }
+  };
+
+  const handlePageChange = (nextPage: number) => {
+    setPage(nextPage);
+    if (currentBatch) {
+      fetchPreviewPage(currentBatch.id, statusFilter, sheetFilter, nextPage, pageSize);
+    }
+  };
+
+  const handlePageSizeChange = (nextSize: number) => {
+    setPageSize(nextSize);
+    setPage(0);
+    if (currentBatch) {
+      fetchPreviewPage(currentBatch.id, statusFilter, sheetFilter, 0, nextSize);
+    }
+  };
+
+  // Build full sheet list with exact totals from batch summary
+  const sheetCountsMap = currentBatch?.summary?.sheet_counts || {};
+  const availableSheetsWithCounts: Array<{ name: string; total: number }> = (() => {
+    const entries = Object.entries(sheetCountsMap)
+      .filter(([, sc]) => (sc?.total ?? 0) > 0)
+      .map(([name, sc]) => ({ name, total: sc?.total ?? 0 }));
+    if (entries.length > 0) {
+      const orderIndex = (s: string) => {
+        const idx = (MASTER_IMPORT_SHEETS as readonly string[]).indexOf(s);
+        return idx === -1 ? 999 : idx;
+      };
+      return entries.sort((a, b) => orderIndex(a.name) - orderIndex(b.name));
+    }
+    const uniqueNames = Array.from(new Set(previewRows.map((r) => r.sheet)));
+    return uniqueNames.map((name) => ({
+      name,
+      total: previewRows.filter((r) => r.sheet === name).length,
+    }));
+  })();
+
+  const totalPages = Math.max(1, Math.ceil(filteredTotal / pageSize));
+  const rangeStart = filteredTotal === 0 ? 0 : page * pageSize + 1;
+  const rangeEnd = Math.min(filteredTotal, (page + 1) * pageSize);
 
   return (
     <div className="space-y-6">
@@ -582,6 +670,8 @@ export const Imports: React.FC = () => {
                     onClick={() => {
                       setCurrentBatch(null);
                       setPreviewRows([]);
+                      setFilteredTotal(0);
+                      setPage(0);
                       setStatusFilter("ALL");
                       setSheetFilter("ALL");
                       setErrorMessage(null);
@@ -628,7 +718,7 @@ export const Imports: React.FC = () => {
                   {["ALL", "NEW", "UPDATED", "UNCHANGED", "WARNINGS", "ERRORS"].map((filter) => (
                     <button
                       key={filter}
-                      onClick={() => setStatusFilter(filter)}
+                      onClick={() => handleStatusFilterChange(filter)}
                       className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
                         statusFilter === filter
                           ? "bg-slate-900 text-white font-semibold"
@@ -645,13 +735,15 @@ export const Imports: React.FC = () => {
                   <Filter className="h-4 w-4 text-slate-400" />
                   <select
                     value={sheetFilter}
-                    onChange={(e) => setSheetFilter(e.target.value)}
+                    onChange={(e) => handleSheetFilterChange(e.target.value)}
                     className="rounded-lg border border-slate-300 bg-white py-1.5 px-3 text-xs font-medium text-slate-700 shadow-sm focus:border-indigo-500 focus:outline-none"
                   >
-                    <option value="ALL">All Sheets ({previewRows.length})</option>
-                    {availableSheets.map((s) => (
-                      <option key={s} value={s}>
-                        {s} ({previewRows.filter((r) => r.sheet === s).length})
+                    <option value="ALL">
+                      All Sheets ({(currentBatch.summary.total_rows ?? previewRows.length).toLocaleString()})
+                    </option>
+                    {availableSheetsWithCounts.map((s) => (
+                      <option key={s.name} value={s.name}>
+                        {s.name} ({s.total.toLocaleString()})
                       </option>
                     ))}
                   </select>
@@ -674,16 +766,22 @@ export const Imports: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 text-slate-700">
-                      {filteredRows.length === 0 ? (
+                      {rowsLoading ? (
                         <tr>
                           <td colSpan={7} className="py-8 text-center text-slate-400">
-                            {previewRows.length === 0
+                            Loading preview rows...
+                          </td>
+                        </tr>
+                      ) : previewRows.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="py-8 text-center text-slate-400">
+                            {(currentBatch.summary.total_rows ?? 0) === 0
                               ? "No data rows parsed. Leave Column A blank on rows you want to import (rows marked EXAMPLE or # are skipped)."
                               : "No rows matching selected filter."}
                           </td>
                         </tr>
                       ) : (
-                        filteredRows.map((r) => {
+                        previewRows.map((r) => {
                           const hasDiff = Object.keys(r.diff).length > 0;
                           return (
                             <tr
@@ -782,6 +880,51 @@ export const Imports: React.FC = () => {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Pagination Bar */}
+                {filteredTotal > 0 && (
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 bg-slate-50 border-t border-slate-200 text-xs text-slate-600">
+                    <div className="flex items-center gap-3">
+                      <span>
+                        Showing <span className="font-semibold text-slate-900">{rangeStart.toLocaleString()}</span>–
+                        <span className="font-semibold text-slate-900">{rangeEnd.toLocaleString()}</span> of{" "}
+                        <span className="font-semibold text-slate-900">{filteredTotal.toLocaleString()}</span> rows
+                      </span>
+                      <select
+                        value={pageSize}
+                        onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                        className="rounded-md border border-slate-300 bg-white py-1 px-2 text-xs text-slate-700"
+                      >
+                        <option value={50}>50 / page</option>
+                        <option value={100}>100 / page</option>
+                        <option value={200}>200 / page</option>
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handlePageChange(Math.max(0, page - 1))}
+                        disabled={page === 0 || rowsLoading}
+                        className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <ChevronLeft className="h-3.5 w-3.5" />
+                        Prev
+                      </button>
+                      <span className="px-2 font-medium text-slate-700">
+                        Page {page + 1} of {totalPages}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handlePageChange(Math.min(totalPages - 1, page + 1))}
+                        disabled={page + 1 >= totalPages || rowsLoading}
+                        className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        Next
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}

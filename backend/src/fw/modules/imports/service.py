@@ -1070,6 +1070,7 @@ class ImportService:
             can_commit=can_commit,
             summary=batch.summary,
             rows=preview_rows,
+            filtered_total=total_rows,
         )
 
     @staticmethod
