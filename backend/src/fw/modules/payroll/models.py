@@ -57,6 +57,7 @@ class EmployeeSalary(Base):
     housing_transport_allowance: Mapped[Decimal] = mapped_column(
         Numeric(14, 2), default=Decimal("0.00"), nullable=False
     )
+    change_source: Mapped[str | None] = mapped_column(String(50), nullable=True)
     import_batch_id: Mapped[UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("import_batches.id", ondelete="SET NULL"),

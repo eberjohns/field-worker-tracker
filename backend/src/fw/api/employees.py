@@ -3,7 +3,7 @@ from datetime import UTC, date, datetime
 from uuid import UUID
 
 import xlsxwriter
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,6 +35,7 @@ from fw.modules.org import (
     EntityLifecycleResponse,
     GradeChangeRequest,
     HierarchyTreeNode,
+    HierarchyViolationItem,
     OrgService,
     ReactivateRequest,
     RegisteredDeviceRead,
@@ -44,6 +45,7 @@ from fw.modules.org import (
     TallyIdChangeRequest,
     TallyIdCheckResponse,
 )
+from fw.modules.payroll import PayrollSalaryService
 from fw.modules.scheduling import SchedulingService
 from fw.modules.settings import SettingsService
 from fw.modules.sync import MobileConsentWithdrawRequest, SyncService
@@ -298,7 +300,81 @@ async def bulk_update_employees(
         actor_user_id=current_user.id,
         actor_role=current_user.role,
     )
+    if request.changes.break_override_minutes is not None:
+        eff_from = request.effective_from or date.today()
+        sup_query = select(Employee).where(
+            Employee.id.in_(request.employee_ids),
+            Employee.role == "SUPERVISOR",
+        )
+        supervisors = (await session.execute(sup_query)).scalars().all()
+        for sup in supervisors:
+            await PayrollSalaryService.propagate_crew_break_to_supervisor_crew(
+                session=session,
+                supervisor_id=sup.id,
+                break_minutes=request.changes.break_override_minutes,
+                effective_from=eff_from,
+                actor_user_id=current_user.id,
+                actor_role=current_user.role,
+            )
     return {"updated_count": updated_count}
+
+
+@router.get("/hierarchy-violations", response_model=list[HierarchyViolationItem])
+async def get_hierarchy_violations(
+    current_user: User = Depends(require_role("ADMIN")),
+    session: AsyncSession = Depends(get_db),
+) -> list[HierarchyViolationItem]:
+    """Admin-only audit endpoint listing reporting lines that violate the fixed crew structure."""
+    return await OrgService.get_hierarchy_violations(session=session)
+
+
+@router.get("/hierarchy-violations/export")
+async def export_hierarchy_violations(
+    current_user: User = Depends(require_role("ADMIN")),
+    session: AsyncSession = Depends(get_db),
+) -> Response:
+    """Admin-only export of hierarchy violations to Excel (.xlsx)."""
+    violations = await OrgService.get_hierarchy_violations(session=session)
+    excel_bytes = OrgService.export_hierarchy_violations_excel(violations)
+    return Response(
+        content=excel_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": "attachment; filename=hierarchy_violations.xlsx"
+        },
+    )
+
+
+@router.post("/hierarchy-violations/{line_id}/deactivate")
+async def deactivate_hierarchy_violation_line(
+    line_id: UUID,
+    current_user: User = Depends(require_role("ADMIN")),
+    session: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    """Deactivate a non-conforming reporting line."""
+    await OrgService.remove_reporting_line(
+        session=session,
+        reporting_line_id=line_id,
+        actor_user_id=current_user.id,
+        actor_role=current_user.role,
+    )
+    return {"message": "Reporting line deactivated successfully."}
+
+
+@router.post("/hierarchy-violations/{line_id}/move-to-supervisor")
+async def move_hierarchy_violation_to_supervisor(
+    line_id: UUID,
+    current_user: User = Depends(require_role("ADMIN")),
+    session: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    """Move a worker's direct supt/eng link to their supervisor, then deactivate the worker link."""
+    await OrgService.move_reporting_line_to_supervisor(
+        session=session,
+        reporting_line_id=line_id,
+        actor_user_id=current_user.id,
+        actor_role=current_user.role,
+    )
+    return {"message": "Reporting line moved to supervisor and direct link deactivated."}
 
 
 @router.get("/check-tally-id", response_model=TallyIdCheckResponse)
@@ -624,6 +700,16 @@ async def update_employee(
         actor_user_id=current_user.id,
         actor_role=current_user.role,
     )
+    if request.break_override_minutes is not None and employee.role == "SUPERVISOR":
+        eff_from = request.effective_from or date.today()
+        await PayrollSalaryService.propagate_crew_break_to_supervisor_crew(
+            session=session,
+            supervisor_id=employee.id,
+            break_minutes=request.break_override_minutes,
+            effective_from=eff_from,
+            actor_user_id=current_user.id,
+            actor_role=current_user.role,
+        )
     return EmployeeRead.model_validate(employee)
 
 
@@ -664,13 +750,25 @@ async def add_reporting_line(
     current_user: User = Depends(require_role("ADMIN")),
     session: AsyncSession = Depends(get_db),
 ) -> ReportingLineRead:
-    return await OrgService.add_reporting_line(
+    res = await OrgService.add_reporting_line(
         session=session,
         employee_id=employee_id,
         data=request,
         actor_user_id=current_user.id,
         actor_role=current_user.role,
     )
+    if request.relationship == "SUPERVISOR":
+        mgr = await session.get(Employee, request.manager_id)
+        if mgr and mgr.break_override_minutes and mgr.break_override_minutes > 0:
+            await PayrollSalaryService.propagate_crew_break_to_worker(
+                session=session,
+                worker_id=employee_id,
+                break_minutes=mgr.break_override_minutes,
+                effective_from=date.today(),
+                actor_user_id=current_user.id,
+                actor_role=current_user.role,
+            )
+    return res
 
 
 @router.delete("/{employee_id}/reporting-lines/{line_id}")

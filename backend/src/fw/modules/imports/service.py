@@ -52,6 +52,7 @@ from fw.modules.payroll import (
 )
 from fw.modules.payroll.schemas import EmployeeSalaryCreate
 from fw.modules.settings import CompanySettingValue, PublicHoliday, SettingsService, TimeRule
+from fw.rules.hierarchy import HierarchyRuleViolation, validate_reporting_link
 from fw.rules.imports import (
     detect_file_key_clashes,
     detect_reporting_issues,
@@ -240,6 +241,7 @@ class ImportService:
                     file_accommodations.add(str(val).strip())
 
         file_employees: set[str] = set()
+        file_employees_roles: dict[str, str] = {}
         if _sheet_enabled("Employees"):
             ws_emp = wb["Employees"]
             for r_idx in range(5, ws_emp.max_row + 1):
@@ -248,7 +250,11 @@ class ImportService:
                     continue
                 val = ws_emp.cell(r_idx, 2).value
                 if val is not None and str(val).strip() != "":
-                    file_employees.add(str(val).strip())
+                    t_id = str(val).strip()
+                    file_employees.add(t_id)
+                    col_role = ws_emp.cell(r_idx, 4).value
+                    if col_role is not None and str(col_role).strip() != "":
+                        file_employees_roles[t_id] = str(col_role).strip().upper()
 
         file_revisions: set[str] = set()
         if _sheet_enabled("Salary_Revisions"):
@@ -608,13 +614,47 @@ class ImportService:
                         )
                         row_status = "ERROR"
 
+                    emp_role = (
+                        existing_employees[emp_tally].role
+                        if emp_tally in existing_employees
+                        else file_employees_roles.get(emp_tally)
+                    )
+                    mgr_role = (
+                        existing_employees[mgr_tally].role
+                        if mgr_tally in existing_employees
+                        else file_employees_roles.get(mgr_tally)
+                    )
+
+                    if emp_exists and mgr_exists and rel:
+                        try:
+                            validate_reporting_link(
+                                existing_links=[],
+                                employee_id=emp_tally,
+                                manager_id=mgr_tally,
+                                relationship=rel,
+                                employee_role=emp_role,
+                                manager_role=mgr_role,
+                            )
+                        except HierarchyRuleViolation as e:
+                            row_codes.append(e.code)
+                            row_messages.append(
+                                {
+                                    "field": "relationship",
+                                    "code": e.code,
+                                    "message": e.message,
+                                }
+                            )
+                            row_status = "ERROR"
+
                     if emp_tally in existing_employees and mgr_tally in existing_employees:
                         emp_obj = existing_employees[emp_tally]
                         mgr_obj = existing_employees[mgr_tally]
                         if emp_obj and mgr_obj and rel:
                             rep_key = (emp_obj.id, mgr_obj.id, rel)
                             if rep_key in existing_reporting:
-                                row_action = "UNCHANGED"
+                                existing_line = existing_reporting[rep_key]
+                                if getattr(existing_line, "is_active", True):
+                                    row_action = "UNCHANGED"
 
                 # Employee_Salary
                 elif sheet_name == "Employee_Salary":
@@ -1295,9 +1335,10 @@ class ImportService:
         await session.flush()
 
         # 5. Employee_Reporting
-        emp_id_map = {
-            e.tally_id: e.id for e in (await session.execute(select(Employee))).scalars().all()
-        }
+        all_emps = (await session.execute(select(Employee))).scalars().all()
+        emp_id_map = {e.tally_id: e.id for e in all_emps}
+        emp_obj_map = {e.id: e for e in all_emps}
+
         for r in sheet_to_rows.get("Employee_Reporting", []):
             emp_t = r.normalized.get("employee_tally_id")
             mgr_t = r.normalized.get("manager_tally_id")
@@ -1319,8 +1360,26 @@ class ImportService:
                             manager_id=m_id,
                             relationship=rel,
                             notes=notes,
+                            is_active=True,
                         )
                     )
+                elif not existing_rep.is_active:
+                    existing_rep.is_active = True
+                    existing_rep.deactivated_at = None
+                    existing_rep.deactivated_by = None
+                    existing_rep.notes = notes
+
+                if rel == "SUPERVISOR":
+                    mgr_obj = emp_obj_map.get(m_id)
+                    if mgr_obj and mgr_obj.break_override_minutes and mgr_obj.break_override_minutes > 0:
+                        await PayrollSalaryService.propagate_crew_break_to_worker(
+                            session=session,
+                            worker_id=e_id,
+                            break_minutes=mgr_obj.break_override_minutes,
+                            effective_from=date.today(),
+                            actor_user_id=user_id,
+                            actor_role=actor_role,
+                        )
 
         await session.flush()
 

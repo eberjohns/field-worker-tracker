@@ -564,6 +564,7 @@ class SyncService:
             .where(
                 EmployeeReportingLine.employee_id == employee_id,
                 EmployeeReportingLine.relationship == "SUPERVISOR",
+                EmployeeReportingLine.is_active == True,  # noqa: E712
             )
         )
         rep_res = await session.execute(rep_query)

@@ -1477,13 +1477,13 @@ export const Payroll: React.FC = () => {
 
                 <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 space-y-2">
                   <div className="flex justify-between text-slate-600">
-                    <span>Gratuity Provision (21/12):</span>
+                    <span>Gratuity Provision (basic / 365 × 30):</span>
                     <span className="font-mono font-semibold">
                       ${Number(selectedRecord.gratuity_provision ?? selectedRecord.snapshot?.gratuity_provision ?? 0).toFixed(2)}
                     </span>
                   </div>
                   <div className="flex justify-between text-slate-600">
-                    <span>Leave Salary Provision (30/12):</span>
+                    <span>Leave Salary Provision (basic / 12):</span>
                     <span className="font-mono font-semibold">
                       ${Number(selectedRecord.leave_salary_provision ?? selectedRecord.snapshot?.leave_salary_provision ?? 0).toFixed(2)}
                     </span>
@@ -2008,8 +2008,8 @@ export const Payroll: React.FC = () => {
                   Employer staff cost calculation includes statutory end-of-service gratuity and leave salary accruals:
                 </p>
                 <div className="font-mono text-3xs bg-white p-2 rounded border border-slate-200 space-y-0.5">
-                  <div><strong>Gratuity Provision:</strong> (Basic Salary / 30) × (21 / 12)</div>
-                  <div><strong>Leave Salary Provision:</strong> ((Basic + Housing Allowance) / 30) × (30 / 12)</div>
+                  <div><strong>Gratuity Provision:</strong> Basic Salary / 365 × 30</div>
+                  <div><strong>Leave Salary Provision:</strong> Basic Salary / 12</div>
                   <div><strong>5 Company Provisions:</strong> Visa, Air Ticket, Uniform, Medical, Accommodation</div>
                   <div><strong>HR Overhead:</strong> 5% added to Total Staff Cost for the final figure.</div>
                 </div>

@@ -59,7 +59,7 @@ When resolving a setting for a worker, worksite, or process:
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | `default_accommodation_start` | string | `05:00` | HH:MM | Global | PROPOSED_DEFAULT | Baseline planned departure time from accommodation camp when no scoped TimeRule specifies camp departure. |
 | `default_first_site_start` | string | `06:00` | HH:MM | Global | PROPOSED_DEFAULT | Baseline planned arrival and work commencement time at first worksite when no scoped TimeRule specifies site start. |
-| `default_break_minutes` | integer | `30` | minutes | Global | PROPOSED_DEFAULT | Default unpaid midday lunch/rest break duration deducted from on-site elapsed time. |
+| `default_break_minutes` | integer | `30` | minutes | Global | PROPOSED_DEFAULT | Baseline fallback unpaid midday lunch/rest break duration deducted from on-site elapsed time when neither worker salary structure break nor seasonal time rule specifies a break. |
 | `default_last_site_end` | string | `15:30` | HH:MM | Global | PROPOSED_DEFAULT | Baseline planned work finish and departure time from last worksite when no scoped TimeRule specifies site end. |
 | `default_accommodation_end` | string | `17:00` | HH:MM | Global | PROPOSED_DEFAULT | Baseline planned arrival time back at accommodation camp when no scoped TimeRule specifies camp return. |
 | `grace_period_minutes` | integer | `10` | minutes | Global | PROPOSED_DEFAULT | Leniency window for late arrival or early departure before attendance status flags a discrepancy. |

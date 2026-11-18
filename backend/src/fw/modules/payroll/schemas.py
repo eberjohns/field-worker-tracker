@@ -23,6 +23,7 @@ class EmployeeSalaryRead(BaseModel):
     bonus: Decimal
     telephone_allowance: Decimal
     housing_transport_allowance: Decimal
+    change_source: str | None = None
     salary_portion: Decimal
     difference: Decimal = Decimal("0.00")
     created_at: datetime
@@ -38,6 +39,7 @@ class EmployeeSalaryCreate(BaseModel):
     bonus: Decimal = Field(default=Decimal("0.00"), ge=Decimal("0.00"))
     telephone_allowance: Decimal = Field(default=Decimal("0.00"), ge=Decimal("0.00"))
     housing_transport_allowance: Decimal = Field(default=Decimal("0.00"), ge=Decimal("0.00"))
+    change_source: str | None = None
 
 
 class EmployeeSalaryHistoryResponse(BaseModel):

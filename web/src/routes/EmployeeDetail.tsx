@@ -61,6 +61,12 @@ export const EmployeeDetail: React.FC = () => {
   const [newManagerId, setNewManagerId] = useState("");
   const [savingHierarchy, setSavingHierarchy] = useState(false);
 
+  // Batch 4: Hierarchy Violations Modal (Admin only)
+  const [violationsModalOpen, setViolationsModalOpen] = useState(false);
+  const [hierarchyViolations, setHierarchyViolations] = useState<any[]>([]);
+  const [loadingViolations, setLoadingViolations] = useState(false);
+  const [actionInProgress, setActionInProgress] = useState<string | null>(null);
+
   // Phase 13 DSAR and Consent actions
   const [exportingDsar, setExportingDsar] = useState(false);
   const [withdrawingConsent, setWithdrawingConsent] = useState(false);
@@ -323,6 +329,11 @@ export const EmployeeDetail: React.FC = () => {
         setEditPhone(empData.phone || "");
         setEditEmail(empData.email || "");
         setEditAccommodationId(empData.accommodation_id || "");
+        if (empData.role === "SUPERVISOR") {
+          setNewRelType("SUPERINTENDENT");
+        } else {
+          setNewRelType("SUPERVISOR");
+        }
       }
 
       // Accommodations list
@@ -520,6 +531,85 @@ export const EmployeeDetail: React.FC = () => {
       setErrorMessage(err.message || "Failed to remove reporting line.");
     } finally {
       setSavingHierarchy(false);
+    }
+  };
+
+  const fetchHierarchyViolations = async () => {
+    setLoadingViolations(true);
+    try {
+      const res = await fetch("/api/v1/employees/hierarchy-violations", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        setHierarchyViolations(await res.json());
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingViolations(false);
+    }
+  };
+
+  const handleDeactivateViolation = async (lineId: string) => {
+    if (!window.confirm("Are you sure you want to deactivate this reporting line?")) return;
+    setActionInProgress(lineId);
+    try {
+      const res = await fetch(`/api/v1/employees/hierarchy-violations/${lineId}/deactivate`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || err.message || "Failed to deactivate line");
+      }
+      setStatusMessage("Reporting line deactivated.");
+      await fetchHierarchyViolations();
+      await fetchData();
+    } catch (err: any) {
+      setErrorMessage(err.message || "Failed to deactivate line.");
+    } finally {
+      setActionInProgress(null);
+    }
+  };
+
+  const handleMoveViolationToSupervisor = async (lineId: string) => {
+    if (!window.confirm("Move this leadership link to the worker's supervisor and deactivate the worker's direct link?")) return;
+    setActionInProgress(lineId);
+    try {
+      const res = await fetch(`/api/v1/employees/hierarchy-violations/${lineId}/move-to-supervisor`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || err.message || "Failed to move line");
+      }
+      setStatusMessage("Reporting line moved to supervisor.");
+      await fetchHierarchyViolations();
+      await fetchData();
+    } catch (err: any) {
+      setErrorMessage(err.message || "Failed to move line.");
+    } finally {
+      setActionInProgress(null);
+    }
+  };
+
+  const handleExportViolationsExcel = async () => {
+    try {
+      const res = await fetch("/api/v1/employees/hierarchy-violations/export", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "hierarchy_violations.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (err: any) {
+      setErrorMessage(err.message || "Failed to export Excel");
     }
   };
 
@@ -1033,6 +1123,10 @@ export const EmployeeDetail: React.FC = () => {
       {activeTab === "hierarchy" && (() => {
         const canEditHierarchy =
           user?.role === "ADMIN" && employee?.role !== "ADMIN" && employee?.tally_id !== "ADMIN001";
+        const isWorker = employee?.role === "WORKER";
+        const isSupervisor = employee?.role === "SUPERVISOR";
+        const isLeadership = employee?.role === "SUPERINTENDENT" || employee?.role === "ENGINEER";
+
         const existingDirectSup = reportingLines.find(
           (l) => l.is_direct && l.relationship === "SUPERVISOR"
         );
@@ -1041,11 +1135,10 @@ export const EmployeeDetail: React.FC = () => {
             .filter((l) => l.is_direct && l.relationship === newRelType)
             .map((l) => l.manager_id)
         );
+
+        // Strict role matching candidates per fixed crew structure (DEC-10)
         const matchingRoleCandidates = allManagers.filter(
           (m) => m.role === newRelType && !existingDirectIdsForType.has(m.id)
-        );
-        const otherCandidates = allManagers.filter(
-          (m) => m.role !== newRelType && m.role !== "WORKER" && !existingDirectIdsForType.has(m.id)
         );
 
         return (
@@ -1055,10 +1148,24 @@ export const EmployeeDetail: React.FC = () => {
                 <div>
                   <h3 className="text-sm font-semibold text-slate-900">Management Reporting Chain</h3>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Employees may have at most 1 direct Supervisor and multiple Superintendents or Engineers.
+                    {isWorker && "Workers have exactly 1 direct Supervisor. Leadership (Superintendents & Engineers) is inherited transitively."}
+                    {isSupervisor && "Supervisors lead crews and attach to Superintendents and Engineers."}
+                    {isLeadership && "Superintendents and Engineers manage Supervisors directly."}
                   </p>
                 </div>
-                <span className="text-xs text-slate-500 font-medium">Full Upstream Tree</span>
+                {user?.role === "ADMIN" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setViolationsModalOpen(true);
+                      fetchHierarchyViolations();
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 text-amber-900 rounded-lg text-xs font-semibold hover:bg-amber-100 transition shadow-xs"
+                  >
+                    <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
+                    Hierarchy Audit & Violations
+                  </button>
+                )}
               </div>
 
               {employee?.role === "ADMIN" || employee?.tally_id === "ADMIN001" ? (
@@ -1076,6 +1183,9 @@ export const EmployeeDetail: React.FC = () => {
                         : line.relationship === "SUPERINTENDENT"
                         ? "bg-purple-100 text-purple-700 border-purple-200"
                         : "bg-sky-100 text-sky-700 border-sky-200";
+
+                    // In fixed crew structure: direct supt/eng on a worker is non-conforming or inherited
+                    const isInherited = !line.is_direct || (isWorker && line.relationship !== "SUPERVISOR");
 
                     return (
                       <div
@@ -1101,16 +1211,16 @@ export const EmployeeDetail: React.FC = () => {
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
-                            {line.is_direct ? (
-                              <span className="px-2 py-0.5 rounded-full text-2xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                                Direct Manager
+                            {isInherited ? (
+                              <span className="px-2 py-0.5 rounded-full text-2xs font-semibold bg-slate-200 text-slate-700 border border-slate-300">
+                                {line.via_name ? `Inherited via ${line.via_name}` : "Inherited Leadership"}
                               </span>
                             ) : (
-                              <span className="px-2 py-0.5 rounded-full text-2xs font-semibold bg-slate-200 text-slate-700 border border-slate-300">
-                                Upstream Chain
+                              <span className="px-2 py-0.5 rounded-full text-2xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                Direct {line.relationship}
                               </span>
                             )}
-                            {canEditHierarchy && line.is_direct && (
+                            {canEditHierarchy && line.is_direct && (!isWorker || line.relationship === "SUPERVISOR") && (
                               <button
                                 type="button"
                                 disabled={savingHierarchy}
@@ -1120,7 +1230,7 @@ export const EmployeeDetail: React.FC = () => {
                                     line.manager_name || line.manager_id
                                   )
                                 }
-                                title="Remove direct reporting line"
+                                title="Remove / Deactivate direct reporting line"
                                 className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition disabled:opacity-40"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
@@ -1142,13 +1252,13 @@ export const EmployeeDetail: React.FC = () => {
             </div>
 
             {/* Admin-Only Edit Hierarchy Form */}
-            {canEditHierarchy && (
+            {canEditHierarchy && !isLeadership && (
               <form
                 onSubmit={handleAddReportingLine}
                 className="pt-5 border-t border-slate-200 space-y-3"
               >
                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                  Assign / Update Direct Manager (Admin Only)
+                  {isWorker ? "Assign Supervisor (Admin Only)" : "Assign Leadership Manager (Admin Only)"}
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
@@ -1163,9 +1273,14 @@ export const EmployeeDetail: React.FC = () => {
                       }}
                       className="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     >
-                      <option value="SUPERVISOR">Supervisor (Max 1)</option>
-                      <option value="SUPERINTENDENT">Superintendent (Multiple allowed)</option>
-                      <option value="ENGINEER">Engineer (Multiple allowed)</option>
+                      {isWorker ? (
+                        <option value="SUPERVISOR">Supervisor (Max 1)</option>
+                      ) : (
+                        <>
+                          <option value="SUPERINTENDENT">Superintendent (Multiple allowed)</option>
+                          <option value="ENGINEER">Engineer (Multiple allowed)</option>
+                        </>
+                      )}
                     </select>
                   </div>
                   <div>
@@ -1179,23 +1294,14 @@ export const EmployeeDetail: React.FC = () => {
                       className="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     >
                       <option value="">-- Choose {newRelType.toLowerCase()} --</option>
-                      {matchingRoleCandidates.length > 0 && (
-                        <optgroup label={`${newRelType}s`}>
-                          {matchingRoleCandidates.map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.name} ({m.tally_id})
-                            </option>
-                          ))}
-                        </optgroup>
-                      )}
-                      {otherCandidates.length > 0 && (
-                        <optgroup label="Other Management Staff">
-                          {otherCandidates.map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.name} ({m.tally_id}) — {m.role}
-                            </option>
-                          ))}
-                        </optgroup>
+                      {matchingRoleCandidates.length > 0 ? (
+                        matchingRoleCandidates.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.name} ({m.tally_id})
+                          </option>
+                        ))
+                      ) : (
+                        <option disabled value="">No available {newRelType.toLowerCase()}s</option>
                       )}
                     </select>
                   </div>
@@ -1223,6 +1329,12 @@ export const EmployeeDetail: React.FC = () => {
                   </button>
                 </div>
               </form>
+            )}
+
+            {isLeadership && (
+              <div className="pt-3 border-t border-slate-200 text-xs text-slate-500 bg-slate-50 p-3 rounded-lg">
+                Superintendents and Engineers attach directly to Supervisors. Field workers inherit their leadership chain transitively.
+              </div>
             )}
           </div>
         );
@@ -1823,6 +1935,137 @@ export const EmployeeDetail: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Batch 4: Hierarchy Violations Modal (Admin only) */}
+      {violationsModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-xl border border-slate-200 space-y-4 max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-amber-600" />
+                  Hierarchy Violations Audit (DEC-10)
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Active reporting lines that violate the fixed crew hierarchy (worker direct supt/eng links or non-supervisor managers).
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleExportViolationsExcel}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 transition"
+                  title="Export violations to Excel"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Export Excel (.xlsx)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViolationsModalOpen(false)}
+                  className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              {loadingViolations ? (
+                <div className="flex items-center justify-center py-12 text-slate-500 text-xs gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />
+                  Scanning active reporting lines...
+                </div>
+              ) : hierarchyViolations.length === 0 ? (
+                <div className="p-8 text-center bg-emerald-50/50 border border-emerald-100 rounded-xl space-y-2">
+                  <CheckCircle className="h-8 w-8 text-emerald-600 mx-auto" />
+                  <p className="text-sm font-semibold text-emerald-900">
+                    No Hierarchy Violations Found
+                  </p>
+                  <p className="text-xs text-emerald-700">
+                    All active reporting lines cleanly adhere to the fixed crew hierarchy structure.
+                  </p>
+                </div>
+              ) : (
+                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
+                      <tr>
+                        <th className="p-3">Employee (Subordinate)</th>
+                        <th className="p-3">Direct Manager</th>
+                        <th className="p-3">Relationship</th>
+                        <th className="p-3">Violation Details</th>
+                        <th className="p-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {hierarchyViolations.map((v) => (
+                        <tr key={v.reporting_line_id} className="hover:bg-slate-50/80 transition">
+                          <td className="p-3">
+                            <div className="font-semibold text-slate-900">{v.employee_name}</div>
+                            <div className="text-2xs text-slate-500 font-mono">Tally: {v.employee_tally_id} ({v.employee_role})</div>
+                          </td>
+                          <td className="p-3">
+                            <div className="font-semibold text-slate-900">{v.manager_name}</div>
+                            <div className="text-2xs text-slate-500 font-mono">Tally: {v.manager_tally_id} ({v.manager_role})</div>
+                          </td>
+                          <td className="p-3">
+                            <span className="px-2 py-0.5 rounded text-2xs font-mono font-medium border bg-amber-50 text-amber-700 border-amber-200">
+                              {v.relationship}
+                            </span>
+                          </td>
+                          <td className="p-3 text-slate-600 max-w-xs">
+                            <div className="font-medium text-amber-900">{v.violation_code}</div>
+                            <div className="text-2xs mt-0.5">{v.violation_message}</div>
+                            {v.supervisor_name && (
+                              <div className="text-2xs text-slate-500 mt-1">
+                                Worker's Supervisor: <span className="font-medium text-slate-700">{v.supervisor_name} ({v.supervisor_tally_id})</span>
+                                {v.supervisor_already_has_manager && " (Already linked)"}
+                              </div>
+                            )}
+                          </td>
+                          <td className="p-3 text-right space-x-1.5 whitespace-nowrap">
+                            {v.can_move_to_supervisor && (
+                              <button
+                                type="button"
+                                disabled={actionInProgress === v.reporting_line_id}
+                                onClick={() => handleMoveViolationToSupervisor(v.reporting_line_id)}
+                                className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-2xs font-semibold disabled:opacity-40 transition"
+                                title="Add link to supervisor and deactivate direct link on worker"
+                              >
+                                {actionInProgress === v.reporting_line_id ? "Moving..." : "Move to Supervisor"}
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              disabled={actionInProgress === v.reporting_line_id}
+                              onClick={() => handleDeactivateViolation(v.reporting_line_id)}
+                              className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg text-2xs font-semibold disabled:opacity-40 transition"
+                              title="Deactivate non-conforming reporting line"
+                            >
+                              {actionInProgress === v.reporting_line_id ? "Deactivating..." : "Deactivate"}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setViolationsModalOpen(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

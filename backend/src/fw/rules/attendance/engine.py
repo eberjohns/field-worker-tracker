@@ -34,6 +34,7 @@ class DailyCalculationInputs:
     is_ot2_weekday: bool  # e.g. Sunday
     has_approved_leave: bool
     first_site_break_override: int | None = None
+    break_source: str = "TIME_RULE"
     grace_period_minutes: int = 10
     gap_flag_minutes: int = 15
     max_transit_minutes: int = 90
@@ -119,13 +120,9 @@ def compute_daily_attendance(inputs: DailyCalculationInputs) -> DailyCalculation
             if f not in flags:
                 flags.append(f)
 
-    # Effective break resolution: first site visited override vs time rule break
-    if inputs.first_site_break_override is not None:
-        break_minutes_used = inputs.first_site_break_override
-        break_source = "JOB_ITEM_OVERRIDE"
-    else:
-        break_minutes_used = sched.break_minutes
-        break_source = "TIME_RULE"
+    # Effective break resolution: single source of truth (first_site_break_override is display only and ignored)
+    break_minutes_used = sched.break_minutes
+    break_source = inputs.break_source or "TIME_RULE"
 
     # Actual timing points
     first_site_entry_at: datetime | None = None

@@ -47,7 +47,10 @@ async def fetch_document_expiry(
     mgr_stmt = (
         select(EmployeeReportingLine, Employee)
         .join(Employee, EmployeeReportingLine.manager_id == Employee.id)
-        .where(EmployeeReportingLine.relationship == "SUPERVISOR")
+        .where(
+            EmployeeReportingLine.relationship == "SUPERVISOR",
+            EmployeeReportingLine.is_active == True,  # noqa: E712
+        )
     )
     mgr_res = await session.execute(mgr_stmt)
     supervisor_map: dict[UUID, str] = {row[0].employee_id: row[1].name for row in mgr_res.all()}

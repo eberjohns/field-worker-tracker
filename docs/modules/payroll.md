@@ -45,8 +45,8 @@ The `payroll` module handles month-end payroll processing, draft generation, iss
 2. **OT1 Rate**: `(basic / 208) * 1.25` (hours worked beyond standard hours on normal working days).
 3. **OT2 Rate**: `(basic / 208) * 1.50` (all hours worked on public holidays and worker's weekly off day).
 4. **Missed Hours Deduction**: `(unpaid_leave_hours + shortfall_hours) * (basic / 208)`. Paid leaves incur zero deduction.
-5. **Gratuity Provision**: `(basic / 30) * (21 / 12)`.
-6. **Leave Salary Provision**: `((basic + housing_allowance) / 30) * (30 / 12)`.
+5. **Gratuity Provision**: `basic / 365 * 30`.
+6. **Leave Salary Provision**: `basic / 12`.
 7. **Company Provisions**: 5 settings (Visa, Air Ticket, Uniform, Medical, Accommodation).
 8. **HR Overhead**: 5% of Subtotal Staff Cost.
 9. **Final Total Staff Cost**: Subtotal Staff Cost + 5% HR OH.

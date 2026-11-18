@@ -19,8 +19,8 @@ salary_portion = basic + special_allowance + fixed_ot + bonus + telephone_allowa
 
 ## 3. Monthly formulas (per worker, per month)
 ```
-gratuity        = (basic / 30) * (21 / 12)                     # statutory 21 days per year / 12 months
-leave_salary    = ((basic + housing_allowance) / 30) * (30 / 12) # 30 calendar days per year / 12 months
+gratuity        = basic / 365 * 30                             # client confirmed formula (basic / 365 * 30)
+leave_salary    = basic / 12                                   # client confirmed formula (basic / 12)
 provisions      = visa + air_ticket + uniform + accommodation + medical        # company settings
 per_month_provision = provisions + gratuity + leave_salary
 hourly_rate_ot1 = basic / 208 * 1.25          # divisor and multipliers from settings

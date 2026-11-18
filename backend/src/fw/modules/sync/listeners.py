@@ -477,6 +477,7 @@ async def handle_employee_profile_changed(
         .where(
             EmployeeReportingLine.employee_id == employee.id,
             EmployeeReportingLine.relationship == "SUPERVISOR",
+            EmployeeReportingLine.is_active == True,  # noqa: E712
         )
     )
     rep_res = await session.execute(rep_query)

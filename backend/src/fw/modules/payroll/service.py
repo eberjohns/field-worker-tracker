@@ -10,6 +10,7 @@ from uuid import UUID
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.core.errors import AppError
@@ -115,9 +116,11 @@ class PayrollSalaryService:
                     basic_salary=r.basic_salary,
                     special_allowance=r.special_allowance,
                     fixed_ot_amount=r.fixed_ot_amount,
+                    break_minutes=r.break_minutes,
                     bonus=r.bonus,
                     telephone_allowance=r.telephone_allowance,
                     housing_transport_allowance=r.housing_transport_allowance,
+                    change_source=r.change_source,
                     salary_portion=portion,
                     difference=diff,
                     created_at=r.created_at,
@@ -199,9 +202,11 @@ class PayrollSalaryService:
             basic_salary=row.basic_salary,
             special_allowance=row.special_allowance,
             fixed_ot_amount=row.fixed_ot_amount,
+            break_minutes=row.break_minutes,
             bonus=row.bonus,
             telephone_allowance=row.telephone_allowance,
             housing_transport_allowance=row.housing_transport_allowance,
+            change_source=row.change_source,
             salary_portion=portion,
             difference=Decimal("0.00"),
             created_at=row.created_at,
@@ -236,6 +241,10 @@ class PayrollSalaryService:
             existing.bonus = data.bonus
             existing.telephone_allowance = data.telephone_allowance
             existing.housing_transport_allowance = data.housing_transport_allowance
+            if data.break_minutes is not None:
+                existing.break_minutes = data.break_minutes
+            if data.change_source is not None:
+                existing.change_source = data.change_source
             if batch_id:
                 existing.import_batch_id = batch_id
             target = existing
@@ -248,9 +257,11 @@ class PayrollSalaryService:
                 basic_salary=data.basic_salary,
                 special_allowance=data.special_allowance,
                 fixed_ot_amount=data.fixed_ot_amount,
+                break_minutes=data.break_minutes,
                 bonus=data.bonus,
                 telephone_allowance=data.telephone_allowance,
                 housing_transport_allowance=data.housing_transport_allowance,
+                change_source=data.change_source,
                 import_batch_id=batch_id,
                 created_by_user_id=actor_user_id,
             )
@@ -370,6 +381,177 @@ class PayrollSalaryService:
                     )
                 )
         return items
+
+    @staticmethod
+    async def propagate_crew_break_to_worker(
+        session: AsyncSession,
+        worker_id: UUID,
+        break_minutes: int | None,
+        effective_from: date,
+        actor_user_id: UUID | None = None,
+        actor_role: str = "ADMIN",
+    ) -> None:
+        """Propagate supervisor crew break to a worker's effective-dated salary structure.
+
+        Rules:
+        a) Future-dated salary rows: set new break on all rows where effective_from > chosen date.
+        b) Same-date row: if row exists with effective_from == chosen date, update break_minutes.
+        c) Locked periods: reject effective date inside a month with APPROVED payroll run.
+        d) Mark created/updated row with change_source = 'CREW_BREAK'.
+        e) Recalculate unlocked past attendance dates if effective_from < today.
+        """
+        worker = await session.get(Employee, worker_id)
+        if not worker:
+            return
+
+        # Check c: Locked period check via PayrollRun
+        pay_run_stmt = select(PayrollRun.id).where(
+            PayrollRun.country == worker.country,
+            PayrollRun.status == "APPROVED",
+            PayrollRun.period_start <= effective_from,
+            PayrollRun.period_end >= effective_from,
+        ).limit(1)
+        approved_run = (await session.execute(pay_run_stmt)).scalars().first()
+        if approved_run:
+            raise AppError(
+                code="PAYROLL_PERIOD_LOCKED",
+                message=f"Cannot apply crew break to {effective_from}: period is locked by an approved payroll run.",
+                status_code=422,
+            )
+
+        # Check if attendance is locked for finalized payroll
+        from fw.modules.attendance.models import AttendanceRecord
+
+        att_locked_stmt = select(AttendanceRecord.id).where(
+            AttendanceRecord.employee_id == worker_id,
+            AttendanceRecord.work_date >= effective_from,
+            AttendanceRecord.locked.is_(True),
+        ).limit(1)
+        if (await session.execute(att_locked_stmt)).scalars().first():
+            raise AppError(
+                code="PAYROLL_PERIOD_LOCKED",
+                message=f"Cannot apply crew break to {effective_from}: attendance is locked for finalized payroll.",
+                status_code=422,
+            )
+
+        # Query all salary rows for worker
+        stmt = (
+            select(EmployeeSalary)
+            .where(EmployeeSalary.employee_id == worker_id)
+            .order_by(EmployeeSalary.effective_from.asc())
+        )
+        res = await session.execute(stmt)
+        all_salaries = list(res.scalars().all())
+
+        same_date_row = next((s for s in all_salaries if s.effective_from == effective_from), None)
+        future_rows = [s for s in all_salaries if s.effective_from > effective_from]
+        prior_rows = [s for s in all_salaries if s.effective_from < effective_from]
+
+        if same_date_row:
+            same_date_row.break_minutes = break_minutes
+            same_date_row.change_source = "CREW_BREAK"
+        elif prior_rows:
+            latest_prior = prior_rows[-1]
+            new_sal = EmployeeSalary(
+                employee_id=worker_id,
+                effective_from=effective_from,
+                standard_hours=latest_prior.standard_hours,
+                basic_salary=latest_prior.basic_salary,
+                special_allowance=latest_prior.special_allowance,
+                fixed_ot_amount=latest_prior.fixed_ot_amount,
+                bonus=latest_prior.bonus,
+                telephone_allowance=latest_prior.telephone_allowance,
+                housing_transport_allowance=latest_prior.housing_transport_allowance,
+                break_minutes=break_minutes,
+                change_source="CREW_BREAK",
+                created_by_user_id=actor_user_id,
+            )
+            session.add(new_sal)
+        else:
+            # Baseline salary row
+            new_sal = EmployeeSalary(
+                employee_id=worker_id,
+                effective_from=effective_from,
+                standard_hours=Decimal("8.0"),
+                basic_salary=Decimal("0.00"),
+                special_allowance=Decimal("0.00"),
+                fixed_ot_amount=Decimal("0.00"),
+                bonus=Decimal("0.00"),
+                telephone_allowance=Decimal("0.00"),
+                housing_transport_allowance=Decimal("0.00"),
+                break_minutes=break_minutes,
+                change_source="CREW_BREAK",
+                created_by_user_id=actor_user_id,
+            )
+            session.add(new_sal)
+
+        # Update all future rows
+        for fut in future_rows:
+            fut.break_minutes = break_minutes
+
+        await session.flush()
+
+        await AuditService.log_action(
+            session=session,
+            actor_user_id=actor_user_id,
+            actor_role=actor_role,
+            action="CREW_BREAK_PROPAGATED",
+            entity_type="employee_salary",
+            entity_id=str(worker_id),
+            diff={"break_minutes": break_minutes, "effective_from": str(effective_from)},
+            reason="Supervisor crew break propagation",
+        )
+
+        # Recalculate past attendance for dates from effective_from up to yesterday (if effective_from < today)
+        today = date.today()
+        if effective_from < today:
+            from fw.modules.attendance import AttendanceRecord, AttendanceService
+
+            curr_date = effective_from
+            while curr_date < today:
+                att_q = select(AttendanceRecord).where(
+                    AttendanceRecord.employee_id == worker_id,
+                    AttendanceRecord.work_date == curr_date,
+                    AttendanceRecord.locked.is_(False),
+                )
+                att_rec = (await session.execute(att_q)).scalar_one_or_none()
+                if att_rec:
+                    await AttendanceService.recalculate_day(
+                        session=session,
+                        employee_id=worker_id,
+                        work_date=curr_date,
+                        reason="CREW_BREAK_PROPAGATION",
+                    )
+                curr_date += timedelta(days=1)
+
+    @staticmethod
+    async def propagate_crew_break_to_supervisor_crew(
+        session: AsyncSession,
+        supervisor_id: UUID,
+        break_minutes: int | None,
+        effective_from: date,
+        actor_user_id: UUID | None = None,
+        actor_role: str = "ADMIN",
+    ) -> int:
+        """Find all active workers reporting to supervisor_id and propagate the crew break."""
+        from fw.modules.org.models import EmployeeReportingLine
+
+        stmt = select(EmployeeReportingLine.employee_id).where(
+            EmployeeReportingLine.manager_id == supervisor_id,
+            EmployeeReportingLine.relationship == "SUPERVISOR",
+            EmployeeReportingLine.is_active == True,  # noqa: E712
+        )
+        worker_ids = (await session.execute(stmt)).scalars().all()
+        for wid in worker_ids:
+            await PayrollSalaryService.propagate_crew_break_to_worker(
+                session=session,
+                worker_id=wid,
+                break_minutes=break_minutes,
+                effective_from=effective_from,
+                actor_user_id=actor_user_id,
+                actor_role=actor_role,
+            )
+        return len(worker_ids)
 
 
 class PayrollService:

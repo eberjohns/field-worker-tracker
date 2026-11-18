@@ -153,7 +153,10 @@ class AttendanceService:
         # Load reporting lines for team resolution
         lines_q = select(
             EmployeeReportingLine.manager_id, EmployeeReportingLine.relationship
-        ).where(EmployeeReportingLine.employee_id == employee_id)
+        ).where(
+            EmployeeReportingLine.employee_id == employee_id,
+            EmployeeReportingLine.is_active == True,  # noqa: E712
+        )
         lines_res = await session.execute(lines_q)
         mgr_links = [(row[0], row[1]) for row in lines_res.all()]
 
@@ -365,29 +368,32 @@ class AttendanceService:
         ]
         constructed_gaps = build_gaps_for_day(events_for_gap, work_date)
 
-        # 9. Effective break minutes resolution: Supervisor Group > Salary Structure > Time Rule / Company Default
-        effective_break_minutes: int | None = None
+        # 9. Effective break minutes resolution: Salary Structure > Resolved Time Rule > Company Default
+        effective_break_minutes: int
+        effective_break_source: str
 
-        # Check supervisor group break override
-        sup_stmt = (
-            select(Employee.break_override_minutes)
-            .join(EmployeeReportingLine, EmployeeReportingLine.manager_id == Employee.id)
-            .where(
-                EmployeeReportingLine.employee_id == employee_id,
-                EmployeeReportingLine.relationship == "SUPERVISOR",
-                Employee.break_override_minutes.is_not(None),
-            )
-            .limit(1)
-        )
-        sup_break = (await session.execute(sup_stmt)).scalar_one_or_none()
-        if sup_break is not None and sup_break > 0:
-            effective_break_minutes = sup_break
-        elif salary_break_minutes is not None and salary_break_minutes > 0:
+        if salary_break_minutes is not None and salary_break_minutes > 0:
             effective_break_minutes = salary_break_minutes
-        else:
+            effective_break_source = "SALARY_STRUCTURE"
+        elif (
+            resolved_schedule.winning_sources.get("break_minutes") is not None
+            and resolved_schedule.break_minutes > 0
+        ):
             effective_break_minutes = resolved_schedule.break_minutes
+            effective_break_source = "TIME_RULE"
+        else:
+            default_break_setting = await SettingsService.get_setting(
+                session, "default_break_minutes", country=country, as_of=work_date
+            )
+            try:
+                effective_break_minutes = (
+                    int(default_break_setting) if default_break_setting is not None else 0
+                )
+            except Exception:
+                effective_break_minutes = 0
+            effective_break_source = "COMPANY_DEFAULT"
 
-        resolved_schedule.break_minutes = effective_break_minutes or 30
+        resolved_schedule.break_minutes = effective_break_minutes
 
         # 10. Run pure engine calculation
         calc_inputs = DailyCalculationInputs(
@@ -406,6 +412,7 @@ class AttendanceService:
             is_ot2_weekday=is_ot2_weekday,
             has_approved_leave=has_approved_leave,
             first_site_break_override=None,
+            break_source=effective_break_source,
         )
         calc_result = compute_daily_attendance(calc_inputs)
 

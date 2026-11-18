@@ -15,7 +15,7 @@ Start with `phases/README.md` to build. Reference documents are numbered; design
 | 09 | [mobile-sync-contract](09-mobile-sync-contract.md) | **Shared with the mobile team** |
 | 10 | [ui-views](10-ui-views.md) | Screens by role |
 | 11 | [import-pipeline](11-import-pipeline.md) | Excel import: keys, preview, rules |
-| 12 | [reports](12-reports.md) | 16 reports, live monitoring, alerts, generated history |
+| 12 | [reports](12-reports.md) | 15 reports, live monitoring, alerts, generated history |
 | 13 | [architecture](13-architecture.md) | Stack, modules, deployment |
 | 14 | [nonfunctional](14-nonfunctional.md) | Security, retention, backup, hosting |
 | 15 | [dev-process](15-dev-process.md) | Working method, git, definition of done |

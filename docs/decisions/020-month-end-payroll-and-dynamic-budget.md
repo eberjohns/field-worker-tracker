@@ -22,8 +22,8 @@ Phase 11 introduces month-end payroll calculation, salary revisions management, 
    - OT1 Rate = `(basic / 208) * 1.25` (hours worked beyond standard hours on normal working days).
    - OT2 Rate = `(basic / 208) * 1.50` (all hours worked on public holidays and worker's weekly off day).
    - Missed Hours Deduction = `missed_hours * (basic / 208)`. Paid leaves incur zero deduction.
-   - Gratuity Provision = `(basic / 30) * (21 / 12)`.
-   - Leave Salary Provision = `((basic + housing) / 30) * (30 / 12)`.
+   - Gratuity Provision = `basic / 365 * 30`.
+   - Leave Salary Provision = `basic / 12`.
    - Five Company Provisions (Visa, Air Ticket, Uniform, Medical, Accommodation).
    - 5% HR Overhead added to Total Staff Cost for Final Staff Cost.
 2. **Draft & Approval Lifecycle (`fw.modules.payroll`):**

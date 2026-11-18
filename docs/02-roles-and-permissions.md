@@ -9,10 +9,16 @@ Roles are **fixed**: ADMIN, ENGINEER, SUPERINTENDENT, SUPERVISOR, WORKER. There 
 - Workers are **bound to the first device** they log in from (device model, OS, app version stored); other devices are refused and logged; Admin resets the binding when a worker changes phone.
 - Accounts are created from the employee import; no emails are required.
 
-## Reporting scope
-Visibility is by reporting relationship. Reporting lines are stored as links `(employee, manager, relationship)` in `employee_reporting_lines`, where relationship is SUPERVISOR, SUPERINTENDENT or ENGINEER. A person may have **several superintendents and several engineers** (and at most one supervisor). For user U (an employee), `scope(U)` is the set of employees E where:
+## Reporting scope and fixed crew structure
+Visibility is governed by the fixed crew hierarchy (DEC-10, ADR-011, ADR-024). Active reporting lines are stored in `employee_reporting_lines` (`WHERE is_active = true`):
+- **Worker Level**: Every `WORKER` has **exactly one supervisor** link, and the manager must have role `SUPERVISOR`. Direct worker links to superintendents or engineers are prohibited.
+- **Supervisor Level**: `SUPERINTENDENT` and `ENGINEER` links attach **strictly to supervisors** (zero or many superintendents, zero or many engineers per supervisor).
+- **Transitive Leadership Inheritance**: Workers inherit their supervisor's superintendents and engineers transitively for reporting scope (`scope(U)`), approval routing (leave, reassignments, attendance review), reports, and live monitoring.
+- **Soft Deactivation**: Reporting lines are deactivated (`is_active = false`, `deactivated_at`, `deactivated_by`) with audit logging, never hard-deleted (Golden Rule 5).
+
+For user U (an employee), `scope(U)` is the set of employees E where:
 - `E.id = U.id` (self), or
-- a direct or indirect (transitive) reporting link exists where `U` manages `E` across any relationship (ADR-011).
+- a direct or indirect (transitive) active reporting link exists where `U` manages `E` across any relationship (ADR-011, ADR-024).
 
 ADMIN sees everything. WORKER sees self only. Superintendents are view-only, except that they may create temporary reassignments (see the matrix).
 

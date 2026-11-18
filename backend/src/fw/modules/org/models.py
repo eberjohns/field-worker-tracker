@@ -15,6 +15,7 @@ from sqlalchemy import (
     Numeric,
     String,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -125,20 +126,23 @@ class EmployeeReportingLine(Base):
             "relationship IN ('SUPERVISOR', 'SUPERINTENDENT', 'ENGINEER')",
             name="check_reporting_relationship_valid",
         ),
-        UniqueConstraint(
+        Index(
+            "uq_employee_manager_relationship_active",
             "employee_id",
             "manager_id",
             "relationship",
-            name="uq_employee_manager_relationship",
+            unique=True,
+            postgresql_where=text("is_active = true"),
         ),
         Index(
             "ix_unique_single_supervisor",
             "employee_id",
             unique=True,
-            postgresql_where=(mapped_column("relationship") == "SUPERVISOR"),
+            postgresql_where=text("relationship = 'SUPERVISOR' AND is_active = true"),
         ),
         Index("ix_reporting_lines_manager_rel", "manager_id", "relationship"),
         Index("ix_reporting_lines_employee", "employee_id"),
+        Index("ix_reporting_lines_active", "is_active"),
     )
 
     id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
@@ -154,6 +158,13 @@ class EmployeeReportingLine(Base):
     )
     relationship: Mapped[str] = mapped_column(String(20), nullable=False)
     notes: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    deactivated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deactivated_by: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),

@@ -23,13 +23,19 @@ def validate_reporting_link(
     employee_id: str,
     manager_id: str,
     relationship: str,
+    employee_role: str | None = None,
+    manager_role: str | None = None,
 ) -> None:
     """Validate that adding (employee_id -> manager_id) does not violate hierarchy rules.
 
     Rules:
     - No self-link (employee_id != manager_id)
-    - At most one SUPERVISOR relationship per employee
-    - No directed cycle across any reporting relationship (BR-EM-06)
+    - A WORKER has exactly one SUPERVISOR link, and the manager must have role SUPERVISOR.
+    - Direct WORKER -> SUPERINTENDENT/ENGINEER links are not allowed.
+    - SUPERINTENDENT and ENGINEER links attach ONLY to supervisors (zero or many each).
+    - If manager_role is provided and relationship == "SUPERVISOR", manager must be "SUPERVISOR".
+    - At most one SUPERVISOR relationship per employee.
+    - No directed cycle across any reporting relationship (BR-EM-06).
     """
     if employee_id == manager_id:
         raise HierarchyRuleViolation(
@@ -37,8 +43,49 @@ def validate_reporting_link(
             message="An employee cannot report to themselves.",
         )
 
+    norm_rel = relationship.strip().upper()
+    emp_role = employee_role.strip().upper() if employee_role else None
+    mgr_role = manager_role.strip().upper() if manager_role else None
+
+    # Role-based validations
+    if emp_role == "WORKER" and norm_rel in ("SUPERINTENDENT", "ENGINEER"):
+        raise HierarchyRuleViolation(
+            code="WORKER_DIRECT_LINK_NOT_ALLOWED",
+            message=f"Workers cannot be directly linked to a {norm_rel.lower()}. They inherit superintendents and engineers from their supervisor.",
+        )
+
+    if norm_rel in ("SUPERINTENDENT", "ENGINEER") and emp_role is not None and emp_role != "SUPERVISOR":
+        raise HierarchyRuleViolation(
+            code="INVALID_LINK_SUBJECT",
+            message=f"{norm_rel.capitalize()} links attach only to supervisors, but employee role is {emp_role}.",
+        )
+
+    if norm_rel == "SUPERVISOR":
+        if mgr_role is not None and mgr_role != "SUPERVISOR":
+            raise HierarchyRuleViolation(
+                code="SUPERVISOR_LINK_ROLE_MISMATCH",
+                message=f"Manager must have role SUPERVISOR for a supervisor reporting line (got {mgr_role}).",
+            )
+        if emp_role is not None and emp_role in ("SUPERINTENDENT", "ENGINEER"):
+            raise HierarchyRuleViolation(
+                code="INVALID_LINK_SUBJECT",
+                message=f"{emp_role.capitalize()} accounts cannot report to a supervisor.",
+            )
+
+    if norm_rel == "SUPERINTENDENT" and mgr_role is not None and mgr_role != "SUPERINTENDENT":
+        raise HierarchyRuleViolation(
+            code="HIERARCHY_ROLE_MISMATCH",
+            message=f"Manager must have role SUPERINTENDENT for a superintendent reporting line (got {mgr_role}).",
+        )
+
+    if norm_rel == "ENGINEER" and mgr_role is not None and mgr_role != "ENGINEER":
+        raise HierarchyRuleViolation(
+            code="HIERARCHY_ROLE_MISMATCH",
+            message=f"Manager must have role ENGINEER for an engineer reporting line (got {mgr_role}).",
+        )
+
     # Check for duplicate supervisor
-    if relationship == "SUPERVISOR":
+    if norm_rel == "SUPERVISOR":
         for emp, mgr, rel in existing_links:
             if emp == employee_id and rel == "SUPERVISOR" and mgr != manager_id:
                 raise HierarchyRuleViolation(

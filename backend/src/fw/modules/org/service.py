@@ -33,6 +33,7 @@ from fw.modules.org.schemas import (
     GroupCreate,
     GroupUpdate,
     HierarchyTreeNode,
+    HierarchyViolationItem,
     ReportingLineCreate,
     ReportingLineRead,
     TallyIdChangeRequest,
@@ -72,7 +73,9 @@ class ScopeService:
 
         # For ENGINEER, SUPERINTENDENT, SUPERVISOR:
         # Load all reporting lines to compute transitive descendant scope
-        query = select(EmployeeReportingLine.employee_id, EmployeeReportingLine.manager_id)
+        query = select(EmployeeReportingLine.employee_id, EmployeeReportingLine.manager_id).where(
+            EmployeeReportingLine.is_active == True  # noqa: E712
+        )
         result = await session.execute(query)
         links = [(str(row.employee_id), str(row.manager_id)) for row in result.all()]
 
@@ -127,7 +130,8 @@ class OrgService:
             query = query.where(or_(Employee.name.ilike(search), Employee.tally_id.ilike(search)))
         if manager_id:
             subquery = select(EmployeeReportingLine.employee_id).where(
-                EmployeeReportingLine.manager_id == manager_id
+                EmployeeReportingLine.manager_id == manager_id,
+                EmployeeReportingLine.is_active == True,  # noqa: E712
             )
             query = query.where(Employee.id.in_(subquery))
 
@@ -304,6 +308,7 @@ class OrgService:
             .join(Employee, Employee.id == EmployeeReportingLine.employee_id)
             .where(
                 EmployeeReportingLine.manager_id == manager_id,
+                EmployeeReportingLine.is_active.is_(True),
                 Employee.is_active.is_(True),
             )
         )
@@ -423,7 +428,9 @@ class OrgService:
 
         diff: dict[str, Any] = {}
         # Apply fields
-        for field, value in data.model_dump(exclude_unset=True, exclude={"version"}).items():
+        for field, value in data.model_dump(
+            exclude_unset=True, exclude={"version", "effective_from"}
+        ).items():
             old_val = getattr(employee, field)
             if old_val != value:
                 diff[field] = {"old": str(old_val), "new": str(value)}
@@ -541,8 +548,10 @@ class OrgService:
         session: AsyncSession,
         employee_id: UUID,
     ) -> list[ReportingLineRead]:
-        """List all direct and upstream reporting lines for an employee (full management chain)."""
-        all_lines_query = select(EmployeeReportingLine)
+        """List all active direct and upstream reporting lines for an employee (full management chain)."""
+        all_lines_query = select(EmployeeReportingLine).where(
+            EmployeeReportingLine.is_active == True  # noqa: E712
+        )
         all_lines = (await session.execute(all_lines_query)).scalars().all()
 
         emp_query = select(Employee)
@@ -571,6 +580,7 @@ class OrgService:
                         relationship=line.relationship,
                         notes=line.notes,
                         created_at=line.created_at,
+                        is_active=line.is_active,
                         is_direct=is_direct,
                         via_name=via_name,
                     )
@@ -610,12 +620,12 @@ class OrgService:
                 status_code=400,
             )
 
-        # Load all existing reporting lines for cycle and constraint validation
+        # Load active reporting lines for cycle and constraint validation
         query = select(
             EmployeeReportingLine.employee_id,
             EmployeeReportingLine.manager_id,
             EmployeeReportingLine.relationship,
-        )
+        ).where(EmployeeReportingLine.is_active == True)  # noqa: E712
         result = await session.execute(query)
         existing_links = [
             (str(r.employee_id), str(r.manager_id), r.relationship) for r in result.all()
@@ -634,17 +644,37 @@ class OrgService:
                 employee_id=str(employee_id),
                 manager_id=str(data.manager_id),
                 relationship=data.relationship,
+                employee_role=emp.role,
+                manager_role=mgr.role,
             )
         except HierarchyRuleViolation as e:
             raise AppError(code=e.code, message=e.message, status_code=422) from e
 
-        link = EmployeeReportingLine(
-            employee_id=employee_id,
-            manager_id=data.manager_id,
-            relationship=data.relationship,
-            notes=data.notes,
+        # Check if an inactive line exists that can be reactivated
+        inactive_query = select(EmployeeReportingLine).where(
+            EmployeeReportingLine.employee_id == employee_id,
+            EmployeeReportingLine.manager_id == data.manager_id,
+            EmployeeReportingLine.relationship == data.relationship,
+            EmployeeReportingLine.is_active == False,  # noqa: E712
         )
-        session.add(link)
+        existing_inactive = (await session.execute(inactive_query)).scalar_one_or_none()
+
+        if existing_inactive:
+            link = existing_inactive
+            link.is_active = True
+            link.deactivated_at = None
+            link.deactivated_by = None
+            link.notes = data.notes
+        else:
+            link = EmployeeReportingLine(
+                employee_id=employee_id,
+                manager_id=data.manager_id,
+                relationship=data.relationship,
+                notes=data.notes,
+                is_active=True,
+            )
+            session.add(link)
+
         await session.flush()
 
         await AuditService.log_action(
@@ -673,6 +703,7 @@ class OrgService:
             relationship=link.relationship,
             notes=link.notes,
             created_at=link.created_at,
+            is_active=link.is_active,
         )
 
     @staticmethod
@@ -682,21 +713,32 @@ class OrgService:
         actor_user_id: UUID,
         actor_role: str,
     ) -> None:
-        query = select(EmployeeReportingLine).where(EmployeeReportingLine.id == reporting_line_id)
+        query = select(EmployeeReportingLine).where(
+            EmployeeReportingLine.id == reporting_line_id,
+            EmployeeReportingLine.is_active == True,  # noqa: E712
+        )
         result = await session.execute(query)
         link = result.scalar_one_or_none()
         if not link:
             raise AppError(code="NOT_FOUND", message="Reporting line not found.", status_code=404)
 
         emp_id = link.employee_id
-        await session.delete(link)
+        link.is_active = False
+        link.deactivated_at = datetime.now(UTC)
+        link.deactivated_by = actor_user_id
         await session.flush()
 
         await AuditService.log_action(
             session=session,
-            action="REMOVE_REPORTING_LINE",
+            action="DEACTIVATE_REPORTING_LINE",
             entity_type="employee_reporting_line",
             entity_id=str(reporting_line_id),
+            diff={
+                "is_active": {"old": "True", "new": "False"},
+                "employee_id": str(link.employee_id),
+                "manager_id": str(link.manager_id),
+                "relationship": link.relationship,
+            },
             actor_user_id=actor_user_id,
             actor_role=actor_role,
         )
@@ -715,8 +757,10 @@ class OrgService:
             query = query.where(Employee.id.in_(scoped_ids))
         employees = {emp.id: emp for emp in (await session.execute(query)).scalars().all()}
 
-        # Load reporting lines
-        lines_query = select(EmployeeReportingLine)
+        # Load active reporting lines
+        lines_query = select(EmployeeReportingLine).where(
+            EmployeeReportingLine.is_active == True  # noqa: E712
+        )
         all_lines = (await session.execute(lines_query)).scalars().all()
 
         # Build child map
@@ -743,6 +787,256 @@ class OrgService:
             )
 
         return [build_node(r) for r in roots]
+
+    # --- Hierarchy Violations Audit (Batch 4) ---
+    @staticmethod
+    async def get_hierarchy_violations(
+        session: AsyncSession,
+    ) -> list[HierarchyViolationItem]:
+        """Audit active reporting lines and return all that violate the fixed crew structure."""
+        lines_query = select(EmployeeReportingLine).where(
+            EmployeeReportingLine.is_active == True  # noqa: E712
+        )
+        lines = (await session.execute(lines_query)).scalars().all()
+
+        emp_query = select(Employee)
+        employees = {e.id: e for e in (await session.execute(emp_query)).scalars().all()}
+
+        # Map supervisor per worker and leaders per supervisor
+        worker_supervisor: dict[UUID, Employee] = {}
+        supervisor_leaders: dict[UUID, set[tuple[UUID, str]]] = defaultdict(set)
+
+        for line in lines:
+            if line.relationship == "SUPERVISOR":
+                emp = employees.get(line.employee_id)
+                mgr = employees.get(line.manager_id)
+                if emp and mgr:
+                    worker_supervisor[emp.id] = mgr
+            elif line.relationship in ("SUPERINTENDENT", "ENGINEER"):
+                supervisor_leaders[line.employee_id].add((line.manager_id, line.relationship))
+
+        violations: list[HierarchyViolationItem] = []
+
+        for line in lines:
+            emp = employees.get(line.employee_id)
+            mgr = employees.get(line.manager_id)
+            if not emp or not mgr:
+                continue
+
+            violation_code: str | None = None
+            violation_msg: str | None = None
+
+            if emp.role == "WORKER" and line.relationship in ("SUPERINTENDENT", "ENGINEER"):
+                violation_code = "WORKER_DIRECT_LINK_NOT_ALLOWED"
+                violation_msg = (
+                    f"Worker {emp.tally_id} ({emp.name}) has direct {line.relationship} link to "
+                    f"{mgr.tally_id} ({mgr.name}). Workers inherit leadership through their supervisor."
+                )
+            elif line.relationship == "SUPERVISOR" and mgr.role != "SUPERVISOR":
+                violation_code = "SUPERVISOR_LINK_ROLE_MISMATCH"
+                violation_msg = (
+                    f"Supervisor reporting line for {emp.tally_id} ({emp.name}) has manager "
+                    f"{mgr.tally_id} ({mgr.name}) with role {mgr.role} instead of SUPERVISOR."
+                )
+            elif line.relationship in ("SUPERINTENDENT", "ENGINEER") and emp.role != "SUPERVISOR":
+                violation_code = "INVALID_LINK_SUBJECT"
+                violation_msg = (
+                    f"{line.relationship} link has subordinate {emp.tally_id} ({emp.name}) "
+                    f"with role {emp.role}. These links must attach only to supervisors."
+                )
+            elif line.relationship == "SUPERINTENDENT" and mgr.role != "SUPERINTENDENT":
+                violation_code = "HIERARCHY_ROLE_MISMATCH"
+                violation_msg = (
+                    f"Superintendent link has manager {mgr.tally_id} ({mgr.name}) with role {mgr.role}."
+                )
+            elif line.relationship == "ENGINEER" and mgr.role != "ENGINEER":
+                violation_code = "HIERARCHY_ROLE_MISMATCH"
+                violation_msg = (
+                    f"Engineer link has manager {mgr.tally_id} ({mgr.name}) with role {mgr.role}."
+                )
+
+            if violation_code and violation_msg:
+                sup_emp = worker_supervisor.get(emp.id)
+                sup_already_has = False
+                can_move = False
+                if sup_emp and line.relationship in ("SUPERINTENDENT", "ENGINEER"):
+                    sup_leaders = supervisor_leaders.get(sup_emp.id, set())
+                    sup_already_has = (mgr.id, line.relationship) in sup_leaders
+                    can_move = emp.role == "WORKER" and not sup_already_has
+
+                violations.append(
+                    HierarchyViolationItem(
+                        reporting_line_id=line.id,
+                        employee_id=emp.id,
+                        employee_tally_id=emp.tally_id,
+                        employee_name=emp.name,
+                        employee_role=emp.role,
+                        manager_id=mgr.id,
+                        manager_tally_id=mgr.tally_id,
+                        manager_name=mgr.name,
+                        manager_role=mgr.role,
+                        relationship=line.relationship,
+                        violation_code=violation_code,
+                        violation_message=violation_msg,
+                        supervisor_id=sup_emp.id if sup_emp else None,
+                        supervisor_tally_id=sup_emp.tally_id if sup_emp else None,
+                        supervisor_name=sup_emp.name if sup_emp else None,
+                        supervisor_already_has_manager=sup_already_has,
+                        can_move_to_supervisor=can_move,
+                    )
+                )
+
+        return violations
+
+    @staticmethod
+    async def move_reporting_line_to_supervisor(
+        session: AsyncSession,
+        reporting_line_id: UUID,
+        actor_user_id: UUID,
+        actor_role: str,
+    ) -> None:
+        """Move a direct worker->supt/eng link to the worker's supervisor, then deactivate the direct link."""
+        line = await session.get(EmployeeReportingLine, reporting_line_id)
+        if not line or not line.is_active:
+            raise AppError(code="NOT_FOUND", message="Active reporting line not found.", status_code=404)
+
+        emp = await session.get(Employee, line.employee_id)
+        mgr = await session.get(Employee, line.manager_id)
+        if not emp or not mgr:
+            raise AppError(code="NOT_FOUND", message="Employee or manager not found.", status_code=404)
+
+        if emp.role != "WORKER" or line.relationship not in ("SUPERINTENDENT", "ENGINEER"):
+            raise AppError(
+                code="INVALID_MOVE_REQUEST",
+                message="Only direct superintendent or engineer links on workers can be moved to a supervisor.",
+                status_code=400,
+            )
+
+        # Find worker's supervisor
+        sup_stmt = select(EmployeeReportingLine).where(
+            EmployeeReportingLine.employee_id == emp.id,
+            EmployeeReportingLine.relationship == "SUPERVISOR",
+            EmployeeReportingLine.is_active == True,  # noqa: E712
+        )
+        sup_link = (await session.execute(sup_stmt)).scalar_one_or_none()
+        if not sup_link:
+            raise AppError(
+                code="WORKER_HAS_NO_SUPERVISOR",
+                message=f"Worker {emp.tally_id} has no active supervisor to move this link to.",
+                status_code=400,
+            )
+
+        supervisor_id = sup_link.manager_id
+
+        # Check if supervisor already has this link (active or inactive)
+        check_stmt = select(EmployeeReportingLine).where(
+            EmployeeReportingLine.employee_id == supervisor_id,
+            EmployeeReportingLine.manager_id == mgr.id,
+            EmployeeReportingLine.relationship == line.relationship,
+        )
+        existing_sup_link = (await session.execute(check_stmt)).scalar_one_or_none()
+
+        if existing_sup_link:
+            if not existing_sup_link.is_active:
+                existing_sup_link.is_active = True
+                existing_sup_link.deactivated_at = None
+                existing_sup_link.deactivated_by = None
+        else:
+            new_sup_link = EmployeeReportingLine(
+                employee_id=supervisor_id,
+                manager_id=mgr.id,
+                relationship=line.relationship,
+                notes=f"Moved from worker {emp.tally_id} ({emp.name})",
+                is_active=True,
+            )
+            session.add(new_sup_link)
+
+        # Deactivate worker's direct link
+        line.is_active = False
+        line.deactivated_at = datetime.now(UTC)
+        line.deactivated_by = actor_user_id
+        await session.flush()
+
+        await AuditService.log_action(
+            session=session,
+            action="MOVE_REPORTING_LINE_TO_SUPERVISOR",
+            entity_type="employee_reporting_line",
+            entity_id=str(reporting_line_id),
+            diff={
+                "worker_id": str(emp.id),
+                "supervisor_id": str(supervisor_id),
+                "manager_id": str(mgr.id),
+                "relationship": line.relationship,
+            },
+            actor_user_id=actor_user_id,
+            actor_role=actor_role,
+            reason=f"Moved {line.relationship} link from worker {emp.tally_id} to supervisor",
+        )
+
+        await event_bus.publish(EmployeeProfileChanged(employee_id=emp.id), session=session)
+        await event_bus.publish(EmployeeProfileChanged(employee_id=supervisor_id), session=session)
+
+    @staticmethod
+    def export_hierarchy_violations_excel(violations: list[HierarchyViolationItem]) -> bytes:
+        import io
+        import openpyxl
+        from openpyxl.styles import Alignment, Font, PatternFill
+        from openpyxl.utils import get_column_letter
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        assert ws is not None
+        ws.title = "Hierarchy Violations"
+
+        headers = [
+            "Employee Tally ID",
+            "Employee Name",
+            "Employee Role",
+            "Manager Tally ID",
+            "Manager Name",
+            "Manager Role",
+            "Relationship",
+            "Violation Code",
+            "Violation Message",
+            "Worker's Supervisor",
+            "Supervisor Already Has Manager",
+            "Can Move To Supervisor",
+        ]
+        ws.append(headers)
+
+        header_fill = PatternFill(start_color="1F497D", end_color="1F497D", fill_type="solid")
+        header_font = Font(color="FFFFFF", bold=True)
+        for col_idx in range(1, len(headers) + 1):
+            cell = ws.cell(row=1, column=col_idx)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+
+        for v in violations:
+            sup_display = f"{v.supervisor_tally_id} ({v.supervisor_name})" if v.supervisor_tally_id else "None"
+            ws.append([
+                v.employee_tally_id,
+                v.employee_name,
+                v.employee_role,
+                v.manager_tally_id,
+                v.manager_name,
+                v.manager_role,
+                v.relationship,
+                v.violation_code,
+                v.violation_message,
+                sup_display,
+                "Yes" if v.supervisor_already_has_manager else "No",
+                "Yes" if v.can_move_to_supervisor else "No",
+            ])
+
+        for col in ws.columns:
+            max_len = max(len(str(cell.value or "")) for cell in col)
+            col_letter = get_column_letter(int(col[0].column or 1))
+            ws.column_dimensions[col_letter].width = max(max_len + 3, 12)
+
+        output = io.BytesIO()
+        wb.save(output)
+        return output.getvalue()
 
     # --- Groups, Zones, Accommodations CRUD ---
     @staticmethod
@@ -1090,6 +1384,7 @@ class OrgService:
                 .where(
                     EmployeeReportingLine.employee_id.in_(emp_ids),
                     EmployeeReportingLine.relationship == "SUPERVISOR",
+                    EmployeeReportingLine.is_active == True,  # noqa: E712
                 )
             )
             sup_rows = (await session.execute(sup_stmt)).all()
