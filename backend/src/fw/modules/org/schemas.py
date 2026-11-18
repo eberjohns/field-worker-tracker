@@ -95,6 +95,7 @@ class EmployeeCreate(BaseModel):
     break_override_minutes: int | None = None
     join_date: date | None = None
     employment_end_date: date | None = None
+    confirm_reuse: bool = False
 
 
 class EmployeeUpdate(BaseModel):
@@ -258,3 +259,62 @@ class HierarchyTreeNode(BaseModel):
     employee: EmployeeRead
     relationship: str | None = None
     subordinates: list[Any] = Field(default_factory=list)
+
+
+class TallyIdPreviousUse(BaseModel):
+    employee_id: str
+    employee_name: str | None = None
+    new_tally_id: str | None = None
+    changed_at: datetime | None = None
+
+
+class TallyIdCheckResponse(BaseModel):
+    tally_id: str
+    available: bool
+    in_use_by_employee_id: UUID | None = None
+    in_use_by_name: str | None = None
+    previously_used: bool = False
+    previous_uses: list[TallyIdPreviousUse] = Field(default_factory=list)
+
+
+class TallyIdChangeRequest(BaseModel):
+    new_tally_id: str
+    reason: str
+    confirm_reuse: bool = False
+
+
+class DeactivateRequest(BaseModel):
+    confirmation_text: str
+    admin_password: str
+    effective_date: date | None = None
+    reason: str
+
+
+class ReactivateRequest(BaseModel):
+    confirmation_text: str
+    admin_password: str
+    reason: str
+    reactivate_items: bool = True
+
+
+class EmployeeDeactivationImpactResponse(BaseModel):
+    employee_id: UUID
+    employee_name: str
+    tally_id: str
+    role: str
+    effective_date: date
+    future_active_shifts: int
+    base_roster_slots: int
+    active_standing_assignments: int
+    pending_leave_requests: int
+    pending_reassignment_requests: int
+    active_direct_reports: int
+
+
+class EntityLifecycleResponse(BaseModel):
+    status: str
+    entity_id: UUID
+    is_active: bool
+    effective_date: date | None = None
+    summary: dict[str, Any] = Field(default_factory=dict)
+    message: str

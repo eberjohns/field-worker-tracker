@@ -18,6 +18,14 @@ import {
   TrendingDown,
   Download,
   ShieldAlert,
+  Pencil,
+  PowerOff,
+  RotateCcw,
+  Eye,
+  EyeOff,
+  AlertTriangle,
+  X,
+  Loader2,
 } from "lucide-react";
 
 export const EmployeeDetail: React.FC = () => {
@@ -56,6 +64,198 @@ export const EmployeeDetail: React.FC = () => {
   // Phase 13 DSAR and Consent actions
   const [exportingDsar, setExportingDsar] = useState(false);
   const [withdrawingConsent, setWithdrawingConsent] = useState(false);
+
+  // Batch 3: Change Tally ID (Admin only)
+  const [tallyModalOpen, setTallyModalOpen] = useState(false);
+  const [newTallyId, setNewTallyId] = useState("");
+  const [tallyReason, setTallyReason] = useState("");
+  const [tallyCheck, setTallyCheck] = useState<any | null>(null);
+  const [checkingTally, setCheckingTally] = useState(false);
+  const [confirmReuse, setConfirmReuse] = useState(false);
+  const [submittingTally, setSubmittingTally] = useState(false);
+  const [tallyModalError, setTallyModalError] = useState<string | null>(null);
+
+  // Batch 3: Deactivate / Reactivate Employee (Admin only)
+  const [deactivateModalOpen, setDeactivateModalOpen] = useState(false);
+  const [deactivateEffectiveDate, setDeactivateEffectiveDate] = useState(() =>
+    new Date().toISOString().slice(0, 10)
+  );
+  const [deactivateReason, setDeactivateReason] = useState("");
+  const [deactivateConfirmText, setDeactivateConfirmText] = useState("");
+  const [deactivatePassword, setDeactivatePassword] = useState("");
+  const [showDeactivatePassword, setShowDeactivatePassword] = useState(false);
+  const [deactivateImpact, setDeactivateImpact] = useState<any | null>(null);
+  const [loadingImpact, setLoadingImpact] = useState(false);
+  const [submittingDeactivate, setSubmittingDeactivate] = useState(false);
+  const [deactivateError, setDeactivateError] = useState<string | null>(null);
+
+  const [reactivateModalOpen, setReactivateModalOpen] = useState(false);
+  const [reactivateReason, setReactivateReason] = useState("");
+  const [reactivateConfirmText, setReactivateConfirmText] = useState("");
+  const [reactivatePassword, setReactivatePassword] = useState("");
+  const [showReactivatePassword, setShowReactivatePassword] = useState(false);
+  const [submittingReactivate, setSubmittingReactivate] = useState(false);
+  const [reactivateError, setReactivateError] = useState<string | null>(null);
+
+  // Live check new tally_id when modal is open
+  useEffect(() => {
+    if (!tallyModalOpen || !newTallyId.trim() || !token) {
+      setTallyCheck(null);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setCheckingTally(true);
+      try {
+        const res = await fetch(
+          `/api/v1/employees/check-tally-id?tally_id=${encodeURIComponent(
+            newTallyId.trim()
+          )}&exclude_employee_id=${encodeURIComponent(employeeId)}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (res.ok) {
+          setTallyCheck(await res.json());
+        }
+      } catch {
+        setTallyCheck(null);
+      } finally {
+        setCheckingTally(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [tallyModalOpen, newTallyId, token, employeeId]);
+
+  // Live fetch deactivation impact whenever modal opens or effective date changes
+  useEffect(() => {
+    if (!deactivateModalOpen || !token || !employeeId) return;
+    let active = true;
+    const loadImpact = async () => {
+      setLoadingImpact(true);
+      try {
+        const qs = deactivateEffectiveDate
+          ? `?effective_date=${encodeURIComponent(deactivateEffectiveDate)}`
+          : "";
+        const res = await fetch(`/api/v1/employees/${employeeId}/deactivation-impact${qs}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok && active) {
+          setDeactivateImpact(await res.json());
+        }
+      } catch {
+        if (active) setDeactivateImpact(null);
+      } finally {
+        if (active) setLoadingImpact(false);
+      }
+    };
+    loadImpact();
+    return () => {
+      active = false;
+    };
+  }, [deactivateModalOpen, deactivateEffectiveDate, token, employeeId]);
+
+  const handleChangeTallyId = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTallyModalError(null);
+    setSubmittingTally(true);
+    try {
+      const res = await fetch(`/api/v1/employees/${employeeId}/change-tally-id`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          new_tally_id: newTallyId.trim(),
+          reason: tallyReason.trim() || "Temp to permanent Tally ID update",
+          confirm_reuse: confirmReuse,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.detail?.message || data?.detail || "Failed to change Tally ID");
+      }
+      setTallyModalOpen(false);
+      setNewTallyId("");
+      setTallyReason("");
+      setConfirmReuse(false);
+      setStatusMessage(
+        `Tally ID updated to ${data.tally_id}. Employee login username has been updated automatically; please inform the worker to sign in with the new Tally ID on their next login.`
+      );
+      await fetchData();
+    } catch (err: any) {
+      setTallyModalError(err.message || "Failed to update Tally ID");
+    } finally {
+      setSubmittingTally(false);
+    }
+  };
+
+  const handleDeactivateEmployee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setDeactivateError(null);
+    setSubmittingDeactivate(true);
+    try {
+      const res = await fetch(`/api/v1/employees/${employeeId}/deactivate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          reason: deactivateReason.trim(),
+          effective_date: deactivateEffectiveDate || null,
+          confirmation_text: deactivateConfirmText.trim(),
+          admin_password: deactivatePassword,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.detail?.message || data?.detail || "Failed to deactivate employee");
+      }
+      setDeactivateModalOpen(false);
+      setDeactivateReason("");
+      setDeactivateConfirmText("");
+      setDeactivatePassword("");
+      setStatusMessage(data.message || "Employee deactivated cleanly.");
+      await fetchData();
+    } catch (err: any) {
+      setDeactivateError(err.message || "Deactivation failed");
+    } finally {
+      setSubmittingDeactivate(false);
+    }
+  };
+
+  const handleReactivateEmployee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setReactivateError(null);
+    setSubmittingReactivate(true);
+    try {
+      const res = await fetch(`/api/v1/employees/${employeeId}/reactivate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          reason: reactivateReason.trim(),
+          confirmation_text: reactivateConfirmText.trim(),
+          admin_password: reactivatePassword,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.detail?.message || data?.detail || "Failed to reactivate employee");
+      }
+      setReactivateModalOpen(false);
+      setReactivateReason("");
+      setReactivateConfirmText("");
+      setReactivatePassword("");
+      setStatusMessage(data.message || "Employee reactivated cleanly (Option A — no past shifts restored).");
+      await fetchData();
+    } catch (err: any) {
+      setReactivateError(err.message || "Reactivation failed");
+    } finally {
+      setSubmittingReactivate(false);
+    }
+  };
 
   const handleExportDsar = async () => {
     setExportingDsar(true);
@@ -399,14 +599,36 @@ export const EmployeeDetail: React.FC = () => {
             <ArrowLeft className="h-4 w-4" />
           </Link>
           <div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2.5">
               <h2 className="text-2xl font-bold tracking-tight text-slate-900">{employee.name}</h2>
               <span className="font-mono text-xs px-2 py-0.5 rounded bg-slate-100 font-semibold text-slate-700">
                 {employee.tally_id}
               </span>
+              {user?.role === "ADMIN" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewTallyId("");
+                    setTallyReason("");
+                    setTallyCheck(null);
+                    setConfirmReuse(false);
+                    setTallyModalError(null);
+                    setTallyModalOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold rounded border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition cursor-pointer"
+                  title="Update temporary or permanent Tally ID"
+                >
+                  <Pencil className="h-3 w-3" /> Change Tally ID
+                </button>
+              )}
               <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700">
                 {employee.role}
               </span>
+              {employee.is_active === false && (
+                <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-300">
+                  DEACTIVATED
+                </span>
+              )}
               <span
                 className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
                   employee.consent_status === "WITHDRAWN"
@@ -423,7 +645,7 @@ export const EmployeeDetail: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={handleExportDsar}
             disabled={exportingDsar}
@@ -443,6 +665,43 @@ export const EmployeeDetail: React.FC = () => {
             >
               <ShieldAlert className="h-3.5 w-3.5 text-rose-600" />
               {withdrawingConsent ? "Withdrawing..." : "Withdraw Consent"}
+            </button>
+          )}
+
+          {user?.role === "ADMIN" && employee.is_active !== false && employee.role !== "ADMIN" && (
+            <button
+              type="button"
+              onClick={() => {
+                setDeactivateEffectiveDate(new Date().toISOString().slice(0, 10));
+                setDeactivateReason("");
+                setDeactivateConfirmText("");
+                setDeactivatePassword("");
+                setDeactivateError(null);
+                setDeactivateModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 border border-rose-300 bg-rose-600 text-white rounded-lg text-xs font-semibold hover:bg-rose-700 transition shadow-xs cursor-pointer"
+              title="Deactivate employee, disable login, and cancel future shifts"
+            >
+              <PowerOff className="h-3.5 w-3.5" />
+              Deactivate
+            </button>
+          )}
+
+          {user?.role === "ADMIN" && employee.is_active === false && (
+            <button
+              type="button"
+              onClick={() => {
+                setReactivateReason("");
+                setReactivateConfirmText("");
+                setReactivatePassword("");
+                setReactivateError(null);
+                setReactivateModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 border border-emerald-300 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 transition shadow-xs cursor-pointer"
+              title="Reactivate employee cleanly without restoring cancelled shifts"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Reactivate
             </button>
           )}
         </div>
@@ -1147,6 +1406,424 @@ export const EmployeeDetail: React.FC = () => {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Change Tally ID Modal (Admin Only) */}
+      {tallyModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <Pencil className="h-4 w-4 text-indigo-600" />
+                  Change Tally ID
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Current Tally ID: <span className="font-mono font-bold text-slate-800">{employee.tally_id}</span>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTallyModalOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleChangeTallyId} className="p-6 space-y-4">
+              <div className="p-3 rounded-lg bg-indigo-50/70 border border-indigo-200 text-xs text-indigo-900 space-y-1">
+                <div className="font-semibold">How Tally ID changes work:</div>
+                <ul className="list-disc pl-4 space-y-0.5 text-[11px]">
+                  <li>All historical shifts, attendance, payroll, and GPS records remain linked automatically via internal UUID.</li>
+                  <li>The linked login username updates to the new Tally ID immediately; the employee will use it on their next login.</li>
+                  <li>The previous Tally ID is preserved in the Audit Trail only.</li>
+                </ul>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  New Tally ID <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newTallyId}
+                  onChange={(e) => {
+                    setNewTallyId(e.target.value);
+                    setConfirmReuse(false);
+                  }}
+                  placeholder="e.g. PERM-1042"
+                  className="w-full px-3 py-2 text-sm font-mono border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                {checkingTally && (
+                  <p className="text-[11px] text-slate-400 mt-1 flex items-center gap-1">
+                    <Loader2 className="h-3 w-3 animate-spin" /> Checking Tally ID history...
+                  </p>
+                )}
+              </div>
+
+              {tallyCheck && !tallyCheck.available && (
+                <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+                  <div>
+                    <strong>Already in use</strong> by {tallyCheck.in_use_by_name || "another employee"}. Choose a different Tally ID.
+                  </div>
+                </div>
+              )}
+
+              {tallyCheck && tallyCheck.available && tallyCheck.previously_used && (
+                <div className="p-3 rounded-lg bg-amber-50 border border-amber-300 text-xs text-amber-900 space-y-2">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <strong>Previously Used Tally ID Guardrail:</strong> This Tally ID was previously assigned to:
+                      <ul className="list-disc pl-4 mt-1 space-y-0.5 text-[11px]">
+                        {(tallyCheck.previous_uses || []).map((h: any, idx: number) => (
+                          <li key={idx}>
+                            <strong>{h.employee_name || h.employee_id}</strong> (changed to{" "}
+                            <span className="font-mono">{h.new_tally_id || "another ID"}</span>
+                            {h.changed_at ? ` on ${new Date(h.changed_at).toLocaleDateString()}` : ""})
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="text-[11px] mt-1">
+                        System data stays separated by UUID, but reusing a retired Tally ID may confuse external Tally/Excel exports.
+                      </p>
+                    </div>
+                  </div>
+                  <label className="flex items-center gap-2 pt-1 font-semibold cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={confirmReuse}
+                      onChange={(e) => setConfirmReuse(e.target.checked)}
+                      className="rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+                    />
+                    <span>I understand this Tally ID was previously used and confirm reuse</span>
+                  </label>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Reason for Change <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={tallyReason}
+                  onChange={(e) => setTallyReason(e.target.value)}
+                  placeholder="e.g. Probation completed — assigned permanent Tally ID"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              {tallyModalError && (
+                <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-800">
+                  {tallyModalError}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setTallyModalOpen(false)}
+                  className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={
+                    submittingTally ||
+                    !newTallyId.trim() ||
+                    !tallyReason.trim() ||
+                    (tallyCheck !== null && !tallyCheck.available) ||
+                    (Boolean(tallyCheck?.previously_used) && !confirmReuse)
+                  }
+                  className="px-4 py-2 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white flex items-center gap-1.5 cursor-pointer"
+                >
+                  {submittingTally && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  Update Tally ID
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Deactivate Employee Modal (Admin Only) */}
+      {deactivateModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
+          <div className="bg-white rounded-xl shadow-2xl border border-rose-200 w-full max-w-lg max-h-[92vh] flex flex-col overflow-hidden">
+            <div className="px-6 py-4 border-b border-rose-200 bg-rose-50 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-rose-900 flex items-center gap-2">
+                  <PowerOff className="h-5 w-5 text-rose-600" />
+                  Deactivate Employee
+                </h3>
+                <p className="text-xs text-rose-700 mt-0.5">
+                  {employee.name} ({employee.tally_id}) · {employee.role}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeactivateModalOpen(false)}
+                className="p-1.5 rounded-lg text-rose-400 hover:text-rose-700 hover:bg-rose-100 cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleDeactivateEmployee} className="flex-1 overflow-y-auto p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Effective Date (Optional — defaults to Today)
+                </label>
+                <input
+                  type="date"
+                  value={deactivateEffectiveDate}
+                  onChange={(e) => setDeactivateEffectiveDate(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
+                />
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Only schedules on or after this date will be cancelled and marked as <strong>Needs Cover</strong>. Past attendance and payroll stay untouched.
+                </p>
+              </div>
+
+              {/* Impact Preview */}
+              <div className="p-3.5 rounded-lg bg-amber-50 border border-amber-200 text-xs space-y-2">
+                <div className="font-bold text-amber-950 flex items-center justify-between">
+                  <span>Deactivation Impact Preview</span>
+                  {loadingImpact && <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-700" />}
+                </div>
+                {deactivateImpact ? (
+                  <ul className="space-y-1 text-[11px] text-amber-900">
+                    <li>
+                      • <strong>Login Access:</strong> Web &amp; mobile account (if linked) will be disabled immediately and all active sessions revoked.
+                    </li>
+                    <li>
+                      • <strong>Base Roster Slots:</strong> {deactivateImpact.base_roster_slots ?? 0} recurring slot(s) removed (future days flagged Needs Cover).
+                    </li>
+                    <li>
+                      • <strong>Scheduled Shifts (≥ {deactivateImpact.effective_date}):</strong> {deactivateImpact.future_active_shifts ?? 0} shift(s) cancelled &amp; flagged Needs Cover.
+                    </li>
+                    <li>
+                      • <strong>Standing Assignments:</strong> {deactivateImpact.active_standing_assignments ?? 0} active assignment(s) ended.
+                    </li>
+                    <li>
+                      • <strong>Pending Requests:</strong> {deactivateImpact.pending_leave_requests ?? 0} leave(s) and {deactivateImpact.pending_reassignment_requests ?? 0} reassignment(s) cancelled.
+                    </li>
+                    {(deactivateImpact.active_direct_reports ?? 0) > 0 && (
+                      <li className="text-rose-800 font-semibold">
+                        • Direct Reports: {deactivateImpact.active_direct_reports} employee(s) report to this manager — remember to reassign their supervisor.
+                      </li>
+                    )}
+                  </ul>
+                ) : (
+                  <p className="text-[11px] text-amber-700">Calculating impact...</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Reason for Deactivation <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={deactivateReason}
+                  onChange={(e) => setDeactivateReason(e.target.value)}
+                  placeholder="e.g. Resigned / Contract ended / Transferred"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Type <span className="font-mono font-bold text-rose-700">DEACTIVATE</span> to confirm <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={deactivateConfirmText}
+                    onChange={(e) => setDeactivateConfirmText(e.target.value)}
+                    placeholder="DEACTIVATE"
+                    className="w-full px-3 py-2 text-xs font-mono border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Admin Password <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showDeactivatePassword ? "text" : "password"}
+                      required
+                      value={deactivatePassword}
+                      onChange={(e) => setDeactivatePassword(e.target.value)}
+                      placeholder="Enter your password"
+                      className="w-full px-3 py-2 pr-9 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowDeactivatePassword((p) => !p)}
+                      className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      {showDeactivatePassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {deactivateError && (
+                <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-800">
+                  {deactivateError}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setDeactivateModalOpen(false)}
+                  className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={
+                    submittingDeactivate ||
+                    deactivateConfirmText.trim() !== "DEACTIVATE" ||
+                    !deactivateReason.trim() ||
+                    !deactivatePassword
+                  }
+                  className="px-4 py-2 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white flex items-center gap-1.5 cursor-pointer"
+                >
+                  {submittingDeactivate && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  Confirm Deactivation
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Reactivate Employee Modal (Option A — Clean, Admin Only) */}
+      {reactivateModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
+          <div className="bg-white rounded-xl shadow-2xl border border-emerald-200 w-full max-w-lg overflow-hidden">
+            <div className="px-6 py-4 border-b border-emerald-200 bg-emerald-50 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-emerald-900 flex items-center gap-2">
+                  <RotateCcw className="h-5 w-5 text-emerald-600" />
+                  Reactivate Employee (Clean)
+                </h3>
+                <p className="text-xs text-emerald-700 mt-0.5">
+                  {employee.name} ({employee.tally_id})
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReactivateModalOpen(false)}
+                className="p-1.5 rounded-lg text-emerald-500 hover:text-emerald-700 hover:bg-emerald-100 cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleReactivateEmployee} className="p-6 space-y-4">
+              <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 space-y-1">
+                <div className="font-bold">Clean Reactivation (Option A):</div>
+                <p className="text-[11px]">
+                  This restores the employee&apos;s active status, visibility across pages, and login access. <strong>No previously cancelled schedules or base roster slots are restored</strong>, preventing any double-booking with cover workers. Assign new shifts manually in the Base or Operational Planner.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Reason for Reactivation <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={reactivateReason}
+                  onChange={(e) => setReactivateReason(e.target.value)}
+                  placeholder="e.g. Rehired / Returned from extended absence"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Type <span className="font-mono font-bold text-emerald-700">REACTIVATE</span> <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={reactivateConfirmText}
+                    onChange={(e) => setReactivateConfirmText(e.target.value)}
+                    placeholder="REACTIVATE"
+                    className="w-full px-3 py-2 text-xs font-mono border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Admin Password <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showReactivatePassword ? "text" : "password"}
+                      required
+                      value={reactivatePassword}
+                      onChange={(e) => setReactivatePassword(e.target.value)}
+                      placeholder="Enter your password"
+                      className="w-full px-3 py-2 pr-9 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowReactivatePassword((p) => !p)}
+                      className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      {showReactivatePassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {reactivateError && (
+                <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-800">
+                  {reactivateError}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setReactivateModalOpen(false)}
+                  className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={
+                    submittingReactivate ||
+                    reactivateConfirmText.trim() !== "REACTIVATE" ||
+                    !reactivateReason.trim() ||
+                    !reactivatePassword
+                  }
+                  className="px-4 py-2 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white flex items-center gap-1.5 cursor-pointer"
+                >
+                  {submittingReactivate && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  Confirm Reactivation
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

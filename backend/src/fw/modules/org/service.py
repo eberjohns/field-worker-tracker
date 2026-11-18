@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.core.errors import AppError
 from fw.core.events import EmployeeProfileChanged, event_bus
-from fw.modules.audit import AuditService
+from fw.modules.audit import AuditLog, AuditService
 from fw.modules.identity import User, hash_password
 from fw.modules.org.models import (
     Accommodation,
@@ -35,6 +35,9 @@ from fw.modules.org.schemas import (
     HierarchyTreeNode,
     ReportingLineCreate,
     ReportingLineRead,
+    TallyIdChangeRequest,
+    TallyIdCheckResponse,
+    TallyIdPreviousUse,
     ZoneCreate,
     ZoneUpdate,
 )
@@ -150,6 +153,160 @@ class OrgService:
         return employee
 
     @staticmethod
+    async def check_tally_id(
+        session: AsyncSession,
+        tally_id: str,
+        exclude_employee_id: UUID | None = None,
+    ) -> TallyIdCheckResponse:
+        """Check whether a tally_id is available and whether it was ever previously used."""
+        clean_id = tally_id.strip()
+        emp_stmt = select(Employee).where(Employee.tally_id == clean_id)
+        if exclude_employee_id is not None:
+            emp_stmt = emp_stmt.where(Employee.id != exclude_employee_id)
+        existing_emp = (await session.execute(emp_stmt)).scalar_one_or_none()
+
+        user_stmt = select(User).where(User.username == clean_id)
+        if exclude_employee_id is not None:
+            user_stmt = user_stmt.where(
+                or_(User.employee_id.is_(None), User.employee_id != exclude_employee_id)
+            )
+        existing_user = (await session.execute(user_stmt)).scalar_one_or_none()
+
+        available = existing_emp is None and existing_user is None
+
+        # Check historical CHANGE_TALLY_ID audit logs for previous usage of this tally_id
+        audit_stmt = (
+            select(AuditLog)
+            .where(AuditLog.action == "CHANGE_TALLY_ID")
+            .order_by(AuditLog.created_at.desc())
+        )
+        audit_rows = (await session.execute(audit_stmt)).scalars().all()
+        previous_uses: list[TallyIdPreviousUse] = []
+        for log in audit_rows:
+            d = log.diff or {}
+            if str(d.get("old_tally_id", "")).strip() == clean_id:
+                previous_uses.append(
+                    TallyIdPreviousUse(
+                        employee_id=str(log.entity_id),
+                        employee_name=d.get("employee_name"),
+                        new_tally_id=d.get("new_tally_id"),
+                        changed_at=log.created_at,
+                    )
+                )
+
+        return TallyIdCheckResponse(
+            tally_id=clean_id,
+            available=available,
+            in_use_by_employee_id=existing_emp.id if existing_emp else None,
+            in_use_by_name=existing_emp.name if existing_emp else None,
+            previously_used=len(previous_uses) > 0,
+            previous_uses=previous_uses,
+        )
+
+    @staticmethod
+    async def change_tally_id(
+        session: AsyncSession,
+        employee_id: UUID,
+        request: TallyIdChangeRequest,
+        actor_user_id: UUID,
+        actor_role: str,
+    ) -> Employee:
+        """Admin changes an employee's tally_id (e.g. temporary -> permanent) and linked login username."""
+        new_id = request.new_tally_id.strip()
+        if not new_id:
+            raise AppError(
+                code="VALIDATION_ERROR",
+                message="New Tally ID cannot be empty.",
+                status_code=400,
+            )
+        if not request.reason or not request.reason.strip():
+            raise AppError(
+                code="REASON_REQUIRED",
+                message="A reason for changing the Tally ID is required.",
+                status_code=400,
+            )
+
+        employee = await session.get(Employee, employee_id)
+        if not employee:
+            raise AppError(code="NOT_FOUND", message="Employee not found.", status_code=404)
+        if employee.role == "ADMIN" or employee.tally_id == "ADMIN001":
+            raise AppError(
+                code="FORBIDDEN",
+                message="System admin account Tally ID cannot be changed.",
+                status_code=400,
+            )
+        if employee.tally_id == new_id:
+            raise AppError(
+                code="VALIDATION_ERROR",
+                message="New Tally ID is identical to the current Tally ID.",
+                status_code=400,
+            )
+
+        check = await OrgService.check_tally_id(session, new_id, exclude_employee_id=employee.id)
+        if not check.available:
+            raise AppError(
+                code="DUPLICATE_TALLY_ID",
+                message=f"Tally ID '{new_id}' is already assigned to another account.",
+                status_code=409,
+            )
+        if check.previously_used and not request.confirm_reuse:
+            prev = check.previous_uses[0]
+            raise AppError(
+                code="TALLY_ID_PREVIOUSLY_USED",
+                message=(
+                    f"Tally ID '{new_id}' was previously assigned to "
+                    f"{prev.employee_name or prev.employee_id} (changed to {prev.new_tally_id}). "
+                    "Confirm reuse explicitly to proceed."
+                ),
+                status_code=409,
+            )
+
+        old_id = employee.tally_id
+        employee.tally_id = new_id
+        employee.version += 1
+
+        # Update linked User.username atomically (active JWT sessions remain valid by UUID)
+        user_stmt = select(User).where(
+            or_(User.employee_id == employee.id, User.username == old_id)
+        )
+        linked_user = (await session.execute(user_stmt)).scalars().first()
+        if linked_user:
+            linked_user.username = new_id
+
+        await session.flush()
+
+        await AuditService.log_action(
+            session=session,
+            action="CHANGE_TALLY_ID",
+            entity_type="employee",
+            entity_id=str(employee.id),
+            diff={
+                "old_tally_id": old_id,
+                "new_tally_id": new_id,
+                "employee_name": employee.name,
+                "reused_historical_id": check.previously_used,
+            },
+            actor_user_id=actor_user_id,
+            actor_role=actor_role,
+            reason=request.reason.strip(),
+        )
+        await event_bus.publish(EmployeeProfileChanged(employee_id=employee.id), session=session)
+        return employee
+
+    @staticmethod
+    async def count_active_direct_reports(session: AsyncSession, manager_id: UUID) -> int:
+        """Count distinct active employees who report directly to manager_id."""
+        stmt = (
+            select(func.count(func.distinct(EmployeeReportingLine.employee_id)))
+            .join(Employee, Employee.id == EmployeeReportingLine.employee_id)
+            .where(
+                EmployeeReportingLine.manager_id == manager_id,
+                Employee.is_active.is_(True),
+            )
+        )
+        return int((await session.execute(stmt)).scalar_one() or 0)
+
+    @staticmethod
     async def create_employee(
         session: AsyncSession,
         data: EmployeeCreate,
@@ -157,17 +314,28 @@ class OrgService:
         actor_user_id: UUID,
         actor_role: str,
     ) -> Employee:
-        # Check uniqueness of tally_id
-        existing = await session.execute(select(Employee).where(Employee.tally_id == data.tally_id))
-        if existing.scalar_one_or_none():
+        clean_tally = data.tally_id.strip()
+        check = await OrgService.check_tally_id(session, clean_tally)
+        if not check.available:
             raise AppError(
                 code="DUPLICATE_TALLY_ID",
-                message=f"Employee with ID '{data.tally_id}' already exists.",
+                message=f"Employee with ID '{clean_tally}' already exists.",
+                status_code=409,
+            )
+        if check.previously_used and not data.confirm_reuse:
+            prev = check.previous_uses[0]
+            raise AppError(
+                code="TALLY_ID_PREVIOUSLY_USED",
+                message=(
+                    f"Tally ID '{clean_tally}' was previously assigned to "
+                    f"{prev.employee_name or prev.employee_id} (changed to {prev.new_tally_id}). "
+                    "Confirm reuse explicitly to create an employee with this ID."
+                ),
                 status_code=409,
             )
 
         employee = Employee(
-            tally_id=data.tally_id,
+            tally_id=clean_tally,
             name=data.name,
             phone=data.phone,
             email=data.email,
@@ -668,13 +836,17 @@ class OrgService:
         return zone
 
     @staticmethod
-    async def list_accommodations(session: AsyncSession) -> list[tuple[Accommodation, str | None]]:
-        result = await session.execute(
-            select(
-                Accommodation,
-                func.ST_AsGeoJSON(Accommodation.boundary).label("geojson_str"),
-            ).order_by(Accommodation.name.asc())
+    async def list_accommodations(
+        session: AsyncSession,
+        is_active: bool | None = True,
+    ) -> list[tuple[Accommodation, str | None]]:
+        stmt = select(
+            Accommodation,
+            func.ST_AsGeoJSON(Accommodation.boundary).label("geojson_str"),
         )
+        if is_active is not None:
+            stmt = stmt.where(Accommodation.is_active.is_(is_active))
+        result = await session.execute(stmt.order_by(Accommodation.name.asc()))
         return list(result.all())
 
     @staticmethod

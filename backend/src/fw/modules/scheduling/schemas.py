@@ -93,6 +93,7 @@ class ScheduledWorkRead(BaseModel):
     sequence: int
     status: str
     source: str
+    is_weekly_off_cover: bool = False
     version: int
     created_at: datetime
 
@@ -481,6 +482,7 @@ class LeaveRequestCreate(BaseModel):
     """Payload to record a leave request."""
 
     employee_id: UUID
+    cover_employee_id: UUID | None = None
     leave_type: str = Field(..., description="ANNUAL | SICK | UNPAID | EMERGENCY | OTHER")
     from_date: date
     to_date: date
@@ -489,6 +491,22 @@ class LeaveRequestCreate(BaseModel):
         default=False,
         description="Whether to bypass the 3-day notice rule (Admin confirmation only).",
     )
+
+
+class LeaveBulkCoverRequest(BaseModel):
+    """Assign one cover worker to all uncovered TO_BE_COVERED slots of an approved leave."""
+
+    cover_employee_id: UUID
+
+
+class LeaveBulkCoverResponse(BaseModel):
+    """Result of bulk-covering all uncovered slots for an approved leave."""
+
+    leave_id: UUID
+    cover_employee_id: UUID
+    cover_employee_name: str | None = None
+    covered_count: int
+    weekly_off_cover_dates: list[date] = Field(default_factory=list)
 
 
 class LeaveRequestResponse(BaseModel):
@@ -500,6 +518,12 @@ class LeaveRequestResponse(BaseModel):
     employee_id: UUID
     employee_name: str | None = None
     tally_id: str | None = None
+    employee_weekly_off_day: str | None = None
+    cover_employee_id: UUID | None = None
+    cover_employee_name: str | None = None
+    cover_employee_tally_id: str | None = None
+    cover_weekly_off_day: str | None = None
+    weekly_off_mismatch: bool = False
     leave_type: str
     from_date: date
     to_date: date
@@ -599,12 +623,41 @@ class ReassignmentPreviewResponse(BaseModel):
     can_submit: bool
 
 
+class ReassignmentBatchItemCreate(BaseModel):
+    """One proposed reassignment line inside a Supervisor draft batch."""
+
+    reassignment_type: str = Field(..., description="REPLACE | MOVE | ADD | CANCEL")
+    date_from: date
+    date_to: date
+    original_employee_id: UUID | None = None
+    new_employee_id: UUID | None = None
+    original_scheduled_work_id: UUID | None = None
+    standing_assignment_id: UUID | None = None
+    target_job_item_id: UUID | None = None
+    hours_per_day: Decimal | None = None
+    reason_category: str | None = None
+    reason: str | None = None
+
+
+class ReassignmentBatchCreate(BaseModel):
+    """Payload to submit multiple temporary reassignment items together as one approval batch."""
+
+    reason_category: str = Field(
+        default="CAPACITY", description="LEAVE_COVER | CAPACITY | WEATHER | PRIORITY | OTHER"
+    )
+    reason: str | None = None
+    batch_note: str | None = None
+    items: list[ReassignmentBatchItemCreate] = Field(..., min_length=1)
+
+
 class ReassignmentResponse(BaseModel):
     """API representation of a reassignment request."""
 
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
+    batch_id: UUID | None = None
+    batch_note: str | None = None
     reassignment_type: str
     date_from: date
     date_to: date
@@ -640,9 +693,17 @@ class ReassignmentResponse(BaseModel):
 
 
 class ReassignmentDecisionRequest(BaseModel):
-    """Payload to approve or reject a reassignment request."""
+    """Payload to approve or reject a reassignment request or batch."""
 
     decision_note: str | None = None
+
+
+class ReassignmentBatchResponse(BaseModel):
+    """Response for creating or deciding a reassignment batch."""
+
+    batch_id: UUID
+    count: int
+    items: list[ReassignmentResponse] = Field(default_factory=list)
 
 
 # -------------------------------------------------------------------------
@@ -681,6 +742,7 @@ class StaffingGapSlot(BaseModel):
     original_employee_name: str
     reason: str
     gap_type: str = "LEAVE"
+    leave_id: UUID | None = None
     days_to_go: int
 
 

@@ -11,6 +11,7 @@ import {
   AlertCircle,
   Calendar,
   Users,
+  Layers,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { formatMinutes, formatSignedMinutes, formatDate } from "../features/attendance/formatters";
@@ -20,6 +21,12 @@ interface LeaveRequestItem {
   employee_id: string;
   employee_name: string;
   tally_id: string;
+  employee_weekly_off_day?: string | null;
+  cover_employee_id?: string | null;
+  cover_employee_name?: string | null;
+  cover_employee_tally_id?: string | null;
+  cover_weekly_off_day?: string | null;
+  weekly_off_mismatch?: boolean;
   leave_type: string;
   from_date: string;
   to_date: string;
@@ -36,6 +43,8 @@ interface LeaveRequestItem {
 
 interface ReassignmentItem {
   id: string;
+  batch_id?: string | null;
+  batch_note?: string | null;
   reassignment_type: string;
   date_from: string;
   date_to: string;
@@ -72,7 +81,8 @@ interface AttendanceInboxRow {
 }
 
 interface ApprovalsCounts {
-  leaves: number;
+  leave?: number;
+  leaves?: number;
   reassignments: number;
   attendance: number;
   total: number;
@@ -80,8 +90,10 @@ interface ApprovalsCounts {
 
 export const Approvals: React.FC = () => {
   const { token, user } = useAuth();
+  const canApprove =
+    user?.role === "ADMIN" || user?.role === "ENGINEER" || user?.role === "SUPERINTENDENT";
   const [activeTab, setActiveTab] = useState<"leave" | "reassignments" | "attendance">("leave");
-  const [counts, setCounts] = useState<ApprovalsCounts>({ leaves: 0, reassignments: 0, attendance: 0, total: 0 });
+  const [counts, setCounts] = useState<ApprovalsCounts>({ leave: 0, leaves: 0, reassignments: 0, attendance: 0, total: 0 });
   const [leaves, setLeaves] = useState<LeaveRequestItem[]>([]);
   const [reassignments, setReassignments] = useState<ReassignmentItem[]>([]);
   const [attendanceRows, setAttendanceRows] = useState<AttendanceInboxRow[]>([]);
@@ -91,7 +103,7 @@ export const Approvals: React.FC = () => {
   // Decision Modal State
   const [decisionModal, setDecisionModal] = useState<{
     open: boolean;
-    type: "LEAVE" | "REASSIGNMENT" | "ATTENDANCE";
+    type: "LEAVE" | "REASSIGNMENT" | "REASSIGNMENT_BATCH" | "ATTENDANCE";
     action: "APPROVE" | "REJECT";
     item: any | null;
     note: string;
@@ -131,7 +143,11 @@ export const Approvals: React.FC = () => {
     fetchInbox();
   }, [token, statusFilter]);
 
-  const handleOpenDecision = (type: "LEAVE" | "REASSIGNMENT" | "ATTENDANCE", action: "APPROVE" | "REJECT", item: any) => {
+  const handleOpenDecision = (
+    type: "LEAVE" | "REASSIGNMENT" | "REASSIGNMENT_BATCH" | "ATTENDANCE",
+    action: "APPROVE" | "REJECT",
+    item: any
+  ) => {
     setDecisionModal({
       open: true,
       type,
@@ -166,6 +182,10 @@ export const Approvals: React.FC = () => {
       } else if (decisionModal.type === "REASSIGNMENT") {
         const actionPath = decisionModal.action === "APPROVE" ? "approve" : "reject";
         url = `/api/v1/reassignment-requests/${decisionModal.item.id}/${actionPath}`;
+        body = { decision_note: decisionModal.note.trim() };
+      } else if (decisionModal.type === "REASSIGNMENT_BATCH") {
+        const actionPath = decisionModal.action === "APPROVE" ? "approve" : "reject";
+        url = `/api/v1/reassignment-batches/${decisionModal.item.batch_id}/${actionPath}`;
         body = { decision_note: decisionModal.note.trim() };
       } else if (decisionModal.type === "ATTENDANCE") {
         url = `/api/v1/attendance/${decisionModal.item.id}/decisions`;
@@ -264,9 +284,9 @@ export const Approvals: React.FC = () => {
         >
           <Calendar className="h-4 w-4" />
           Leave Requests
-          {counts.leaves > 0 && (
+          {(counts.leave ?? counts.leaves ?? 0) > 0 && (
             <span className="bg-amber-100 text-amber-800 text-xs font-bold px-2 py-0.5 rounded-full">
-              {counts.leaves}
+              {counts.leave ?? counts.leaves}
             </span>
           )}
         </button>
@@ -341,7 +361,22 @@ export const Approvals: React.FC = () => {
                       <tr key={l.id} className="hover:bg-slate-50/80 transition">
                         <td className="py-3.5 px-4">
                           <div className="font-medium text-slate-900">{l.employee_name}</div>
-                          <div className="text-xs text-slate-400">Tally ID: {l.tally_id}</div>
+                          <div className="text-xs text-slate-400">
+                            Tally ID: {l.tally_id}
+                            {l.employee_weekly_off_day ? ` · Off: ${l.employee_weekly_off_day}` : ""}
+                          </div>
+                          {l.cover_employee_name && (
+                            <div className="mt-1 flex flex-wrap items-center gap-1">
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                Auto-Cover: {l.cover_employee_name} ({l.cover_employee_tally_id})
+                              </span>
+                              {l.weekly_off_mismatch && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                                  Off-Day Mismatch
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </td>
                         <td className="py-3.5 px-4">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
@@ -377,7 +412,7 @@ export const Approvals: React.FC = () => {
                           </span>
                         </td>
                         <td className="py-3.5 px-4 text-right">
-                          {isPending && (user?.role === "ADMIN" || user?.role === "ENGINEER") ? (
+                          {isPending && canApprove ? (
                             <div className="flex items-center justify-end gap-2">
                               <button
                                 onClick={() => handleOpenDecision("LEAVE", "APPROVE", l)}
@@ -422,154 +457,254 @@ export const Approvals: React.FC = () => {
 
       {/* Tab Content: Reassignment Requests */}
       {activeTab === "reassignments" && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+        <div className="space-y-4">
           {loading ? (
-            <div className="p-8 text-center text-slate-500 flex items-center justify-center gap-2">
+            <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-8 text-center text-slate-500 flex items-center justify-center gap-2">
               <RefreshCw className="h-5 w-5 animate-spin" />
               Loading reassignment requests...
             </div>
           ) : reassignments.length === 0 ? (
-            <div className="p-12 text-center text-slate-400 space-y-2">
+            <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-12 text-center text-slate-400 space-y-2">
               <CheckCircle2 className="h-10 w-10 text-emerald-500 mx-auto" />
               <div className="text-base font-semibold text-slate-700">No reassignments to review</div>
               <p className="text-xs text-slate-400">All temporary coverage requests have been decided.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
-                <thead className="bg-slate-50 text-xs font-semibold text-slate-600 uppercase">
-                  <tr>
-                    <th className="py-3 px-4">Type</th>
-                    <th className="py-3 px-4">Workers</th>
-                    <th className="py-3 px-4">Target Job / Site</th>
-                    <th className="py-3 px-4">Dates</th>
-                    <th className="py-3 px-4">Requested By</th>
-                    <th className="py-3 px-4">Reason</th>
-                    <th className="py-3 px-4">Notice Status</th>
-                    <th className="py-3 px-4">Status</th>
-                    <th className="py-3 px-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {reassignments.map((r) => {
-                    const isPending = r.status === "PENDING";
-                    return (
-                      <tr key={r.id} className="hover:bg-slate-50/80 transition">
-                        <td className="py-3.5 px-4">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${
-                            r.reassignment_type === "REPLACE" ? "bg-indigo-50 text-indigo-700 border border-indigo-200" :
-                            r.reassignment_type === "ADD" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" :
-                            r.reassignment_type === "MOVE" ? "bg-purple-50 text-purple-700 border border-purple-200" :
-                            "bg-rose-50 text-rose-700 border border-rose-200"
-                          }`}>
-                            {r.reassignment_type}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-4">
-                          {r.reassignment_type === "REPLACE" && (
-                            <div className="flex items-center gap-1.5 text-xs">
-                              <span className="font-medium text-slate-800">{r.original_employee_name}</span>
-                              <ArrowRight className="h-3 w-3 text-slate-400" />
-                              <span className="font-bold text-emerald-700">{r.new_employee_name}</span>
-                            </div>
-                          )}
-                          {r.reassignment_type === "ADD" && (
-                            <div className="font-bold text-emerald-700 text-xs">{r.new_employee_name}</div>
-                          )}
-                          {r.reassignment_type === "MOVE" && (
-                            <div className="font-medium text-slate-800 text-xs">{r.original_employee_name}</div>
-                          )}
-                          {r.reassignment_type === "CANCEL" && (
-                            <div className="font-medium text-rose-800 text-xs">{r.original_employee_name}</div>
-                          )}
-                        </td>
-                        <td className="py-3.5 px-4">
-                          <div className="font-medium text-slate-800 text-xs">{r.target_job_name || "—"}</div>
-                          <div className="text-2xs text-slate-400">{r.target_job_number}</div>
-                        </td>
-                        <td className="py-3.5 px-4 text-xs font-medium text-slate-800">
-                          {r.date_from === r.date_to ? r.date_from : `${r.date_from} to ${r.date_to}`}
-                        </td>
-                        <td className="py-3.5 px-4 text-xs text-slate-500">
-                          <div className="font-medium text-slate-800">{r.requested_by_name || "Supervisor"}</div>
-                          <div className="text-2xs text-slate-400">
-                            {new Date(r.created_at || r.requested_at || Date.now()).toLocaleDateString()}
-                          </div>
-                        </td>
-                        <td className="py-3.5 px-4 text-xs text-slate-600 max-w-xs truncate" title={r.reason}>
-                          <span className="font-medium text-slate-700">[{r.reason_category}]</span> {r.reason}
-                        </td>
-                        <td className="py-3.5 px-4">
-                          {r.is_late_approval ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-2xs font-semibold bg-amber-100 text-amber-800 border border-amber-300">
-                              <AlertTriangle className="h-3 w-3 text-amber-600" />
-                              LATE_APPROVAL
-                            </span>
-                          ) : (
-                            <span className="text-2xs text-emerald-600 font-medium">Standard Notice</span>
-                          )}
-                        </td>
-                        <td className="py-3.5 px-4">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
-                            r.status === "PENDING" ? "bg-amber-100 text-amber-800" :
-                            r.status === "APPROVED" ? "bg-emerald-100 text-emerald-800" :
-                            r.status === "REJECTED" ? "bg-rose-100 text-rose-800" :
-                            r.status === "EXPIRED" ? "bg-slate-200 text-slate-700" :
-                            "bg-slate-100 text-slate-600"
-                          }`}>
-                            {r.status}
-                          </span>
-                          {r.decided_by_name && (
-                            <div className="text-2xs text-slate-500 pt-0.5">
-                              by {r.decided_by_name}
-                              {r.decision_note && <div className="text-slate-400 italic">"{r.decision_note}"</div>}
-                            </div>
-                          )}
-                        </td>
-                        <td className="py-3.5 px-4 text-right">
-                          {isPending && (user?.role === "ADMIN" || user?.role === "ENGINEER") ? (
-                            <div className="flex items-center justify-end gap-2">
-                              <button
-                                onClick={() => handleOpenDecision("REASSIGNMENT", "APPROVE", r)}
-                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-xs font-medium transition shadow-2xs cursor-pointer"
-                              >
-                                Approve
-                              </button>
-                              <button
-                                onClick={() => handleOpenDecision("REASSIGNMENT", "REJECT", r)}
-                                className="px-3 py-1 bg-white hover:bg-rose-50 text-rose-700 border border-rose-300 rounded-md text-xs font-medium transition cursor-pointer"
-                              >
-                                Reject
-                              </button>
-                            </div>
-                          ) : r.status === "APPROVED" ? (
-                            <div className="flex items-center justify-end">
-                              <Link
-                                to="/operational-planner"
-                                search={{
-                                  date: r.date_from,
-                                  job_item_id: r.target_job_item_id || undefined,
-                                  lens: "COVERAGE",
-                                }}
-                                className="px-2.5 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-md transition flex items-center gap-1 shadow-2xs"
-                                title="Open Operational Planner to view this reassignment"
-                              >
-                                <Users className="h-3 w-3" />
-                                View in Planner
-                              </Link>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-slate-400">
-                              {r.decided_by_name ? `Decided by ${r.decided_by_name}` : "—"}
-                            </span>
-                          )}
-                        </td>
+            (() => {
+              const batchGroups = new Map<string, ReassignmentItem[]>();
+              const standalone: ReassignmentItem[] = [];
+              for (const r of reassignments) {
+                if (r.batch_id) {
+                  const arr = batchGroups.get(r.batch_id) || [];
+                  arr.push(r);
+                  batchGroups.set(r.batch_id, arr);
+                } else {
+                  standalone.push(r);
+                }
+              }
+
+              const renderRowsTable = (rows: ReassignmentItem[]) => (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
+                    <thead className="bg-slate-50 text-xs font-semibold text-slate-600 uppercase">
+                      <tr>
+                        <th className="py-3 px-4">Type</th>
+                        <th className="py-3 px-4">Workers</th>
+                        <th className="py-3 px-4">Target Job / Site</th>
+                        <th className="py-3 px-4">Dates</th>
+                        <th className="py-3 px-4">Requested By</th>
+                        <th className="py-3 px-4">Reason</th>
+                        <th className="py-3 px-4">Notice Status</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4 text-right">Actions</th>
                       </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {rows.map((r) => {
+                        const isPending = r.status === "PENDING";
+                        return (
+                          <tr key={r.id} className="hover:bg-slate-50/80 transition">
+                            <td className="py-3.5 px-4">
+                              <span
+                                className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${
+                                  r.reassignment_type === "REPLACE"
+                                    ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
+                                    : r.reassignment_type === "ADD"
+                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                    : r.reassignment_type === "MOVE"
+                                    ? "bg-purple-50 text-purple-700 border border-purple-200"
+                                    : "bg-rose-50 text-rose-700 border border-rose-200"
+                                }`}
+                              >
+                                {r.reassignment_type}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              {r.reassignment_type === "REPLACE" && (
+                                <div className="flex items-center gap-1.5 text-xs">
+                                  <span className="font-medium text-slate-800">{r.original_employee_name}</span>
+                                  <ArrowRight className="h-3 w-3 text-slate-400" />
+                                  <span className="font-bold text-emerald-700">{r.new_employee_name}</span>
+                                </div>
+                              )}
+                              {r.reassignment_type === "ADD" && (
+                                <div className="font-bold text-emerald-700 text-xs">{r.new_employee_name}</div>
+                              )}
+                              {r.reassignment_type === "MOVE" && (
+                                <div className="font-medium text-slate-800 text-xs">{r.original_employee_name}</div>
+                              )}
+                              {r.reassignment_type === "CANCEL" && (
+                                <div className="font-medium text-rose-800 text-xs">{r.original_employee_name}</div>
+                              )}
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <div className="font-medium text-slate-800 text-xs">{r.target_job_name || "—"}</div>
+                              <div className="text-2xs text-slate-400">{r.target_job_number}</div>
+                            </td>
+                            <td className="py-3.5 px-4 text-xs font-medium text-slate-800">
+                              {r.date_from === r.date_to ? r.date_from : `${r.date_from} to ${r.date_to}`}
+                            </td>
+                            <td className="py-3.5 px-4 text-xs text-slate-500">
+                              <div className="font-medium text-slate-800">{r.requested_by_name || "Supervisor"}</div>
+                              <div className="text-2xs text-slate-400">
+                                {new Date(r.created_at || r.requested_at || Date.now()).toLocaleDateString()}
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-4 text-xs text-slate-600 max-w-xs truncate" title={r.reason}>
+                              <span className="font-medium text-slate-700">[{r.reason_category}]</span> {r.reason}
+                            </td>
+                            <td className="py-3.5 px-4">
+                              {r.is_late_approval ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-2xs font-semibold bg-amber-100 text-amber-800 border border-amber-300">
+                                  <AlertTriangle className="h-3 w-3 text-amber-600" />
+                                  LATE_APPROVAL
+                                </span>
+                              ) : (
+                                <span className="text-2xs text-emerald-600 font-medium">Standard Notice</span>
+                              )}
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <span
+                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
+                                  r.status === "PENDING"
+                                    ? "bg-amber-100 text-amber-800"
+                                    : r.status === "APPROVED"
+                                    ? "bg-emerald-100 text-emerald-800"
+                                    : r.status === "REJECTED"
+                                    ? "bg-rose-100 text-rose-800"
+                                    : r.status === "EXPIRED"
+                                    ? "bg-slate-200 text-slate-700"
+                                    : "bg-slate-100 text-slate-600"
+                                }`}
+                              >
+                                {r.status}
+                              </span>
+                              {r.decided_by_name && (
+                                <div className="text-2xs text-slate-500 pt-0.5">
+                                  by {r.decided_by_name}
+                                  {r.decision_note && <div className="text-slate-400 italic">"{r.decision_note}"</div>}
+                                </div>
+                              )}
+                            </td>
+                            <td className="py-3.5 px-4 text-right">
+                              {isPending && canApprove ? (
+                                <div className="flex items-center justify-end gap-2">
+                                  <button
+                                    onClick={() => handleOpenDecision("REASSIGNMENT", "APPROVE", r)}
+                                    className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-xs font-medium transition shadow-2xs cursor-pointer"
+                                  >
+                                    Approve
+                                  </button>
+                                  <button
+                                    onClick={() => handleOpenDecision("REASSIGNMENT", "REJECT", r)}
+                                    className="px-3 py-1 bg-white hover:bg-rose-50 text-rose-700 border border-rose-300 rounded-md text-xs font-medium transition cursor-pointer"
+                                  >
+                                    Reject
+                                  </button>
+                                </div>
+                              ) : r.status === "APPROVED" ? (
+                                <div className="flex items-center justify-end">
+                                  <Link
+                                    to="/operational-planner"
+                                    search={{
+                                      date: r.date_from,
+                                      job_item_id: r.target_job_item_id || undefined,
+                                      lens: "COVERAGE",
+                                    }}
+                                    className="px-2.5 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-md transition flex items-center gap-1 shadow-2xs"
+                                    title="Open Operational Planner to view this reassignment"
+                                  >
+                                    <Users className="h-3 w-3" />
+                                    View in Planner
+                                  </Link>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-slate-400">
+                                  {r.decided_by_name ? `Decided by ${r.decided_by_name}` : "—"}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              );
+
+              return (
+                <>
+                  {Array.from(batchGroups.entries()).map(([batchId, items]) => {
+                    const pendingCount = items.filter((i) => i.status === "PENDING").length;
+                    const first = items[0];
+                    return (
+                      <div
+                        key={batchId}
+                        className="bg-white rounded-xl border-2 border-indigo-200 shadow-xs overflow-hidden"
+                      >
+                        <div className="bg-indigo-50/70 px-4 py-3 border-b border-indigo-200 flex flex-wrap items-center justify-between gap-3">
+                          <div className="flex items-center gap-2.5">
+                            <Layers className="h-4 w-4 text-indigo-600 shrink-0" />
+                            <div>
+                              <div className="text-sm font-bold text-indigo-950 flex items-center gap-2">
+                                Supervisor Draft Batch ({items.length}{" "}
+                                {items.length === 1 ? "change" : "changes"})
+                                <span className="text-[11px] font-mono font-normal text-indigo-600">
+                                  #{batchId.slice(0, 8)}
+                                </span>
+                              </div>
+                              <div className="text-xs text-indigo-800/80">
+                                Requested by <strong>{first.requested_by_name || "Supervisor"}</strong> ·{" "}
+                                {first.batch_note || first.reason}
+                              </div>
+                            </div>
+                          </div>
+                          {pendingCount > 0 && canApprove && (
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleOpenDecision("REASSIGNMENT_BATCH", "APPROVE", {
+                                    batch_id: batchId,
+                                    count: pendingCount,
+                                    reason: first.batch_note || first.reason,
+                                    requested_by_name: first.requested_by_name,
+                                  })
+                                }
+                                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-xs font-semibold shadow-2xs transition cursor-pointer"
+                              >
+                                Approve All ({pendingCount})
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleOpenDecision("REASSIGNMENT_BATCH", "REJECT", {
+                                    batch_id: batchId,
+                                    count: pendingCount,
+                                    reason: first.batch_note || first.reason,
+                                    requested_by_name: first.requested_by_name,
+                                  })
+                                }
+                                className="px-3.5 py-1.5 bg-white hover:bg-rose-50 text-rose-700 border border-rose-300 rounded-md text-xs font-semibold transition cursor-pointer"
+                              >
+                                Reject All ({pendingCount})
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        {renderRowsTable(items)}
+                      </div>
                     );
                   })}
-                </tbody>
-              </table>
-            </div>
+
+                  {standalone.length > 0 && (
+                    <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+                      {renderRowsTable(standalone)}
+                    </div>
+                  )}
+                </>
+              );
+            })()
           )}
         </div>
       )}
@@ -697,18 +832,26 @@ export const Approvals: React.FC = () => {
                 <span className="font-semibold text-slate-700">Request:</span>{" "}
                 {decisionModal.type === "LEAVE"
                   ? `${decisionModal.item.employee_name} (${decisionModal.item.leave_type} Leave)`
+                  : decisionModal.type === "REASSIGNMENT_BATCH"
+                  ? `Supervisor Draft Batch (${decisionModal.item.count} pending item(s))`
+                  : decisionModal.type === "ATTENDANCE"
+                  ? `${decisionModal.item.employee_name} — Attendance Exception (${decisionModal.item.work_date})`
                   : `${decisionModal.item.reassignment_type} Cover for ${decisionModal.item.target_job_name || "Shift"}`}
               </div>
-              <div>
-                <span className="font-semibold text-slate-700">Dates:</span>{" "}
-                {decisionModal.type === "LEAVE"
-                  ? `${decisionModal.item.from_date} to ${decisionModal.item.to_date}`
-                  : `${decisionModal.item.date_from} to ${decisionModal.item.date_to}`}
-              </div>
-              <div>
-                <span className="font-semibold text-slate-700">Reason:</span>{" "}
-                {decisionModal.item.reason}
-              </div>
+              {decisionModal.type !== "REASSIGNMENT_BATCH" && decisionModal.type !== "ATTENDANCE" && (
+                <div>
+                  <span className="font-semibold text-slate-700">Dates:</span>{" "}
+                  {decisionModal.type === "LEAVE"
+                    ? `${decisionModal.item.from_date} to ${decisionModal.item.to_date}`
+                    : `${decisionModal.item.date_from} to ${decisionModal.item.date_to}`}
+                </div>
+              )}
+              {decisionModal.item.reason && (
+                <div>
+                  <span className="font-semibold text-slate-700">Reason:</span>{" "}
+                  {decisionModal.item.reason}
+                </div>
+              )}
             </div>
 
             {decisionModal.action === "REJECT" && (

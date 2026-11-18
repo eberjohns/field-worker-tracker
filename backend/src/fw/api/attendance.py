@@ -350,7 +350,7 @@ async def add_attendance_comment(
 async def record_attendance_decision(
     attendance_id: UUID,
     request: AttendanceDecisionRequest,
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERINTENDENT")),
     session: AsyncSession = Depends(get_db),
 ) -> AttendanceApprovalResponse:
     """Record an Engineer or Admin approval/rejection decision on an attendance record."""

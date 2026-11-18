@@ -20,6 +20,12 @@ interface LeaveRequestItem {
   employee_id: string;
   employee_name: string;
   tally_id: string;
+  employee_weekly_off_day?: string | null;
+  cover_employee_id?: string | null;
+  cover_employee_name?: string | null;
+  cover_employee_tally_id?: string | null;
+  cover_weekly_off_day?: string | null;
+  weekly_off_mismatch?: boolean;
   leave_type: string;
   from_date: string;
   to_date: string;
@@ -54,6 +60,8 @@ interface EmployeeOption {
   id: string;
   name: string;
   tally_id: string;
+  weekly_off_day?: string | null;
+  role?: string;
 }
 
 export const LeaveManagement: React.FC = () => {
@@ -70,6 +78,7 @@ export const LeaveManagement: React.FC = () => {
   const [recordModalOpen, setRecordModalOpen] = useState(false);
   const [recordForm, setRecordForm] = useState({
     employee_id: "",
+    cover_employee_id: "",
     leave_type: "ANNUAL",
     from_date: "",
     to_date: "",
@@ -78,6 +87,16 @@ export const LeaveManagement: React.FC = () => {
   const [recordSubmitting, setRecordSubmitting] = useState(false);
   const [bypassNotice, setBypassNotice] = useState(false);
   const [recordError, setRecordError] = useState<string | null>(null);
+
+  // Bulk Cover Modal State
+  const [bulkCoverLeave, setBulkCoverLeave] = useState<LeaveRequestItem | null>(null);
+  const [bulkCoverEmpId, setBulkCoverEmpId] = useState("");
+  const [bulkCoverSubmitting, setBulkCoverSubmitting] = useState(false);
+  const [bulkCoverResult, setBulkCoverResult] = useState<string | null>(null);
+  const [bulkCoverError, setBulkCoverError] = useState<string | null>(null);
+
+  const canManageCover =
+    user?.role === "ADMIN" || user?.role === "ENGINEER" || user?.role === "SUPERINTENDENT";
 
   // Import Modal State
   const [importModalOpen, setImportModalOpen] = useState(false);
@@ -175,7 +194,12 @@ export const LeaveManagement: React.FC = () => {
         "Content-Type": "application/json",
       };
       const payload = {
-        ...recordForm,
+        employee_id: recordForm.employee_id,
+        cover_employee_id: recordForm.cover_employee_id || null,
+        leave_type: recordForm.leave_type,
+        from_date: recordForm.from_date,
+        to_date: recordForm.to_date,
+        reason: recordForm.reason,
         bypass_notice: user?.role === "ADMIN" && bypassNotice,
       };
       const res = await fetch("/api/v1/leave-requests", {
@@ -195,6 +219,7 @@ export const LeaveManagement: React.FC = () => {
       setBypassNotice(false);
       setRecordForm({
         employee_id: "",
+        cover_employee_id: "",
         leave_type: "ANNUAL",
         from_date: "",
         to_date: "",
@@ -205,6 +230,42 @@ export const LeaveManagement: React.FC = () => {
       setRecordError(err.message || "Network error");
     } finally {
       setRecordSubmitting(false);
+    }
+  };
+
+  const handleBulkCoverSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bulkCoverLeave || !bulkCoverEmpId) return;
+    setBulkCoverSubmitting(true);
+    setBulkCoverError(null);
+    setBulkCoverResult(null);
+    try {
+      const res = await fetch(`/api/v1/leave-requests/${bulkCoverLeave.id}/bulk-cover`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ cover_employee_id: bulkCoverEmpId }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setBulkCoverError(String(err?.detail?.message || err?.detail || "Failed to bulk cover leave."));
+        return;
+      }
+      const data = await res.json();
+      const woMsg =
+        data.weekly_off_cover_dates?.length > 0
+          ? ` (${data.weekly_off_cover_dates.length} day(s) fall on cover worker's weekly off and are marked Weekly Off Covering)`
+          : "";
+      setBulkCoverResult(
+        `Assigned ${data.cover_employee_name || "cover worker"} to ${data.covered_count} uncovered slot(s)${woMsg}.`
+      );
+      await fetchLeavesAndSummaries();
+    } catch (err: any) {
+      setBulkCoverError(err.message || "Network error");
+    } finally {
+      setBulkCoverSubmitting(false);
     }
   };
 
@@ -481,7 +542,25 @@ export const LeaveManagement: React.FC = () => {
                   <tr key={l.id} className="hover:bg-slate-50/80 transition">
                     <td className="py-3.5 px-4">
                       <div className="font-semibold text-slate-900">{l.employee_name}</div>
-                      <div className="text-xs text-slate-400">Tally: {l.tally_id}</div>
+                      <div className="text-xs text-slate-400">
+                        Tally: {l.tally_id}
+                        {l.employee_weekly_off_day ? ` · Off: ${l.employee_weekly_off_day}` : ""}
+                      </div>
+                      {l.cover_employee_name && (
+                        <div className="mt-1 flex flex-wrap items-center gap-1">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                            Cover: {l.cover_employee_name} ({l.cover_employee_tally_id})
+                          </span>
+                          {l.weekly_off_mismatch && (
+                            <span
+                              className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200"
+                              title={`Original off: ${l.employee_weekly_off_day || "Unset"}, Cover off: ${l.cover_weekly_off_day || "Unset"}`}
+                            >
+                              Off-Day Mismatch
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </td>
                     <td className="py-3.5 px-4">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
@@ -525,6 +604,22 @@ export const LeaveManagement: React.FC = () => {
                     </td>
                     <td className="py-3.5 px-4 text-right">
                       <div className="flex items-center justify-end gap-2">
+                        {l.status === "APPROVED" && canManageCover && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setBulkCoverLeave(l);
+                              setBulkCoverEmpId(l.cover_employee_id || "");
+                              setBulkCoverError(null);
+                              setBulkCoverResult(null);
+                            }}
+                            className="px-2.5 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-md transition flex items-center gap-1 shadow-2xs cursor-pointer"
+                            title="Assign one cover worker to every remaining TO_BE_COVERED slot for this leave"
+                          >
+                            <Users className="h-3 w-3" />
+                            Cover All Slots
+                          </button>
+                        )}
                         {l.status === "APPROVED" && (
                           <Link
                             to="/operational-planner"
@@ -658,6 +753,49 @@ export const LeaveManagement: React.FC = () => {
               )}
 
               <div className="space-y-1">
+                <label className="font-semibold text-slate-700">
+                  Cover Worker <span className="font-normal text-slate-400">(Optional — auto-covers all shifts on approval)</span>
+                </label>
+                <select
+                  value={recordForm.cover_employee_id}
+                  onChange={(e) => setRecordForm({ ...recordForm, cover_employee_id: e.target.value })}
+                  className="w-full p-2.5 rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">No pre-assigned cover worker</option>
+                  {employees
+                    .filter((emp) => emp.id !== recordForm.employee_id && emp.role !== "ADMIN")
+                    .map((emp) => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.name} ({emp.tally_id}){emp.weekly_off_day ? ` — Off: ${emp.weekly_off_day}` : ""}
+                      </option>
+                    ))}
+                </select>
+                {(() => {
+                  const origEmp = employees.find((e) => e.id === recordForm.employee_id);
+                  const covEmp = employees.find((e) => e.id === recordForm.cover_employee_id);
+                  if (
+                    origEmp &&
+                    covEmp &&
+                    (origEmp.weekly_off_day || "").toUpperCase() !== (covEmp.weekly_off_day || "").toUpperCase()
+                  ) {
+                    return (
+                      <div className="mt-1.5 p-2.5 bg-amber-50 border border-amber-200 text-amber-900 rounded-lg flex items-start gap-2">
+                        <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+                        <span>
+                          <strong>Weekly Off Day Mismatch:</strong> {origEmp.name}'s off day is{" "}
+                          <strong>{origEmp.weekly_off_day || "Unset"}</strong>, while {covEmp.name}'s off day is{" "}
+                          <strong>{covEmp.weekly_off_day || "Unset"}</strong>. On approval, {covEmp.name} will still
+                          be assigned to cover all working days of {origEmp.name}, with a clear{" "}
+                          <strong>Weekly Off (Covering)</strong> indicator on {covEmp.weekly_off_day || "their off day"}.
+                        </span>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+              </div>
+
+              <div className="space-y-1">
                 <label className="font-semibold text-slate-700">Reason / Notes *</label>
                 <textarea
                   required
@@ -690,6 +828,114 @@ export const LeaveManagement: React.FC = () => {
                   className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition"
                 >
                   {recordSubmitting ? "Submitting..." : "Submit Leave Request"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Cover Approved Leave Modal */}
+      {bulkCoverLeave && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4 border border-slate-100">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Users className="h-5 w-5 text-emerald-600" />
+                Cover All Uncovered Slots
+              </h3>
+              <button
+                onClick={() => setBulkCoverLeave(null)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs space-y-1">
+              <div>
+                <span className="font-semibold text-slate-700">Worker on Leave:</span>{" "}
+                {bulkCoverLeave.employee_name} ({bulkCoverLeave.tally_id})
+                {bulkCoverLeave.employee_weekly_off_day
+                  ? ` · Off: ${bulkCoverLeave.employee_weekly_off_day}`
+                  : ""}
+              </div>
+              <div>
+                <span className="font-semibold text-slate-700">Leave Period:</span>{" "}
+                {bulkCoverLeave.from_date} to {bulkCoverLeave.to_date} ({bulkCoverLeave.leave_type})
+              </div>
+            </div>
+
+            <form onSubmit={handleBulkCoverSubmit} className="space-y-3 text-xs">
+              <div className="space-y-1">
+                <label className="font-semibold text-slate-700">Select Cover Worker *</label>
+                <select
+                  required
+                  value={bulkCoverEmpId}
+                  onChange={(e) => setBulkCoverEmpId(e.target.value)}
+                  className="w-full p-2.5 rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="">Choose cover worker...</option>
+                  {employees
+                    .filter((emp) => emp.id !== bulkCoverLeave.employee_id && emp.role !== "ADMIN")
+                    .map((emp) => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.name} ({emp.tally_id}){emp.weekly_off_day ? ` — Off: ${emp.weekly_off_day}` : ""}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              {(() => {
+                const covEmp = employees.find((e) => e.id === bulkCoverEmpId);
+                if (
+                  covEmp &&
+                  (bulkCoverLeave.employee_weekly_off_day || "").toUpperCase() !==
+                    (covEmp.weekly_off_day || "").toUpperCase()
+                ) {
+                  return (
+                    <div className="p-2.5 bg-amber-50 border border-amber-200 text-amber-900 rounded-lg flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+                      <span>
+                        <strong>Weekly Off Mismatch:</strong> {covEmp.name}'s weekly off is{" "}
+                        <strong>{covEmp.weekly_off_day || "Unset"}</strong>. All uncovered working days of{" "}
+                        {bulkCoverLeave.employee_name} will be assigned with a clear{" "}
+                        <strong>Weekly Off (Covering)</strong> indicator where overlapping.
+                      </span>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+
+              {bulkCoverError && (
+                <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  {bulkCoverError}
+                </div>
+              )}
+
+              {bulkCoverResult && (
+                <div className="p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 shrink-0" />
+                  {bulkCoverResult}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setBulkCoverLeave(null)}
+                  className="px-3.5 py-2 border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg font-medium"
+                >
+                  Close
+                </button>
+                <button
+                  type="submit"
+                  disabled={bulkCoverSubmitting || !bulkCoverEmpId}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg font-semibold"
+                >
+                  {bulkCoverSubmitting ? "Assigning..." : "Cover All Uncovered Slots"}
                 </button>
               </div>
             </form>

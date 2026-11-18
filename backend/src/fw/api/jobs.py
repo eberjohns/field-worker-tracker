@@ -2,15 +2,19 @@
 
 import io
 from datetime import UTC, date, datetime
+from typing import Any
 from uuid import UUID
 
 import xlsxwriter
 from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import Response, StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.core.db import get_db
-from fw.modules.identity import User, get_current_user, require_role
+from fw.core.errors import AppError
+from fw.modules.audit import AuditService
+from fw.modules.identity import User, get_current_user, require_role, verify_password
 from fw.modules.jobs import (
     BoundaryCopyRequest,
     BoundaryCopyToRequest,
@@ -19,6 +23,7 @@ from fw.modules.jobs import (
     BoundaryQueueResponse,
     BoundaryUpdateRequest,
     GenerateOccurrencesRequest,
+    JobItem,
     JobItemCreate,
     JobItemResponse,
     JobItemUpdate,
@@ -26,11 +31,14 @@ from fw.modules.jobs import (
     JobOccurrenceResponse,
     JobOccurrenceUpdate,
     JobsService,
+    Worksite,
     WorksiteCreate,
     WorksiteDetailResponse,
     WorksiteResponse,
     WorksiteUpdate,
 )
+from fw.modules.org import DeactivateRequest, EntityLifecycleResponse, ReactivateRequest
+from fw.modules.scheduling import SchedulingService
 
 router = APIRouter(tags=["jobs"])
 
@@ -49,7 +57,8 @@ async def list_worksites(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> list[WorksiteResponse]:
-    """List worksites with optional filtering."""
+    """List worksites with optional filtering (deactivated visible to Admin only)."""
+    effective_is_active = is_active if current_user.role == "ADMIN" else True
     return await JobsService.list_worksites(
         session=session,
         q=q,
@@ -57,7 +66,7 @@ async def list_worksites(
         zone_id=zone_id,
         country=country,
         has_boundary=has_boundary,
-        is_active=is_active,
+        is_active=effective_is_active,
         limit=limit,
         offset=offset,
     )
@@ -72,11 +81,12 @@ async def export_worksites_excel(
     session: AsyncSession = Depends(get_db),
 ):
     """Export worksites list to an Excel spreadsheet."""
+    effective_is_active = is_active if current_user.role == "ADMIN" else True
     worksites = await JobsService.list_worksites(
         session=session,
         q=q,
         country=country,
-        is_active=is_active,
+        is_active=effective_is_active,
         limit=5000,
         offset=0,
     )
@@ -145,7 +155,229 @@ async def get_worksite_detail(
     session: AsyncSession = Depends(get_db),
 ) -> WorksiteDetailResponse:
     """Get full details of a worksite including items and boundary GeoJSON."""
-    return await JobsService.get_worksite(session=session, worksite_id=worksite_id)
+    detail = await JobsService.get_worksite(session=session, worksite_id=worksite_id)
+    if current_user.role != "ADMIN":
+        if not detail.is_active:
+            raise AppError(code="NOT_FOUND", message="Worksite not found.", status_code=404)
+        detail.items = [it for it in detail.items if it.is_active]
+    return detail
+
+
+@router.get("/worksites/{worksite_id}/deactivation-impact")
+async def get_worksite_deactivation_impact(
+    worksite_id: UUID,
+    effective_date: date | None = Query(None),
+    current_user: User = Depends(require_role("ADMIN")),
+    session: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Preview scheduling impact of deactivating a worksite (Admin only)."""
+    ws = await session.get(Worksite, worksite_id)
+    if not ws:
+        raise AppError(code="NOT_FOUND", message="Worksite not found.", status_code=404)
+
+    eff = effective_date or date.today()
+    items = list(
+        (
+            await session.execute(
+                select(JobItem).where(JobItem.worksite_id == ws.id, JobItem.is_active.is_(True))
+            )
+        )
+        .scalars()
+        .all()
+    )
+    item_ids = [it.id for it in items]
+    impact = await SchedulingService(session).get_job_items_deactivation_impact(
+        job_item_ids=item_ids,
+        effective_date=eff,
+    )
+    return {
+        "worksite_id": str(ws.id),
+        "job_number": ws.job_number,
+        "job_name": ws.job_name,
+        "effective_date": eff.isoformat(),
+        "active_job_items": len(item_ids),
+        **impact,
+    }
+
+
+@router.post("/worksites/{worksite_id}/deactivate", response_model=EntityLifecycleResponse)
+async def deactivate_worksite(
+    worksite_id: UUID,
+    payload: DeactivateRequest,
+    current_user: User = Depends(require_role("ADMIN")),
+    session: AsyncSession = Depends(get_db),
+) -> EntityLifecycleResponse:
+    """Admin-only worksite deactivation with DEACTIVATE confirmation + admin password + worker schedule release."""
+    if payload.confirmation_text.strip() != "DEACTIVATE":
+        raise AppError(
+            code="VALIDATION_ERROR",
+            message='You must type "DEACTIVATE" exactly to confirm deactivation.',
+            status_code=400,
+        )
+    if not payload.admin_password or not verify_password(
+        payload.admin_password, current_user.credential_hash
+    ):
+        raise AppError(
+            code="INVALID_PASSWORD",
+            message="Admin password is incorrect. Deactivation aborted.",
+            status_code=403,
+        )
+    if not payload.reason or not payload.reason.strip():
+        raise AppError(
+            code="REASON_REQUIRED",
+            message="A reason for deactivation is required.",
+            status_code=400,
+        )
+
+    ws = await session.get(Worksite, worksite_id)
+    if not ws:
+        raise AppError(code="NOT_FOUND", message="Worksite not found.", status_code=404)
+    if not ws.is_active:
+        raise AppError(
+            code="INVALID_STATE", message="Worksite is already deactivated.", status_code=400
+        )
+
+    eff = payload.effective_date or date.today()
+    ws.is_active = False
+    ws.version += 1
+
+    items = list(
+        (
+            await session.execute(
+                select(JobItem).where(JobItem.worksite_id == ws.id, JobItem.is_active.is_(True))
+            )
+        )
+        .scalars()
+        .all()
+    )
+    item_ids: list[UUID] = []
+    for it in items:
+        it.is_active = False
+        it.version += 1
+        item_ids.append(it.id)
+
+    cascade_summary, affected_workers = await SchedulingService(
+        session
+    ).cascade_job_items_deactivation(
+        job_item_ids=item_ids,
+        effective_date=eff,
+        reason_label="WORKSITE_DEACTIVATED",
+    )
+    cascade_summary["deactivated_job_items"] = len(item_ids)
+    cascade_summary["freed_workers"] = len(affected_workers)
+
+    await AuditService.log_action(
+        session=session,
+        action="DEACTIVATE_WORKSITE",
+        entity_type="worksite",
+        entity_id=str(ws.id),
+        diff={
+            "job_number": ws.job_number,
+            "job_name": ws.job_name,
+            "effective_date": eff.isoformat(),
+            **cascade_summary,
+        },
+        actor_user_id=current_user.id,
+        actor_role=current_user.role,
+        reason=payload.reason.strip(),
+    )
+    await session.commit()
+
+    return EntityLifecycleResponse(
+        status="DEACTIVATED",
+        entity_id=ws.id,
+        is_active=False,
+        effective_date=eff,
+        summary=cascade_summary,
+        message=(
+            f"Worksite {ws.job_number} deactivated effective {eff.isoformat()}. "
+            f"{cascade_summary['cancelled_future_shifts']} future shift(s) cancelled, freeing assigned workers."
+        ),
+    )
+
+
+@router.post("/worksites/{worksite_id}/reactivate", response_model=EntityLifecycleResponse)
+async def reactivate_worksite(
+    worksite_id: UUID,
+    payload: ReactivateRequest,
+    current_user: User = Depends(require_role("ADMIN")),
+    session: AsyncSession = Depends(get_db),
+) -> EntityLifecycleResponse:
+    """Admin-only clean reactivation (Option A): sets worksite active without restoring old schedules."""
+    if payload.confirmation_text.strip() != "REACTIVATE":
+        raise AppError(
+            code="VALIDATION_ERROR",
+            message='You must type "REACTIVATE" exactly to confirm reactivation.',
+            status_code=400,
+        )
+    if not payload.admin_password or not verify_password(
+        payload.admin_password, current_user.credential_hash
+    ):
+        raise AppError(
+            code="INVALID_PASSWORD",
+            message="Admin password is incorrect. Reactivation aborted.",
+            status_code=403,
+        )
+    if not payload.reason or not payload.reason.strip():
+        raise AppError(
+            code="REASON_REQUIRED",
+            message="A reason for reactivation is required.",
+            status_code=400,
+        )
+
+    ws = await session.get(Worksite, worksite_id)
+    if not ws:
+        raise AppError(code="NOT_FOUND", message="Worksite not found.", status_code=404)
+    if ws.is_active:
+        raise AppError(code="INVALID_STATE", message="Worksite is already active.", status_code=400)
+
+    ws.is_active = True
+    ws.version += 1
+
+    reactivated_items = 0
+    if payload.reactivate_items:
+        items = list(
+            (
+                await session.execute(
+                    select(JobItem).where(
+                        JobItem.worksite_id == ws.id, JobItem.is_active.is_(False)
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for it in items:
+            it.is_active = True
+            it.version += 1
+            reactivated_items += 1
+
+    await AuditService.log_action(
+        session=session,
+        action="REACTIVATE_WORKSITE",
+        entity_type="worksite",
+        entity_id=str(ws.id),
+        diff={
+            "job_number": ws.job_number,
+            "reactivated_job_items": reactivated_items,
+            "schedules_restored": False,
+        },
+        actor_user_id=current_user.id,
+        actor_role=current_user.role,
+        reason=payload.reason.strip(),
+    )
+    await session.commit()
+
+    return EntityLifecycleResponse(
+        status="REACTIVATED",
+        entity_id=ws.id,
+        is_active=True,
+        summary={"reactivated_job_items": reactivated_items, "schedules_restored": False},
+        message=(
+            f"Worksite {ws.job_number} reactivated cleanly ({reactivated_items} item(s) restored). "
+            "No old schedules were restored."
+        ),
+    )
 
 
 @router.patch("/worksites/{worksite_id}", response_model=WorksiteResponse)
@@ -368,6 +600,179 @@ async def generate_occurrences(
         to_date=payload.to_date,
         actor_user_id=current_user.id,
         actor_role=current_user.role,
+    )
+
+
+@router.get("/job-items/{job_item_id}/deactivation-impact")
+async def get_job_item_deactivation_impact(
+    job_item_id: UUID,
+    effective_date: date | None = Query(None),
+    current_user: User = Depends(require_role("ADMIN")),
+    session: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Preview scheduling impact of deactivating a single job item (Admin only)."""
+    item = await session.get(JobItem, job_item_id)
+    if not item:
+        raise AppError(code="NOT_FOUND", message="Job item not found.", status_code=404)
+
+    eff = effective_date or date.today()
+    impact = await SchedulingService(session).get_job_items_deactivation_impact(
+        job_item_ids=[item.id],
+        effective_date=eff,
+    )
+    return {
+        "job_item_id": str(item.id),
+        "sub_item_code": item.sub_item_code,
+        "staff_grade_description": item.staff_grade_description,
+        "effective_date": eff.isoformat(),
+        **impact,
+    }
+
+
+@router.post("/job-items/{job_item_id}/deactivate", response_model=EntityLifecycleResponse)
+async def deactivate_job_item(
+    job_item_id: UUID,
+    payload: DeactivateRequest,
+    current_user: User = Depends(require_role("ADMIN")),
+    session: AsyncSession = Depends(get_db),
+) -> EntityLifecycleResponse:
+    """Admin-only job item deactivation with DEACTIVATE confirmation + admin password + schedule release."""
+    if payload.confirmation_text.strip() != "DEACTIVATE":
+        raise AppError(
+            code="VALIDATION_ERROR",
+            message='You must type "DEACTIVATE" exactly to confirm deactivation.',
+            status_code=400,
+        )
+    if not payload.admin_password or not verify_password(
+        payload.admin_password, current_user.credential_hash
+    ):
+        raise AppError(
+            code="INVALID_PASSWORD",
+            message="Admin password is incorrect. Deactivation aborted.",
+            status_code=403,
+        )
+    if not payload.reason or not payload.reason.strip():
+        raise AppError(
+            code="REASON_REQUIRED",
+            message="A reason for deactivation is required.",
+            status_code=400,
+        )
+
+    item = await session.get(JobItem, job_item_id)
+    if not item:
+        raise AppError(code="NOT_FOUND", message="Job item not found.", status_code=404)
+    if not item.is_active:
+        raise AppError(
+            code="INVALID_STATE", message="Job item is already deactivated.", status_code=400
+        )
+
+    eff = payload.effective_date or date.today()
+    item.is_active = False
+    item.version += 1
+
+    cascade_summary, affected_workers = await SchedulingService(
+        session
+    ).cascade_job_items_deactivation(
+        job_item_ids=[item.id],
+        effective_date=eff,
+        reason_label="JOB_ITEM_DEACTIVATED",
+    )
+    cascade_summary["freed_workers"] = len(affected_workers)
+
+    await AuditService.log_action(
+        session=session,
+        action="DEACTIVATE_JOB_ITEM",
+        entity_type="job_item",
+        entity_id=str(item.id),
+        diff={
+            "sub_item_code": item.sub_item_code,
+            "worksite_id": str(item.worksite_id),
+            "effective_date": eff.isoformat(),
+            **cascade_summary,
+        },
+        actor_user_id=current_user.id,
+        actor_role=current_user.role,
+        reason=payload.reason.strip(),
+    )
+    await session.commit()
+
+    return EntityLifecycleResponse(
+        status="DEACTIVATED",
+        entity_id=item.id,
+        is_active=False,
+        effective_date=eff,
+        summary=cascade_summary,
+        message=(
+            f"Job item {item.sub_item_code} deactivated effective {eff.isoformat()}. "
+            f"{cascade_summary['cancelled_future_shifts']} future shift(s) cancelled."
+        ),
+    )
+
+
+@router.post("/job-items/{job_item_id}/reactivate", response_model=EntityLifecycleResponse)
+async def reactivate_job_item(
+    job_item_id: UUID,
+    payload: ReactivateRequest,
+    current_user: User = Depends(require_role("ADMIN")),
+    session: AsyncSession = Depends(get_db),
+) -> EntityLifecycleResponse:
+    """Admin-only clean reactivation (Option A) of a job item (parent worksite must be active)."""
+    if payload.confirmation_text.strip() != "REACTIVATE":
+        raise AppError(
+            code="VALIDATION_ERROR",
+            message='You must type "REACTIVATE" exactly to confirm reactivation.',
+            status_code=400,
+        )
+    if not payload.admin_password or not verify_password(
+        payload.admin_password, current_user.credential_hash
+    ):
+        raise AppError(
+            code="INVALID_PASSWORD",
+            message="Admin password is incorrect. Reactivation aborted.",
+            status_code=403,
+        )
+    if not payload.reason or not payload.reason.strip():
+        raise AppError(
+            code="REASON_REQUIRED",
+            message="A reason for reactivation is required.",
+            status_code=400,
+        )
+
+    item = await session.get(JobItem, job_item_id)
+    if not item:
+        raise AppError(code="NOT_FOUND", message="Job item not found.", status_code=404)
+    if item.is_active:
+        raise AppError(code="INVALID_STATE", message="Job item is already active.", status_code=400)
+
+    parent_ws = await session.get(Worksite, item.worksite_id)
+    if not parent_ws or not parent_ws.is_active:
+        raise AppError(
+            code="PARENT_INACTIVE",
+            message="Reactivate the parent worksite before reactivating this job item.",
+            status_code=400,
+        )
+
+    item.is_active = True
+    item.version += 1
+
+    await AuditService.log_action(
+        session=session,
+        action="REACTIVATE_JOB_ITEM",
+        entity_type="job_item",
+        entity_id=str(item.id),
+        diff={"sub_item_code": item.sub_item_code, "schedules_restored": False},
+        actor_user_id=current_user.id,
+        actor_role=current_user.role,
+        reason=payload.reason.strip(),
+    )
+    await session.commit()
+
+    return EntityLifecycleResponse(
+        status="REACTIVATED",
+        entity_id=item.id,
+        is_active=True,
+        summary={"schedules_restored": False},
+        message=f"Job item {item.sub_item_code} reactivated cleanly. No old schedules were restored.",
     )
 
 

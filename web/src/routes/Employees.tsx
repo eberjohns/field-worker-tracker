@@ -19,6 +19,8 @@ import {
   Coffee,
   Edit2,
   ArrowUpDown,
+  AlertTriangle,
+  AlertCircle,
 } from "lucide-react";
 
 interface Employee {
@@ -62,6 +64,7 @@ export const Employees: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("");
+  const [statusFilter, setStatusFilter] = useState<"active" | "inactive" | "all">("active");
   const [staffGrades, setStaffGrades] = useState<string[]>([]);
   const [accommodationFilter, setAccommodationFilter] = useState<string>("");
   const [groupBySupervisor, setGroupBySupervisor] = useState(true);
@@ -121,6 +124,8 @@ export const Employees: React.FC = () => {
   });
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [createTallyCheck, setCreateTallyCheck] = useState<any | null>(null);
+  const [createConfirmReuse, setCreateConfirmReuse] = useState(false);
   const [successToast, setSuccessToast] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
 
@@ -163,6 +168,13 @@ export const Employees: React.FC = () => {
       if (accommodationFilter === "assigned") params.set("has_accommodation", "true");
       else if (accommodationFilter === "unassigned") params.set("has_accommodation", "false");
       else if (accommodationFilter) params.set("accommodation_id", accommodationFilter);
+
+      if (user?.role === "ADMIN") {
+        if (statusFilter === "active") params.set("is_active", "true");
+        else if (statusFilter === "inactive") params.set("is_active", "false");
+      } else {
+        params.set("is_active", "true");
+      }
 
       const res = await fetch(`/api/v1/employees?${params.toString()}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -367,7 +379,28 @@ export const Employees: React.FC = () => {
     fetchEmployees();
     fetchHierarchy();
     fetchAccommodations();
-  }, [search, roleFilter, accommodationFilter]);
+  }, [search, roleFilter, accommodationFilter, statusFilter]);
+
+  useEffect(() => {
+    if (!createModalOpen || !createFormData.tally_id.trim() || !token) {
+      setCreateTallyCheck(null);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/v1/employees/check-tally-id?tally_id=${encodeURIComponent(
+            createFormData.tally_id.trim()
+          )}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (res.ok) setCreateTallyCheck(await res.json());
+      } catch {
+        setCreateTallyCheck(null);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [createModalOpen, createFormData.tally_id, token]);
 
   const handleCreateEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -401,6 +434,7 @@ export const Employees: React.FC = () => {
             ? Number(createFormData.break_override_minutes)
             : null,
         join_date: createFormData.join_date || null,
+        confirm_reuse: createConfirmReuse,
       };
 
       const res = await fetch("/api/v1/employees", {
@@ -414,7 +448,9 @@ export const Employees: React.FC = () => {
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.detail || errData.message || `Creation failed (${res.status})`);
+        throw new Error(
+          errData.detail?.message || errData.detail || errData.message || `Creation failed (${res.status})`
+        );
       }
 
       const created = await res.json();
@@ -985,6 +1021,26 @@ export const Employees: React.FC = () => {
           </select>
         </div>
 
+        {/* Admin-only Active / Deactivated / All Status Filter */}
+        {user?.role === "ADMIN" && (
+          <div className="flex items-center gap-1.5">
+            <select
+              value={statusFilter}
+              onChange={(e) => {
+                const next = e.target.value as "active" | "inactive" | "all";
+                setStatusFilter(next);
+                if (next !== "active") setGroupBySupervisor(false);
+              }}
+              className="border border-slate-200 rounded-lg text-sm px-3 py-2 bg-white font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              title="Admin Only: Filter active or deactivated employees"
+            >
+              <option value="active">Status: Active</option>
+              <option value="inactive">Status: Deactivated</option>
+              <option value="all">Status: All</option>
+            </select>
+          </div>
+        )}
+
         {/* Sort Selector */}
         <div className="flex items-center gap-1.5 border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white">
           <ArrowUpDown className="h-4 w-4 text-slate-400" />
@@ -1449,7 +1505,12 @@ export const Employees: React.FC = () => {
                 sortEmployees(employees).map((emp) => {
                   const isSelected = selectedIds.includes(emp.id);
                   return (
-                    <tr key={emp.id} className="hover:bg-slate-50 transition">
+                    <tr
+                      key={emp.id}
+                      className={`hover:bg-slate-50 transition ${
+                        !emp.is_active ? "bg-slate-50/70 opacity-75" : ""
+                      }`}
+                    >
                       <td className="p-4">
                         <button
                           onClick={() => toggleSelect(emp.id)}
@@ -1619,9 +1680,10 @@ export const Employees: React.FC = () => {
                     required
                     placeholder="e.g. 1205 or W_101"
                     value={createFormData.tally_id}
-                    onChange={(e) =>
-                      setCreateFormData({ ...createFormData, tally_id: e.target.value })
-                    }
+                    onChange={(e) => {
+                      setCreateFormData({ ...createFormData, tally_id: e.target.value });
+                      setCreateConfirmReuse(false);
+                    }}
                     className="w-full border border-slate-300 rounded-lg p-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
@@ -1641,6 +1703,41 @@ export const Employees: React.FC = () => {
                     className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
+
+                {createTallyCheck && !createTallyCheck.available && (
+                  <div className="col-span-2 p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
+                    <span>
+                      <strong>Tally ID already in use</strong> by {createTallyCheck.in_use_by_name || "another employee"}.
+                    </span>
+                  </div>
+                )}
+
+                {createTallyCheck && createTallyCheck.available && createTallyCheck.previously_used && (
+                  <div className="col-span-2 p-3 rounded-lg bg-amber-50 border border-amber-300 text-xs text-amber-900 space-y-2">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <strong>Previously Used Tally ID Guardrail:</strong> This Tally ID previously belonged to{" "}
+                        <strong>
+                          {(createTallyCheck.previous_uses || [])
+                            .map((h: any) => h.employee_name || h.employee_id)
+                            .join(", ")}
+                        </strong>
+                        . Reusing a retired ID may cause confusion in external Tally/Excel exports.
+                      </div>
+                    </div>
+                    <label className="flex items-center gap-2 font-semibold cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={createConfirmReuse}
+                        onChange={(e) => setCreateConfirmReuse(e.target.checked)}
+                        className="rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+                      />
+                      <span>Confirm reuse of previously used Tally ID</span>
+                    </label>
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Role</label>
