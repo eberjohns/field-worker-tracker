@@ -1234,48 +1234,96 @@ export const Settings: React.FC = () => {
           <div>
             <h3 className="text-base font-semibold text-slate-900">Budget-Only Staff Types</h3>
             <p className="text-xs text-slate-500">
-              Per DEC-09 and BR-JB-07: Roles selected below are included strictly for contract
-              budgeting; they are never scheduled and never tracked on phones.
+              Per DEC-09 and BR-JB-07: Roles selected below (resolved from active workforce &amp;
+              contract job items) are included strictly for contract budgeting; they are never
+              scheduled and never tracked on phones.
             </p>
           </div>
 
-          {loadingStaffGrades ? (
-            <div className="py-8 text-center text-slate-400 text-xs">
-              Loading unique staff types from workforce personnel...
-            </div>
-          ) : staffGrades.length === 0 ? (
-            <div className="py-8 text-center text-slate-400 text-xs bg-slate-50 rounded-lg border border-slate-200">
-              No staff grade descriptions found in workforce records. Import employees or add personnel to configure budget-only roles.
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-2">
-              {staffGrades.map((role) => {
-                const budgetSetting = settings.find((s) => s.setting_key === "budget_only_staff_types");
-                const currentList = parseRoleList(budgetSetting?.value);
-                const isChecked = currentList.some((r) => r.toLowerCase() === role.toLowerCase());
+          {(() => {
+            const budgetSetting = settings.find((s) => s.setting_key === "budget_only_staff_types");
+            const currentList = parseRoleList(budgetSetting?.value);
+            const activeLower = new Set(staffGrades.map((g) => g.toLowerCase()));
+            const orphanedSaved = currentList.filter((r) => !activeLower.has(r.toLowerCase()));
+            const canEditBudget = user?.role === "ADMIN" || user?.role === "ENGINEER";
 
-                return (
-                  <label
-                    key={role}
-                    className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition ${
-                      isChecked
-                        ? "bg-indigo-50 border-indigo-200 text-indigo-900"
-                        : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isChecked}
-                      disabled={user?.role !== "ADMIN" && user?.role !== "ENGINEER"}
-                      onChange={() => handleToggleBudgetRole(role)}
-                      className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
-                    />
-                    <span className="text-xs font-medium">{role}</span>
-                  </label>
-                );
-              })}
-            </div>
-          )}
+            return (
+              <>
+                {loadingStaffGrades ? (
+                  <div className="py-8 text-center text-slate-400 text-xs">
+                    Loading unique staff types from active workforce and job items...
+                  </div>
+                ) : staffGrades.length === 0 ? (
+                  <div className="py-8 text-center text-slate-400 text-xs bg-slate-50 rounded-lg border border-slate-200">
+                    No staff grade descriptions found in active workforce or job items. Import
+                    employees/worksites to configure budget-only roles.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-2">
+                    {staffGrades.map((role) => {
+                      const isChecked = currentList.some(
+                        (r) => r.toLowerCase() === role.toLowerCase()
+                      );
+
+                      return (
+                        <label
+                          key={role}
+                          className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition ${
+                            isChecked
+                              ? "bg-indigo-50 border-indigo-200 text-indigo-900"
+                              : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            disabled={!canEditBudget}
+                            onChange={() => handleToggleBudgetRole(role)}
+                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                          />
+                          <span className="text-xs font-medium">{role}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {orphanedSaved.length > 0 && (
+                  <div className="mt-4 p-4 rounded-lg bg-amber-50/70 border border-amber-200 space-y-2">
+                    <div>
+                      <h4 className="text-xs font-semibold text-amber-900">
+                        Saved Budget-Only Roles (Not Currently in Active Workforce / Job Items)
+                      </h4>
+                      <p className="text-[11px] text-amber-700">
+                        These roles remain active in settings and will automatically apply whenever
+                        matching staff or contract job items exist. Click × to remove a role.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {orphanedSaved.map((role) => (
+                        <span
+                          key={role}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-white border border-amber-300 text-amber-900 shadow-2xs"
+                        >
+                          <span>{role}</span>
+                          {canEditBudget && (
+                            <button
+                              type="button"
+                              onClick={() => handleToggleBudgetRole(role)}
+                              title={`Remove ${role} from budget-only roles`}
+                              className="text-amber-600 hover:text-rose-600 font-bold leading-none cursor-pointer"
+                            >
+                              ×
+                            </button>
+                          )}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
       )}
 
@@ -1283,14 +1331,22 @@ export const Settings: React.FC = () => {
       {activeTab === "password" && (
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4 max-w-2xl">
           <div>
-            <h3 className="text-base font-semibold text-slate-900">Worker Password Policy</h3>
+            <h3 className="text-base font-semibold text-slate-900">Unified Default Password Policy</h3>
             <p className="text-xs text-slate-500">
-              Per DEC-53: All workers start with the company default password, are forced to change
-              it on first login, and are locked out after `default_password_max_days`.
+              Per DEC-53: One single company default password (<code>default_password</code>)
+              applies to all web and mobile worker accounts on initial onboarding or admin reset.
+              Users are forced to change it on first login and locked out after{" "}
+              <code>default_password_max_days</code>.
             </p>
           </div>
 
           <div className="bg-slate-50 rounded-lg p-4 border border-slate-200 space-y-3 text-xs">
+            <div className="flex justify-between items-center py-1">
+              <span className="text-slate-600 font-medium">Scope:</span>
+              <span className="font-semibold text-indigo-700">
+                Unified (Web Dashboard + Mobile Worker App)
+              </span>
+            </div>
             <div className="flex justify-between items-center py-1">
               <span className="text-slate-600 font-medium">Default Password Expiration:</span>
               <span className="font-semibold text-slate-900">
@@ -1302,7 +1358,7 @@ export const Settings: React.FC = () => {
               <span className="font-semibold text-emerald-700">Admin Only (manual action)</span>
             </div>
             <div className="flex justify-between items-center py-1">
-              <span className="text-slate-600 font-medium">Device Binding:</span>
+              <span className="text-slate-600 font-medium">Device Binding (Mobile):</span>
               <span className="font-semibold text-slate-900">Locked to first registered phone</span>
             </div>
           </div>

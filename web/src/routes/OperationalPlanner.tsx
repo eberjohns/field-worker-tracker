@@ -18,6 +18,7 @@ import {
   FileText,
   Plus,
   Undo2,
+  Redo2,
   Pin,
   Filter,
   RotateCcw,
@@ -26,7 +27,10 @@ import {
   Download,
   Upload,
   ArrowUpDown,
+  Send,
+  Layers,
 } from "lucide-react";
+import { usePlannerHistory } from "../hooks/usePlannerHistory";
 import {
   OperationalCoverageResponse,
   OperationalWorksiteRow,
@@ -94,8 +98,90 @@ interface StagedBaseRemoval {
   reason: string;
 }
 
+interface DraftReassignmentItem {
+  draftId: string;
+  reassignment_type: "REPLACE" | "ADD" | "CANCEL";
+  date_from: string;
+  date_to: string;
+  original_employee_id?: string | null;
+  original_employee_name?: string | null;
+  new_employee_id?: string | null;
+  new_employee_name?: string | null;
+  target_job_item_id: string;
+  job_number: string;
+  sub_item_code: string;
+  reason_category: string;
+  reason: string;
+}
+
+interface OpDirectHistoryPayload {
+  createdShiftIds: string[];
+  createdPayloads: OperationalShiftCreate[];
+  deletedPayloads: OperationalShiftCreate[];
+}
+
+interface DraftBatchHistoryPayload {
+  before: DraftReassignmentItem[];
+  after: DraftReassignmentItem[];
+}
+
 export const OperationalPlanner: React.FC = () => {
   const { token, user } = useAuth();
+  const canDirectEdit =
+    user?.role === "ADMIN" || user?.role === "ENGINEER" || user?.role === "SUPERINTENDENT";
+  const isSupervisorDraftMode = user?.role === "SUPERVISOR";
+  const draftStorageKey = `fwt_draft_reassignments_${user?.id || "anon"}`;
+
+  const [historyToast, setHistoryToast] = useState<string | null>(null);
+  const showHistoryToast = (msg: string) => {
+    setHistoryToast(msg);
+    setTimeout(() => setHistoryToast((prev) => (prev === msg ? null : prev)), 3500);
+  };
+
+  // Supervisor Draft Reassignment Batch (persisted in localStorage)
+  const [draftBatch, setDraftBatch] = useState<DraftReassignmentItem[]>(() => {
+    try {
+      const raw = localStorage.getItem(`fwt_draft_reassignments_${user?.id || "anon"}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+    return [];
+  });
+  const [batchSubmitModalOpen, setBatchSubmitModalOpen] = useState<boolean>(false);
+  const [batchNote, setBatchNote] = useState<string>("");
+  const [batchSubmitting, setBatchSubmitting] = useState<boolean>(false);
+  const [batchError, setBatchError] = useState<string | null>(null);
+  const [batchSuccess, setBatchSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(draftStorageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          setDraftBatch(parsed);
+          return;
+        }
+      }
+      setDraftBatch([]);
+    } catch {
+      setDraftBatch([]);
+    }
+  }, [draftStorageKey]);
+
+  const persistDraftBatch = (next: DraftReassignmentItem[]) => {
+    setDraftBatch(next);
+    try {
+      localStorage.setItem(draftStorageKey, JSON.stringify(next));
+    } catch {}
+  };
+
+  // Track latest shift IDs across repeated undo/redo cycles for direct edits
+  const directHistoryIdsRef = useRef<Map<string, { created: string[]; restored: string[] }>>(
+    new Map()
+  );
 
   // Navigation & Lens
   const [activeLens, setActiveLens] = useState<"COVERAGE" | "ROSTER">(() => {
@@ -797,20 +883,272 @@ export const OperationalPlanner: React.FC = () => {
     setReplacementTargetId(null);
   };
 
-  // Atomically save all staged operations
+  const directHistory = usePlannerHistory<OpDirectHistoryPayload>({
+    storageKey: `fwt_history_op_planner_${user?.id || "anon"}`,
+    enabled: canDirectEdit && !selectedCell && !reassignmentModalOpen,
+    onUndo: async (entry) => {
+      const tracked = directHistoryIdsRef.current.get(entry.id);
+      const idsToDelete = tracked?.created ?? entry.payload.createdShiftIds;
+      for (const sid of idsToDelete) {
+        const res = await fetch(`/api/v1/operational-planner/shifts/${sid}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok && res.status !== 404) {
+          throw new Error("Failed to undo created shift");
+        }
+      }
+      const restoredIds: string[] = [];
+      for (const payload of entry.payload.deletedPayloads) {
+        const res = await fetch("/api/v1/operational-planner/shifts", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          const created = await res.json().catch(() => null);
+          if (created?.id) restoredIds.push(created.id);
+        }
+      }
+      directHistoryIdsRef.current.set(entry.id, { created: [], restored: restoredIds });
+      await fetchOperationalData(true);
+      showHistoryToast(`Undid: ${entry.label}`);
+    },
+    onRedo: async (entry) => {
+      const tracked = directHistoryIdsRef.current.get(entry.id);
+      const idsToDelete = tracked?.restored ?? [];
+      for (const sid of idsToDelete) {
+        const res = await fetch(`/api/v1/operational-planner/shifts/${sid}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok && res.status !== 404) {
+          throw new Error("Failed to re-remove shift");
+        }
+      }
+      const reCreatedIds: string[] = [];
+      for (const payload of entry.payload.createdPayloads) {
+        const res = await fetch("/api/v1/operational-planner/shifts", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          const created = await res.json().catch(() => null);
+          if (created?.id) reCreatedIds.push(created.id);
+        }
+      }
+      directHistoryIdsRef.current.set(entry.id, { created: reCreatedIds, restored: [] });
+      await fetchOperationalData(true);
+      showHistoryToast(`Redid: ${entry.label}`);
+    },
+  });
+
+  const draftHistory = usePlannerHistory<DraftBatchHistoryPayload>({
+    storageKey: `fwt_history_op_draft_${user?.id || "anon"}`,
+    enabled: isSupervisorDraftMode && !selectedCell && !batchSubmitModalOpen && !reassignmentModalOpen,
+    onUndo: async (entry) => {
+      persistDraftBatch(entry.payload.before);
+      showHistoryToast(`Undid draft: ${entry.label}`);
+    },
+    onRedo: async (entry) => {
+      persistDraftBatch(entry.payload.after);
+      showHistoryToast(`Redid draft: ${entry.label}`);
+    },
+  });
+
+  const activeHistory = isSupervisorDraftMode ? draftHistory : directHistory;
+
+  const handleRemoveDraftItem = (draftId: string) => {
+    const before = draftBatch;
+    const item = before.find((d) => d.draftId === draftId);
+    const after = before.filter((d) => d.draftId !== draftId);
+    persistDraftBatch(after);
+    draftHistory.push(
+      `Remove draft ${item?.reassignment_type || "item"} (${item?.date_from || ""})`,
+      { before, after }
+    );
+  };
+
+  const handleDiscardDraftBatch = () => {
+    if (draftBatch.length === 0) return;
+    if (!window.confirm(`Discard all ${draftBatch.length} staged draft reassignment(s)?`)) return;
+    const before = draftBatch;
+    persistDraftBatch([]);
+    draftHistory.push(`Discard ${before.length} draft item(s)`, { before, after: [] });
+  };
+
+  const handleSubmitDraftBatch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (draftBatch.length === 0) return;
+    setBatchSubmitting(true);
+    setBatchError(null);
+    setBatchSuccess(null);
+    try {
+      const payload = {
+        batch_note: batchNote.trim() || null,
+        items: draftBatch.map((item) => ({
+          reassignment_type: item.reassignment_type,
+          date_from: item.date_from,
+          date_to: item.date_to,
+          original_employee_id: item.original_employee_id || null,
+          new_employee_id: item.new_employee_id || null,
+          target_job_item_id: item.target_job_item_id || null,
+          reason_category: item.reason_category || "OTHER",
+          reason: item.reason || "Supervisor operational batch request",
+        })),
+      };
+      const res = await fetch("/api/v1/reassignment-requests/batch", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.detail?.message || data?.detail || "Failed to submit batch request");
+      }
+      setBatchSuccess(
+        `Submitted ${data.count || draftBatch.length} reassignment request(s) for approval!`
+      );
+      persistDraftBatch([]);
+      draftHistory.clear();
+      setBatchNote("");
+      setTimeout(() => {
+        setBatchSubmitModalOpen(false);
+        setBatchSuccess(null);
+        fetchOperationalData(true);
+        fetchStaffingGaps();
+      }, 1400);
+    } catch (err: any) {
+      setBatchError(err.message || "Network error submitting batch");
+    } finally {
+      setBatchSubmitting(false);
+    }
+  };
+
+  // Atomically save all staged operations (or stage into Supervisor Draft Batch)
   const handleSaveOperationalRoster = async () => {
     if (!selectedCell) return;
+
+    // Supervisor Draft Mode: stage into localStorage Draft Batch instead of live writes
+    if (isSupervisorDraftMode) {
+      const newDrafts: DraftReassignmentItem[] = [];
+      const workDate = selectedCell.cell.work_date;
+      const jobItemId = selectedCell.item.job_item_id;
+      const jobNumber = selectedCell.worksite.job_number;
+      const subItemCode = selectedCell.item.sub_item_code;
+
+      for (const addition of stagedAdditions) {
+        const isCover = Boolean(addition.original_employee_id);
+        newDrafts.push({
+          draftId: `draft-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          reassignment_type: isCover ? "REPLACE" : "ADD",
+          date_from: workDate,
+          date_to: workDate,
+          original_employee_id: addition.original_employee_id || null,
+          original_employee_name: addition.original_employee_name || null,
+          new_employee_id: addition.employee_id,
+          new_employee_name: addition.employee_name,
+          target_job_item_id: jobItemId,
+          job_number: jobNumber,
+          sub_item_code: subItemCode,
+          reason_category: isCover ? "LEAVE_COVER" : "CAPACITY",
+          reason:
+            addition.override_reason ||
+            (isCover ? `Cover for ${addition.original_employee_name || "worker"}` : "Additional shift"),
+        });
+      }
+
+      for (const baseRemoval of Array.from(stagedBaseRemovals.values())) {
+        newDrafts.push({
+          draftId: `draft-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          reassignment_type: "CANCEL",
+          date_from: workDate,
+          date_to: workDate,
+          original_employee_id: baseRemoval.employee_id,
+          original_employee_name: baseRemoval.employee_name,
+          new_employee_id: null,
+          new_employee_name: null,
+          target_job_item_id: jobItemId,
+          job_number: jobNumber,
+          sub_item_code: subItemCode,
+          reason_category: "OTHER",
+          reason: baseRemoval.reason,
+        });
+      }
+
+      for (const shiftId of stagedRemovals) {
+        const w = selectedCell.cell.workers.find((x) => x.shift_id === shiftId);
+        if (w) {
+          newDrafts.push({
+            draftId: `draft-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            reassignment_type: "CANCEL",
+            date_from: workDate,
+            date_to: workDate,
+            original_employee_id: w.employee_id,
+            original_employee_name: w.employee_name,
+            new_employee_id: null,
+            new_employee_name: null,
+            target_job_item_id: jobItemId,
+            job_number: jobNumber,
+            sub_item_code: subItemCode,
+            reason_category: "OTHER",
+            reason: `Remove shift for ${w.employee_name}`,
+          });
+        }
+      }
+
+      if (newDrafts.length > 0) {
+        const before = draftBatch;
+        const after = [...before, ...newDrafts];
+        persistDraftBatch(after);
+        draftHistory.push(
+          `Stage ${newDrafts.length} change(s) on ${jobNumber} · ${workDate}`,
+          { before, after }
+        );
+        showHistoryToast(`Added ${newDrafts.length} change(s) to Draft Batch`);
+      }
+      handleCancelModal();
+      return;
+    }
+
     setSavingShift(true);
     try {
+      const createdShiftIds: string[] = [];
+      const createdPayloads: OperationalShiftCreate[] = [];
+      const deletedPayloads: OperationalShiftCreate[] = [];
+
       // 1. Process staged removals (includes deletions of shifts, covers, or restorations of cancelled base workers)
       for (const shiftId of stagedRemovals) {
+        const existingWorker = selectedCell.cell.workers.find((w) => w.shift_id === shiftId);
         const res = await fetch(`/api/v1/operational-planner/shifts/${shiftId}`, {
           method: "DELETE",
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) {
           const errJson = await res.json().catch(() => ({}));
-          throw new Error(errJson.detail || "Failed to remove shift");
+          throw new Error(errJson.detail?.message || errJson.detail || "Failed to remove shift");
+        }
+        if (existingWorker) {
+          deletedPayloads.push({
+            job_item_id: selectedCell.item.job_item_id,
+            work_date: selectedCell.cell.work_date,
+            employee_id: existingWorker.employee_id,
+            assigned_hours: Number(existingWorker.assigned_hours) || 8,
+            override_reason: existingWorker.reason || undefined,
+            source: existingWorker.display_type === "DIRECT" ? "DIRECT" : "OVERRIDE",
+            status: existingWorker.display_type === "REMOVED" ? "CANCELLED" : "ACTIVE",
+            acknowledge_warnings: true,
+          });
         }
       }
 
@@ -838,8 +1176,11 @@ export const OperationalPlanner: React.FC = () => {
 
         if (!res.ok) {
           const errJson = await res.json().catch(() => ({}));
-          throw new Error(errJson.detail || "Failed to remove base shift");
+          throw new Error(errJson.detail?.message || errJson.detail || "Failed to remove base shift");
         }
+        const created = await res.json().catch(() => null);
+        if (created?.id) createdShiftIds.push(created.id);
+        createdPayloads.push(payload);
       }
 
       // 3. Process staged additions
@@ -850,7 +1191,9 @@ export const OperationalPlanner: React.FC = () => {
           employee_id: addition.employee_id,
           original_employee_id: addition.original_employee_id || undefined,
           assigned_hours: addition.assigned_hours,
-          override_reason: addition.override_reason || (addition.source === "OVERRIDE" ? "Leave Cover" : "Additional shift"),
+          override_reason:
+            addition.override_reason ||
+            (addition.source === "OVERRIDE" ? "Leave Cover" : "Additional shift"),
           source: addition.source,
           status: "ACTIVE",
           acknowledge_warnings: true,
@@ -867,8 +1210,20 @@ export const OperationalPlanner: React.FC = () => {
 
         if (!res.ok) {
           const errJson = await res.json().catch(() => ({}));
-          throw new Error(errJson.detail || "Failed to assign operational shift");
+          throw new Error(
+            errJson.detail?.message || errJson.detail || "Failed to assign operational shift"
+          );
         }
+        const created = await res.json().catch(() => null);
+        if (created?.id) createdShiftIds.push(created.id);
+        createdPayloads.push(payload);
+      }
+
+      if (createdPayloads.length > 0 || deletedPayloads.length > 0) {
+        directHistory.push(
+          `Edit ${selectedCell.worksite.job_number} · ${selectedCell.cell.work_date}`,
+          { createdShiftIds, createdPayloads, deletedPayloads }
+        );
       }
 
       const scrollPos = window.scrollY;
@@ -1113,15 +1468,24 @@ export const OperationalPlanner: React.FC = () => {
           <td
             key={d.work_date}
             className={`px-2 py-2 border-l border-slate-200 text-center ${
-              d.is_weekly_off ? "bg-slate-50 text-slate-400" : ""
+              d.is_weekly_off && d.shifts.length > 0
+                ? "bg-amber-50/70"
+                : d.is_weekly_off
+                ? "bg-slate-50 text-slate-400"
+                : ""
             }`}
           >
-            {d.is_weekly_off ? (
+            {d.is_weekly_off && d.shifts.length === 0 ? (
               <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-200 text-slate-600">
                 WEEKLY OFF
               </span>
             ) : d.shifts.length > 0 ? (
               <div className="space-y-1">
+                {d.is_weekly_off && (
+                  <span className="inline-block text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300">
+                    WEEKLY OFF (COVERING)
+                  </span>
+                )}
                 {d.shifts.map((s, idx) => {
                   const isRemoved = s.opacity_class === "removed";
                   const hours = Number(s.assigned_hours) || 0;
@@ -1180,6 +1544,17 @@ export const OperationalPlanner: React.FC = () => {
               <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                 Live Operations
               </span>
+              {isSupervisorDraftMode && (
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-300 flex items-center gap-1">
+                  <Layers className="h-3.5 w-3.5" />
+                  Draft Request Mode (Approval Required)
+                </span>
+              )}
+              {historyToast && (
+                <span className="text-xs text-emerald-700 font-semibold bg-emerald-50 px-2.5 py-0.5 rounded border border-emerald-200">
+                  {historyToast}
+                </span>
+              )}
               {isRefreshing && (
                 <span className="text-xs text-indigo-600 flex items-center gap-1 font-medium bg-indigo-50/80 px-2 py-0.5 rounded border border-indigo-200 animate-pulse">
                   <Loader2 className="h-3 w-3 animate-spin" /> Saving & updating...
@@ -1187,11 +1562,46 @@ export const OperationalPlanner: React.FC = () => {
               )}
             </div>
             <p className="text-sm text-slate-500 mt-1">
-              Active shifts, leave covers, base shift removals and operational adjustments.
+              {isSupervisorDraftMode
+                ? "Click any cell to stage temporary reassignments into your Draft Batch, then submit all at once for Engineer / Superintendent approval."
+                : "Active shifts, leave covers, base shift removals and operational adjustments."}
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            {/* Undo / Redo Buttons */}
+            {(canDirectEdit || isSupervisorDraftMode) && (
+              <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-1 shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => activeHistory.undo()}
+                  disabled={!activeHistory.canUndo || activeHistory.isApplying}
+                  title={
+                    activeHistory.undoLabel
+                      ? `Undo: ${activeHistory.undoLabel} (Ctrl+Z)`
+                      : "Undo (Ctrl+Z)"
+                  }
+                  className="flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                >
+                  <Undo2 className="h-3.5 w-3.5" />
+                  <span>Undo</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => activeHistory.redo()}
+                  disabled={!activeHistory.canRedo || activeHistory.isApplying}
+                  title={
+                    activeHistory.redoLabel
+                      ? `Redo: ${activeHistory.redoLabel} (Ctrl+Y)`
+                      : "Redo (Ctrl+Y)"
+                  }
+                  className="flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                >
+                  <Redo2 className="h-3.5 w-3.5" />
+                  <span>Redo</span>
+                </button>
+              </div>
+            )}
             {/* Lens Switcher */}
             <div className="bg-slate-100 p-1 rounded-lg flex items-center text-xs font-semibold">
               <button
@@ -1971,51 +2381,87 @@ export const OperationalPlanner: React.FC = () => {
                                           }
 
                                           if (isWarning) {
+                                            const isDeactivatedGap =
+                                              w.tags?.includes("Worker Deactivated") ||
+                                              (w.reason || "").toLowerCase().includes("deactivated");
                                             return (
                                               <div
                                                 key={idx}
-                                                className="p-1 rounded text-[10px] font-semibold bg-amber-50 text-amber-900 border border-dashed border-amber-400 flex items-center justify-between"
+                                                className={`p-1 rounded text-[10px] font-semibold border border-dashed flex flex-col gap-0.5 ${
+                                                  isDeactivatedGap
+                                                    ? "bg-rose-50 text-rose-900 border-rose-400"
+                                                    : "bg-amber-50 text-amber-900 border-amber-400"
+                                                }`}
+                                                title={w.reason || "Needs Cover"}
                                               >
-                                                <span className="truncate">{w.employee_name}</span>
-                                                <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />
+                                                <div className="flex items-center justify-between gap-1">
+                                                  <span className="truncate">{w.employee_name}</span>
+                                                  <AlertTriangle
+                                                    className={`h-3 w-3 shrink-0 ${
+                                                      isDeactivatedGap ? "text-rose-500" : "text-amber-500"
+                                                    }`}
+                                                  />
+                                                </div>
+                                                {isDeactivatedGap && (
+                                                  <span className="text-[8px] uppercase font-bold text-rose-700">
+                                                    Worker Deactivated
+                                                  </span>
+                                                )}
                                               </div>
                                             );
                                           }
 
+                                          const isWeeklyOffCover =
+                                            w.tags?.includes("Weekly Off (Covering)") ||
+                                            (w.display_type === "OVERRIDE" && Boolean(w.is_rest_day));
+
                                           return (
                                             <div
                                               key={idx}
-                                              className={`p-1 rounded text-[10px] font-medium flex items-center justify-between gap-1 ${
+                                              className={`p-1 rounded text-[10px] font-medium flex flex-col gap-0.5 ${
                                                 isSolid
                                                   ? "bg-indigo-600 text-white shadow-sm font-semibold"
                                                   : "bg-indigo-50 text-indigo-900 border border-dashed border-indigo-300 opacity-60"
                                               }`}
-                                              title={w.reason ? `${w.employee_name} • Note: ${w.reason}` : w.employee_name}
+                                              title={
+                                                isWeeklyOffCover
+                                                  ? `${w.employee_name} • Weekly Off (Covering)${w.reason ? ` — ${w.reason}` : ""}`
+                                                  : w.reason
+                                                  ? `${w.employee_name} • Note: ${w.reason}`
+                                                  : w.employee_name
+                                              }
                                             >
-                                              <div className="flex items-center gap-1 min-w-0">
-                                                {w.reason && (
-                                                  <FileText
-                                                    className={`h-2.5 w-2.5 shrink-0 ${
-                                                      isSolid ? "text-white/80" : "text-indigo-400"
-                                                    }`}
-                                                  />
+                                              <div className="flex items-center justify-between gap-1">
+                                                <div className="flex items-center gap-1 min-w-0">
+                                                  {w.reason && (
+                                                    <FileText
+                                                      className={`h-2.5 w-2.5 shrink-0 ${
+                                                        isSolid ? "text-white/80" : "text-indigo-400"
+                                                      }`}
+                                                    />
+                                                  )}
+                                                  <span className="truncate max-w-[85px]">
+                                                    {w.employee_name}
+                                                  </span>
+                                                </div>
+                                                {w.display_type === "OVERRIDE" && (
+                                                  <span className="text-[8px] bg-indigo-800 text-white px-1 rounded uppercase font-bold shrink-0">
+                                                    Cover
+                                                  </span>
                                                 )}
-                                                <span className="truncate max-w-[85px]">
-                                                  {w.employee_name}
-                                                </span>
+                                                {w.display_type === "DIRECT" && (
+                                                  <span
+                                                    className={`text-[8px] px-1 rounded uppercase font-bold text-white shrink-0 ${
+                                                      isExcess ? "bg-purple-700" : "bg-emerald-700"
+                                                    }`}
+                                                  >
+                                                    {isExcess ? "Excess" : "Additional"}
+                                                  </span>
+                                                )}
                                               </div>
-                                              {w.display_type === "OVERRIDE" && (
-                                                <span className="text-[8px] bg-indigo-800 text-white px-1 rounded uppercase font-bold shrink-0">
-                                                  Cover
-                                                </span>
-                                              )}
-                                              {w.display_type === "DIRECT" && (
-                                                <span
-                                                  className={`text-[8px] px-1 rounded uppercase font-bold text-white shrink-0 ${
-                                                    isExcess ? "bg-purple-700" : "bg-emerald-700"
-                                                  }`}
-                                                >
-                                                  {isExcess ? "Excess" : "Additional"}
+                                              {isWeeklyOffCover && (
+                                                <span className="text-[8px] font-bold bg-amber-400 text-amber-950 px-1 py-0.2 rounded w-fit uppercase">
+                                                  Weekly Off (Covering)
                                                 </span>
                                               )}
                                             </div>
@@ -2025,6 +2471,31 @@ export const OperationalPlanner: React.FC = () => {
                                     ) : (
                                       <div className="text-[10px] text-slate-300 text-center py-2">—</div>
                                     )}
+
+                                    {/* Supervisor Staged Draft Chips */}
+                                    {isSupervisorDraftMode &&
+                                      draftBatch
+                                        .filter(
+                                          (d) =>
+                                            d.target_job_item_id === it.job_item_id &&
+                                            d.date_from === cell.work_date
+                                        )
+                                        .map((d) => (
+                                          <div
+                                            key={d.draftId}
+                                            className="p-1 rounded text-[9px] font-bold bg-amber-100 text-amber-900 border border-dashed border-amber-500 flex items-center justify-between gap-1"
+                                            title={`Staged Draft (${d.reassignment_type}): ${d.reason}`}
+                                          >
+                                            <span className="truncate">
+                                              {d.reassignment_type === "CANCEL"
+                                                ? `✕ ${d.original_employee_name || "Cancel"}`
+                                                : `+ ${d.new_employee_name || "Cover"}`}
+                                            </span>
+                                            <span className="text-[8px] bg-amber-600 text-white px-1 rounded uppercase shrink-0">
+                                              Draft
+                                            </span>
+                                          </div>
+                                        ))}
 
                                     {/* Bottom status */}
                                     {hasCoverIssue && (
@@ -2183,7 +2654,7 @@ export const OperationalPlanner: React.FC = () => {
               <div>
                 <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                   <CalendarDays className="h-5 w-5 text-indigo-600" />
-                  Operational Shift Action
+                  {isSupervisorDraftMode ? "Stage Temporary Reassignment (Draft)" : "Operational Shift Action"}
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
                   {selectedCell.cell.weekday} {selectedCell.cell.work_date} • {selectedCell.worksite.job_number} (
@@ -2198,6 +2669,15 @@ export const OperationalPlanner: React.FC = () => {
                 <X className="h-5 w-5" />
               </button>
             </div>
+
+            {isSupervisorDraftMode && (
+              <div className="px-6 py-2.5 bg-amber-50 border-b border-amber-200 text-xs text-amber-900 flex items-center gap-2">
+                <Layers className="h-4 w-4 text-amber-600 shrink-0" />
+                <span>
+                  <strong>Supervisor Draft Mode:</strong> Changes staged here are added to your Draft Reassignment Batch and will only take effect after approval by an Engineer, Superintendent, or Admin.
+                </span>
+              </div>
+            )}
 
             {/* Modal Body */}
             <div className="p-6 space-y-5 flex-1 overflow-y-auto">
@@ -2779,10 +3259,14 @@ export const OperationalPlanner: React.FC = () => {
                   type="button"
                   onClick={handleSaveOperationalRoster}
                   disabled={savingShift || (stagedAdditions.length === 0 && stagedRemovals.size === 0 && stagedBaseRemovals.size === 0)}
-                  className="px-4 py-2 rounded-lg text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1.5 shadow-sm transition-colors"
+                  className={`px-4 py-2 rounded-lg text-xs font-semibold text-white disabled:opacity-50 flex items-center gap-1.5 shadow-sm transition-colors ${
+                    isSupervisorDraftMode
+                      ? "bg-amber-600 hover:bg-amber-700"
+                      : "bg-indigo-600 hover:bg-indigo-700"
+                  }`}
                 >
                   {savingShift && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  Save Operational Roster
+                  {isSupervisorDraftMode ? "Add to Draft Batch" : "Save Operational Roster"}
                 </button>
               </div>
             </div>
@@ -3054,7 +3538,7 @@ export const OperationalPlanner: React.FC = () => {
               {/* Modal Footer Actions */}
               <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
                 <span className="text-2xs text-slate-400">
-                  Engineer or Admin approval required before operational schedule is updated.
+                  Engineer, Superintendent, or Admin approval required before operational schedule is updated.
                 </span>
                 <div className="flex items-center gap-2">
                   <button
@@ -3073,6 +3557,172 @@ export const OperationalPlanner: React.FC = () => {
                     Submit Reassignment Request
                   </button>
                 </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Sticky Supervisor Draft Batch Bar */}
+      {isSupervisorDraftMode && draftBatch.length > 0 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[94%] max-w-4xl bg-slate-900 text-white rounded-xl shadow-2xl border border-amber-400/50 px-5 py-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="h-8 w-8 rounded-lg bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-300 font-bold text-sm">
+              {draftBatch.length}
+            </div>
+            <div>
+              <div className="text-xs font-bold flex items-center gap-2">
+                <span>Draft Reassignment Batch Ready</span>
+                <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-amber-500/20 text-amber-200 border border-amber-400/30">
+                  Saved in Browser
+                </span>
+              </div>
+              <div className="text-[11px] text-slate-300">
+                Review and submit all {draftBatch.length} staged change{draftBatch.length === 1 ? "" : "s"} together for Engineer / Superintendent approval.
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleDiscardDraftBatch}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-700 transition cursor-pointer"
+            >
+              Discard All
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setBatchError(null);
+                setBatchSuccess(null);
+                setBatchSubmitModalOpen(true);
+              }}
+              className="px-4 py-1.5 rounded-lg text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 flex items-center gap-1.5 shadow-sm transition cursor-pointer"
+            >
+              <Send className="h-3.5 w-3.5" />
+              Review &amp; Submit Batch ({draftBatch.length})
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Submit Draft Reassignment Batch Modal */}
+      {batchSubmitModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-amber-50">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <Layers className="h-5 w-5 text-amber-600" />
+                  Submit Reassignment Batch ({draftBatch.length} items)
+                </h3>
+                <p className="text-xs text-slate-600 mt-0.5">
+                  All staged changes will be grouped as a single batch in the Approvals Inbox.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBatchSubmitModalOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-amber-100 cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitDraftBatch} className="flex-1 overflow-y-auto p-6 space-y-4">
+              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                {draftBatch.map((item, idx) => (
+                  <div
+                    key={item.draftId}
+                    className="p-3 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-between gap-3 text-xs"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-[10px] font-bold text-slate-400">
+                          #{idx + 1}
+                        </span>
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
+                            item.reassignment_type === "CANCEL"
+                              ? "bg-rose-100 text-rose-800"
+                              : item.reassignment_type === "REPLACE"
+                              ? "bg-indigo-100 text-indigo-800"
+                              : "bg-emerald-100 text-emerald-800"
+                          }`}
+                        >
+                          {item.reassignment_type}
+                        </span>
+                        <span className="font-semibold text-slate-900">
+                          {item.reassignment_type === "REPLACE"
+                            ? `${item.original_employee_name || "Worker"} → ${item.new_employee_name}`
+                            : item.reassignment_type === "CANCEL"
+                            ? item.original_employee_name
+                            : item.new_employee_name}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-500 mt-0.5">
+                        {item.date_from} · Job {item.job_number} ({item.sub_item_code}) · {item.reason}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveDraftItem(item.draftId)}
+                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition cursor-pointer"
+                      title="Remove from batch"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Batch Note (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={batchNote}
+                  onChange={(e) => setBatchNote(e.target.value)}
+                  placeholder="e.g. Week 46 sick-leave cover plan for Zone A..."
+                  className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
+                />
+              </div>
+
+              {batchError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-lg flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span>{batchError}</span>
+                </div>
+              )}
+              {batchSuccess && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-lg flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 shrink-0" />
+                  <span>{batchSuccess}</span>
+                </div>
+              )}
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setBatchSubmitModalOpen(false)}
+                  className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                >
+                  Keep Editing
+                </button>
+                <button
+                  type="submit"
+                  disabled={batchSubmitting || draftBatch.length === 0}
+                  className="px-4 py-2 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white flex items-center gap-1.5 shadow-sm cursor-pointer"
+                >
+                  {batchSubmitting ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Send className="h-3.5 w-3.5" />
+                  )}
+                  Submit Batch ({draftBatch.length})
+                </button>
               </div>
             </form>
           </div>

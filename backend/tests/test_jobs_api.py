@@ -5,12 +5,12 @@ from uuid import uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import delete, select
+from sqlalchemy import select
 
 from fw.core.db import async_session_factory, engine
 from fw.main import app
 from fw.modules.identity import AuthService, User, hash_password
-from fw.modules.org import Accommodation, Employee, Group, Zone
+from fw.modules.org import Accommodation, Group, Zone
 
 
 def is_db_available() -> bool:
@@ -32,42 +32,11 @@ async def admin_client():
     if not is_db_available():
         pytest.skip("PostgreSQL not available on localhost:5432")
 
-    created_temp = False
     async with async_session_factory() as session:
-        # Check if bootstrap ADMIN001 already exists
-        user = (
-            await session.execute(select(User).where(User.username == "ADMIN001"))
-        ).scalar_one_or_none()
+        from fw.modules.identity import UserService
 
-        if user:
-            admin_id = user.id
-            emp_id = user.employee_id
-        else:
-            admin_id = uuid4()
-            emp_id = uuid4()
-            emp = Employee(
-                id=emp_id,
-                tally_id=f"ADM{str(uuid4())[:6]}",
-                name="Jobs Admin",
-                role="ADMIN",
-                country="AE",
-                is_active=True,
-            )
-            session.add(emp)
-            await session.flush()
-
-            user = User(
-                id=admin_id,
-                employee_id=emp_id,
-                username=emp.tally_id,
-                credential_hash=hash_password("Admin@1234"),
-                role="ADMIN",
-                is_active=True,
-                must_change_password=False,
-            )
-            session.add(user)
-            await session.commit()
-            created_temp = True
+        user = await UserService.get_or_create_system_admin(session)
+        await session.commit()
 
     token = AuthService.create_access_token(user)
     transport = ASGITransport(app=app)
@@ -79,11 +48,6 @@ async def admin_client():
         ) as client:
             yield client
     finally:
-        if created_temp:
-            async with async_session_factory() as session:
-                await session.execute(delete(User).where(User.id == admin_id))
-                await session.execute(delete(Employee).where(Employee.id == emp_id))
-                await session.commit()
         await engine.dispose()
 
 

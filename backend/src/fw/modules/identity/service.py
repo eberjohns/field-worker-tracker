@@ -139,7 +139,7 @@ class AuthService:
         now = datetime.now(UTC)
         payload = {
             "sub": str(user.id),
-            "employee_id": str(user.employee_id),
+            "employee_id": str(user.employee_id) if user.employee_id else None,
             "username": user.username,
             "role": user.role,
             "must_change_password": user.must_change_password,
@@ -274,6 +274,40 @@ class UserService:
         return result.scalar_one_or_none()
 
     @staticmethod
+    async def get_or_create_system_admin(
+        session: AsyncSession,
+        password: str | None = None,
+    ) -> User:
+        """Return the single standalone system ADMIN001 user, creating it if absent."""
+        admin = (
+            await session.execute(select(User).where(User.role == "ADMIN"))
+        ).scalar_one_or_none()
+        now = datetime.now(UTC)
+        if admin is None:
+            admin = User(
+                employee_id=None,
+                username="ADMIN001",
+                credential_hash=hash_password(password or "ChangeMe123!"),
+                role="ADMIN",
+                is_active=True,
+                must_change_password=False,
+                password_changed_at=now,
+            )
+            session.add(admin)
+            await session.flush()
+            return admin
+
+        if password is not None:
+            admin.credential_hash = hash_password(password)
+            admin.password_changed_at = now
+        admin.is_active = True
+        admin.must_change_password = False
+        admin.locked_until = None
+        admin.failed_attempts = 0
+        await session.flush()
+        return admin
+
+    @staticmethod
     async def update_user(
         session: AsyncSession,
         user_id: UUID,
@@ -292,9 +326,24 @@ class UserService:
 
         diff: dict[str, str | bool] = {}
         if update_data.role is not None and update_data.role != user.role:
+            if update_data.role.upper() == "ADMIN" or user.role == "ADMIN":
+                raise AppError(
+                    code="ADMIN_ROLE_RESERVED",
+                    message=(
+                        "The system administrator role is reserved for the single standalone "
+                        "ADMIN001 account and cannot be assigned or revoked."
+                    ),
+                    status_code=400,
+                )
             diff["role"] = f"{user.role} -> {update_data.role}"
             user.role = update_data.role
         if update_data.is_active is not None and update_data.is_active != user.is_active:
+            if user.role == "ADMIN" and not update_data.is_active:
+                raise AppError(
+                    code="FORBIDDEN",
+                    message="The system administrator account cannot be deactivated.",
+                    status_code=400,
+                )
             diff["is_active"] = f"{user.is_active} -> {update_data.is_active}"
             user.is_active = update_data.is_active
 

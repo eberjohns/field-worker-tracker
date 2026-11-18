@@ -25,6 +25,11 @@ import {
   CalendarDays,
   List,
   Info,
+  PowerOff,
+  RotateCcw,
+  Eye,
+  EyeOff,
+  Loader2,
 } from "lucide-react";
 import { MapContainer, PolygonEditor, PlaceSearch } from "../features/map";
 import { Map as MapLibreMap } from "maplibre-gl";
@@ -114,6 +119,123 @@ export const WorksiteDetail: React.FC = () => {
 
   // Copy Boundary Modals
   const [copyModalMode, setCopyModalMode] = useState<"COPY_FROM" | "COPY_TO" | null>(null);
+
+  // Batch 3: Admin Lifecycle Modals (Deactivate / Reactivate Worksite or Job Item)
+  const [showDeactivatedItems, setShowDeactivatedItems] = useState(false);
+  const [lifecycleTarget, setLifecycleTarget] = useState<{
+    entity: "worksite" | "job_item";
+    action: "deactivate" | "reactivate";
+    id: string;
+    label: string;
+  } | null>(null);
+  const [lifecycleEffectiveDate, setLifecycleEffectiveDate] = useState(() =>
+    new Date().toISOString().slice(0, 10)
+  );
+  const [lifecycleReason, setLifecycleReason] = useState("");
+  const [lifecycleConfirmText, setLifecycleConfirmText] = useState("");
+  const [lifecyclePassword, setLifecyclePassword] = useState("");
+  const [showLifecyclePassword, setShowLifecyclePassword] = useState(false);
+  const [reactivateChildItems, setReactivateChildItems] = useState(true);
+  const [lifecycleImpact, setLifecycleImpact] = useState<any | null>(null);
+  const [loadingLifecycleImpact, setLoadingLifecycleImpact] = useState(false);
+  const [submittingLifecycle, setSubmittingLifecycle] = useState(false);
+  const [lifecycleError, setLifecycleError] = useState<string | null>(null);
+
+  const openLifecycleModal = (
+    entity: "worksite" | "job_item",
+    action: "deactivate" | "reactivate",
+    id: string,
+    label: string
+  ) => {
+    setLifecycleTarget({ entity, action, id, label });
+    setLifecycleEffectiveDate(new Date().toISOString().slice(0, 10));
+    setLifecycleReason("");
+    setLifecycleConfirmText("");
+    setLifecyclePassword("");
+    setShowLifecyclePassword(false);
+    setReactivateChildItems(true);
+    setLifecycleImpact(null);
+    setLifecycleError(null);
+  };
+
+  useEffect(() => {
+    if (!lifecycleTarget || lifecycleTarget.action !== "deactivate" || !token) return;
+    let active = true;
+    const loadImpact = async () => {
+      setLoadingLifecycleImpact(true);
+      try {
+        const base =
+          lifecycleTarget.entity === "worksite"
+            ? `/api/v1/worksites/${lifecycleTarget.id}/deactivation-impact`
+            : `/api/v1/job-items/${lifecycleTarget.id}/deactivation-impact`;
+        const qs = lifecycleEffectiveDate
+          ? `?effective_date=${encodeURIComponent(lifecycleEffectiveDate)}`
+          : "";
+        const res = await fetch(`${base}${qs}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok && active) {
+          setLifecycleImpact(await res.json());
+        }
+      } catch {
+        if (active) setLifecycleImpact(null);
+      } finally {
+        if (active) setLoadingLifecycleImpact(false);
+      }
+    };
+    loadImpact();
+    return () => {
+      active = false;
+    };
+  }, [lifecycleTarget, lifecycleEffectiveDate, token]);
+
+  const handleConfirmLifecycle = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!lifecycleTarget) return;
+    setLifecycleError(null);
+    setSubmittingLifecycle(true);
+    try {
+      const basePath =
+        lifecycleTarget.entity === "worksite"
+          ? `/api/v1/worksites/${lifecycleTarget.id}`
+          : `/api/v1/job-items/${lifecycleTarget.id}`;
+      const endpoint =
+        lifecycleTarget.action === "deactivate"
+          ? `${basePath}/deactivate`
+          : lifecycleTarget.entity === "worksite"
+          ? `${basePath}/reactivate?reactivate_items=${reactivateChildItems}`
+          : `${basePath}/reactivate`;
+
+      const payload: any = {
+        reason: lifecycleReason.trim(),
+        confirmation_text: lifecycleConfirmText.trim(),
+        admin_password: lifecyclePassword,
+      };
+      if (lifecycleTarget.action === "deactivate") {
+        payload.effective_date = lifecycleEffectiveDate || null;
+      }
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.detail?.message || data?.detail || "Action failed");
+      }
+      setStatusMessage(data.message || "Status updated successfully.");
+      setLifecycleTarget(null);
+      await fetchData();
+    } catch (err: any) {
+      setLifecycleError(err.message || "Operation failed");
+    } finally {
+      setSubmittingLifecycle(false);
+    }
+  };
 
   const handleQuickCopy = (format: "GeoJSON" | "WKT") => {
     if (!worksite?.boundary_geojson) return;
@@ -382,10 +504,51 @@ export const WorksiteDetail: React.FC = () => {
               <MapPin className="h-3 w-3" />
               {worksite.has_boundary ? "Boundary Configured" : "Boundary Missing"}
             </span>
+            {worksite.is_active === false && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-300">
+                DEACTIVATED
+              </span>
+            )}
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {user?.role === "ADMIN" && worksite.is_active !== false && (
+            <button
+              type="button"
+              onClick={() =>
+                openLifecycleModal(
+                  "worksite",
+                  "deactivate",
+                  worksite.id,
+                  `${worksite.job_number} — ${worksite.job_name}`
+                )
+              }
+              className="px-3 py-1.5 border border-rose-300 bg-rose-600 text-white rounded-lg text-xs font-semibold hover:bg-rose-700 flex items-center gap-1.5 shadow-xs cursor-pointer"
+              title="Deactivate worksite and free all future assigned worker schedules"
+            >
+              <PowerOff className="h-3.5 w-3.5" />
+              Deactivate Worksite
+            </button>
+          )}
+          {user?.role === "ADMIN" && worksite.is_active === false && (
+            <button
+              type="button"
+              onClick={() =>
+                openLifecycleModal(
+                  "worksite",
+                  "reactivate",
+                  worksite.id,
+                  `${worksite.job_number} — ${worksite.job_name}`
+                )
+              }
+              className="px-3 py-1.5 border border-emerald-300 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 flex items-center gap-1.5 shadow-xs cursor-pointer"
+              title="Cleanly reactivate worksite without restoring old schedules"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Reactivate Worksite
+            </button>
+          )}
           <button
             onClick={() => setCopyModalMode("COPY_FROM")}
             className="px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 shadow-xs"
@@ -738,22 +901,35 @@ export const WorksiteDetail: React.FC = () => {
       {/* Tab 2: Job Items */}
       {activeTab === "items" && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-xs text-slate-500">
               Each job item specifies frequency, staff grade, required headcount, and shift hours.
             </span>
-            {["ADMIN", "ENGINEER"].includes(user?.role || "") && (
-              <button
-                onClick={() => {
-                  setEditingItem(null);
-                  setIsItemModalOpen(true);
-                }}
-                className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-xs"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Add Job Item
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              {user?.role === "ADMIN" && (
+                <label className="flex items-center gap-1.5 text-xs font-medium text-slate-600 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={showDeactivatedItems}
+                    onChange={(e) => setShowDeactivatedItems(e.target.checked)}
+                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span>Show Deactivated Items</span>
+                </label>
+              )}
+              {["ADMIN", "ENGINEER"].includes(user?.role || "") && (
+                <button
+                  onClick={() => {
+                    setEditingItem(null);
+                    setIsItemModalOpen(true);
+                  }}
+                  className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-xs"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add Job Item
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
@@ -771,10 +947,28 @@ export const WorksiteDetail: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {itemsList.map((item: any) => (
-                  <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
+                {itemsList
+                  .filter((item: any) =>
+                    user?.role === "ADMIN"
+                      ? showDeactivatedItems || item.is_active !== false
+                      : item.is_active !== false
+                  )
+                  .map((item: any) => (
+                  <tr
+                    key={item.id}
+                    className={`hover:bg-slate-50/80 transition-colors ${
+                      item.is_active === false ? "bg-slate-50/80 opacity-70" : ""
+                    }`}
+                  >
                     <td className="px-4 py-3 font-mono font-bold text-slate-900">
-                      {item.sub_item_code}
+                      <div className="flex items-center gap-1.5">
+                        <span>{item.sub_item_code}</span>
+                        {item.is_active === false && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-100 text-rose-700 border border-rose-200">
+                            DEACTIVATED
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <span className="font-medium text-slate-800">
@@ -852,6 +1046,40 @@ export const WorksiteDetail: React.FC = () => {
                               <RefreshCw className="h-3.5 w-3.5" />
                             </button>
                           </>
+                        )}
+                        {user?.role === "ADMIN" && item.is_active !== false && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              openLifecycleModal(
+                                "job_item",
+                                "deactivate",
+                                item.id,
+                                `${worksite.job_number} · ${item.sub_item_code} (${item.staff_grade_description})`
+                              )
+                            }
+                            className="p-1 rounded text-rose-600 hover:text-rose-800 hover:bg-rose-50 cursor-pointer"
+                            title="Deactivate job item & free future worker shifts"
+                          >
+                            <PowerOff className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                        {user?.role === "ADMIN" && item.is_active === false && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              openLifecycleModal(
+                                "job_item",
+                                "reactivate",
+                                item.id,
+                                `${worksite.job_number} · ${item.sub_item_code} (${item.staff_grade_description})`
+                              )
+                            }
+                            className="p-1 rounded text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 cursor-pointer"
+                            title="Cleanly reactivate job item"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                          </button>
                         )}
                       </div>
                     </td>
@@ -1486,6 +1714,251 @@ export const WorksiteDetail: React.FC = () => {
             fetchData();
           }}
         />
+      )}
+
+      {/* Admin Lifecycle Modal (Deactivate / Reactivate Worksite or Job Item) */}
+      {lifecycleTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
+          <div
+            className={`bg-white rounded-xl shadow-2xl border w-full max-w-lg max-h-[92vh] flex flex-col overflow-hidden ${
+              lifecycleTarget.action === "deactivate" ? "border-rose-200" : "border-emerald-200"
+            }`}
+          >
+            <div
+              className={`px-6 py-4 border-b flex items-center justify-between ${
+                lifecycleTarget.action === "deactivate"
+                  ? "border-rose-200 bg-rose-50"
+                  : "border-emerald-200 bg-emerald-50"
+              }`}
+            >
+              <div>
+                <h3
+                  className={`text-base font-bold flex items-center gap-2 ${
+                    lifecycleTarget.action === "deactivate" ? "text-rose-900" : "text-emerald-900"
+                  }`}
+                >
+                  {lifecycleTarget.action === "deactivate" ? (
+                    <PowerOff className="h-5 w-5 text-rose-600" />
+                  ) : (
+                    <RotateCcw className="h-5 w-5 text-emerald-600" />
+                  )}
+                  {lifecycleTarget.action === "deactivate" ? "Deactivate" : "Reactivate"}{" "}
+                  {lifecycleTarget.entity === "worksite" ? "Worksite" : "Job Item"}
+                </h3>
+                <p
+                  className={`text-xs mt-0.5 ${
+                    lifecycleTarget.action === "deactivate" ? "text-rose-700" : "text-emerald-700"
+                  }`}
+                >
+                  {lifecycleTarget.label}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLifecycleTarget(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-white/60 cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={handleConfirmLifecycle}
+              className="flex-1 overflow-y-auto p-6 space-y-4"
+            >
+              {lifecycleTarget.action === "deactivate" ? (
+                <>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Effective Date (Optional — defaults to Today)
+                    </label>
+                    <input
+                      type="date"
+                      value={lifecycleEffectiveDate}
+                      onChange={(e) => setLifecycleEffectiveDate(e.target.value)}
+                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
+                    />
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      Future worker shifts &amp; occurrences on or after this date will be cancelled, immediately freeing assigned workers&apos; capacity.
+                    </p>
+                  </div>
+
+                  <div className="p-3.5 rounded-lg bg-amber-50 border border-amber-200 text-xs space-y-2">
+                    <div className="font-bold text-amber-950 flex items-center justify-between">
+                      <span>Deactivation Impact Preview</span>
+                      {loadingLifecycleImpact && (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-700" />
+                      )}
+                    </div>
+                    {lifecycleImpact ? (
+                      <ul className="space-y-1 text-[11px] text-amber-900">
+                        {lifecycleImpact.active_job_items != null && (
+                          <li>
+                            • <strong>Job Items Deactivated:</strong>{" "}
+                            {lifecycleImpact.active_job_items} active item(s)
+                          </li>
+                        )}
+                        <li>
+                          • <strong>Base Roster Templates Deactivated:</strong>{" "}
+                          {lifecycleImpact.active_base_templates ?? 0}
+                        </li>
+                        <li>
+                          • <strong>Workers Freed:</strong>{" "}
+                          {lifecycleImpact.affected_workers ?? 0} assigned worker(s)
+                        </li>
+                        <li>
+                          • <strong>Future Shifts Cancelled (≥ {lifecycleImpact.effective_date}):</strong>{" "}
+                          {lifecycleImpact.future_active_shifts ?? 0} shift(s)
+                        </li>
+                        <li>
+                          • <strong>Future Occurrences Cancelled:</strong>{" "}
+                          {lifecycleImpact.future_occurrences ?? 0} occurrence(s)
+                        </li>
+                        <li>
+                          • <strong>Standing Assignments Ended:</strong>{" "}
+                          {lifecycleImpact.active_standing_assignments ?? 0}
+                        </li>
+                        <li>
+                          • <strong>Pending Reassignments Cancelled:</strong>{" "}
+                          {lifecycleImpact.pending_reassignment_requests ?? 0}
+                        </li>
+                      </ul>
+                    ) : (
+                      <p className="text-[11px] text-amber-700">Calculating impact...</p>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 space-y-2">
+                  <div className="font-bold">Clean Reactivation (Option A):</div>
+                  <p className="text-[11px]">
+                    Restores active visibility across planning and reporting pages.{" "}
+                    <strong>No previously cancelled schedules or roster templates are restored</strong>, preventing any double-booking with workers&apos; current assignments.
+                  </p>
+                  {lifecycleTarget.entity === "worksite" && (
+                    <label className="flex items-center gap-2 pt-1 font-semibold cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={reactivateChildItems}
+                        onChange={(e) => setReactivateChildItems(e.target.checked)}
+                        className="rounded border-emerald-400 text-emerald-600 focus:ring-emerald-500"
+                      />
+                      <span>Also reactivate child job items on this worksite</span>
+                    </label>
+                  )}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Reason <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={lifecycleReason}
+                  onChange={(e) => setLifecycleReason(e.target.value)}
+                  placeholder={
+                    lifecycleTarget.action === "deactivate"
+                      ? "e.g. Contract expired / Client suspended service"
+                      : "e.g. Contract renewed by client"
+                  }
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Type{" "}
+                    <span
+                      className={`font-mono font-bold ${
+                        lifecycleTarget.action === "deactivate"
+                          ? "text-rose-700"
+                          : "text-emerald-700"
+                      }`}
+                    >
+                      {lifecycleTarget.action === "deactivate" ? "DEACTIVATE" : "REACTIVATE"}
+                    </span>{" "}
+                    <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={lifecycleConfirmText}
+                    onChange={(e) => setLifecycleConfirmText(e.target.value)}
+                    placeholder={
+                      lifecycleTarget.action === "deactivate" ? "DEACTIVATE" : "REACTIVATE"
+                    }
+                    className="w-full px-3 py-2 text-xs font-mono border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Admin Password <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showLifecyclePassword ? "text" : "password"}
+                      required
+                      value={lifecyclePassword}
+                      onChange={(e) => setLifecyclePassword(e.target.value)}
+                      placeholder="Enter your password"
+                      className="w-full px-3 py-2 pr-9 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowLifecyclePassword((p) => !p)}
+                      className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      {showLifecyclePassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {lifecycleError && (
+                <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-800">
+                  {lifecycleError}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setLifecycleTarget(null)}
+                  className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={
+                    submittingLifecycle ||
+                    !lifecycleReason.trim() ||
+                    !lifecyclePassword ||
+                    lifecycleConfirmText.trim() !==
+                      (lifecycleTarget.action === "deactivate" ? "DEACTIVATE" : "REACTIVATE")
+                  }
+                  className={`px-4 py-2 rounded-lg text-xs font-bold text-white disabled:opacity-50 flex items-center gap-1.5 cursor-pointer ${
+                    lifecycleTarget.action === "deactivate"
+                      ? "bg-rose-600 hover:bg-rose-700"
+                      : "bg-emerald-600 hover:bg-emerald-700"
+                  }`}
+                >
+                  {submittingLifecycle && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  {lifecycleTarget.action === "deactivate"
+                    ? "Confirm Deactivation"
+                    : "Confirm Reactivation"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

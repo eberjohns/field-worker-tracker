@@ -91,6 +91,7 @@ export const Worksites: React.FC = () => {
   const [revisionFilter, setRevisionFilter] = useState("");
   const [revisions, setRevisions] = useState<{ code: string; name: string; country: string }[]>([]);
   const [boundaryFilter, setBoundaryFilter] = useState<string>("SET");
+  const [statusFilter, setStatusFilter] = useState<"active" | "inactive" | "all">("active");
   const [sortBy, setSortBy] = useState<"job_number" | "name">("job_number");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
@@ -145,11 +146,26 @@ export const Worksites: React.FC = () => {
       if (boundaryFilter === "SET") params.set("has_boundary", "true");
       if (boundaryFilter === "UNSET") params.set("has_boundary", "false");
 
+      const accParams = new URLSearchParams();
+      if (user?.role === "ADMIN") {
+        if (statusFilter === "active") {
+          params.set("is_active", "true");
+          accParams.set("is_active", "true");
+        } else if (statusFilter === "inactive") {
+          params.set("is_active", "false");
+          accParams.set("is_active", "false");
+        }
+      } else {
+        params.set("is_active", "true");
+        accParams.set("is_active", "true");
+      }
+
+      const accQs = accParams.toString() ? `?${accParams.toString()}` : "";
       const [wsRes, gRes, zRes, accRes, revRes] = await Promise.all([
         fetch(`/api/v1/worksites?${params.toString()}`, { headers }),
         fetch("/api/v1/groups", { headers }),
         fetch("/api/v1/zones", { headers }),
-        fetch("/api/v1/accommodations", { headers }),
+        fetch(`/api/v1/accommodations${accQs}`, { headers }),
         fetch("/api/v1/payroll/salary-revisions", { headers }),
       ]);
 
@@ -177,7 +193,7 @@ export const Worksites: React.FC = () => {
 
   useEffect(() => {
     fetchData();
-  }, [search, groupFilter, zoneFilter, countryFilter, boundaryFilter]);
+  }, [search, groupFilter, zoneFilter, countryFilter, boundaryFilter, statusFilter]);
 
   const handleSaveAccommodationBoundary = async (polygon: GeoJSON.Polygon) => {
     if (!drawingAccommodation) return;
@@ -431,6 +447,19 @@ export const Worksites: React.FC = () => {
             <option value="UNSET">No Boundary</option>
           </select>
 
+          {user?.role === "ADMIN" && (
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as "active" | "inactive" | "all")}
+              className="text-sm border border-slate-300 rounded-md py-1.5 px-3 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white font-medium text-slate-700"
+              title="Admin Only: Filter active or deactivated records"
+            >
+              <option value="active">Status: Active</option>
+              <option value="inactive">Status: Deactivated</option>
+              <option value="all">Status: All</option>
+            </select>
+          )}
+
           {activeTab === "worksites" && (
             <>
               <select
@@ -555,10 +584,19 @@ export const Worksites: React.FC = () => {
                     <tr
                       key={ws.id}
                       onClick={() => navigate({ to: "/worksites/$worksiteId", params: { worksiteId: ws.id } })}
-                      className="hover:bg-indigo-50/50 cursor-pointer transition"
+                      className={`hover:bg-indigo-50/50 cursor-pointer transition ${
+                        !ws.is_active ? "bg-slate-50/80 opacity-75" : ""
+                      }`}
                     >
                       <td className="py-3.5 px-4 font-mono font-medium text-slate-900">
-                        {ws.job_number}
+                        <div className="flex items-center gap-1.5">
+                          <span>{ws.job_number}</span>
+                          {!ws.is_active && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-200">
+                              DEACTIVATED
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3.5 px-4 font-medium text-slate-800">
                         <div className="flex items-center gap-1.5">

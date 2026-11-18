@@ -1,34 +1,50 @@
 import io
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from uuid import UUID
 
 import xlsxwriter
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.core.db import get_db
 from fw.core.errors import AppError
+from fw.core.events import EmployeeProfileChanged, event_bus
 from fw.modules.archive.dsar import generate_employee_dsar_excel
 from fw.modules.audit import AuditService
-from fw.modules.identity import User, UserService, get_current_user, hash_password, require_role
+from fw.modules.identity import (
+    User,
+    UserService,
+    UserSession,
+    get_current_user,
+    hash_password,
+    require_role,
+    verify_password,
+)
 from fw.modules.org import (
+    DeactivateRequest,
     Employee,
     EmployeeBulkUpdateRequest,
     EmployeeCreate,
+    EmployeeDeactivationImpactResponse,
     EmployeeDocumentCreate,
     EmployeeDocumentRead,
     EmployeeRead,
     EmployeeUpdate,
+    EntityLifecycleResponse,
     GradeChangeRequest,
     HierarchyTreeNode,
     OrgService,
+    ReactivateRequest,
     RegisteredDeviceRead,
     ReportingLineCreate,
     ReportingLineRead,
     ScopeService,
+    TallyIdChangeRequest,
+    TallyIdCheckResponse,
 )
+from fw.modules.scheduling import SchedulingService
 from fw.modules.settings import SettingsService
 from fw.modules.sync import MobileConsentWithdrawRequest, SyncService
 
@@ -52,6 +68,7 @@ async def list_employees(
     session: AsyncSession = Depends(get_db),
 ) -> list[EmployeeRead]:
     scoped_ids = await ScopeService.get_scoped_employee_ids(session, current_user)
+    effective_is_active = is_active if current_user.role == "ADMIN" else True
     employees = await OrgService.list_employees(
         session=session,
         scoped_ids=scoped_ids,
@@ -62,7 +79,7 @@ async def list_employees(
         accommodation_id=accommodation_id,
         has_accommodation=has_accommodation,
         country=country,
-        is_active=is_active,
+        is_active=effective_is_active,
         q=q,
         limit=limit,
         offset=offset,
@@ -80,12 +97,13 @@ async def export_employees_directory(
 ):
     """Export filtered employee directory as an Excel spreadsheet."""
     scoped_ids = await ScopeService.get_scoped_employee_ids(session, current_user)
+    effective_is_active = is_active if current_user.role == "ADMIN" else True
     employees = await OrgService.list_employees(
         session=session,
         scoped_ids=scoped_ids,
         role=role,
         country=country,
-        is_active=is_active,
+        is_active=effective_is_active,
         limit=5000,
         offset=0,
     )
@@ -283,6 +301,21 @@ async def bulk_update_employees(
     return {"updated_count": updated_count}
 
 
+@router.get("/check-tally-id", response_model=TallyIdCheckResponse)
+async def check_tally_id(
+    tally_id: str = Query(..., min_length=1),
+    exclude_employee_id: UUID | None = Query(None),
+    current_user: User = Depends(require_role("ADMIN")),
+    session: AsyncSession = Depends(get_db),
+) -> TallyIdCheckResponse:
+    """Check whether a Tally ID is available and whether it was previously held by another employee."""
+    return await OrgService.check_tally_id(
+        session=session,
+        tally_id=tally_id,
+        exclude_employee_id=exclude_employee_id,
+    )
+
+
 @router.get("/{employee_id}", response_model=EmployeeRead)
 async def get_employee(
     employee_id: UUID,
@@ -291,7 +324,256 @@ async def get_employee(
 ) -> EmployeeRead:
     scoped_ids = await ScopeService.get_scoped_employee_ids(session, current_user)
     employee = await OrgService.get_employee(session, employee_id, scoped_ids)
+    if not employee.is_active and current_user.role != "ADMIN":
+        raise AppError(code="NOT_FOUND", message="Employee not found.", status_code=404)
     return EmployeeRead.model_validate(employee)
+
+
+@router.post("/{employee_id}/change-tally-id", response_model=EmployeeRead)
+async def change_employee_tally_id(
+    employee_id: UUID,
+    request: TallyIdChangeRequest,
+    current_user: User = Depends(require_role("ADMIN")),
+    session: AsyncSession = Depends(get_db),
+) -> EmployeeRead:
+    """Admin updates an employee's Tally ID (e.g. temporary probation ID -> permanent ID) and login username."""
+    employee = await OrgService.change_tally_id(
+        session=session,
+        employee_id=employee_id,
+        request=request,
+        actor_user_id=current_user.id,
+        actor_role=current_user.role,
+    )
+    await session.commit()
+    return EmployeeRead.model_validate(employee)
+
+
+@router.get("/{employee_id}/deactivation-impact", response_model=EmployeeDeactivationImpactResponse)
+async def get_employee_deactivation_impact(
+    employee_id: UUID,
+    effective_date: date | None = Query(None),
+    current_user: User = Depends(require_role("ADMIN")),
+    session: AsyncSession = Depends(get_db),
+) -> EmployeeDeactivationImpactResponse:
+    """Preview scheduling and reporting-line impact before deactivating an employee (Admin only)."""
+    employee = await session.get(Employee, employee_id)
+    if not employee:
+        raise AppError(code="NOT_FOUND", message="Employee not found.", status_code=404)
+
+    eff = effective_date or date.today()
+    sched_impact = await SchedulingService(session).get_employee_deactivation_impact(
+        employee_id=employee.id,
+        effective_date=eff,
+    )
+    direct_reports = await OrgService.count_active_direct_reports(session, employee.id)
+
+    return EmployeeDeactivationImpactResponse(
+        employee_id=employee.id,
+        employee_name=employee.name,
+        tally_id=employee.tally_id,
+        role=employee.role,
+        effective_date=eff,
+        future_active_shifts=sched_impact["future_active_shifts"],
+        base_roster_slots=sched_impact["base_roster_slots"],
+        active_standing_assignments=sched_impact["active_standing_assignments"],
+        pending_leave_requests=sched_impact["pending_leave_requests"],
+        pending_reassignment_requests=sched_impact["pending_reassignment_requests"],
+        active_direct_reports=direct_reports,
+    )
+
+
+@router.post("/{employee_id}/deactivate", response_model=EntityLifecycleResponse)
+async def deactivate_employee(
+    employee_id: UUID,
+    payload: DeactivateRequest,
+    current_user: User = Depends(require_role("ADMIN")),
+    session: AsyncSession = Depends(get_db),
+) -> EntityLifecycleResponse:
+    """Admin-only deactivation with DEACTIVATE confirmation + admin password + cascading schedule cleanup."""
+    if payload.confirmation_text.strip() != "DEACTIVATE":
+        raise AppError(
+            code="VALIDATION_ERROR",
+            message='You must type "DEACTIVATE" exactly to confirm deactivation.',
+            status_code=400,
+        )
+    if not payload.admin_password or not verify_password(
+        payload.admin_password, current_user.credential_hash
+    ):
+        raise AppError(
+            code="INVALID_PASSWORD",
+            message="Admin password is incorrect. Deactivation aborted.",
+            status_code=403,
+        )
+    if not payload.reason or not payload.reason.strip():
+        raise AppError(
+            code="REASON_REQUIRED",
+            message="A reason for deactivation is required.",
+            status_code=400,
+        )
+
+    employee = await session.get(Employee, employee_id)
+    if not employee:
+        raise AppError(code="NOT_FOUND", message="Employee not found.", status_code=404)
+    if (
+        employee.role == "ADMIN"
+        or employee.tally_id == "ADMIN001"
+        or employee.id == current_user.employee_id
+    ):
+        raise AppError(
+            code="FORBIDDEN",
+            message="System admin accounts cannot be deactivated.",
+            status_code=400,
+        )
+    if not employee.is_active:
+        raise AppError(
+            code="INVALID_STATE",
+            message="Employee is already deactivated.",
+            status_code=400,
+        )
+
+    eff = payload.effective_date or date.today()
+    now = datetime.now(UTC)
+
+    employee.is_active = False
+    if employee.employment_end_date is None or employee.employment_end_date > eff:
+        employee.employment_end_date = eff
+    employee.version += 1
+
+    # Immediately disable linked User login and revoke all refresh sessions
+    user_stmt = select(User).where(
+        or_(User.employee_id == employee.id, User.username == employee.tally_id)
+    )
+    linked_users = list((await session.execute(user_stmt)).scalars().all())
+    revoked_sessions = 0
+    for u in linked_users:
+        u.is_active = False
+        sess_stmt = select(UserSession).where(
+            UserSession.user_id == u.id,
+            UserSession.revoked_at.is_(None),
+        )
+        active_sessions = list((await session.execute(sess_stmt)).scalars().all())
+        for s in active_sessions:
+            s.revoked_at = now
+            revoked_sessions += 1
+
+    cascade_summary = await SchedulingService(session).cascade_employee_deactivation(
+        employee_id=employee.id,
+        effective_date=eff,
+        actor_user_id=current_user.id,
+    )
+    cascade_summary["disabled_user_accounts"] = len(linked_users)
+    cascade_summary["revoked_sessions"] = revoked_sessions
+
+    await AuditService.log_action(
+        session=session,
+        action="DEACTIVATE_EMPLOYEE",
+        entity_type="employee",
+        entity_id=str(employee.id),
+        diff={
+            "tally_id": employee.tally_id,
+            "name": employee.name,
+            "role": employee.role,
+            "effective_date": eff.isoformat(),
+            **cascade_summary,
+        },
+        actor_user_id=current_user.id,
+        actor_role=current_user.role,
+        reason=payload.reason.strip(),
+    )
+    await event_bus.publish(EmployeeProfileChanged(employee_id=employee.id), session=session)
+    await session.commit()
+
+    return EntityLifecycleResponse(
+        status="DEACTIVATED",
+        entity_id=employee.id,
+        is_active=False,
+        effective_date=eff,
+        summary=cascade_summary,
+        message=(
+            f"Employee {employee.name} ({employee.tally_id}) deactivated effective {eff.isoformat()}. "
+            "Login access disabled and future shifts marked as Needs Cover."
+        ),
+    )
+
+
+@router.post("/{employee_id}/reactivate", response_model=EntityLifecycleResponse)
+async def reactivate_employee(
+    employee_id: UUID,
+    payload: ReactivateRequest,
+    current_user: User = Depends(require_role("ADMIN")),
+    session: AsyncSession = Depends(get_db),
+) -> EntityLifecycleResponse:
+    """Admin-only clean reactivation (Option A): re-enables account & visibility without restoring old schedules."""
+    if payload.confirmation_text.strip() != "REACTIVATE":
+        raise AppError(
+            code="VALIDATION_ERROR",
+            message='You must type "REACTIVATE" exactly to confirm reactivation.',
+            status_code=400,
+        )
+    if not payload.admin_password or not verify_password(
+        payload.admin_password, current_user.credential_hash
+    ):
+        raise AppError(
+            code="INVALID_PASSWORD",
+            message="Admin password is incorrect. Reactivation aborted.",
+            status_code=403,
+        )
+    if not payload.reason or not payload.reason.strip():
+        raise AppError(
+            code="REASON_REQUIRED",
+            message="A reason for reactivation is required.",
+            status_code=400,
+        )
+
+    employee = await session.get(Employee, employee_id)
+    if not employee:
+        raise AppError(code="NOT_FOUND", message="Employee not found.", status_code=404)
+    if employee.is_active:
+        raise AppError(
+            code="INVALID_STATE",
+            message="Employee is already active.",
+            status_code=400,
+        )
+
+    employee.is_active = True
+    employee.employment_end_date = None
+    employee.version += 1
+
+    user_stmt = select(User).where(
+        or_(User.employee_id == employee.id, User.username == employee.tally_id)
+    )
+    linked_users = list((await session.execute(user_stmt)).scalars().all())
+    for u in linked_users:
+        u.is_active = True
+
+    await AuditService.log_action(
+        session=session,
+        action="REACTIVATE_EMPLOYEE",
+        entity_type="employee",
+        entity_id=str(employee.id),
+        diff={
+            "tally_id": employee.tally_id,
+            "name": employee.name,
+            "re_enabled_user_accounts": len(linked_users),
+            "schedules_restored": False,
+        },
+        actor_user_id=current_user.id,
+        actor_role=current_user.role,
+        reason=payload.reason.strip(),
+    )
+    await event_bus.publish(EmployeeProfileChanged(employee_id=employee.id), session=session)
+    await session.commit()
+
+    return EntityLifecycleResponse(
+        status="REACTIVATED",
+        entity_id=employee.id,
+        is_active=True,
+        summary={"re_enabled_user_accounts": len(linked_users), "schedules_restored": False},
+        message=(
+            f"Employee {employee.name} ({employee.tally_id}) reactivated cleanly. "
+            "No previous schedules were restored; assign shifts manually as needed."
+        ),
+    )
 
 
 @router.patch("/{employee_id}", response_model=EmployeeRead)

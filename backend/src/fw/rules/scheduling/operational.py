@@ -33,6 +33,7 @@ class OperationalShiftInput:
     assigned_hours: float
     sequence: int = 1
     status: str = "ACTIVE"  # "ACTIVE" | "CANCELLED"
+    is_weekly_off_cover: bool = False
 
 
 @dataclass(frozen=True)
@@ -119,11 +120,15 @@ def resolve_operational_cell(
             )
         elif replacement is not None:
             # Replaced by an operational override!
-            rep_off = is_same_weekday(off_days.get(replacement.employee_id), dow)
+            rep_off = (
+                is_same_weekday(off_days.get(replacement.employee_id), dow)
+                or replacement.is_weekly_off_cover
+            )
             tags = ["Cover Replacement"]
             if is_public_holiday:
                 tags.append("Holiday Overtime")
             if rep_off:
+                tags.append("Weekly Off (Covering)")
                 tags.append("Rest Day Overtime")
 
             resolved.append(
@@ -184,6 +189,60 @@ def resolve_operational_cell(
             )
 
     # 2. Add direct operational shifts (those not replacing a specific base slot)
+    handled_orig_ids = {base.employee_id for base in base_slots}
+    for orig_id, replacement in replacements_by_orig_worker.items():
+        if orig_id in handled_orig_ids:
+            continue
+        rep_off = (
+            is_same_weekday(off_days.get(replacement.employee_id), dow)
+            or replacement.is_weekly_off_cover
+        )
+        tags = ["Cover Replacement"]
+        if is_public_holiday:
+            tags.append("Holiday Overtime")
+        if rep_off:
+            tags.append("Weekly Off (Covering)")
+            tags.append("Rest Day Overtime")
+        resolved.append(
+            ResolvedOperationalCellWorker(
+                employee_id=replacement.employee_id,
+                assigned_hours=replacement.assigned_hours,
+                sequence=replacement.sequence,
+                display_type="OVERRIDE",
+                opacity_class="solid",
+                original_employee_id=orig_id,
+                shift_id=replacement.id,
+                reason=replacement.override_reason or "Cover Replacement",
+                is_public_holiday=is_public_holiday,
+                is_rest_day=rep_off,
+                tags=tags,
+            )
+        )
+
+    # 2b. Surface uncovered WORKER_DEACTIVATED cancelled shifts as TO_BE_COVERED gaps
+    for cancelled_emp_id, cancellation in cancellations_by_worker.items():
+        if cancelled_emp_id in handled_orig_ids:
+            continue
+        if cancellation.override_reason != "WORKER_DEACTIVATED":
+            continue
+        if cancelled_emp_id in replacements_by_orig_worker:
+            continue
+        resolved.append(
+            ResolvedOperationalCellWorker(
+                employee_id=cancelled_emp_id,
+                assigned_hours=cancellation.assigned_hours,
+                sequence=cancellation.sequence,
+                display_type="TO_BE_COVERED",
+                opacity_class="warning",
+                original_employee_id=cancelled_emp_id,
+                shift_id=cancellation.id,
+                reason="Worker Deactivated - Cover Required",
+                is_public_holiday=is_public_holiday,
+                is_rest_day=False,
+                tags=["Worker Deactivated", "Needs Cover"],
+            )
+        )
+
     for direct in direct_shifts:
         # Check if already handled
         if direct.employee_id in [r.employee_id for r in resolved]:

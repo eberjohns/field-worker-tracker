@@ -166,24 +166,10 @@ async def test_planner_coverage_and_excess_integrity():
         # -------------------------------------------------------------
         # Scenario 2: Assign Thursday First -> Verify Requirement Fulfilled
         # -------------------------------------------------------------
-        from fw.modules.identity.models import User
+        from fw.modules.identity import UserService
         from fw.modules.org import Employee
 
-        user_stmt = select(User).limit(1)
-        test_user = (await session.execute(user_stmt)).scalars().first()
-        if not test_user:
-            from fw.modules.identity.service import hash_password
-
-            test_user = User(
-                id=uuid4(),
-                employee_id=uuid4(),
-                username="ADMIN001",
-                role="ADMIN",
-                credential_hash=hash_password("admin123"),
-                is_active=True,
-            )
-            session.add(test_user)
-            await session.flush()
+        test_user = await UserService.get_or_create_system_admin(session)
         current_user_id = test_user.id
 
         # Pick any active employee

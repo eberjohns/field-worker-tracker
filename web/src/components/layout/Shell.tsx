@@ -39,7 +39,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: "Dashboard", to: "/", icon: LayoutDashboard },
-  { label: "Approvals Inbox", to: "/approvals", icon: CheckSquare, roles: ["ADMIN", "ENGINEER"] },
+  { label: "Approvals Inbox", to: "/approvals", icon: CheckSquare, roles: ["ADMIN", "ENGINEER", "SUPERINTENDENT"] },
   { label: "Employees", to: "/employees", icon: Users, roles: ["ADMIN", "ENGINEER", "SUPERINTENDENT", "SUPERVISOR"] },
   { label: "Worksites & Jobs", to: "/worksites", icon: Building2, roles: ["ADMIN", "ENGINEER", "SUPERINTENDENT", "SUPERVISOR"] },
   { label: "Boundary Queue", to: "/boundaries", icon: Hexagon, roles: ["ADMIN", "ENGINEER"] },
@@ -89,7 +89,11 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 
   useEffect(() => {
     const token = localStorage.getItem("fwt_token");
-    if (!token || (user?.role !== "ADMIN" && user?.role !== "ENGINEER")) return;
+    if (
+      !token ||
+      (user?.role !== "ADMIN" && user?.role !== "ENGINEER" && user?.role !== "SUPERINTENDENT")
+    )
+      return;
     const fetchCounts = async () => {
       try {
         const res = await fetch("/api/v1/approvals?status=PENDING", {

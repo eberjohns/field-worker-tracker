@@ -18,6 +18,8 @@ from fw.modules.scheduling import (
     BaseRosterTemplateRead,
     CandidateRecommendationRead,
     CoverageResponse,
+    LeaveBulkCoverRequest,
+    LeaveBulkCoverResponse,
     LeaveDecisionRequest,
     LeaveRequestCreate,
     LeaveRequestResponse,
@@ -25,6 +27,8 @@ from fw.modules.scheduling import (
     OperationalCoverageResponse,
     OperationalRosterResponse,
     OperationalShiftCreate,
+    ReassignmentBatchCreate,
+    ReassignmentBatchResponse,
     ReassignmentDecisionRequest,
     ReassignmentPreviewRequest,
     ReassignmentPreviewResponse,
@@ -137,7 +141,7 @@ async def get_occurrence_recommendations(
     date: date | None = Query(None),
     weekday: str | None = Query(None),
     all_roles: bool = Query(False),
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERINTENDENT", "SUPERVISOR")),
     session: AsyncSession = Depends(get_db),
 ) -> list[CandidateRecommendationRead]:
     """Ranked worker candidates for an occurrence by grade group, exact staff type first."""
@@ -153,7 +157,7 @@ async def get_job_item_recommendations(
     date: date | None = Query(None),
     weekday: str | None = Query(None),
     all_roles: bool = Query(False),
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERINTENDENT", "SUPERVISOR")),
     session: AsyncSession = Depends(get_db),
 ) -> list[CandidateRecommendationRead]:
     """Ranked worker candidates for a job item by grade group, exact staff type first."""
@@ -187,7 +191,7 @@ async def list_standing_assignments(
 )
 async def create_standing_assignment(
     payload: StandingAssignmentCreate,
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERINTENDENT")),
     session: AsyncSession = Depends(get_db),
 ) -> StandingAssignmentRead:
     """Create standing assignment and materialize daily ScheduledWork for 13 months."""
@@ -201,7 +205,7 @@ async def create_standing_assignment(
 async def end_standing_assignment(
     id: UUID,
     payload: StandingAssignmentEndRequest,
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERINTENDENT")),
     session: AsyncSession = Depends(get_db),
 ) -> StandingAssignmentRead:
     """End a standing assignment from a date and cancel future unstarted scheduled work."""
@@ -235,7 +239,7 @@ async def validate_scheduled_work(
 )
 async def create_scheduled_work(
     payload: ScheduledWorkCreate,
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERINTENDENT")),
     session: AsyncSession = Depends(get_db),
 ) -> ScheduledWorkRead:
     """Create direct scheduled work assignment (with warnings check)."""
@@ -253,7 +257,7 @@ async def create_scheduled_work(
 )
 async def create_scheduled_work_batch(
     payload: ScheduledWorkBatchCreate,
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERINTENDENT")),
     session: AsyncSession = Depends(get_db),
 ) -> list[ScheduledWorkRead]:
     """Batch assign multiple workers to a job item on a work date."""
@@ -267,7 +271,7 @@ async def create_scheduled_work_batch(
 @router.delete("/scheduled-work/{id}", status_code=status.HTTP_204_NO_CONTENT)
 async def cancel_scheduled_work(
     id: UUID,
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERINTENDENT")),
     session: AsyncSession = Depends(get_db),
 ) -> None:
     """Cancel / unassign a scheduled work assignment."""
@@ -279,7 +283,7 @@ async def cancel_scheduled_work(
 async def update_scheduled_work(
     id: UUID,
     payload: ScheduledWorkUpdate,
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERINTENDENT")),
     session: AsyncSession = Depends(get_db),
 ) -> ScheduledWorkRead:
     """Update assigned hours, sequence, or cancel scheduled work."""
@@ -293,7 +297,7 @@ async def update_scheduled_work(
 @router.post("/scheduled-work/reorder", response_model=list[ScheduledWorkRead])
 async def reorder_scheduled_work(
     payload: ScheduledWorkReorderRequest,
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERINTENDENT")),
     session: AsyncSession = Depends(get_db),
 ) -> list[ScheduledWorkRead]:
     """Reorder multiple daily visits for an employee on a work date."""
@@ -335,10 +339,10 @@ async def get_base_template(
 )
 async def save_base_template(
     payload: BaseRosterTemplateCreate,
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERVISOR")),
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERINTENDENT")),
     session: AsyncSession = Depends(get_db),
 ) -> BaseRosterTemplateRead:
-    """Create or update active Base Roster Template for a job item."""
+    """Create or update active Base Roster Template for a job item (Admin, Engineer, Superintendent)."""
     service = SchedulingService(session)
     return await service.save_base_template(payload, current_user_id=current_user.id)
 
@@ -379,10 +383,10 @@ async def get_operational_roster(
 )
 async def create_operational_shift(
     payload: OperationalShiftCreate,
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERVISOR")),
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERINTENDENT")),
     session: AsyncSession = Depends(get_db),
 ) -> ScheduledWorkRead:
-    """Create a single-day operational shift or cover replacement."""
+    """Create a single-day operational shift or cover replacement (Admin, Engineer, Superintendent)."""
     service = SchedulingService(session)
     return await service.create_operational_shift(payload, current_user_id=current_user.id)
 
@@ -390,10 +394,10 @@ async def create_operational_shift(
 @router.delete("/operational-planner/shifts/{shift_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_operational_shift(
     shift_id: UUID,
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERVISOR")),
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERINTENDENT")),
     session: AsyncSession = Depends(get_db),
 ) -> None:
-    """Cancel an operational shift."""
+    """Cancel an operational shift (Admin, Engineer, Superintendent)."""
     service = SchedulingService(session)
     await service.delete_operational_shift(shift_id, current_user_id=current_user.id)
 
@@ -410,7 +414,7 @@ async def delete_operational_shift(
 )
 async def create_leave_request(
     payload: LeaveRequestCreate,
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERVISOR")),
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERINTENDENT", "SUPERVISOR")),
     session: AsyncSession = Depends(get_db),
 ) -> LeaveRequestResponse:
     """Record a new leave request (>= 3 days notice for supervisors)."""
@@ -516,10 +520,10 @@ async def get_leave_request(
 @router.post("/leave-requests/{leave_id}/approve", response_model=LeaveRequestResponse)
 async def approve_leave_request(
     leave_id: UUID,
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERINTENDENT")),
     session: AsyncSession = Depends(get_db),
 ) -> LeaveRequestResponse:
-    """Approve a leave request (Engineer or Admin)."""
+    """Approve a leave request (Admin, Engineer, or Superintendent)."""
     service = SchedulingService(session)
     return await service.approve_leave_request(leave_id, current_user)
 
@@ -528,7 +532,7 @@ async def approve_leave_request(
 async def reject_leave_request(
     leave_id: UUID,
     payload: LeaveDecisionRequest,
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERINTENDENT")),
     session: AsyncSession = Depends(get_db),
 ) -> LeaveRequestResponse:
     """Reject a leave request with mandatory reason."""
@@ -538,10 +542,26 @@ async def reject_leave_request(
     )
 
 
+@router.post("/leave-requests/{leave_id}/bulk-cover", response_model=LeaveBulkCoverResponse)
+async def bulk_cover_leave_request(
+    leave_id: UUID,
+    payload: LeaveBulkCoverRequest,
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERINTENDENT")),
+    session: AsyncSession = Depends(get_db),
+) -> LeaveBulkCoverResponse:
+    """Assign one cover worker to every remaining TO_BE_COVERED slot of an approved leave."""
+    service = SchedulingService(session)
+    return await service.bulk_cover_leave(
+        leave_id=leave_id,
+        cover_employee_id=payload.cover_employee_id,
+        current_user=current_user,
+    )
+
+
 @router.post("/leave-requests/{leave_id}/cancel", response_model=LeaveRequestResponse)
 async def cancel_leave_request(
     leave_id: UUID,
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERVISOR")),
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERINTENDENT", "SUPERVISOR")),
     session: AsyncSession = Depends(get_db),
 ) -> LeaveRequestResponse:
     """Cancel an approved or requested leave."""
@@ -609,14 +629,61 @@ async def get_reassignment_request(
     return await service.get_reassignment_request(request_id)
 
 
+@router.post(
+    "/reassignment-requests/batch",
+    response_model=ReassignmentBatchResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_reassignment_batch(
+    payload: ReassignmentBatchCreate,
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERINTENDENT", "SUPERVISOR")),
+    session: AsyncSession = Depends(get_db),
+) -> ReassignmentBatchResponse:
+    """Submit multiple temporary reassignment proposals together as one grouped approval batch."""
+    service = SchedulingService(session)
+    return await service.create_reassignment_batch(payload, current_user)
+
+
+@router.post("/reassignment-batches/{batch_id}/approve", response_model=ReassignmentBatchResponse)
+async def approve_reassignment_batch(
+    batch_id: UUID,
+    payload: ReassignmentDecisionRequest | None = None,
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERINTENDENT")),
+    session: AsyncSession = Depends(get_db),
+) -> ReassignmentBatchResponse:
+    """Approve all pending reassignment items in a batch (Admin, Engineer, or Superintendent)."""
+    service = SchedulingService(session)
+    return await service.approve_reassignment_batch(
+        batch_id=batch_id,
+        decision_note=payload.decision_note if payload else None,
+        current_user=current_user,
+    )
+
+
+@router.post("/reassignment-batches/{batch_id}/reject", response_model=ReassignmentBatchResponse)
+async def reject_reassignment_batch(
+    batch_id: UUID,
+    payload: ReassignmentDecisionRequest,
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERINTENDENT")),
+    session: AsyncSession = Depends(get_db),
+) -> ReassignmentBatchResponse:
+    """Reject all pending reassignment items in a batch with mandatory reason."""
+    service = SchedulingService(session)
+    return await service.reject_reassignment_batch(
+        batch_id=batch_id,
+        reason=payload.decision_note,
+        current_user=current_user,
+    )
+
+
 @router.post("/reassignment-requests/{request_id}/approve", response_model=ReassignmentResponse)
 async def approve_reassignment_request(
     request_id: UUID,
     payload: ReassignmentDecisionRequest | None = None,
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERINTENDENT")),
     session: AsyncSession = Depends(get_db),
 ) -> ReassignmentResponse:
-    """Approve a reassignment request (Engineer or Admin)."""
+    """Approve a reassignment request (Admin, Engineer, or Superintendent)."""
     service = SchedulingService(session)
     return await service.approve_reassignment_request(
         request_id=request_id,
@@ -629,7 +696,7 @@ async def approve_reassignment_request(
 async def reject_reassignment_request(
     request_id: UUID,
     payload: ReassignmentDecisionRequest,
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERINTENDENT")),
     session: AsyncSession = Depends(get_db),
 ) -> ReassignmentResponse:
     """Reject a reassignment request with mandatory reason."""
@@ -662,7 +729,7 @@ async def get_approvals_inbox(
     status: str | None = Query(
         "PENDING", description="Filter status: PENDING, APPROVED, REJECTED, DECIDED, ALL"
     ),
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERINTENDENT")),
     session: AsyncSession = Depends(get_db),
 ) -> ApprovalsInboxResponse:
     """Get approvals inbox items (leave requests, reassignments, attendance) in scope with badge counts."""

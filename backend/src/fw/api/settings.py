@@ -58,10 +58,18 @@ async def list_staff_grades(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> list[str]:
-    """Return distinct staff grade descriptions across employees and settings."""
+    """Return deduplicated union of distinct staff grade descriptions across active employees and job items."""
+    from fw.modules.jobs import JobsService
     from fw.modules.org import OrgService
 
-    return await OrgService.get_unique_staff_grades(session)
+    emp_grades = await OrgService.get_unique_staff_grades(session)
+    job_grades = await JobsService.get_unique_staff_grades(session)
+    canonical: dict[str, str] = {}
+    for g in emp_grades + job_grades:
+        key = g.strip().lower()
+        if key and key not in canonical:
+            canonical[key] = g.strip()
+    return sorted(canonical.values(), key=str.lower)
 
 
 @router.put("/settings/{key}", response_model=CompanySettingRead)
@@ -498,22 +506,6 @@ async def reset_database(
         await session.execute(text(f"DELETE FROM {table};"))
 
     now = datetime.now(UTC)
-    emp_res = await session.execute(
-        text(
-            """
-            INSERT INTO employees (
-                id, tally_id, name, email, role, country, is_driver,
-                join_date, is_active, version, created_at, updated_at
-            ) VALUES (
-                gen_random_uuid(), 'ADMIN001', 'System Administrator', 'admin@fieldworkertracker.local',
-                'ADMIN', 'AE', false, '2026-01-01', true, 1, :now, :now
-            ) RETURNING id
-        """
-        ),
-        {"now": now},
-    )
-    admin_emp_id = emp_res.scalar()
-
     default_pwd = "ChangeMe123!"
     cred_hash = hash_password(default_pwd)
     await session.execute(
@@ -523,12 +515,12 @@ async def reset_database(
                 id, employee_id, username, credential_hash, role,
                 must_change_password, password_changed_at, is_active, version, created_at, updated_at
             ) VALUES (
-                gen_random_uuid(), :emp_id, 'ADMIN001', :cred_hash, 'ADMIN',
+                gen_random_uuid(), NULL, 'ADMIN001', :cred_hash, 'ADMIN',
                 false, :now, true, 1, :now, :now
             )
         """
         ),
-        {"emp_id": admin_emp_id, "cred_hash": cred_hash, "now": now},
+        {"cred_hash": cred_hash, "now": now},
     )
 
     await SettingsService.set_setting(

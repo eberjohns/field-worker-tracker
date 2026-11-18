@@ -95,10 +95,13 @@ async def update_zone(
 # --- Accommodations ---
 @router.get("/accommodations", response_model=list[AccommodationRead])
 async def list_accommodations(
+    is_active: bool | None = True,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> list[AccommodationRead]:
-    rows = await OrgService.list_accommodations(session)
+    # Non-admins can only view active accommodations
+    effective_is_active = is_active if current_user.role == "ADMIN" else True
+    rows = await OrgService.list_accommodations(session, is_active=effective_is_active)
     items: list[AccommodationRead] = []
     for acc, geojson_str in rows:
         read = AccommodationRead.model_validate(acc)

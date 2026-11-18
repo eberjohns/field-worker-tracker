@@ -1499,3 +1499,19 @@ class JobsService:
         )
 
         return JobOccurrenceResponse.model_validate(occ)
+
+    @staticmethod
+    async def get_unique_staff_grades(session: AsyncSession) -> list[str]:
+        """Return distinct staff_grade_description values across active job items on active worksites."""
+        stmt = (
+            select(JobItem.staff_grade_description)
+            .join(Worksite, Worksite.id == JobItem.worksite_id)
+            .where(
+                JobItem.is_active.is_(True),
+                Worksite.is_active.is_(True),
+                JobItem.staff_grade_description.isnot(None),
+            )
+            .distinct()
+        )
+        rows = (await session.execute(stmt)).scalars().all()
+        return sorted({str(g).strip() for g in rows if g and str(g).strip()})

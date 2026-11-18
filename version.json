@@ -1,9 +1,9 @@
 {
-  "version": "1.4.2",
+  "version": "1.5.4",
   "major": 1,
-  "minor": 4,
-  "patch": 2,
-  "last_branch": "fix/hierarchy-imports-payroll-leave-ui",
-  "last_commit": "3f3d1c9",
-  "updated_at": "2026-11-18T04:38:06.994787+00:00"
+  "minor": 5,
+  "patch": 4,
+  "last_branch": "feat/batch3-roles-undo-tally-deactivation",
+  "last_commit": "4146c3e",
+  "updated_at": "2026-11-18T17:48:57.789242+00:00"
 }

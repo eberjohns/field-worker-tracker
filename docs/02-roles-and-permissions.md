@@ -3,7 +3,8 @@
 Roles are **fixed**: ADMIN, ENGINEER, SUPERINTENDENT, SUPERVISOR, WORKER. There is no configurable permission engine.
 
 ## Accounts
-- Every person has a login: **username = worker/employee ID**. All users receive the **same default password** (a company setting). It must be changed at first login; an account that has not changed it within `default_password_max_days` is locked until Admin resets it.
+- **Single Standalone System Admin (`ADMIN001`):** There is **at most one `ADMIN` account** in the entire system (enforced by PostgreSQL partial unique index `uq_users_single_admin` and API/import guardrails, ADR-023). The System Admin lives exclusively in `users` (`employee_id IS NULL`) and has **no row in `employees`**, guaranteeing Admin never appears in scheduling, attendance, leave, salaries, payroll runs, reports, hierarchy, or mobile tracking.
+- **Operational Users (`ENGINEER`, `SUPERINTENDENT`, `SUPERVISOR`, `WORKER`):** Every operational person has a 1:1 login (`username = tally_id`, `employee_id NOT NULL`). All users receive the **same default password** (a company setting). It must be changed at first login; an account that has not changed it within `default_password_max_days` is locked until Admin resets it.
 - Users can change their own password at any time. **Only Admin can reset** any user (workers included) back to the default password. Workers who forget ask their supervisor, who asks Admin.
 - Workers are **bound to the first device** they log in from (device model, OS, app version stored); other devices are refused and logged; Admin resets the binding when a worker changes phone.
 - Accounts are created from the employee import; no emails are required.

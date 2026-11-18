@@ -16,7 +16,11 @@ import {
   AlertTriangle,
   Pin,
   ArrowUpDown,
+  Undo2,
+  Redo2,
+  Eye,
 } from "lucide-react";
+import { usePlannerHistory } from "../hooks/usePlannerHistory";
 import {
   BasePlannerResponse,
   BasePlannerWorksiteRow,
@@ -40,10 +44,18 @@ interface SupervisorOption {
   tally_id?: string;
 }
 
+interface BaseTemplateHistoryPayload {
+  before: BaseRosterTemplateCreate;
+  after: BaseRosterTemplateCreate;
+}
+
 export const BasePlanner: React.FC = () => {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const canEditBasePlanner =
+    user?.role === "ADMIN" || user?.role === "ENGINEER" || user?.role === "SUPERINTENDENT";
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [historyToast, setHistoryToast] = useState<string | null>(null);
   const [worksites, setWorksites] = useState<BasePlannerWorksiteRow[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>("");
 
@@ -156,12 +168,59 @@ export const BasePlanner: React.FC = () => {
     }
   }, [token]);
 
+  const showHistoryToast = (msg: string) => {
+    setHistoryToast(msg);
+    setTimeout(() => setHistoryToast((prev) => (prev === msg ? null : prev)), 3500);
+  };
+
+  const applyTemplateSnapshot = async (snapshot: BaseRosterTemplateCreate) => {
+    const res = await fetch("/api/v1/base-planner/templates", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(snapshot),
+    });
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.detail?.message || errJson.detail || "Failed to revert template");
+    }
+    const scrollPos = window.scrollY;
+    await fetchBasePlannerData(true);
+    setTimeout(() => window.scrollTo({ top: scrollPos, behavior: "instant" }), 0);
+  };
+
+  const plannerHistory = usePlannerHistory<BaseTemplateHistoryPayload>({
+    storageKey: `fwt_history_base_planner_${user?.id || "anon"}`,
+    enabled: canEditBasePlanner && !activeSlot,
+    onUndo: async (entry) => {
+      try {
+        await applyTemplateSnapshot(entry.payload.before);
+        showHistoryToast(`Undid: ${entry.label}`);
+      } catch (err) {
+        alert(`Failed to undo: ${err instanceof Error ? err.message : "Unknown error"}`);
+        throw err;
+      }
+    },
+    onRedo: async (entry) => {
+      try {
+        await applyTemplateSnapshot(entry.payload.after);
+        showHistoryToast(`Redid: ${entry.label}`);
+      } catch (err) {
+        alert(`Failed to redo: ${err instanceof Error ? err.message : "Unknown error"}`);
+        throw err;
+      }
+    },
+  });
+
   // Click on a cell opens the assignment modal
   const handleCellClick = async (
     ws: BasePlannerWorksiteRow,
     it: BasePlannerItemRow,
     dow: typeof WEEKDAYS[number]
   ) => {
+    if (!canEditBasePlanner) return;
     setActiveSlot({ worksite: ws, item: it, weekday: dow });
     setFillWorkingDays(false);
     setCandidateSearch("");
@@ -380,6 +439,22 @@ export const BasePlanner: React.FC = () => {
         });
       }
 
+      const beforePayload: BaseRosterTemplateCreate = {
+        job_item_id: it.job_item_id,
+        allocation_mode: it.template?.allocation_mode || "DAY_OF_WEEK",
+        start_date:
+          it.template?.start_date ||
+          activeSlot.worksite.start_date ||
+          new Date().toISOString().split("T")[0],
+        end_date: it.template?.end_date || activeSlot.worksite.end_date || null,
+        entries: existingEntries.map((e) => ({
+          employee_id: e.employee_id,
+          weekday_mask: e.weekday_mask,
+          assigned_hours: Number(e.assigned_hours),
+          sequence: e.sequence,
+        })),
+      };
+
       const payload: BaseRosterTemplateCreate = {
         job_item_id: it.job_item_id,
         allocation_mode: "DAY_OF_WEEK",
@@ -399,8 +474,13 @@ export const BasePlanner: React.FC = () => {
 
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.detail || "Failed to save template");
+        throw new Error(errJson.detail?.message || errJson.detail || "Failed to save template");
       }
+
+      const actionLabel = fillWorkingDays
+        ? `Fill working days on ${activeSlot.worksite.job_number} · ${it.sub_item_code}`
+        : `Update ${targetDow} on ${activeSlot.worksite.job_number} · ${it.sub_item_code}`;
+      plannerHistory.push(actionLabel, { before: beforePayload, after: payload });
 
       const scrollPos = window.scrollY;
       await fetchBasePlannerData(true);
@@ -554,6 +634,40 @@ export const BasePlanner: React.FC = () => {
               />
             </div>
 
+            {/* Undo / Redo Buttons (localStorage-backed) */}
+            {canEditBasePlanner && (
+              <div className="inline-flex items-center rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => void plannerHistory.undo()}
+                  disabled={!plannerHistory.canUndo}
+                  className="flex items-center gap-1 px-2.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed border-r border-slate-200 transition"
+                  title={
+                    plannerHistory.undoLabel
+                      ? `Undo (Ctrl+Z): ${plannerHistory.undoLabel}`
+                      : "Nothing to undo (Ctrl+Z)"
+                  }
+                >
+                  <Undo2 className="h-3.5 w-3.5" />
+                  <span>Undo</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void plannerHistory.redo()}
+                  disabled={!plannerHistory.canRedo}
+                  className="flex items-center gap-1 px-2.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                  title={
+                    plannerHistory.redoLabel
+                      ? `Redo (Ctrl+Y): ${plannerHistory.redoLabel}`
+                      : "Nothing to redo (Ctrl+Y)"
+                  }
+                >
+                  <Redo2 className="h-3.5 w-3.5" />
+                  <span>Redo</span>
+                </button>
+              </div>
+            )}
+
             {/* Worksite Sort Toggle */}
             <button
               type="button"
@@ -566,6 +680,23 @@ export const BasePlanner: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {!canEditBasePlanner && (
+          <div className="mt-3 p-2.5 rounded-lg bg-slate-100 border border-slate-200 text-xs text-slate-700 flex items-center gap-2">
+            <Eye className="h-4 w-4 text-slate-500 shrink-0" />
+            <span>
+              <strong>View-Only Mode:</strong> Supervisors cannot modify the recurring Base Planner directly. Use{" "}
+              <strong>Operational Planner</strong> to stage and submit temporary reassignment requests for approval.
+            </span>
+          </div>
+        )}
+
+        {historyToast && (
+          <div className="mt-2.5 px-3 py-1.5 rounded-lg bg-indigo-50 border border-indigo-200 text-xs font-medium text-indigo-800 inline-flex items-center gap-2">
+            <CheckCircle2 className="h-3.5 w-3.5 text-indigo-600" />
+            {historyToast}
+          </div>
+        )}
 
         {/* Legend */}
         <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100">

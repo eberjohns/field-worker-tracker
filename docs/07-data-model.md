@@ -89,7 +89,7 @@ erDiagram
 | tally_id | text | **unique**, not null (business key) |
 | name | text | not null |
 | phone, email | text | nullable; email required for web roles |
-| role | text | role enum, not null |
+| role | text | operational role enum (`WORKER`, `SUPERVISOR`, `SUPERINTENDENT`, `ENGINEER`), not null — `ADMIN` is forbidden in `employees` (ADR-023) |
 | grade_code | text | salary label, e.g. G2B26 |
 | staff_grade_description | text | matching label; controlled list |
 | accommodation_id | uuid FK accommodations | nullable |
@@ -108,7 +108,7 @@ Replaces single supervisor/superintendent/engineer columns. One row per link: `e
 `employee_id`, `old_grade_code`, `new_grade_code`, `effective_from` date, `changed_by_user_id`, `reason`.
 
 ### users
-`employee_id` FK (unique), `username` (= employee ID, unique), `credential_hash` (Argon2id), `role`, `is_active`, `must_change_password` bool, `password_changed_at`, `failed_attempts`, `locked_until`, `last_login_at`. Every user starts with the company default password and must change it at first login; an account that still has the default after `default_password_max_days` is locked. Only Admin resets a user (back to the default).
+`employee_id` FK (unique, **nullable exclusively for `role = 'ADMIN'`**), `username` (`ADMIN001` for standalone admin; employee `tally_id` for operational users, unique), `credential_hash` (Argon2id), `role`, `is_active`, `must_change_password` bool, `password_changed_at`, `failed_attempts`, `locked_until`, `last_login_at`. Constraints (ADR-023): `CHECK ((role = 'ADMIN' AND employee_id IS NULL) OR (role <> 'ADMIN' AND employee_id IS NOT NULL))` and partial unique index `uq_users_single_admin ON users ((true)) WHERE role = 'ADMIN'` guaranteeing a single standalone System Admin. Every operational user starts with the company default password and must change it at first login; an account that still has the default after `default_password_max_days` is locked. Only Admin resets a user (back to the default).
 
 ### user_sessions
 `id` uuid PK, `user_id` FK users(id) ON DELETE CASCADE, `token_hash` string(128) unique, `expires_at` timestamptz, `revoked_at` timestamptz nullable, `created_at` timestamptz. Used for refresh token rotation and revocation (ADR-011).
@@ -158,7 +158,7 @@ Unique (worksite_id, sub_item_code). Derived values (`days_per_occurrence`, expe
 Unique (job_item_id, window_start, slot_index). Index (due_date), (status).
 
 ### scheduled_work
-`employee_id`, `work_date`, `occurrence_id`, `job_item_id`, `worksite_id` (denormalized for fast queries), `assigned_hours` numeric(5,2), `sequence` smallint, `status` (ACTIVE | CANCELLED | REASSIGNED | COMPLETED), `source` (TEMPLATE | STANDING | DIRECT | OVERRIDE | EXCEPTION | FOLLOW_UP), `original_scheduled_work_id` nullable FK (self), `original_employee_id` nullable FK employees, `override_reason` text nullable, `reassignment_request_id` nullable FK reassignment_requests, `is_late_approval` bool default false, `created_by_user_id`, `version`.
+`employee_id`, `work_date`, `occurrence_id`, `job_item_id`, `worksite_id` (denormalized for fast queries), `assigned_hours` numeric(5,2), `sequence` smallint, `status` (ACTIVE | CANCELLED | REASSIGNED | COMPLETED), `source` (TEMPLATE | STANDING | DIRECT | OVERRIDE | EXCEPTION | FOLLOW_UP), `original_scheduled_work_id` nullable FK (self), `original_employee_id` nullable FK employees, `override_reason` text nullable, `reassignment_request_id` nullable FK reassignment_requests, `is_late_approval` bool default false, `is_weekly_off_cover` bool default false (true when a cover shift falls on the cover worker's own weekly off day), `created_by_user_id`, `version`.
 Partial uniques where `status = 'ACTIVE'`: (employee_id, work_date, occurrence_id) and (employee_id, work_date, sequence) (the second is `DEFERRABLE INITIALLY DEFERRED` to allow reordering in one transaction).
 Indexes: (work_date), (worksite_id, work_date), (employee_id, work_date).
 
@@ -172,10 +172,10 @@ Indexes: (work_date), (worksite_id, work_date), (employee_id, work_date).
 `employee_id`, `job_item_id`, `start_date`, `end_date` nullable, `weekday_pattern` text[] nullable (blank = the job item's pattern), `hours_per_day` numeric(5,2) nullable (blank = from the job item), `is_active`, `created_by_user_id`, `version`. Generates daily `scheduled_work` (origin STANDING) on the job's working days, skipping public holidays (marker), weekly off and approved leave (TO_BE_COVERED markers).
 
 ### reassignment_requests (temporary reassignment)
-`reassignment_type` (REPLACE | MOVE | ADD | CANCEL), `date_from`, `date_to`, `original_employee_id`, `new_employee_id` nullable, `original_scheduled_work_id`/`standing_assignment_id` nullable, `target_job_item_id` nullable, `reason_category`, `reason`, `status` (PENDING | APPROVED | REJECTED | CANCELLED | EXPIRED), `requested_by_user_id`, `decided_by_user_id`, `decided_at`, `decision_note`. Validation: `date_from >= today + reassignment_min_notice_days`. Approval creates scheduled_work with origin EXCEPTION and marks originals REASSIGNED.
+`reassignment_type` (REPLACE | MOVE | ADD | CANCEL), `date_from`, `date_to`, `original_employee_id`, `new_employee_id` nullable, `original_scheduled_work_id`/`standing_assignment_id` nullable, `target_job_item_id` nullable, `reason_category`, `reason`, `status` (PENDING | APPROVED | REJECTED | CANCELLED | EXPIRED), `requested_by_user_id`, `decided_by_user_id`, `decided_at`, `decision_note`, `batch_id` uuid nullable (indexed; groups Supervisor draft batch submissions), `batch_note` text nullable. Validation: `date_from >= today + reassignment_min_notice_days`. Approval creates scheduled_work with origin EXCEPTION and marks originals REASSIGNED.
 
 ### leave_requests
-`employee_id`, `leave_type`, `from_date`, `to_date`, `status` (REQUESTED | APPROVED | REJECTED | CANCELLED), `reason`, `recorded_by_user_id` (supervisor), `approved_by_user_id`, `approved_at`. No balances: **leave taken** is a count (view) per worker, type and year from APPROVED rows. Leave never affects pay.
+`employee_id`, `leave_type`, `from_date`, `to_date`, `status` (REQUESTED | APPROVED | REJECTED | CANCELLED), `reason`, `cover_employee_id` nullable FK employees (indexed; optional auto-cover worker assigned on approval across all working days of the leave, tagging `is_weekly_off_cover` if covering on their own weekly off day), `recorded_by_user_id` (supervisor), `approved_by_user_id`, `approved_at`. No balances: **leave taken** is a count (view) per worker, type and year from APPROVED rows. Leave never affects pay.
 
 ### alerts
 `id uuid PK`, `alert_type text` (COVER_NEEDED | PENDING_BOUNDARY | DOC_EXPIRY), `title text`, `message text`, `ref_type text` (LEAVE_REQUEST | WORKSITE | EMPLOYEE_DOCUMENT), `ref_id uuid nullable`, `employee_id uuid nullable FK employees`, `target_user_id uuid nullable FK users`, `target_role text nullable`, `status text` (OPEN | RESOLVED | ARCHIVED), `resolved_at timestamptz nullable`, `resolved_by_user_id uuid nullable FK users`, `details jsonb default '{}'`, `version int default 1`, `created_at timestamptz`, `updated_at timestamptz`. Indexes: (`status`), (`target_role`), (`alert_type`), (`ref_type`, `ref_id`).

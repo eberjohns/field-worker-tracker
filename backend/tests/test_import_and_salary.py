@@ -18,13 +18,11 @@ from uuid import uuid4
 import openpyxl
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import delete, select
 
 from fw.core.db import async_session_factory, engine
 from fw.main import app
 from fw.modules.identity import AuthService, User, get_current_user
 from fw.modules.imports import generate_import_template_bytes
-from fw.modules.org import Employee
 from fw.rules.payroll import compute_next_payroll_month_start
 
 
@@ -49,42 +47,13 @@ async def admin_client():
     if not is_db_available():
         pytest.skip("PostgreSQL not available on localhost:5432")
 
-    created_temp = False
     async with async_session_factory() as session:
-        # Check if bootstrap ADMIN001 already exists
-        user = (
-            await session.execute(select(User).where(User.username == "ADMIN001"))
-        ).scalar_one_or_none()
+        from fw.modules.identity import UserService
 
-        if user:
-            admin_id = user.id
-            emp_id = user.employee_id
-        else:
-            admin_id = uuid4()
-            emp_id = uuid4()
-            emp = Employee(
-                id=emp_id,
-                tally_id=f"ADM{str(uuid4())[:6]}",
-                name="Admin User",
-                role="ADMIN",
-                country="AE",
-                is_active=True,
-            )
-            session.add(emp)
-            await session.flush()
-
-            user = User(
-                id=admin_id,
-                employee_id=emp_id,
-                username=emp.tally_id,
-                credential_hash="fakehash",
-                role="ADMIN",
-                is_active=True,
-                must_change_password=False,
-            )
-            session.add(user)
-            await session.commit()
-            created_temp = True
+        user = await UserService.get_or_create_system_admin(session)
+        await session.commit()
+        admin_id = user.id
+        emp_id = user.employee_id
 
     token = AuthService.create_access_token(user)
     transport = ASGITransport(app=app)
@@ -96,11 +65,6 @@ async def admin_client():
         ) as client:
             yield client, admin_id, emp_id
     finally:
-        if created_temp:
-            async with async_session_factory() as session:
-                await session.execute(delete(User).where(User.id == admin_id))
-                await session.execute(delete(Employee).where(Employee.id == emp_id))
-                await session.commit()
         await engine.dispose()
 
 
@@ -109,8 +73,8 @@ async def test_download_template():
     """Verify template generator and download endpoint without requiring live DB."""
     admin_user = User(
         id=uuid4(),
-        employee_id=uuid4(),
-        username="ADMIN01",
+        employee_id=None,
+        username="ADMIN001",
         role="ADMIN",
         credential_hash="fake",
         is_active=True,

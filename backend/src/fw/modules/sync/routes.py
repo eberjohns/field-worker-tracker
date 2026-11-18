@@ -89,6 +89,13 @@ async def get_mobile_auth_context(
         )
 
     # Find employee
+    if user.employee_id is None:
+        raise AppError(
+            code="FORBIDDEN",
+            message="System administrator does not have a mobile worker profile.",
+            status_code=403,
+        )
+
     from sqlalchemy import select
 
     emp_query = select(Employee).where(Employee.id == user.employee_id)

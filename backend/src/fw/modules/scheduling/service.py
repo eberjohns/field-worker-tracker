@@ -7,7 +7,7 @@ from collections import defaultdict
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import openpyxl
 import sqlalchemy as sa
@@ -50,6 +50,7 @@ from fw.modules.scheduling.schemas import (
     CoverageItemRow,
     CoverageResponse,
     CoverageWorksiteRow,
+    LeaveBulkCoverResponse,
     LeaveRequestCreate,
     LeaveRequestResponse,
     LeaveTakenTypeSummary,
@@ -63,6 +64,8 @@ from fw.modules.scheduling.schemas import (
     OperationalRosterWorkerRow,
     OperationalShiftCreate,
     OperationalWorksiteRow,
+    ReassignmentBatchCreate,
+    ReassignmentBatchResponse,
     ReassignmentPreviewDay,
     ReassignmentPreviewRequest,
     ReassignmentPreviewResponse,
@@ -2785,6 +2788,7 @@ class SchedulingService:
                             assigned_hours=float(s.assigned_hours),
                             sequence=s.sequence,
                             status=s.status,
+                            is_weekly_off_cover=s.is_weekly_off_cover,
                         )
                         for s in op_shifts_raw
                     ]
@@ -2987,7 +2991,7 @@ class SchedulingService:
         worker_rows: list[OperationalRosterWorkerRow] = []
 
         for emp in employees:
-            off_dow = (emp.weekly_off_day or "").upper()
+            off_dow = (emp.weekly_off_day or "").strip().upper()[:3]
             total_week_hours = Decimal("0.0")
             day_cells: list[OperationalRosterDayCell] = []
             assigned_jobs_set: set[str] = set()
@@ -3028,13 +3032,17 @@ class SchedulingService:
                                 shift_id=s.id,
                                 reason=s.override_reason,
                                 is_public_holiday=is_holiday,
-                                is_rest_day=is_off,
+                                is_rest_day=is_off or s.is_weekly_off_cover,
                                 tags=["Removed"]
                                 if is_cancelled
                                 else (
                                     ["Direct Shift"]
                                     if not s.original_employee_id
-                                    else ["Cover Shift"]
+                                    else (
+                                        ["Cover Shift", "Weekly Off (Covering)"]
+                                        if (is_off or s.is_weekly_off_cover)
+                                        else ["Cover Shift"]
+                                    )
                                 ),
                             )
                         )
@@ -3117,10 +3125,24 @@ class SchedulingService:
                 status_code=404,
             )
 
-        from uuid import uuid4
-
+        emp = await self.session.get(Employee, payload.employee_id)
         assigned_hours = payload.assigned_hours or item.hours_per_occurrence_per_staff
         shift_status = payload.status.upper() if payload.status else "ACTIVE"
+
+        seq_stmt = select(func.coalesce(func.max(ScheduledWork.sequence), 0)).where(
+            ScheduledWork.employee_id == payload.employee_id,
+            ScheduledWork.work_date == payload.work_date,
+            ScheduledWork.status == "ACTIVE",
+        )
+        next_seq = int((await self.session.execute(seq_stmt)).scalar() or 0) + 1
+
+        dow = INT_TO_WEEKDAY[payload.work_date.weekday()]
+        is_wo_cover = bool(
+            payload.original_employee_id
+            and emp
+            and emp.weekly_off_day
+            and emp.weekly_off_day.strip().upper()[:3] == dow
+        )
 
         shift = ScheduledWork(
             id=uuid4(),
@@ -3129,11 +3151,12 @@ class SchedulingService:
             worksite_id=item.worksite_id,
             work_date=payload.work_date,
             assigned_hours=assigned_hours,
-            sequence=1,
+            sequence=next_seq,
             status=shift_status,
             source=payload.source.upper(),
             original_employee_id=payload.original_employee_id,
             override_reason=payload.override_reason,
+            is_weekly_off_cover=is_wo_cover,
             created_by_user_id=current_user_id,
             version=1,
         )
@@ -3161,10 +3184,10 @@ class SchedulingService:
                 "original_employee_id": str(payload.original_employee_id)
                 if payload.original_employee_id
                 else None,
+                "is_weekly_off_cover": is_wo_cover,
             },
         )
 
-        emp = await self.session.get(Employee, payload.employee_id)
         return ScheduledWorkRead(
             id=shift.id,
             employee_id=shift.employee_id,
@@ -3177,6 +3200,7 @@ class SchedulingService:
             sequence=shift.sequence,
             status=shift.status,
             source=shift.source,
+            is_weekly_off_cover=shift.is_weekly_off_cover,
             version=shift.version,
             created_at=shift.created_at,
         )
@@ -3385,8 +3409,25 @@ class SchedulingService:
                 status_code=400,
             )
 
+        # 2b. Optional cover worker validation
+        if payload.cover_employee_id is not None:
+            if payload.cover_employee_id == payload.employee_id:
+                raise AppError(
+                    code="INVALID_COVER_WORKER",
+                    message="Cover worker cannot be the same employee taking leave.",
+                    status_code=400,
+                )
+            cover_emp = await self.session.get(Employee, payload.cover_employee_id)
+            if not cover_emp or not cover_emp.is_active:
+                raise AppError(
+                    code="INVALID_COVER_WORKER",
+                    message="Selected cover worker not found or is inactive.",
+                    status_code=400,
+                )
+
         leave = LeaveRequest(
             employee_id=payload.employee_id,
+            cover_employee_id=payload.cover_employee_id,
             leave_type=payload.leave_type.upper(),
             from_date=payload.from_date,
             to_date=payload.to_date,
@@ -3405,6 +3446,9 @@ class SchedulingService:
             actor_user_id=current_user.id,
             diff={
                 "employee_id": str(leave.employee_id),
+                "cover_employee_id": str(leave.cover_employee_id)
+                if leave.cover_employee_id
+                else None,
                 "leave_type": leave.leave_type,
                 "from_date": str(leave.from_date),
                 "to_date": str(leave.to_date),
@@ -3414,26 +3458,24 @@ class SchedulingService:
 
         return await self.get_leave_request(leave.id)
 
-    async def get_leave_request(self, leave_id: UUID) -> LeaveRequestResponse:
-        """Fetch leave request by ID with employee and user metadata."""
-        stmt = (
-            select(LeaveRequest)
-            .where(LeaveRequest.id == leave_id)
-            .options(
-                selectinload(LeaveRequest.employee),
-                selectinload(LeaveRequest.recorded_by),
-                selectinload(LeaveRequest.approved_by),
-            )
+    @staticmethod
+    def _build_leave_response(leave: LeaveRequest) -> LeaveRequestResponse:
+        emp_off = leave.employee.weekly_off_day if leave.employee else None
+        cov_off = leave.cover_employee.weekly_off_day if leave.cover_employee else None
+        wo_mismatch = bool(
+            leave.cover_employee is not None and (emp_off or "").upper() != (cov_off or "").upper()
         )
-        leave = (await self.session.execute(stmt)).scalar_one_or_none()
-        if not leave:
-            raise AppError(code="NOT_FOUND", message="Leave request not found", status_code=404)
-
         return LeaveRequestResponse(
             id=leave.id,
             employee_id=leave.employee_id,
             employee_name=leave.employee.name if leave.employee else None,
             tally_id=leave.employee.tally_id if leave.employee else None,
+            employee_weekly_off_day=emp_off,
+            cover_employee_id=leave.cover_employee_id,
+            cover_employee_name=leave.cover_employee.name if leave.cover_employee else None,
+            cover_employee_tally_id=leave.cover_employee.tally_id if leave.cover_employee else None,
+            cover_weekly_off_day=cov_off,
+            weekly_off_mismatch=wo_mismatch,
             leave_type=leave.leave_type,
             from_date=leave.from_date,
             to_date=leave.to_date,
@@ -3451,6 +3493,24 @@ class SchedulingService:
             updated_at=leave.updated_at,
         )
 
+    async def get_leave_request(self, leave_id: UUID) -> LeaveRequestResponse:
+        """Fetch leave request by ID with employee and user metadata."""
+        stmt = (
+            select(LeaveRequest)
+            .where(LeaveRequest.id == leave_id)
+            .options(
+                selectinload(LeaveRequest.employee),
+                selectinload(LeaveRequest.cover_employee),
+                selectinload(LeaveRequest.recorded_by),
+                selectinload(LeaveRequest.approved_by),
+            )
+        )
+        leave = (await self.session.execute(stmt)).scalar_one_or_none()
+        if not leave:
+            raise AppError(code="NOT_FOUND", message="Leave request not found", status_code=404)
+
+        return self._build_leave_response(leave)
+
     async def list_leave_requests(
         self,
         employee_id: UUID | None = None,
@@ -3465,6 +3525,7 @@ class SchedulingService:
             .where(LeaveRequest.is_active.is_(True))
             .options(
                 selectinload(LeaveRequest.employee),
+                selectinload(LeaveRequest.cover_employee),
                 selectinload(LeaveRequest.recorded_by),
                 selectinload(LeaveRequest.approved_by),
             )
@@ -3486,41 +3547,228 @@ class SchedulingService:
             stmt = stmt.where(LeaveRequest.from_date <= to_date)
 
         rows = (await self.session.execute(stmt)).scalars().all()
-        return [
-            LeaveRequestResponse(
-                id=item.id,
-                employee_id=item.employee_id,
-                employee_name=item.employee.name if item.employee else None,
-                tally_id=item.employee.tally_id if item.employee else None,
-                leave_type=item.leave_type,
-                from_date=item.from_date,
-                to_date=item.to_date,
-                status=item.status,
-                reason=item.reason,
-                recorded_by_user_id=item.recorded_by_user_id,
-                recorded_by_name=item.recorded_by.username if item.recorded_by else None,
-                approved_by_user_id=item.approved_by_user_id,
-                approved_by_name=item.approved_by.username if item.approved_by else None,
-                approved_at=item.approved_at,
-                decision_note=item.decision_note,
-                is_active=item.is_active,
-                version=item.version,
-                created_at=item.created_at,
-                updated_at=item.updated_at,
+        return [self._build_leave_response(item) for item in rows]
+
+    async def _apply_cover_worker_to_leave(
+        self,
+        leave: LeaveRequest,
+        cover_employee_id: UUID,
+        actor_user_id: UUID,
+    ) -> tuple[int, list[date]]:
+        """Assign cover_employee_id to every uncovered working slot of leave.employee_id in [from_date, to_date].
+
+        Always assigns on all working days of the original worker (even if a day lands on the cover
+        worker's weekly off day, in which case is_weekly_off_cover=True is set for clear UI indication).
+        """
+        orig_emp = await self.session.get(Employee, leave.employee_id)
+        cover_emp = await self.session.get(Employee, cover_employee_id)
+        if not orig_emp or not cover_emp or not cover_emp.is_active:
+            raise AppError(
+                code="INVALID_COVER_WORKER",
+                message="Cover worker not found or inactive.",
+                status_code=400,
             )
-            for item in rows
-        ]
+
+        orig_off = (orig_emp.weekly_off_day or "").strip().upper()[:3]
+        cover_off = (cover_emp.weekly_off_day or "").strip().upper()[:3]
+
+        holidays = await self.get_public_holidays(
+            orig_emp.country or "AE", leave.from_date, leave.to_date
+        )
+
+        # Load active base templates containing leave.employee_id
+        tmpl_stmt = (
+            select(BaseRosterTemplate)
+            .where(BaseRosterTemplate.is_active.is_(True))
+            .options(
+                selectinload(BaseRosterTemplate.entries),
+                selectinload(BaseRosterTemplate.job_item),
+            )
+        )
+        templates = (await self.session.execute(tmpl_stmt)).scalars().all()
+        emp_tmpl_entries: list[tuple[BaseRosterTemplate, BaseRosterEntry]] = []
+        for t in templates:
+            if not t.job_item or not t.job_item.is_active:
+                continue
+            for e in t.entries:
+                if e.employee_id == leave.employee_id:
+                    emp_tmpl_entries.append((t, e))
+
+        # Load any active direct/standing ScheduledWork for leave.employee_id in the range
+        orig_sw_stmt = select(ScheduledWork).where(
+            ScheduledWork.employee_id == leave.employee_id,
+            ScheduledWork.work_date >= leave.from_date,
+            ScheduledWork.work_date <= leave.to_date,
+            ScheduledWork.status == "ACTIVE",
+        )
+        orig_sw_rows = (await self.session.execute(orig_sw_stmt)).scalars().all()
+        orig_sw_by_date: dict[date, list[ScheduledWork]] = defaultdict(list)
+        for s in orig_sw_rows:
+            orig_sw_by_date[s.work_date].append(s)
+
+        covered_count = 0
+        weekly_off_cover_dates: list[date] = []
+
+        cur = leave.from_date
+        while cur <= leave.to_date:
+            dow = INT_TO_WEEKDAY[cur.weekday()]
+            is_cover_weekly_off = bool(cover_off and cover_off == dow)
+
+            # Collect target (job_item_id, worksite_id, assigned_hours) slots for original worker on `cur`
+            target_slots: dict[UUID, tuple[UUID, Decimal]] = {}
+
+            # 1. From active ScheduledWork rows
+            for s in orig_sw_by_date.get(cur, []):
+                target_slots[s.job_item_id] = (s.worksite_id, s.assigned_hours)
+
+            # 2. From BaseRosterTemplate entries (on original worker's working days & non-holidays)
+            if cur not in holidays and dow != orig_off:
+                for t, e in emp_tmpl_entries:
+                    if t.start_date <= cur and (t.end_date is None or t.end_date >= cur):
+                        if e.weekday_mask in ("ALL", dow):
+                            if t.job_item_id not in target_slots and t.job_item:
+                                target_slots[t.job_item_id] = (
+                                    t.job_item.worksite_id,
+                                    e.assigned_hours,
+                                )
+
+            for ji_id, (ws_id, hrs) in target_slots.items():
+                # Skip if already covered by an active override for this original worker & job item
+                existing_stmt = select(ScheduledWork).where(
+                    ScheduledWork.original_employee_id == leave.employee_id,
+                    ScheduledWork.work_date == cur,
+                    ScheduledWork.job_item_id == ji_id,
+                    ScheduledWork.status == "ACTIVE",
+                )
+                if (await self.session.execute(existing_stmt)).scalar_one_or_none():
+                    continue
+
+                seq_stmt = select(func.coalesce(func.max(ScheduledWork.sequence), 0)).where(
+                    ScheduledWork.employee_id == cover_employee_id,
+                    ScheduledWork.work_date == cur,
+                    ScheduledWork.status == "ACTIVE",
+                )
+                next_seq = int((await self.session.execute(seq_stmt)).scalar() or 0) + 1
+
+                cover_sw = ScheduledWork(
+                    id=uuid4(),
+                    employee_id=cover_employee_id,
+                    original_employee_id=leave.employee_id,
+                    work_date=cur,
+                    job_item_id=ji_id,
+                    worksite_id=ws_id,
+                    assigned_hours=hrs,
+                    sequence=next_seq,
+                    status="ACTIVE",
+                    source="OVERRIDE",
+                    override_reason=f"Leave Cover ({leave.leave_type})",
+                    is_weekly_off_cover=is_cover_weekly_off,
+                    created_by_user_id=actor_user_id,
+                    version=1,
+                )
+                self.session.add(cover_sw)
+                covered_count += 1
+                if is_cover_weekly_off and cur not in weekly_off_cover_dates:
+                    weekly_off_cover_dates.append(cur)
+
+            # Mark original worker's direct/standing shifts on `cur` as REASSIGNED if covered
+            if target_slots:
+                for s in orig_sw_by_date.get(cur, []):
+                    s.status = "REASSIGNED"
+                    s.version += 1
+
+            cur += timedelta(days=1)
+
+        await self.session.flush()
+        return covered_count, weekly_off_cover_dates
+
+    async def bulk_cover_leave(
+        self,
+        leave_id: UUID,
+        cover_employee_id: UUID,
+        current_user: User,
+    ) -> LeaveBulkCoverResponse:
+        """Assign a single cover worker to every uncovered TO_BE_COVERED slot of an approved leave."""
+        if current_user.role not in ("ADMIN", "ENGINEER", "SUPERINTENDENT"):
+            raise AppError(
+                code="FORBIDDEN",
+                message="Only Admin, Engineer, or Superintendent can bulk-assign leave cover.",
+                status_code=403,
+            )
+
+        leave = await self.session.get(LeaveRequest, leave_id)
+        if not leave:
+            raise AppError(code="NOT_FOUND", message="Leave request not found", status_code=404)
+        if leave.status != "APPROVED":
+            raise AppError(
+                code="INVALID_STATE",
+                message="Bulk cover can only be applied to an APPROVED leave.",
+                status_code=400,
+            )
+        if cover_employee_id == leave.employee_id:
+            raise AppError(
+                code="INVALID_COVER_WORKER",
+                message="Cover worker cannot be the same employee on leave.",
+                status_code=400,
+            )
+
+        scoped_ids = await ScopeService.get_scoped_employee_ids(self.session, current_user)
+        if scoped_ids is not None and leave.employee_id not in scoped_ids:
+            raise AppError(
+                code="OUT_OF_SCOPE",
+                message="Employee outside your reporting scope.",
+                status_code=403,
+            )
+
+        covered_count, wo_dates = await self._apply_cover_worker_to_leave(
+            leave=leave,
+            cover_employee_id=cover_employee_id,
+            actor_user_id=current_user.id,
+        )
+        if leave.cover_employee_id is None:
+            leave.cover_employee_id = cover_employee_id
+            leave.version += 1
+        await self.session.commit()
+
+        if covered_count > 0:
+            await self._check_and_resolve_leave_cover(
+                original_employee_id=leave.employee_id,
+                work_date=leave.from_date,
+                current_user_id=current_user.id,
+            )
+
+        cover_emp = await self.session.get(Employee, cover_employee_id)
+        await AuditService.log_action(
+            session=self.session,
+            action="BULK_COVER_LEAVE",
+            entity_type="LeaveRequest",
+            entity_id=str(leave.id),
+            actor_user_id=current_user.id,
+            diff={
+                "cover_employee_id": str(cover_employee_id),
+                "covered_count": covered_count,
+                "weekly_off_cover_dates": [d.isoformat() for d in wo_dates],
+            },
+        )
+
+        return LeaveBulkCoverResponse(
+            leave_id=leave.id,
+            cover_employee_id=cover_employee_id,
+            cover_employee_name=cover_emp.name if cover_emp else None,
+            covered_count=covered_count,
+            weekly_off_cover_dates=wo_dates,
+        )
 
     async def approve_leave_request(
         self,
         leave_id: UUID,
         current_user: User,
     ) -> LeaveRequestResponse:
-        """Approve a leave request, creating COVER_NEEDED alert and marking slots TO_BE_COVERED."""
-        if current_user.role not in ("ADMIN", "ENGINEER"):
+        """Approve a leave request, auto-assigning cover if cover_employee_id is set or emitting COVER_NEEDED."""
+        if current_user.role not in ("ADMIN", "ENGINEER", "SUPERINTENDENT"):
             raise AppError(
                 code="FORBIDDEN",
-                message="Only Engineers or Admin can approve leave",
+                message="Only Admin, Engineer, or Superintendent can approve leave",
                 status_code=403,
             )
 
@@ -3534,12 +3782,12 @@ class SchedulingService:
                 status_code=400,
             )
 
-        # Check reporting scope for Engineers
+        # Check reporting scope for Engineers / Superintendents
         scoped_ids = await ScopeService.get_scoped_employee_ids(self.session, current_user)
         if scoped_ids is not None and leave.employee_id not in scoped_ids:
             raise AppError(
                 code="OUT_OF_SCOPE",
-                message="Employee outside your engineering scope",
+                message="Employee outside your reporting scope",
                 status_code=403,
             )
 
@@ -3548,23 +3796,34 @@ class SchedulingService:
         leave.approved_at = datetime.now(UTC)
         leave.version += 1
         leave.updated_at = datetime.now(UTC)
+
+        auto_covered_count = 0
+        auto_wo_dates: list[date] = []
+        if leave.cover_employee_id is not None:
+            auto_covered_count, auto_wo_dates = await self._apply_cover_worker_to_leave(
+                leave=leave,
+                cover_employee_id=leave.cover_employee_id,
+                actor_user_id=current_user.id,
+            )
+
         await self.session.commit()
 
-        # Emit COVER_NEEDED alert via event bus
+        # Emit COVER_NEEDED alert via event bus (if no cover worker was pre-assigned)
         emp = await self.session.get(Employee, leave.employee_id)
         emp_name = emp.name if emp else "Worker"
-        await event_bus.publish(
-            LeaveApprovedEvent(
-                leave_id=leave.id,
-                employee_id=leave.employee_id,
-                date_from=leave.from_date,
-                date_to=leave.to_date,
-                worker_name=emp_name,
-                approved_by_user_id=current_user.id,
-            ),
-            session=self.session,
-        )
-        await self.session.commit()
+        if leave.cover_employee_id is None:
+            await event_bus.publish(
+                LeaveApprovedEvent(
+                    leave_id=leave.id,
+                    employee_id=leave.employee_id,
+                    date_from=leave.from_date,
+                    date_to=leave.to_date,
+                    worker_name=emp_name,
+                    approved_by_user_id=current_user.id,
+                ),
+                session=self.session,
+            )
+            await self.session.commit()
 
         await AuditService.log_action(
             session=self.session,
@@ -3572,7 +3831,15 @@ class SchedulingService:
             entity_type="LeaveRequest",
             entity_id=str(leave.id),
             actor_user_id=current_user.id,
-            diff={"status": "APPROVED", "approved_by": str(current_user.id)},
+            diff={
+                "status": "APPROVED",
+                "approved_by": str(current_user.id),
+                "cover_employee_id": str(leave.cover_employee_id)
+                if leave.cover_employee_id
+                else None,
+                "auto_covered_slots": auto_covered_count,
+                "weekly_off_cover_dates": [d.isoformat() for d in auto_wo_dates],
+            },
         )
 
         return await self.get_leave_request(leave.id)
@@ -3584,10 +3851,10 @@ class SchedulingService:
         current_user: User,
     ) -> LeaveRequestResponse:
         """Reject a leave request with mandatory rejection reason."""
-        if current_user.role not in ("ADMIN", "ENGINEER"):
+        if current_user.role not in ("ADMIN", "ENGINEER", "SUPERINTENDENT"):
             raise AppError(
                 code="FORBIDDEN",
-                message="Only Engineers or Admin can reject leave",
+                message="Only Admin, Engineer, or Superintendent can reject leave",
                 status_code=403,
             )
 
@@ -4002,6 +4269,8 @@ class SchedulingService:
 
         return ReassignmentResponse(
             id=req.id,
+            batch_id=req.batch_id,
+            batch_note=req.batch_note,
             reassignment_type=req.reassignment_type,
             date_from=req.date_from,
             date_to=req.date_to,
@@ -4083,6 +4352,8 @@ class SchedulingService:
         return [
             ReassignmentResponse(
                 id=r.id,
+                batch_id=r.batch_id,
+                batch_note=r.batch_note,
                 reassignment_type=r.reassignment_type,
                 date_from=r.date_from,
                 date_to=r.date_to,
@@ -4205,10 +4476,10 @@ class SchedulingService:
         current_user: User,
     ) -> ReassignmentResponse:
         """Approve a reassignment request, creating operational exceptions in scheduled_work."""
-        if current_user.role not in ("ADMIN", "ENGINEER"):
+        if current_user.role not in ("ADMIN", "ENGINEER", "SUPERINTENDENT"):
             raise AppError(
                 code="FORBIDDEN",
-                message="Only Engineers or Admin can approve reassignments",
+                message="Only Admin, Engineer, or Superintendent can approve reassignments",
                 status_code=403,
             )
 
@@ -4281,6 +4552,13 @@ class SchedulingService:
                         ScheduledWork.status == "ACTIVE",
                     )
                     next_seq = int((await self.session.execute(seq_stmt)).scalar() or 0) + 1
+                    new_emp = await self.session.get(Employee, req.new_employee_id)
+                    dow_cur = INT_TO_WEEKDAY[cur.weekday()]
+                    is_wo_cov = bool(
+                        new_emp
+                        and new_emp.weekly_off_day
+                        and new_emp.weekly_off_day.upper() == dow_cur
+                    )
                     new_sw = ScheduledWork(
                         employee_id=req.new_employee_id,
                         original_employee_id=req.original_employee_id,
@@ -4294,6 +4572,7 @@ class SchedulingService:
                         override_reason=req.reason,
                         reassignment_request_id=req.id,
                         is_late_approval=is_late,
+                        is_weekly_off_cover=is_wo_cov,
                     )
                     self.session.add(new_sw)
 
@@ -4419,10 +4698,10 @@ class SchedulingService:
         current_user: User,
     ) -> ReassignmentResponse:
         """Reject a reassignment request with mandatory rejection reason."""
-        if current_user.role not in ("ADMIN", "ENGINEER"):
+        if current_user.role not in ("ADMIN", "ENGINEER", "SUPERINTENDENT"):
             raise AppError(
                 code="FORBIDDEN",
-                message="Only Engineers or Admin can reject reassignments",
+                message="Only Admin, Engineer, or Superintendent can reject reassignments",
                 status_code=403,
             )
 
@@ -4601,69 +4880,810 @@ class SchedulingService:
             stmt_leaves = stmt_leaves.where(LeaveRequest.employee_id.in_(scoped_ids))
 
         approved_leaves = (await self.session.execute(stmt_leaves)).scalars().all()
-
-        if not approved_leaves:
-            return StaffingGapsResponse(from_date=from_date, to_date=to_date, gaps=[])
-
-        # 2. Check base roster templates for these workers
-        stmt_tmpl = (
-            select(BaseRosterTemplate)
-            .where(BaseRosterTemplate.is_active.is_(True))
-            .options(
-                selectinload(BaseRosterTemplate.entries),
-                selectinload(BaseRosterTemplate.job_item).selectinload(JobItem.worksite),
-            )
-        )
-        templates = (await self.session.execute(stmt_tmpl)).scalars().all()
-
         gaps: list[StaffingGapSlot] = []
 
-        for leave in approved_leaves:
-            emp = leave.employee
-            if not emp:
-                continue
+        if approved_leaves:
+            # 2. Check base roster templates for these workers
+            stmt_tmpl = (
+                select(BaseRosterTemplate)
+                .where(BaseRosterTemplate.is_active.is_(True))
+                .options(
+                    selectinload(BaseRosterTemplate.entries),
+                    selectinload(BaseRosterTemplate.job_item).selectinload(JobItem.worksite),
+                )
+            )
+            templates = (await self.session.execute(stmt_tmpl)).scalars().all()
 
-            cur = max(leave.from_date, from_date)
-            end = min(leave.to_date, to_date)
+            for leave in approved_leaves:
+                emp = leave.employee
+                if not emp:
+                    continue
 
-            while cur <= end:
-                dow = INT_TO_WEEKDAY[cur.weekday()]
+                cur = max(leave.from_date, from_date)
+                end = min(leave.to_date, to_date)
 
-                # Find any template entry matching this worker
-                for t in templates:
-                    if not t.job_item or not t.job_item.worksite:
-                        continue
-                    for e in t.entries:
-                        if e.employee_id == emp.id and e.weekday_mask in ("ALL", dow):
-                            # Check if already covered by an active operational shift
-                            sw_stmt = select(ScheduledWork).where(
-                                ScheduledWork.original_employee_id == emp.id,
-                                ScheduledWork.work_date == cur,
-                                ScheduledWork.job_item_id == t.job_item_id,
-                                ScheduledWork.status == "ACTIVE",
-                            )
-                            existing_cover = (
-                                await self.session.execute(sw_stmt)
-                            ).scalar_one_or_none()
-                            if not existing_cover:
-                                days_to_go = (cur - today).days
-                                gaps.append(
-                                    StaffingGapSlot(
-                                        work_date=cur,
-                                        job_item_id=t.job_item_id,
-                                        worksite_id=t.job_item.worksite_id,
-                                        job_number=t.job_item.worksite.job_number,
-                                        job_name=t.job_item.worksite.job_name,
-                                        staff_grade_description=t.job_item.staff_grade_description,
-                                        required_hours=e.assigned_hours,
-                                        original_employee_id=emp.id,
-                                        original_employee_name=emp.name,
-                                        reason=f"Approved {leave.leave_type} Leave",
-                                        gap_type="LEAVE",
-                                        days_to_go=days_to_go,
-                                    )
+                while cur <= end:
+                    dow = INT_TO_WEEKDAY[cur.weekday()]
+
+                    # Find any template entry matching this worker
+                    for t in templates:
+                        if not t.job_item or not t.job_item.worksite:
+                            continue
+                        for e in t.entries:
+                            if e.employee_id == emp.id and e.weekday_mask in ("ALL", dow):
+                                # Check if already covered by an active operational shift
+                                sw_stmt = select(ScheduledWork).where(
+                                    ScheduledWork.original_employee_id == emp.id,
+                                    ScheduledWork.work_date == cur,
+                                    ScheduledWork.job_item_id == t.job_item_id,
+                                    ScheduledWork.status == "ACTIVE",
                                 )
-                cur += timedelta(days=1)
+                                existing_cover = (
+                                    await self.session.execute(sw_stmt)
+                                ).scalar_one_or_none()
+                                if not existing_cover:
+                                    days_to_go = (cur - today).days
+                                    gaps.append(
+                                        StaffingGapSlot(
+                                            work_date=cur,
+                                            job_item_id=t.job_item_id,
+                                            worksite_id=t.job_item.worksite_id,
+                                            job_number=t.job_item.worksite.job_number,
+                                            job_name=t.job_item.worksite.job_name,
+                                            staff_grade_description=t.job_item.staff_grade_description,
+                                            required_hours=e.assigned_hours,
+                                            original_employee_id=emp.id,
+                                            original_employee_name=emp.name,
+                                            reason=f"Approved {leave.leave_type} Leave",
+                                            gap_type="LEAVE",
+                                            leave_id=leave.id,
+                                            days_to_go=days_to_go,
+                                        )
+                                    )
+                    cur += timedelta(days=1)
+
+        # 3. Include uncovered WORKER_DEACTIVATED future cancelled shifts as staffing gaps
+        deact_stmt = (
+            select(ScheduledWork)
+            .where(
+                ScheduledWork.status == "CANCELLED",
+                ScheduledWork.override_reason == "WORKER_DEACTIVATED",
+                ScheduledWork.work_date >= from_date,
+                ScheduledWork.work_date <= to_date,
+            )
+            .options(
+                selectinload(ScheduledWork.employee),
+                selectinload(ScheduledWork.job_item),
+                selectinload(ScheduledWork.worksite),
+            )
+        )
+        if scoped_ids is not None:
+            deact_stmt = deact_stmt.where(ScheduledWork.employee_id.in_(scoped_ids))
+
+        deact_shifts = (await self.session.execute(deact_stmt)).scalars().all()
+        for ds in deact_shifts:
+            if (
+                not ds.job_item
+                or not ds.job_item.is_active
+                or not ds.worksite
+                or not ds.worksite.is_active
+            ):
+                continue
+            cov_stmt = select(ScheduledWork).where(
+                ScheduledWork.original_employee_id == ds.employee_id,
+                ScheduledWork.work_date == ds.work_date,
+                ScheduledWork.job_item_id == ds.job_item_id,
+                ScheduledWork.status == "ACTIVE",
+            )
+            if (await self.session.execute(cov_stmt)).scalar_one_or_none():
+                continue
+            gaps.append(
+                StaffingGapSlot(
+                    work_date=ds.work_date,
+                    job_item_id=ds.job_item_id,
+                    worksite_id=ds.worksite_id,
+                    job_number=ds.worksite.job_number,
+                    job_name=ds.worksite.job_name,
+                    staff_grade_description=ds.job_item.staff_grade_description,
+                    required_hours=ds.assigned_hours,
+                    original_employee_id=ds.employee_id,
+                    original_employee_name=ds.employee.name
+                    if ds.employee
+                    else "Deactivated Worker",
+                    reason="Worker Deactivated - Cover Required",
+                    gap_type="DEACTIVATED",
+                    leave_id=None,
+                    days_to_go=(ds.work_date - today).days,
+                )
+            )
 
         gaps.sort(key=lambda g: g.work_date)
         return StaffingGapsResponse(from_date=from_date, to_date=to_date, gaps=gaps)
+
+    # -------------------------------------------------------------------------
+    # Batch Reassignment Requests (Supervisor Draft Basket -> Approver Batch)
+    # -------------------------------------------------------------------------
+
+    async def create_reassignment_batch(
+        self,
+        payload: ReassignmentBatchCreate,
+        current_user: User,
+    ) -> ReassignmentBatchResponse:
+        """Create a grouped batch of temporary reassignment requests in one atomic transaction."""
+        today = date.today()
+        if not payload.items:
+            raise AppError(
+                code="EMPTY_BATCH",
+                message="Reassignment batch must contain at least one item.",
+                status_code=400,
+            )
+
+        scoped_ids = await ScopeService.get_scoped_employee_ids(self.session, current_user)
+        batch_id = uuid4()
+        created_reqs: list[ReassignmentRequest] = []
+        effective_batch_note = (payload.batch_note or payload.reason or "").strip() or None
+
+        for item in payload.items:
+            if item.date_to < item.date_from:
+                raise AppError(
+                    code="INVALID_DATES",
+                    message="End date cannot be before start date.",
+                    status_code=400,
+                )
+            if item.date_from < today and current_user.role != "ADMIN":
+                raise AppError(
+                    code="INVALID_DATES",
+                    message="Cannot submit reassignment requests for past dates.",
+                    status_code=400,
+                )
+            if scoped_ids is not None:
+                if item.original_employee_id and item.original_employee_id not in scoped_ids:
+                    raise AppError(
+                        code="OUT_OF_SCOPE",
+                        message="Original employee is outside your scope.",
+                        status_code=403,
+                    )
+                if item.new_employee_id and item.new_employee_id not in scoped_ids:
+                    raise AppError(
+                        code="OUT_OF_SCOPE",
+                        message="New employee is outside your scope.",
+                        status_code=403,
+                    )
+
+            req = ReassignmentRequest(
+                batch_id=batch_id,
+                batch_note=effective_batch_note,
+                reassignment_type=item.reassignment_type.upper(),
+                date_from=item.date_from,
+                date_to=item.date_to,
+                original_employee_id=item.original_employee_id,
+                new_employee_id=item.new_employee_id,
+                original_scheduled_work_id=item.original_scheduled_work_id,
+                standing_assignment_id=item.standing_assignment_id,
+                target_job_item_id=item.target_job_item_id,
+                hours_per_day=item.hours_per_day,
+                reason_category=(item.reason_category or payload.reason_category).upper(),
+                reason=(
+                    item.reason or effective_batch_note or "Batch operational reassignment"
+                ).strip(),
+                status="PENDING",
+                requested_by_user_id=current_user.id,
+            )
+            self.session.add(req)
+            created_reqs.append(req)
+
+        await self.session.commit()
+
+        await AuditService.log_action(
+            session=self.session,
+            action="CREATE_BATCH",
+            entity_type="ReassignmentBatch",
+            entity_id=str(batch_id),
+            actor_user_id=current_user.id,
+            diff={
+                "batch_id": str(batch_id),
+                "count": len(created_reqs),
+                "reason_category": payload.reason_category,
+                "reason": effective_batch_note,
+            },
+        )
+
+        responses = [await self.get_reassignment_request(r.id) for r in created_reqs]
+        return ReassignmentBatchResponse(
+            batch_id=batch_id,
+            count=len(responses),
+            items=responses,
+        )
+
+    async def approve_reassignment_batch(
+        self,
+        batch_id: UUID,
+        decision_note: str | None,
+        current_user: User,
+    ) -> ReassignmentBatchResponse:
+        """Approve all PENDING reassignment requests in a batch."""
+        if current_user.role not in ("ADMIN", "ENGINEER", "SUPERINTENDENT"):
+            raise AppError(
+                code="FORBIDDEN",
+                message="Only Admin, Engineer, or Superintendent can approve reassignment batches.",
+                status_code=403,
+            )
+
+        stmt = (
+            select(ReassignmentRequest)
+            .where(
+                ReassignmentRequest.batch_id == batch_id,
+                ReassignmentRequest.is_active.is_(True),
+            )
+            .order_by(ReassignmentRequest.date_from.asc(), ReassignmentRequest.created_at.asc())
+        )
+        reqs = list((await self.session.execute(stmt)).scalars().all())
+        if not reqs:
+            raise AppError(
+                code="NOT_FOUND", message="Reassignment batch not found.", status_code=404
+            )
+
+        pending_reqs = [r for r in reqs if r.status == "PENDING"]
+        if not pending_reqs:
+            raise AppError(
+                code="INVALID_STATE",
+                message="No pending reassignment items remain in this batch.",
+                status_code=400,
+            )
+
+        results: list[ReassignmentResponse] = []
+        for req in pending_reqs:
+            res = await self.approve_reassignment_request(
+                request_id=req.id,
+                decision_note=decision_note,
+                current_user=current_user,
+            )
+            results.append(res)
+
+        await AuditService.log_action(
+            session=self.session,
+            action="APPROVE_BATCH",
+            entity_type="ReassignmentBatch",
+            entity_id=str(batch_id),
+            actor_user_id=current_user.id,
+            diff={"batch_id": str(batch_id), "approved_count": len(results)},
+        )
+
+        return ReassignmentBatchResponse(batch_id=batch_id, count=len(results), items=results)
+
+    async def reject_reassignment_batch(
+        self,
+        batch_id: UUID,
+        reason: str | None,
+        current_user: User,
+    ) -> ReassignmentBatchResponse:
+        """Reject all PENDING reassignment requests in a batch with mandatory reason."""
+        if current_user.role not in ("ADMIN", "ENGINEER", "SUPERINTENDENT"):
+            raise AppError(
+                code="FORBIDDEN",
+                message="Only Admin, Engineer, or Superintendent can reject reassignment batches.",
+                status_code=403,
+            )
+        if not reason or not reason.strip():
+            raise AppError(
+                code="REASON_REQUIRED",
+                message="A rejection reason is mandatory.",
+                status_code=400,
+            )
+
+        stmt = (
+            select(ReassignmentRequest)
+            .where(
+                ReassignmentRequest.batch_id == batch_id,
+                ReassignmentRequest.is_active.is_(True),
+            )
+            .order_by(ReassignmentRequest.date_from.asc(), ReassignmentRequest.created_at.asc())
+        )
+        reqs = list((await self.session.execute(stmt)).scalars().all())
+        if not reqs:
+            raise AppError(
+                code="NOT_FOUND", message="Reassignment batch not found.", status_code=404
+            )
+
+        pending_reqs = [r for r in reqs if r.status == "PENDING"]
+        if not pending_reqs:
+            raise AppError(
+                code="INVALID_STATE",
+                message="No pending reassignment items remain in this batch.",
+                status_code=400,
+            )
+
+        results: list[ReassignmentResponse] = []
+        for req in pending_reqs:
+            res = await self.reject_reassignment_request(
+                request_id=req.id,
+                reason=reason,
+                current_user=current_user,
+            )
+            results.append(res)
+
+        await AuditService.log_action(
+            session=self.session,
+            action="REJECT_BATCH",
+            entity_type="ReassignmentBatch",
+            entity_id=str(batch_id),
+            actor_user_id=current_user.id,
+            diff={
+                "batch_id": str(batch_id),
+                "rejected_count": len(results),
+                "reason": reason.strip(),
+            },
+        )
+
+        return ReassignmentBatchResponse(batch_id=batch_id, count=len(results), items=results)
+
+    # -------------------------------------------------------------------------
+    # Deactivation Impact & Schedule Cascade Helpers (Batch 3)
+    # -------------------------------------------------------------------------
+
+    async def get_employee_deactivation_impact(
+        self,
+        employee_id: UUID,
+        effective_date: date,
+    ) -> dict[str, int]:
+        """Compute scheduling impact of deactivating an employee from effective_date onward."""
+        future_shifts_cnt = int(
+            (
+                await self.session.execute(
+                    select(func.count(ScheduledWork.id)).where(
+                        ScheduledWork.employee_id == employee_id,
+                        ScheduledWork.work_date >= effective_date,
+                        ScheduledWork.status == "ACTIVE",
+                    )
+                )
+            ).scalar_one()
+            or 0
+        )
+
+        tmpl_entries_cnt = int(
+            (
+                await self.session.execute(
+                    select(func.count(BaseRosterEntry.id))
+                    .join(BaseRosterTemplate, BaseRosterTemplate.id == BaseRosterEntry.template_id)
+                    .where(
+                        BaseRosterEntry.employee_id == employee_id,
+                        BaseRosterTemplate.is_active.is_(True),
+                    )
+                )
+            ).scalar_one()
+            or 0
+        )
+
+        standing_cnt = int(
+            (
+                await self.session.execute(
+                    select(func.count(StandingAssignment.id)).where(
+                        StandingAssignment.employee_id == employee_id,
+                        StandingAssignment.is_active.is_(True),
+                    )
+                )
+            ).scalar_one()
+            or 0
+        )
+
+        pending_leaves_cnt = int(
+            (
+                await self.session.execute(
+                    select(func.count(LeaveRequest.id)).where(
+                        LeaveRequest.employee_id == employee_id,
+                        LeaveRequest.status == "REQUESTED",
+                        LeaveRequest.is_active.is_(True),
+                    )
+                )
+            ).scalar_one()
+            or 0
+        )
+
+        pending_reassign_cnt = int(
+            (
+                await self.session.execute(
+                    select(func.count(ReassignmentRequest.id)).where(
+                        or_(
+                            ReassignmentRequest.original_employee_id == employee_id,
+                            ReassignmentRequest.new_employee_id == employee_id,
+                        ),
+                        ReassignmentRequest.status == "PENDING",
+                        ReassignmentRequest.is_active.is_(True),
+                    )
+                )
+            ).scalar_one()
+            or 0
+        )
+
+        return {
+            "future_active_shifts": future_shifts_cnt,
+            "base_roster_slots": tmpl_entries_cnt,
+            "active_standing_assignments": standing_cnt,
+            "pending_leave_requests": pending_leaves_cnt,
+            "pending_reassignment_requests": pending_reassign_cnt,
+        }
+
+    async def cascade_employee_deactivation(
+        self,
+        employee_id: UUID,
+        effective_date: date,
+        actor_user_id: UUID,
+    ) -> dict[str, int]:
+        """Cancel future shifts (creating WORKER_DEACTIVATED cover gaps), remove base slots, and cancel pending requests."""
+        now = datetime.now(UTC)
+
+        # 1. Cancel future ACTIVE ScheduledWork rows with WORKER_DEACTIVATED marker
+        future_shifts = list(
+            (
+                await self.session.execute(
+                    select(ScheduledWork).where(
+                        ScheduledWork.employee_id == employee_id,
+                        ScheduledWork.work_date >= effective_date,
+                        ScheduledWork.status == "ACTIVE",
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for sw in future_shifts:
+            sw.status = "CANCELLED"
+            sw.override_reason = "WORKER_DEACTIVATED"
+            sw.version += 1
+            sw.updated_at = now
+
+        # 2. Materialize 14-day WORKER_DEACTIVATED gap markers for active BaseRosterTemplate slots
+        #    not already represented in ScheduledWork, then remove employee from BaseRosterEntry
+        tmpl_entries = list(
+            (
+                await self.session.execute(
+                    select(BaseRosterEntry)
+                    .join(BaseRosterTemplate, BaseRosterTemplate.id == BaseRosterEntry.template_id)
+                    .where(
+                        BaseRosterEntry.employee_id == employee_id,
+                        BaseRosterTemplate.is_active.is_(True),
+                    )
+                    .options(
+                        selectinload(BaseRosterEntry.template).selectinload(
+                            BaseRosterTemplate.job_item
+                        )
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+        emp = await self.session.get(Employee, employee_id)
+        emp_off = (emp.weekly_off_day or "").strip().upper()[:3] if emp else ""
+        horizon_end = effective_date + timedelta(days=13)
+        existing_sw_keys = {(s.job_item_id, s.work_date) for s in future_shifts}
+        gap_markers_created = 0
+
+        for entry in tmpl_entries:
+            tmpl = entry.template
+            if not tmpl or not tmpl.job_item or not tmpl.job_item.is_active:
+                continue
+            cur = max(effective_date, tmpl.start_date)
+            end = min(horizon_end, tmpl.end_date) if tmpl.end_date else horizon_end
+            while cur <= end:
+                dow = INT_TO_WEEKDAY[cur.weekday()]
+                if dow != emp_off and entry.weekday_mask in ("ALL", dow):
+                    if (tmpl.job_item_id, cur) not in existing_sw_keys:
+                        gap_sw = ScheduledWork(
+                            id=uuid4(),
+                            employee_id=employee_id,
+                            job_item_id=tmpl.job_item_id,
+                            worksite_id=tmpl.job_item.worksite_id,
+                            work_date=cur,
+                            assigned_hours=entry.assigned_hours,
+                            sequence=entry.sequence,
+                            status="CANCELLED",
+                            source="OVERRIDE",
+                            override_reason="WORKER_DEACTIVATED",
+                            created_by_user_id=actor_user_id,
+                            version=1,
+                        )
+                        self.session.add(gap_sw)
+                        existing_sw_keys.add((tmpl.job_item_id, cur))
+                        gap_markers_created += 1
+                cur += timedelta(days=1)
+
+            await self.session.delete(entry)
+
+        # 3. End active standing assignments
+        standing_rows = list(
+            (
+                await self.session.execute(
+                    select(StandingAssignment).where(
+                        StandingAssignment.employee_id == employee_id,
+                        StandingAssignment.is_active.is_(True),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        end_prev = effective_date - timedelta(days=1)
+        for sa_row in standing_rows:
+            sa_row.is_active = False
+            sa_row.end_date = end_prev if end_prev >= sa_row.start_date else sa_row.start_date
+            sa_row.version += 1
+
+        # 4. Cancel pending leave requests
+        pending_leaves = list(
+            (
+                await self.session.execute(
+                    select(LeaveRequest).where(
+                        LeaveRequest.employee_id == employee_id,
+                        LeaveRequest.status == "REQUESTED",
+                        LeaveRequest.is_active.is_(True),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for lr in pending_leaves:
+            lr.status = "CANCELLED"
+            lr.decision_note = "Cancelled automatically on worker deactivation."
+            lr.version += 1
+            lr.updated_at = now
+
+        # 5. Cancel pending reassignment requests involving this employee
+        pending_reassigns = list(
+            (
+                await self.session.execute(
+                    select(ReassignmentRequest).where(
+                        or_(
+                            ReassignmentRequest.original_employee_id == employee_id,
+                            ReassignmentRequest.new_employee_id == employee_id,
+                        ),
+                        ReassignmentRequest.status == "PENDING",
+                        ReassignmentRequest.is_active.is_(True),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for rr in pending_reassigns:
+            rr.status = "CANCELLED"
+            rr.decision_note = "Cancelled automatically on worker deactivation."
+            rr.version += 1
+            rr.updated_at = now
+
+        await self.session.flush()
+        return {
+            "cancelled_future_shifts": len(future_shifts),
+            "created_cover_gap_markers": gap_markers_created,
+            "removed_base_roster_slots": len(tmpl_entries),
+            "ended_standing_assignments": len(standing_rows),
+            "cancelled_leave_requests": len(pending_leaves),
+            "cancelled_reassignment_requests": len(pending_reassigns),
+        }
+
+    async def get_job_items_deactivation_impact(
+        self,
+        job_item_ids: list[UUID],
+        effective_date: date,
+    ) -> dict[str, int]:
+        """Compute scheduling impact of deactivating one or more job items (or a whole worksite)."""
+        if not job_item_ids:
+            return {
+                "active_base_templates": 0,
+                "active_standing_assignments": 0,
+                "future_active_shifts": 0,
+                "affected_workers": 0,
+                "future_occurrences": 0,
+                "pending_reassignment_requests": 0,
+            }
+
+        tmpl_cnt = int(
+            (
+                await self.session.execute(
+                    select(func.count(BaseRosterTemplate.id)).where(
+                        BaseRosterTemplate.job_item_id.in_(job_item_ids),
+                        BaseRosterTemplate.is_active.is_(True),
+                    )
+                )
+            ).scalar_one()
+            or 0
+        )
+
+        standing_cnt = int(
+            (
+                await self.session.execute(
+                    select(func.count(StandingAssignment.id)).where(
+                        StandingAssignment.job_item_id.in_(job_item_ids),
+                        StandingAssignment.is_active.is_(True),
+                    )
+                )
+            ).scalar_one()
+            or 0
+        )
+
+        future_sw_rows = list(
+            (
+                await self.session.execute(
+                    select(ScheduledWork.employee_id).where(
+                        ScheduledWork.job_item_id.in_(job_item_ids),
+                        ScheduledWork.work_date >= effective_date,
+                        ScheduledWork.status == "ACTIVE",
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        affected_workers = len(set(future_sw_rows))
+
+        occ_cnt = int(
+            (
+                await self.session.execute(
+                    select(func.count(JobOccurrence.id)).where(
+                        JobOccurrence.job_item_id.in_(job_item_ids),
+                        JobOccurrence.window_end >= effective_date,
+                        JobOccurrence.status.in_(["GENERATED", "ASSIGNED"]),
+                    )
+                )
+            ).scalar_one()
+            or 0
+        )
+
+        pending_rr_cnt = int(
+            (
+                await self.session.execute(
+                    select(func.count(ReassignmentRequest.id)).where(
+                        ReassignmentRequest.target_job_item_id.in_(job_item_ids),
+                        ReassignmentRequest.status == "PENDING",
+                        ReassignmentRequest.is_active.is_(True),
+                    )
+                )
+            ).scalar_one()
+            or 0
+        )
+
+        return {
+            "active_base_templates": tmpl_cnt,
+            "active_standing_assignments": standing_cnt,
+            "future_active_shifts": len(future_sw_rows),
+            "affected_workers": affected_workers,
+            "future_occurrences": occ_cnt,
+            "pending_reassignment_requests": pending_rr_cnt,
+        }
+
+    async def cascade_job_items_deactivation(
+        self,
+        job_item_ids: list[UUID],
+        effective_date: date,
+        reason_label: str = "JOB_DEACTIVATED",
+    ) -> tuple[dict[str, int], list[UUID]]:
+        """Deactivate templates/standing assignments and cancel future shifts/occurrences to free workers."""
+        if not job_item_ids:
+            return (
+                {
+                    "deactivated_templates": 0,
+                    "ended_standing_assignments": 0,
+                    "cancelled_future_shifts": 0,
+                    "cancelled_occurrences": 0,
+                    "cancelled_reassignment_requests": 0,
+                },
+                [],
+            )
+
+        now = datetime.now(UTC)
+        affected_worker_ids: set[UUID] = set()
+
+        # 1. Deactivate BaseRosterTemplates
+        tmpls = list(
+            (
+                await self.session.execute(
+                    select(BaseRosterTemplate)
+                    .where(
+                        BaseRosterTemplate.job_item_id.in_(job_item_ids),
+                        BaseRosterTemplate.is_active.is_(True),
+                    )
+                    .options(selectinload(BaseRosterTemplate.entries))
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for t in tmpls:
+            for e in t.entries:
+                affected_worker_ids.add(e.employee_id)
+            t.is_active = False
+            t.end_date = effective_date
+            t.version += 1
+            t.updated_at = now
+
+        # 2. End active StandingAssignments
+        standings = list(
+            (
+                await self.session.execute(
+                    select(StandingAssignment).where(
+                        StandingAssignment.job_item_id.in_(job_item_ids),
+                        StandingAssignment.is_active.is_(True),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        end_prev = effective_date - timedelta(days=1)
+        for sa_row in standings:
+            affected_worker_ids.add(sa_row.employee_id)
+            sa_row.is_active = False
+            sa_row.end_date = end_prev if end_prev >= sa_row.start_date else sa_row.start_date
+            sa_row.version += 1
+
+        # 3. Cancel future ACTIVE ScheduledWork (frees workers!)
+        future_shifts = list(
+            (
+                await self.session.execute(
+                    select(ScheduledWork).where(
+                        ScheduledWork.job_item_id.in_(job_item_ids),
+                        ScheduledWork.work_date >= effective_date,
+                        ScheduledWork.status == "ACTIVE",
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for sw in future_shifts:
+            affected_worker_ids.add(sw.employee_id)
+            sw.status = "CANCELLED"
+            sw.override_reason = reason_label
+            sw.version += 1
+            sw.updated_at = now
+
+        # 4. Cancel future GENERATED/ASSIGNED JobOccurrences
+        future_occs = list(
+            (
+                await self.session.execute(
+                    select(JobOccurrence).where(
+                        JobOccurrence.job_item_id.in_(job_item_ids),
+                        JobOccurrence.window_end >= effective_date,
+                        JobOccurrence.status.in_(["GENERATED", "ASSIGNED"]),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for occ in future_occs:
+            occ.status = "CANCELLED"
+
+        # 5. Cancel pending ReassignmentRequests targeting these items
+        pending_rrs = list(
+            (
+                await self.session.execute(
+                    select(ReassignmentRequest).where(
+                        ReassignmentRequest.target_job_item_id.in_(job_item_ids),
+                        ReassignmentRequest.status == "PENDING",
+                        ReassignmentRequest.is_active.is_(True),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for rr in pending_rrs:
+            rr.status = "CANCELLED"
+            rr.decision_note = "Cancelled automatically on job deactivation."
+            rr.version += 1
+            rr.updated_at = now
+
+        await self.session.flush()
+        return (
+            {
+                "deactivated_templates": len(tmpls),
+                "ended_standing_assignments": len(standings),
+                "cancelled_future_shifts": len(future_shifts),
+                "cancelled_occurrences": len(future_occs),
+                "cancelled_reassignment_requests": len(pending_rrs),
+            },
+            list(affected_worker_ids),
+        )

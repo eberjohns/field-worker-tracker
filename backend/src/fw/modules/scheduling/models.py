@@ -239,6 +239,7 @@ class ScheduledWork(Base):
         nullable=True,
     )
     is_late_approval: Mapped[bool] = mapped_column(default=False, nullable=False)
+    is_weekly_off_cover: Mapped[bool] = mapped_column(default=False, nullable=False)
     version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     created_by_user_id: Mapped[UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
@@ -286,6 +287,7 @@ class LeaveRequest(Base):
         Index("ix_leave_requests_emp_dates", "employee_id", "from_date", "to_date"),
         Index("ix_leave_requests_status", "status"),
         Index("ix_leave_requests_recorded_by", "recorded_by_user_id"),
+        Index("ix_leave_requests_cover_emp", "cover_employee_id"),
     )
 
     id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
@@ -293,6 +295,11 @@ class LeaveRequest(Base):
         PG_UUID(as_uuid=True),
         ForeignKey("employees.id", ondelete="RESTRICT"),
         nullable=False,
+    )
+    cover_employee_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("employees.id", ondelete="SET NULL"),
+        nullable=True,
     )
     leave_type: Mapped[str] = mapped_column(String(30), nullable=False)
     from_date: Mapped[date] = mapped_column(Date, nullable=False)
@@ -327,6 +334,7 @@ class LeaveRequest(Base):
 
     # Relationships
     employee = relationship("Employee", foreign_keys=[employee_id])
+    cover_employee = relationship("Employee", foreign_keys=[cover_employee_id])
     recorded_by = relationship("User", foreign_keys=[recorded_by_user_id])
     approved_by = relationship("User", foreign_keys=[approved_by_user_id])
 
@@ -349,9 +357,12 @@ class ReassignmentRequest(Base):
         Index("ix_reassign_requests_status", "status"),
         Index("ix_reassign_requests_orig_emp", "original_employee_id"),
         Index("ix_reassign_requests_new_emp", "new_employee_id"),
+        Index("ix_reassignment_requests_batch_id", "batch_id"),
     )
 
     id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    batch_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
+    batch_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     reassignment_type: Mapped[str] = mapped_column(String(20), nullable=False)
     date_from: Mapped[date] = mapped_column(Date, nullable=False)
     date_to: Mapped[date] = mapped_column(Date, nullable=False)

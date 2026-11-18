@@ -41,6 +41,7 @@ from fw.modules.org import (
     EmployeeDocument,
     EmployeeReportingLine,
     Group,
+    OrgService,
     Zone,
 )
 from fw.modules.payroll import (
@@ -1422,6 +1423,31 @@ class ImportService:
                         ]
                 elif not isinstance(parsed_val, list):
                     parsed_val = [str(parsed_val)]
+
+                # Option A: Intersect imported budget_only_staff_types with resolved staff grades
+                # across active employees, active job items, and incoming Job_Items in this batch.
+                emp_grades = await OrgService.get_unique_staff_grades(session)
+                job_grades = await JobsService.get_unique_staff_grades(session)
+                incoming_job_grades = [
+                    str(jr.normalized.get("staff_grade_description")).strip()
+                    for jr in sheet_to_rows.get("Job_Items", [])
+                    if jr.normalized.get("staff_grade_description")
+                ]
+                resolved_map: dict[str, str] = {}
+                for g in emp_grades + job_grades + incoming_job_grades:
+                    key = g.strip().lower()
+                    if key and key not in resolved_map:
+                        resolved_map[key] = g.strip()
+
+                if resolved_map:
+                    filtered: list[str] = []
+                    seen: set[str] = set()
+                    for raw_role in parsed_val:
+                        rk = str(raw_role).strip().lower()
+                        if rk in resolved_map and rk not in seen:
+                            filtered.append(resolved_map[rk])
+                            seen.add(rk)
+                    parsed_val = filtered
 
             if s_key and s_eff:
                 await SettingsService.set_setting(
