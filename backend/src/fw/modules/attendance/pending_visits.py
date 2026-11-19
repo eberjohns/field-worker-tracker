@@ -8,6 +8,7 @@ import structlog
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fw.core.clock import site_today
 from fw.core.errors import AppError
 from fw.modules.attendance.models import (
     AttendanceComment,
@@ -37,6 +38,7 @@ class PendingVisitsService:
         session: AsyncSession,
         target_date: date,
         min_visit_minutes: int = 10,
+        country: str | None = None,
     ) -> int:
         """Detect unvisited scheduled work occurrences at day close and create PendingVisit rows.
 
@@ -75,7 +77,7 @@ class PendingVisitsService:
         visited_pairs = {(v[0], v[1]) for v in visit_rows}
 
         detected_count = 0
-        today_date = datetime.now(UTC).date()
+        today_date = site_today(country) if country else site_today()
 
         for sw in scheduled_items:
             # Exempt if worker is on approved leave

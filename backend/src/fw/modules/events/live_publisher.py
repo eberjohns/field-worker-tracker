@@ -89,6 +89,7 @@ class LivePositionBroadcaster:
         self._recent_broadcasts: dict[UUID, tuple[str | None, str | None]] = {}
         self._listener_task: asyncio.Task | None = None
         self._stop_event = asyncio.Event()
+        self._background_tasks: set[asyncio.Task[Any]] = set()
 
     async def register_subscriber(
         self,
@@ -174,7 +175,9 @@ class LivePositionBroadcaster:
 
     def _on_pg_notify(self, connection: Any, pid: int, channel: str, payload: str) -> None:
         """Callback when PostgreSQL NOTIFY live_positions arrives."""
-        asyncio.create_task(self._handle_pg_notification(payload))
+        task = asyncio.create_task(self._handle_pg_notification(payload))
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
 
     async def _handle_pg_notification(self, payload: str) -> None:
         """Handle incoming NOTIFY payload, resolving position and fanning out to local subscribers."""
@@ -258,6 +261,11 @@ class LivePositionBroadcaster:
             except asyncio.CancelledError:
                 pass
             self._listener_task = None
+
+        if self._background_tasks:
+            for task in list(self._background_tasks):
+                task.cancel()
+            self._background_tasks.clear()
 
 
 # Global singletons

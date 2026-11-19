@@ -1,9 +1,9 @@
 {
-  "version": "1.7.0",
+  "version": "1.7.1",
   "major": 1,
   "minor": 7,
-  "patch": 0,
+  "patch": 1,
   "last_branch": "fix/batch5-audit-fixes",
-  "last_commit": "862e767",
-  "updated_at": "2026-11-19T05:27:30.758952+00:00"
+  "last_commit": "6ab9f38",
+  "updated_at": "2026-11-19T06:40:49.497145+00:00"
 }

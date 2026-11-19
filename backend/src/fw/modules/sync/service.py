@@ -9,6 +9,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.adapters.push import get_push_provider
+from fw.core.clock import get_country_timezone
 from fw.core.config import get_settings
 from fw.core.errors import AppError
 from fw.core.events import WorkerConsentWithdrawn, event_bus
@@ -631,7 +632,7 @@ class SyncService:
             schedule_sync_window_days=window_days,
             location_policy_version=1,
             alarm_lead_minutes=alarm_lead_minutes,
-            timezone="Asia/Dubai" if employee.country == "AE" else "Asia/Riyadh",
+            timezone=get_country_timezone(employee.country).key,
             upcoming=[],
         )
         entities.append(

@@ -43,36 +43,32 @@ async def _generate_approved_reports_safe(payroll_run_id) -> None:
             await session.commit()
             logger.info("month_end_reports_approved_completed", run_id=str(payroll_run_id))
         except Exception as e:
+            await session.rollback()
             logger.error(
                 "month_end_reports_approved_failed", error=str(e), run_id=str(payroll_run_id)
             )
             try:
-                await NotificationService.create_alert(
-                    session=session,
-                    alert_type="MONTH_END_REPORTS_FAILED",
-                    title=f"Month-end report generation failed for run {payroll_run_id}",
-                    message=f"Report generation error: {e}",
-                    ref_type="PAYROLL_RUN",
-                    ref_id=payroll_run_id,
-                    target_role="ADMIN",
-                )
-                await session.commit()
+                async with async_session_factory() as alert_session:
+                    await NotificationService.create_alert(
+                        session=alert_session,
+                        alert_type="MONTH_END_REPORTS_FAILED",
+                        title=f"Month-end report generation failed for run {payroll_run_id}",
+                        message=f"Report generation error: {e}",
+                        ref_type="PAYROLL_RUN",
+                        ref_id=payroll_run_id,
+                        target_role="ADMIN",
+                    )
+                    await alert_session.commit()
             except Exception as alert_err:
                 logger.error("failed_to_create_month_end_reports_alert", error=str(alert_err))
 
 
-async def handle_payroll_run_approved(event: PayrollRunApproved, session: AsyncSession) -> None:
+async def handle_payroll_run_approved(event: PayrollRunApproved) -> None:
     """When a payroll run is approved, generate the final immutable month-end reports post-commit."""
     if not event.payroll_run_id:
         return
 
     logger.info("handling_payroll_run_approved_for_reports", run_id=str(event.payroll_run_id))
-    try:
-        await session.commit()
-    except Exception as commit_err:
-        logger.error("payroll_approval_commit_failed", error=str(commit_err))
-        raise
-
     await _generate_approved_reports_safe(event.payroll_run_id)
 
 
@@ -84,5 +80,5 @@ def register_reports_listeners() -> None:
     global _registered
     if not _registered:
         event_bus.subscribe_sync(PayrollRunCreated, handle_payroll_run_created)
-        event_bus.subscribe_sync(PayrollRunApproved, handle_payroll_run_approved)
+        event_bus.subscribe_post_commit(PayrollRunApproved, handle_payroll_run_approved)
         _registered = True

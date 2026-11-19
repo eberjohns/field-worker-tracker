@@ -1,20 +1,25 @@
 """Tests for Batch 5 audit fixes: OT2 calculation, worker scheduler, stream tickets, and device revocation."""
 
-from datetime import UTC, date, datetime, time
+from datetime import UTC, date, datetime, time, timedelta
+from decimal import Decimal
 from uuid import uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
+from fw.core.clock import site_today
 from fw.core.db import async_session_factory
 from fw.main import create_app
+from fw.modules.attendance import PendingVisit
 from fw.modules.audit.models import AuditLog
 from fw.modules.events.live_publisher import stream_ticket_manager
 from fw.modules.events.models import StreamTicket
 from fw.modules.identity import AuthService, User
+from fw.modules.jobs import JobItem, Worksite
 from fw.modules.notifications.models import Alert
-from fw.modules.org.models import Employee, RegisteredDevice
+from fw.modules.org.models import Employee, EmployeeDocument, Group, RegisteredDevice, Zone
+from fw.modules.scheduling import ScheduledWork
 from fw.rules.attendance.engine import (
     ConstructedVisit,
     DailyCalculationInputs,
@@ -372,3 +377,355 @@ async def test_device_revocation_and_audit():
             assert audit is not None
             assert audit.actor_user_id == admin_user.id
             assert audit.action == "REVOKE_DEVICE"
+
+
+@pytest.mark.asyncio
+async def test_pending_visits_only_detects_ended_day():
+    """Target date is yesterday: scheduled work for today produces no pending visit, but unvisited scheduled work for yesterday does."""
+    scheduler = WorkerScheduler()
+    country = "AE"
+    today = site_today(country)
+    yesterday = today - timedelta(days=1)
+
+    async with async_session_factory() as session:
+        # Create worker
+        worker = Employee(
+            tally_id=f"B5_PV_{uuid4().hex[:6]}",
+            name="Pending Visit Test Worker",
+            role="WORKER",
+            is_active=True,
+            country="AE",
+        )
+        session.add(worker)
+
+        # Create Group, Zone, Worksite, JobItem
+        grp_id = uuid4()
+        session.add(Group(id=grp_id, code=f"GRP_{grp_id.hex[:4]}", name="PV Group"))
+        zn_id = uuid4()
+        session.add(Zone(id=zn_id, code=f"ZN_{zn_id.hex[:4]}", name="PV Zone"))
+        await session.flush()
+
+        ws_id = uuid4()
+        session.add(
+            Worksite(
+                id=ws_id,
+                job_number=f"JN_{ws_id.hex[:6]}",
+                job_name="PV Worksite",
+                group_id=grp_id,
+                zone_id=zn_id,
+                country="AE",
+                is_active=True,
+            )
+        )
+        ji_id = uuid4()
+        session.add(
+            JobItem(
+                id=ji_id,
+                worksite_id=ws_id,
+                sub_item_code="01",
+                staff_grade_description="Worker",
+                planned_grade_code="G1",
+                frequency_unit="WEEK",
+                occurrences_per_period=Decimal("6.0"),
+                period_interval=1,
+                required_staff_count=1,
+                hours_per_occurrence_per_staff=Decimal("8.0"),
+                start_date=date(2026, 1, 1),
+                deployment_type="PERMANENT",
+                is_active=True,
+            )
+        )
+        await session.flush()
+
+        # Scheduled work TODAY
+        sw_today = ScheduledWork(
+            id=uuid4(),
+            employee_id=worker.id,
+            work_date=today,
+            worksite_id=ws_id,
+            job_item_id=ji_id,
+            assigned_hours=Decimal("8.0"),
+            sequence=1,
+            status="ACTIVE",
+            source="DIRECT",
+        )
+        session.add(sw_today)
+
+        # Scheduled work YESTERDAY
+        sw_yesterday = ScheduledWork(
+            id=uuid4(),
+            employee_id=worker.id,
+            work_date=yesterday,
+            worksite_id=ws_id,
+            job_item_id=ji_id,
+            assigned_hours=Decimal("8.0"),
+            sequence=1,
+            status="ACTIVE",
+            source="DIRECT",
+        )
+        session.add(sw_yesterday)
+        await session.commit()
+
+        sw_today_id = sw_today.id
+        sw_yesterday_id = sw_yesterday.id
+
+    # Run pending visits job
+    res = await scheduler.run_pending_visits(country)
+    assert res is not None
+
+    async with async_session_factory() as session:
+        # Check that sw_today has NO pending visit
+        pv_today = (
+            await session.execute(
+                select(PendingVisit).where(PendingVisit.scheduled_work_id == sw_today_id)
+            )
+        ).scalar_one_or_none()
+        assert pv_today is None, (
+            "Today's scheduled work must not create a pending visit while the day is not ended"
+        )
+
+        # Check that sw_yesterday HAS a pending visit
+        pv_yesterday = (
+            await session.execute(
+                select(PendingVisit).where(PendingVisit.scheduled_work_id == sw_yesterday_id)
+            )
+        ).scalar_one_or_none()
+        assert pv_yesterday is not None
+        assert pv_yesterday.due_date == yesterday
+        assert pv_yesterday.detected_on == today
+        assert pv_yesterday.status == "OPEN"
+
+
+@pytest.mark.asyncio
+async def test_retention_purge_deletes_expired_stream_tickets():
+    """Verify retention purge deletes stream tickets where expires_at < now - 1 day."""
+    scheduler = WorkerScheduler()
+    now = datetime.now(UTC)
+
+    async with async_session_factory() as session:
+        user = (await session.execute(select(User).limit(1))).scalar_one()
+
+        # Ticket expired 2 days ago (> 1 day ago)
+        old_ticket_str = f"old-ticket-{uuid4().hex}"
+        session.add(
+            StreamTicket(
+                ticket=old_ticket_str,
+                user_id=user.id,
+                role="ENGINEER",
+                expires_at=now - timedelta(days=2),
+                created_at=now - timedelta(days=2),
+            )
+        )
+
+        # Ticket expired 2 hours ago (< 1 day ago)
+        recent_ticket_str = f"recent-ticket-{uuid4().hex}"
+        session.add(
+            StreamTicket(
+                ticket=recent_ticket_str,
+                user_id=user.id,
+                role="ENGINEER",
+                expires_at=now - timedelta(hours=2),
+                created_at=now - timedelta(hours=2),
+            )
+        )
+
+        # Unexpired ticket
+        valid_ticket_str = f"valid-ticket-{uuid4().hex}"
+        session.add(
+            StreamTicket(
+                ticket=valid_ticket_str,
+                user_id=user.id,
+                role="ENGINEER",
+                expires_at=now + timedelta(minutes=10),
+                created_at=now,
+            )
+        )
+        await session.commit()
+
+    # Run retention purge
+    res = await scheduler.run_retention_purge()
+    assert res is not None
+    assert res.get("stream_tickets_purged", 0) >= 1
+
+    async with async_session_factory() as session:
+        # old_ticket should be deleted
+        assert await session.get(StreamTicket, old_ticket_str) is None
+
+        # recent_ticket and valid_ticket should still exist
+        assert await session.get(StreamTicket, recent_ticket_str) is not None
+        assert await session.get(StreamTicket, valid_ticket_str) is not None
+
+
+@pytest.mark.asyncio
+async def test_scheduler_startup_run_all_once_is_idempotent():
+    """Running scheduler.run_all_once() twice creates no duplicate alerts on the same day."""
+    scheduler = WorkerScheduler()
+    country = "AE"
+    today = site_today(country)
+
+    async with async_session_factory() as session:
+        # Worker with scheduled work today (will trigger NO_ACTIVITY)
+        emp = Employee(
+            tally_id=f"B5_IDEM_{uuid4().hex[:6]}",
+            name="Idempotency Worker",
+            role="WORKER",
+            is_active=True,
+            country="AE",
+        )
+        session.add(emp)
+
+        grp_id = uuid4()
+        session.add(Group(id=grp_id, code=f"GRP_{grp_id.hex[:4]}", name="Idem Group"))
+        zn_id = uuid4()
+        session.add(Zone(id=zn_id, code=f"ZN_{zn_id.hex[:4]}", name="Idem Zone"))
+        await session.flush()
+
+        ws_id = uuid4()
+        session.add(
+            Worksite(
+                id=ws_id,
+                job_number=f"JN_{ws_id.hex[:6]}",
+                job_name="Idem Worksite",
+                group_id=grp_id,
+                zone_id=zn_id,
+                country="AE",
+                is_active=True,
+            )
+        )
+        ji_id = uuid4()
+        session.add(
+            JobItem(
+                id=ji_id,
+                worksite_id=ws_id,
+                sub_item_code="01",
+                staff_grade_description="Worker",
+                planned_grade_code="G1",
+                frequency_unit="WEEK",
+                occurrences_per_period=Decimal("6.0"),
+                period_interval=1,
+                required_staff_count=1,
+                hours_per_occurrence_per_staff=Decimal("8.0"),
+                start_date=date(2026, 1, 1),
+                deployment_type="PERMANENT",
+                is_active=True,
+            )
+        )
+        await session.flush()
+
+        session.add(
+            ScheduledWork(
+                id=uuid4(),
+                employee_id=emp.id,
+                work_date=today,
+                worksite_id=ws_id,
+                job_item_id=ji_id,
+                assigned_hours=Decimal("8.0"),
+                sequence=1,
+                status="ACTIVE",
+                source="DIRECT",
+            )
+        )
+
+        # Stale device for this employee
+        stale_dev = RegisteredDevice(
+            employee_id=emp.id,
+            device_identifier=f"idem-dev-{uuid4().hex[:8]}",
+            platform="ANDROID",
+            device_model="Test Stale Phone",
+            os_version="Android 14",
+            app_version="1.0.0",
+            is_active=True,
+            last_seen_at=datetime.now(UTC) - timedelta(hours=48),
+        )
+        session.add(stale_dev)
+
+        # Expiring document for this employee
+        doc = EmployeeDocument(
+            id=uuid4(),
+            employee_id=emp.id,
+            document_type="PASSPORT",
+            expiry_date=today + timedelta(days=10),
+            is_active=True,
+        )
+        session.add(doc)
+        await session.commit()
+
+        emp_id = emp.id
+        dev_id = stale_dev.id
+        doc_id = doc.id
+
+    # 1. First run of run_all_once
+    await scheduler.run_all_once()
+
+    async with async_session_factory() as session:
+        no_act_alerts_1 = (
+            (
+                await session.execute(
+                    select(Alert).where(
+                        Alert.alert_type == "NO_ACTIVITY", Alert.employee_id == emp_id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        stale_alerts_1 = (
+            (
+                await session.execute(
+                    select(Alert).where(Alert.alert_type == "STALE_DEVICE", Alert.ref_id == dev_id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        doc_alerts_1 = (
+            (
+                await session.execute(
+                    select(Alert).where(Alert.alert_type == "DOC_EXPIRY", Alert.ref_id == doc_id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+        assert len(no_act_alerts_1) == 1
+        assert len(stale_alerts_1) == 1
+        assert len(doc_alerts_1) == 1
+
+    # 2. Second run of run_all_once (worker restart simulation)
+    await scheduler.run_all_once()
+
+    async with async_session_factory() as session:
+        no_act_alerts_2 = (
+            (
+                await session.execute(
+                    select(Alert).where(
+                        Alert.alert_type == "NO_ACTIVITY", Alert.employee_id == emp_id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        stale_alerts_2 = (
+            (
+                await session.execute(
+                    select(Alert).where(Alert.alert_type == "STALE_DEVICE", Alert.ref_id == dev_id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        doc_alerts_2 = (
+            (
+                await session.execute(
+                    select(Alert).where(Alert.alert_type == "DOC_EXPIRY", Alert.ref_id == doc_id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+        assert len(no_act_alerts_2) == 1, "Duplicate NO_ACTIVITY alert created on second run"
+        assert len(stale_alerts_2) == 1, "Duplicate STALE_DEVICE alert created on second run"
+        assert len(doc_alerts_2) == 1, "Duplicate DOC_EXPIRY alert created on second run"

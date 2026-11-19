@@ -255,9 +255,13 @@ class ArchiveService:
         now = datetime.now(UTC)
         sync_cutoff = now - timedelta(days=sync_days)
         notif_cutoff = now - timedelta(days=notif_months * 30)
+        tickets_cutoff = now - timedelta(days=1)
 
         sync_purged = await ArchiveRepository.purge_expired_sync_changes(session, sync_cutoff)
         notif_purged = await ArchiveRepository.purge_expired_alerts(session, notif_cutoff)
+        tickets_purged = await ArchiveRepository.purge_expired_stream_tickets(
+            session, tickets_cutoff
+        )
 
         if actor_id:
             await AuditService.log_action(
@@ -268,8 +272,10 @@ class ArchiveService:
                 diff={
                     "sync_changes_purged": sync_purged,
                     "notifications_purged": notif_purged,
+                    "stream_tickets_purged": tickets_purged,
                     "sync_cutoff": sync_cutoff.isoformat(),
                     "notif_cutoff": notif_cutoff.isoformat(),
+                    "tickets_cutoff": tickets_cutoff.isoformat(),
                 },
                 actor_user_id=actor_id,
                 reason="Routine retention policy schedule execution",
@@ -279,6 +285,7 @@ class ArchiveService:
         return RetentionPurgeResult(
             sync_changes_purged=sync_purged,
             notification_logs_purged=notif_purged,
+            stream_tickets_purged=tickets_purged,
             completed_at=datetime.now(UTC),
         )
 

@@ -1248,13 +1248,14 @@ class PayrollService:
             or f"Approved payroll run #{run.run_no} for period {run.period_start} to {run.period_end}",
         )
 
-        await event_bus.publish(
+        await session.commit()
+
+        await event_bus.publish_post_commit(
             PayrollRunApproved(
                 payroll_run_id=run.id,
                 country=run.country,
                 actor_user_id=user_id,
-            ),
-            session=session,
+            )
         )
 
         return PayrollRunRead(

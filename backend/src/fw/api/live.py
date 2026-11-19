@@ -161,7 +161,7 @@ async def get_live_positions(
         scoped_list = await OrgService.get_scoped_employee_ids(session, current_user)
         scoped_ids = set(scoped_list) if scoped_list else set()
 
-    # 3. Determine today's date in local time zone (Asia/Dubai default)
+    # 3. Determine today's date in site local time zone (Asia/Dubai default)
     now = datetime.now(UTC)
     local_today = site_today()
 

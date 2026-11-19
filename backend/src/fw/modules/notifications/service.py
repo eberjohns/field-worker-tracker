@@ -7,6 +7,7 @@ from uuid import UUID
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fw.core.clock import site_today
 from fw.core.errors import AppError
 from fw.modules.identity.models import User
 from fw.modules.notifications.models import Alert
@@ -149,7 +150,7 @@ class NotificationService:
         except (ValueError, TypeError):
             lead_days = 30
 
-        today = datetime.now(UTC).date()
+        today = site_today()
         cutoff_date = today + timedelta(days=lead_days)
 
         stmt = (

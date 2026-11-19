@@ -3,7 +3,7 @@
 import asyncio
 import sys
 from collections.abc import Callable, Coroutine
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import structlog
@@ -109,13 +109,14 @@ class WorkerScheduler:
         return await self._execute_job("watchdogs", _job)
 
     async def run_pending_visits(self, country: str) -> dict[str, int]:
-        """Detect unvisited scheduled sites and send reminders."""
+        """Detect unvisited scheduled sites for the day that has ended and send reminders."""
 
         async def _job(session: AsyncSession) -> dict[str, int]:
-            today = site_today(country)
+            target_date = site_today(country) - timedelta(days=1)
             detected = await PendingVisitsService.detect_pending_visits(
                 session=session,
-                target_date=today,
+                target_date=target_date,
+                country=country,
             )
             reminders = await PendingVisitsService.check_pending_visit_reminders(
                 session=session,
@@ -144,12 +145,13 @@ class WorkerScheduler:
             return {
                 "sync_changes_purged": result.sync_changes_purged,
                 "notifications_purged": result.notification_logs_purged,
+                "stream_tickets_purged": result.stream_tickets_purged,
             }
 
         return await self._execute_job("retention_purge", _job)
 
     async def run_yearly_archive(self) -> dict[str, Any]:
-        """Archive and purge events for previous calendar year if not already archived."""
+        """Archive events for previous calendar year without purging (purging remains manual Admin action)."""
 
         async def _job(session: AsyncSession) -> dict[str, Any]:
             prev_year = datetime.now(UTC).year - 1
@@ -160,7 +162,7 @@ class WorkerScheduler:
             archive = await ArchiveService.create_yearly_archive(
                 session=session,
                 year=prev_year,
-                purge_live_events=True,
+                purge_live_events=False,
             )
             return {
                 "status": "ARCHIVED",

@@ -24,6 +24,7 @@ Following a client architecture audit, several operational gaps and edge cases w
    - Removed hardcoded Sunday checks. If `weekly_off_day` is missing, `is_weekly_off` evaluates to `False` and flags `NO_WEEKLY_OFF_DAY`.
 2. **Background Jobs Scheduler (`fw/worker.py`)**:
    - Implemented `WorkerScheduler` executing periodic watchdogs (every 15 min), site-local daily pending visits detection and reminders, daily document expiry checks, routine retention purge (>60d sync changes, >6mo notifications), and yearly archiving.
+   - Yearly archiving in the scheduler runs with `purge_live_events=False`; raw events are never purged automatically. Live record purging remains strictly an explicit manual Admin action until DEC-38 is confirmed with counsel/client.
    - Removed lazy document expiry checks from `notifications/service.py`.
    - Each job runs idempotently, logs start/completion, and logs `JOB_FAILURE` admin alerts on unhandled errors.
 3. **Multi-Process Live Map Architecture**:

@@ -38,7 +38,7 @@ All client questions are answered. **CONFIRMED** = the client decided; **PROPOSE
 | DEC-35 | Effective-dated configuration | Settings and time rules resolved as of the work date | 03, ADR-008, ADR-012 | CONFIRMED |
 | DEC-36 | Permanent vs Remote | PERMANENT: only that job that day; REMOTE: several while hours remain | 03, 04, ADR-014 | CONFIRMED |
 | DEC-37 | Revision lookup (budget) | Latest revision containing the grade; partial revisions allowed; grade year suffix ignored | 06 | PROPOSED |
-| DEC-38 | Retention | 13 months live, encrypted yearly archive for a fixed period, then deletion; payroll/attendance 7 years; AES-256-GCM archive + purge implemented; awaiting client/counsel review | 14, legal, ADR-022 | HUMAN |
+| DEC-38 | Retention | 13 months live, encrypted yearly archive for a fixed period, then deletion; payroll/attendance 7 years; AES-256-GCM archive implemented; automatic worker job archives with purge_live_events=False; purging live events stays an explicit manual Admin action until counsel/client confirmation | 14, legal, ADR-022, ADR-025 | HUMAN |
 | DEC-39 | Provisions | Actual: five provisions from company settings, one value for everyone, plus calculated gratuity and leave salary, + 5% HR OH; budget: the revision file's own static provisions | 06, ADR-020 | CONFIRMED |
 | DEC-40 | Out of scope | Checklists, manual shift confirmation, WPS | 01 | CONFIRMED |
 | DEC-41 | Time rules | Five-point planned schedule (accommodation start, first site, break, last site, accommodation end); break resolves salary break -> time rule -> company default; engineers manage within scope (Owner confirmation 19 Nov 2026) | 05, D3, ADR-012 | CONFIRMED |

@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.modules.archive.models import ArchiveRecord
 from fw.modules.attendance import SiteVisit, TrackingGap
-from fw.modules.events import MobileEventLog
+from fw.modules.events import MobileEventLog, StreamTicket
 from fw.modules.notifications import Alert
 from fw.modules.org import Employee, EmployeeDocument
 from fw.modules.sync import SyncChange
@@ -181,6 +181,13 @@ class ArchiveRepository:
             Alert.status == "RESOLVED",
             Alert.created_at < cutoff_datetime,
         )
+        res = await session.execute(stmt)
+        await session.flush()
+        return int(getattr(res, "rowcount", 0) or 0)
+
+    @staticmethod
+    async def purge_expired_stream_tickets(session: AsyncSession, cutoff_datetime: datetime) -> int:
+        stmt = delete(StreamTicket).where(StreamTicket.expires_at < cutoff_datetime)
         res = await session.execute(stmt)
         await session.flush()
         return int(getattr(res, "rowcount", 0) or 0)
