@@ -1,12 +1,13 @@
 """Handler for Staffing Gaps Report."""
 
-from datetime import date, timedelta
+from datetime import timedelta
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fw.core.clock import site_today
 from fw.modules.jobs.models import Worksite
 from fw.modules.org.models import Employee
 from fw.modules.reports.schemas import ReportFilterParams
@@ -19,7 +20,7 @@ async def fetch_staffing_gaps(
     scoped_ids: set[UUID] | None,
 ) -> list[dict[str, Any]]:
     """Query uncovered shifts caused by approved leave or staffing deficits."""
-    from_d = filters.date_from or date.today()
+    from_d = filters.date_from or site_today()
     to_d = filters.date_to or (from_d + timedelta(days=30))
 
     stmt = select(LeaveRequest).where(
@@ -69,7 +70,7 @@ async def fetch_staffing_gaps(
     for ws in missing_boundary_sites:
         rows.append(
             {
-                "target_date": date.today(),
+                "target_date": site_today(),
                 "worksite_name": ws.job_name,
                 "job_item_name": "Geofence Missing",
                 "gap_reason": "MISSING_BOUNDARY",

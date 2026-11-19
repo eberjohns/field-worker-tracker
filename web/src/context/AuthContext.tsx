@@ -131,7 +131,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await fetch("/api/v1/auth/logout", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
-      }).catch(() => {});
+      }).catch((err) => {
+        console.warn("Logout request failed or server unreachable", err);
+      });
     }
     setToken(null);
     setUser(null);

@@ -28,6 +28,7 @@ One decision per file, numbered. Use the `write-adr` skill. Status: Proposed, Ac
 | 022 | [Yearly Archive, Data Retention, Privacy Tooling and Operational Hardening](022-archive-retention-and-hardening.md) | Accepted |
 | 023 | [Single Standalone System Administrator (Decoupled from Employees)](023-single-standalone-admin.md) | Accepted |
 | 024 | [Fixed Crew Hierarchy Structure and Transitive Leadership Inheritance](024-fixed-crew-hierarchy-structure.md) | Accepted |
+| 025 | [Batch 5 Audit Fixes: Overtime Alignment, Worker Scheduling, and Multi-Process Safety](025-batch5-audit-fixes.md) | Accepted |
 
 See also [decision-register.md](decision-register.md) for business decisions awaiting client confirmation.
 

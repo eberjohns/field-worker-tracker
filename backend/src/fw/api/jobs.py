@@ -11,6 +11,7 @@ from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fw.core.clock import site_today
 from fw.core.db import get_db
 from fw.core.errors import AppError
 from fw.modules.audit import AuditService
@@ -175,7 +176,7 @@ async def get_worksite_deactivation_impact(
     if not ws:
         raise AppError(code="NOT_FOUND", message="Worksite not found.", status_code=404)
 
-    eff = effective_date or date.today()
+    eff = effective_date or site_today()
     items = list(
         (
             await session.execute(
@@ -237,7 +238,7 @@ async def deactivate_worksite(
             code="INVALID_STATE", message="Worksite is already deactivated.", status_code=400
         )
 
-    eff = payload.effective_date or date.today()
+    eff = payload.effective_date or site_today()
     ws.is_active = False
     ws.version += 1
 
@@ -615,7 +616,7 @@ async def get_job_item_deactivation_impact(
     if not item:
         raise AppError(code="NOT_FOUND", message="Job item not found.", status_code=404)
 
-    eff = effective_date or date.today()
+    eff = effective_date or site_today()
     impact = await SchedulingService(session).get_job_items_deactivation_impact(
         job_item_ids=[item.id],
         effective_date=eff,
@@ -666,7 +667,7 @@ async def deactivate_job_item(
             code="INVALID_STATE", message="Job item is already deactivated.", status_code=400
         )
 
-    eff = payload.effective_date or date.today()
+    eff = payload.effective_date or site_today()
     item.is_active = False
     item.version += 1
 

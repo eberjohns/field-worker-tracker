@@ -38,3 +38,4 @@ Field Worker Tracker follows semantic versioning `v<MAJOR>.<MINOR>.<PATCH>`:
 | **v1.6.1** | 2026-11-18 | `fix/batch4-client-alignment` | `7b1416a` | Commit on 'fix/batch4-client-alignment' |
 | **v1.6.2** | 2026-11-18 | `fix/batch4-client-alignment` | `0b5e30a` | Commit on 'fix/batch4-client-alignment' |
 | **v1.6.3** | 2026-11-19 | `fix/batch4-client-alignment` | `e43577d` | Commit on 'fix/batch4-client-alignment' |
+| **v1.7.0** | 2026-11-19 | `fix/batch5-audit-fixes` | `862e767` | New branch 'fix/batch5-audit-fixes' |

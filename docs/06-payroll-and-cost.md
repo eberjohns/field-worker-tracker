@@ -37,8 +37,8 @@ final_total_staff_cost = total_staff_cost + hr_oh              # the "real total
 ```
 Example: basic 1100 -> OT1 rate (1100/208)*1.25 = 6.61, OT2 7.93.
 **Overtime hours** come from attendance (see 05):
-- **OT1**: ONLY hours worked beyond the worker's standard hours on normal assigned days.
-- **OT2**: ALL hours worked on public holidays and on the worker's weekly-off day.
+- **OT1**: hours worked beyond the worker's standard hours on normal assigned days, and ALL hours worked on an unassigned non-off day.
+- **OT2**: ALL hours worked on public holidays and on the worker's own weekly-off day (DEC-01; owner confirmed 19 Nov 2026; Sunday default removed).
 Only reviewed/approved overtime is paid (unapproved overtime is held in the Issues drawer). Rounding: money half-up to 2 dp per line.
 
 Provisions use **company settings**; the grade-review provisions are used only in the **budget**. The reports and UI state which basis each column uses.

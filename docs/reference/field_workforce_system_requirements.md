@@ -328,9 +328,11 @@ formulas used so that historical results remain reproducible.
 -   OT2 = Basic hourly rate × 1.50.
 -   Sunday and public holiday work uses OT2, regardless of the
     employee's weekly off day.
+    *(Note: Owner confirmed 19 Nov 2026 per DEC-01: OT2 applies to all worked hours on a public holiday or on the worker's own weekly off day; unassigned non-off days use OT1; hardcoded Sunday is not used.)*
 -   Public holidays are organization-wide.
 -   Insufficient required work time triggers an alert/review; it does
     not automatically deduct salary.
+    *(Note: Owner confirmed 19 Nov 2026 per DEC-30: deductions apply for missed hours calculated at basic / 208 per hour; net_pay = gross_pay - deductions.)*
 -   Salary revision overtime fields are mapped explicitly so fixed OT
     and calculated OT are not double-counted.
 
@@ -667,6 +669,7 @@ is retained.
 
 Insufficient required hours trigger alerts/review; they do not
 automatically reduce salary.
+*(Note: Owner confirmed 19 Nov 2026 per DEC-30: deductions apply for missed hours calculated at basic / 208 per hour; net_pay = gross_pay - deductions.)*
 
 ### Payroll snapshot fields
 

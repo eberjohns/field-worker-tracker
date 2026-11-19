@@ -156,3 +156,36 @@ class LiveLocationAccessLog(Base):
         default=lambda: datetime.now(UTC),
         nullable=False,
     )
+
+
+class StreamTicket(Base):
+    """Short-lived single-use authentication ticket for live SSE streams."""
+
+    __tablename__ = "stream_tickets"
+    __table_args__ = (Index("ix_stream_tickets_expires_at", "expires_at"),)
+
+    ticket: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    role: Mapped[str] = mapped_column(String(50), nullable=False)
+    employee_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("employees.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        nullable=False,
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+    consumed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )

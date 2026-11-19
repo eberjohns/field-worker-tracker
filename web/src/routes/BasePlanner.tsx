@@ -76,7 +76,9 @@ export const BasePlanner: React.FC = () => {
       else next.add(id);
       try {
         localStorage.setItem("fwt_pinned_worksites", JSON.stringify(Array.from(next)));
-      } catch {}
+      } catch (err) {
+        console.warn("Failed to persist pinned worksites to localStorage", err);
+      }
       return next;
     });
   };

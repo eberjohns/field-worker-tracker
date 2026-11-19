@@ -589,7 +589,12 @@ async def test_live_location_view_is_audit_logged():
 @pytest.mark.asyncio
 async def test_stream_ticket_lifecycle():
     """Verify stream ticket single-use and expiration."""
-    user_id = uuid.uuid4()
+    async with async_session_factory() as session:
+        user_res = await session.execute(select(User).limit(1))
+        existing_user = user_res.scalar_one_or_none()
+        assert existing_user is not None
+        user_id = existing_user.id
+
     ticket = await stream_ticket_manager.create_ticket(user_id=user_id, role="ENGINEER")
     assert isinstance(ticket, str)
     assert len(ticket) >= 32

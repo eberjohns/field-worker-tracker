@@ -259,6 +259,10 @@ Never updated after insert.
 ### live_location_access_logs (surveillance audit trail)
 `id` UUID PK, `user_id` FK (users.id), `access_type` (`POLL` | `STREAM`), `filters` jsonb, `client_ip` string nullable, `user_agent` string nullable, `created_at` timestamp with time zone (default now UTC). Dedicated audit table keeping real-time location views accountable without flooding the general business audit log. Indexes on `(user_id, created_at)` and `(created_at)`. See ADR-019.
 
+### stream_tickets (multi-process live stream authentication)
+`ticket` varchar(64) PK, `user_id` FK (users.id), `role` varchar(50), `employee_id` FK (employees.id) nullable, `created_at` timestamp with time zone (default now UTC), `expires_at` timestamp with time zone, `consumed_at` timestamp with time zone nullable. Short-lived (30s) single-use tickets for Server-Sent Events stream authentication. Multi-process safe: atomic update with `consumed_at IS NULL AND expires_at > now()` ensures single-use consumption across any number of backend instances. Index on `(expires_at)`.
+
+
 ### alerts
 `alert_type`, `employee_id` nullable, `target_user_id` nullable, `ref_type`, `ref_id`, `status` (OPEN/RESOLVED), `details` jsonb, `resolved_at`. Index (status, alert_type).
 

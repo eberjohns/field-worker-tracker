@@ -71,11 +71,11 @@ Detailed algorithms live in docs 04, 05 and 06.
 - **BR-PY-02** Gratuity = Basic / 365 x 30. Leave salary = Basic / 12.
 - **BR-PY-03** Provisions (actual) = visa + air ticket + uniform + accommodation + medical from company settings (one value for everyone) plus gratuity (basic/365 x 30) and leave salary (basic/12), calculated for everyone. Transportation is not a provision **[DEC-39]**.
 - **BR-PY-04** Gross pay = salary portion + OT. Total staff cost = gross pay + per-month provision. HR OH (5%) is added: **final total staff cost = total staff cost + HR OH**.
-- **BR-PY-05** OT hourly rate = basic / 208 x multiplier (1.25, 1.5; settings). **OT2 (1.5)** = all hours on public holidays and on the OT2 weekdays (default Sunday; setting). **OT1 (1.25)** = hours beyond the worker's **standard hours** on normal assigned days, and **all hours** on a weekly off day or a day with no assignment. Fixed OT is paid as given. Overtime is reviewed and approved before it is paid **[DEC-01]**.
+- **BR-PY-05** OT hourly rate = basic / 208 x multiplier (1.25, 1.5; settings). **OT2 (1.5)** = all hours worked on a public holiday or on the worker's own weekly off day (DEC-01, owner confirmed 19 Nov 2026; Sunday default removed). **OT1 (1.25)** = hours beyond standard hours on normal days, and all hours on an unassigned non-off day. Fixed OT is paid as given. Overtime is reviewed and approved before it is paid **[DEC-01]**.
 - **BR-PY-06** Insufficient hours raise alerts/review. They never reduce salary automatically.
 - **BR-PY-07** Employee payroll and employer cost are shown separately. Provisions are employer cost, not cash to the employee.
 - **BR-PY-08** Finalized payroll is an immutable snapshot.
-- **BR-PY-09** No deductions in v1: net pay equals gross pay. The `net_pay` field exists so deductions can be added later **[DEC-30]**.
+- **BR-PY-09** Deductions apply per DEC-30: missed hours deduct at basic / 208 per hour (`missed_hours * (basic / 208)`). Net pay = gross pay - deductions **[DEC-30]**.
 - **BR-PY-10** Month-end: `payroll_auto_run_delay_days` (5) after month-end the system creates a **draft** payroll and the month-end reports; Admin re-runs as needed and **approves**; events uploaded after approval are ignored for that month; abnormal cases are handled outside the system **[DEC-45]**.
 - **BR-PY-11** The job budget uses the salary revision file (grade cost with its own provisions) and the job items; it is for display and comparison only **[DEC-29]**.
 

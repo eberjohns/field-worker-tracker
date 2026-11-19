@@ -13,6 +13,7 @@ from openpyxl.utils import get_column_letter
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fw.core.clock import site_today
 from fw.core.errors import AppError
 from fw.core.events import PayrollRunApproved, PayrollRunCreated, event_bus
 from fw.modules.audit import AuditService
@@ -243,7 +244,7 @@ class PayrollSalaryService:
         batch_id: UUID | None = None,
     ) -> EmployeeSalaryRead:
         """Create or update an effective-dated salary structure."""
-        effective_from = data.effective_from or compute_next_payroll_month_start(date.today())
+        effective_from = data.effective_from or compute_next_payroll_month_start(site_today())
 
         from sqlalchemy import select
 
@@ -577,7 +578,7 @@ class PayrollSalaryService:
         )
 
         # Recalculate past attendance for dates from effective_from up to yesterday (if effective_from < today)
-        today = date.today()
+        today = site_today()
         if effective_from < today:
             from fw.modules.attendance import AttendanceRecord, AttendanceService
 

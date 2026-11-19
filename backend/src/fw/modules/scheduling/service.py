@@ -11,11 +11,13 @@ from uuid import UUID, uuid4
 
 import openpyxl
 import sqlalchemy as sa
+import structlog
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from fw.core.clock import site_today
 from fw.core.errors import AppError
 from fw.core.events import event_bus
 from fw.modules.audit import AuditService
@@ -135,6 +137,8 @@ from fw.rules.time_rules import (
     WorkerContext,
     resolve_time_schedule,
 )
+
+logger = structlog.get_logger(__name__)
 
 # Table representation for employee salary without importing payroll module
 employee_salary_table = sa.table(
@@ -278,8 +282,8 @@ class SchedulingService:
                     parsed = json.loads(trimmed)
                     if isinstance(parsed, list):
                         return {str(x).strip().lower() for x in parsed if x}
-                except Exception:
-                    pass
+                except (json.JSONDecodeError, ValueError) as exc:
+                    logger.debug("budget_roles_json_parse_fallback", error=str(exc))
             return {x.strip().lower() for x in trimmed.split(",") if x.strip()}
         return set()
 
@@ -816,7 +820,7 @@ class SchedulingService:
             assigned_hours=payload.assigned_hours,
             target_sequence=target_seq,
             existing_assignments=existing_contexts,
-            today=date.today(),
+            today=site_today(),
             is_admin=is_admin,
             is_public_holiday=is_holiday,
             is_on_leave=False,
@@ -1139,12 +1143,12 @@ class SchedulingService:
                 t_date = target_date
             elif weekday:
                 w_upper = weekday.strip().upper()
-                today = date.today()
+                today = site_today()
                 monday = today - timedelta(days=today.weekday())
                 w_idx = WEEKDAY_TO_INT.get(w_upper, 0)
                 t_date = monday + timedelta(days=w_idx)
             else:
-                t_date = date.today()
+                t_date = site_today()
         else:
             raise AppError(
                 code="VALIDATION_ERROR",
@@ -1430,7 +1434,7 @@ class SchedulingService:
                 code="NOT_FOUND", message=f"Employee {employee_id} not found.", status_code=404
             )
 
-        t_date = work_date or date.today()
+        t_date = work_date or site_today()
         eff_hours = await self.get_effective_standard_hours(emp, t_date)
 
         # Date boundaries
@@ -3352,7 +3356,7 @@ class SchedulingService:
         current_user: User,
     ) -> LeaveRequestResponse:
         """Create a new leave request with 3-day notice and overlap checks."""
-        today = date.today()
+        today = site_today()
         is_admin = current_user.role == "ADMIN"
 
         # Check scope
@@ -4185,7 +4189,7 @@ class SchedulingService:
         current_user: User,
     ) -> ReassignmentResponse:
         """Create a temporary reassignment request with strict 3-day notice validation."""
-        today = date.today()
+        today = site_today()
 
         # Strict notice validation (checklist: a request under 3 days is refused for any role)
         ok_notice, err_notice = validate_reassignment_notice(
@@ -4318,7 +4322,7 @@ class SchedulingService:
         current_user: User | None = None,
     ) -> list[ReassignmentResponse]:
         """List reassignment requests scoped to user."""
-        today = date.today()
+        today = site_today()
         stmt = (
             select(ReassignmentRequest)
             .where(ReassignmentRequest.is_active.is_(True))
@@ -4512,7 +4516,7 @@ class SchedulingService:
                     status_code=403,
                 )
 
-        today = date.today()
+        today = site_today()
         is_late = check_late_approval(req.date_from, today, min_notice_days=3)
 
         req.status = "APPROVED"
@@ -4870,7 +4874,7 @@ class SchedulingService:
         current_user: User,
     ) -> StaffingGapsResponse:
         """List uncovered TO_BE_COVERED slots resulting from approved leave."""
-        today = date.today()
+        today = site_today()
         scoped_ids = await ScopeService.get_scoped_employee_ids(self.session, current_user)
 
         # 1. Approved leaves intersecting range
@@ -5018,7 +5022,7 @@ class SchedulingService:
         current_user: User,
     ) -> ReassignmentBatchResponse:
         """Create a grouped batch of temporary reassignment requests in one atomic transaction."""
-        today = date.today()
+        today = site_today()
         if not payload.items:
             raise AppError(
                 code="EMPTY_BATCH",

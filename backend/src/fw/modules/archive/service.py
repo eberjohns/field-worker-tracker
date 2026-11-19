@@ -4,7 +4,7 @@ import asyncio
 import gzip
 import json
 import os
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -13,6 +13,7 @@ import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fw.core.clock import site_today
 from fw.core.config import get_settings
 from fw.core.errors import AppError
 from fw.modules.archive.crypto import (
@@ -289,7 +290,7 @@ class ArchiveService:
         actor_id: UUID | None = None,
     ) -> AnonymisationResult:
         """Anonymise workers whose employment terminated > 2 years ago (UAE labour claim expiry)."""
-        cutoff_date = date.today() - timedelta(days=older_than_years * 365)
+        cutoff_date = site_today() - timedelta(days=older_than_years * 365)
 
         if employee_ids:
             stmt = select(Employee).where(

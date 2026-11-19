@@ -285,10 +285,10 @@ export const WorksiteDetail: React.FC = () => {
       setEditEndDate(data.end_date || "");
 
       // Fetch revisions
-      fetch("/api/v1/payroll/salary-revisions", { headers })
+      fetch("/api/v1/salary-revisions", { headers })
         .then((r) => (r.ok ? r.json() : []))
         .then((revs) => setRevisions(revs))
-        .catch(() => {});
+        .catch((err) => console.error("Failed to fetch salary revisions", err));
 
       // Fetch occurrences
       const occRes = await fetch(`/api/v1/occurrences?worksite_id=${worksiteId}&limit=500`, { headers });

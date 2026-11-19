@@ -375,12 +375,12 @@ def test_scenario_e_driver():
 
 
 def test_scenario_f_sunday_or_public_holiday():
-    """F - Sunday or public holiday:
+    """F - Weekly off or public holiday (DEC-01):
 
-    A worker works 8 h -> ot2 = 480, ot1 = 0.
+    A worker works 8 h on their weekly off day or a public holiday -> ot2 = 480, ot1 = 0.
     """
     site1 = uuid4()
-    work_date = date(2026, 11, 8)  # Sunday
+    work_date = date(2026, 11, 8)
 
     visits = [
         ConstructedVisit(
@@ -415,9 +415,8 @@ def test_scenario_f_sunday_or_public_holiday():
             ],
             visits=visits,
             gaps=[],
-            is_public_holiday=False,
+            is_public_holiday=True,
             is_weekly_off=False,
-            is_ot2_weekday=True,  # Sunday is OT2 day
             has_approved_leave=False,
         )
     )
@@ -428,11 +427,11 @@ def test_scenario_f_sunday_or_public_holiday():
     assert calc.day_type == "OT2_DAY"
 
 
-def test_scenario_g_weekly_off_or_no_assignment():
-    """G - weekly off day or day with no assignment:
+def test_scenario_g_unassigned_non_off_day():
+    """G - unassigned non-off day (DEC-01):
 
-    A worker works 8 h on their weekly off day (not Sunday/holiday)
-    -> ot1 = 480 (all hours OT1), flag UNSCHEDULED_WORK if no assignment.
+    A worker works 8 h on an unassigned day (not weekly off, not holiday)
+    -> ot1 = 480 (all hours OT1), flag UNSCHEDULED_WORK.
     """
     site1 = uuid4()
     work_date = date(2026, 11, 6)  # Friday
@@ -467,8 +466,7 @@ def test_scenario_g_weekly_off_or_no_assignment():
             visits=visits,
             gaps=[],
             is_public_holiday=False,
-            is_weekly_off=True,
-            is_ot2_weekday=False,
+            is_weekly_off=False,
             has_approved_leave=False,
         )
     )
@@ -476,6 +474,7 @@ def test_scenario_g_weekly_off_or_no_assignment():
     assert calc.worked_minutes == 480
     assert calc.ot1_minutes == 480
     assert calc.ot2_minutes == 0
+    assert calc.day_type == "UNASSIGNED"
     assert "UNSCHEDULED_WORK" in calc.flags
     assert "Unscheduled work" in calc.review_reasons
 

@@ -80,7 +80,9 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
       const next = !prev;
       try {
         localStorage.setItem("fwt_sidebar_collapsed", String(next));
-      } catch {}
+      } catch (err) {
+        console.warn("Failed to persist sidebar state to localStorage", err);
+      }
       return next;
     });
   };
@@ -103,7 +105,9 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
           const data = await res.json();
           setPendingApprovalsCount(data?.counts?.total || 0);
         }
-      } catch {}
+      } catch (err) {
+        console.error("Failed to fetch pending approvals count", err);
+      }
     };
     fetchCounts();
     const timer = setInterval(fetchCounts, 30000);

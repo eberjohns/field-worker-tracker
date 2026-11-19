@@ -28,23 +28,52 @@ async def handle_payroll_run_created(event: PayrollRunCreated, session: AsyncSes
         )
 
 
+async def _generate_approved_reports_safe(payroll_run_id) -> None:
+    from fw.core.db import async_session_factory
+    from fw.modules.notifications import NotificationService
+
+    async with async_session_factory() as session:
+        try:
+            await ReportService.generate_month_end_reports(
+                session=session,
+                payroll_run_id=payroll_run_id,
+                is_approval=True,
+                generated_by_user="system",
+            )
+            await session.commit()
+            logger.info("month_end_reports_approved_completed", run_id=str(payroll_run_id))
+        except Exception as e:
+            logger.error(
+                "month_end_reports_approved_failed", error=str(e), run_id=str(payroll_run_id)
+            )
+            try:
+                await NotificationService.create_alert(
+                    session=session,
+                    alert_type="MONTH_END_REPORTS_FAILED",
+                    title=f"Month-end report generation failed for run {payroll_run_id}",
+                    message=f"Report generation error: {e}",
+                    ref_type="PAYROLL_RUN",
+                    ref_id=payroll_run_id,
+                    target_role="ADMIN",
+                )
+                await session.commit()
+            except Exception as alert_err:
+                logger.error("failed_to_create_month_end_reports_alert", error=str(alert_err))
+
+
 async def handle_payroll_run_approved(event: PayrollRunApproved, session: AsyncSession) -> None:
-    """When a payroll run is approved, generate the final immutable month-end reports."""
+    """When a payroll run is approved, generate the final immutable month-end reports post-commit."""
     if not event.payroll_run_id:
         return
 
     logger.info("handling_payroll_run_approved_for_reports", run_id=str(event.payroll_run_id))
     try:
-        await ReportService.generate_month_end_reports(
-            session=session,
-            payroll_run_id=event.payroll_run_id,
-            is_approval=True,
-            generated_by_user="system",
-        )
-    except Exception as e:
-        logger.error(
-            "month_end_reports_approved_failed", error=str(e), run_id=str(event.payroll_run_id)
-        )
+        await session.commit()
+    except Exception as commit_err:
+        logger.error("payroll_approval_commit_failed", error=str(commit_err))
+        raise
+
+    await _generate_approved_reports_safe(event.payroll_run_id)
 
 
 _registered = False

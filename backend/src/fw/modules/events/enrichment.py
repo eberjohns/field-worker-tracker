@@ -3,9 +3,11 @@ from datetime import UTC, date, datetime
 from typing import Any, cast
 from uuid import UUID
 
+import structlog
 from geoalchemy2.shape import to_shape
 from shapely.geometry import Point
 from sqlalchemy import select, text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.core.events import (
@@ -18,6 +20,8 @@ from fw.modules.events.models import EmployeeLastPosition, MobileEventLog
 from fw.modules.jobs import Worksite
 from fw.modules.org import Accommodation
 from fw.rules.attendance.verdicts import EventVerdictInput, evaluate_event_verdict
+
+logger = structlog.get_logger(__name__)
 
 
 class EventEnrichmentService:
@@ -293,5 +297,5 @@ class EventEnrichmentService:
             try:
                 # PostgreSQL NOTIFY (no-op if unsupported by engine in SQLite tests)
                 await session.execute(text(f"NOTIFY live_positions, '{pos.employee_id}'"))
-            except Exception:
-                pass
+            except (SQLAlchemyError, OSError) as exc:
+                logger.debug("notify_live_positions_skipped", error=str(exc))

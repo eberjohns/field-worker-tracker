@@ -421,8 +421,10 @@ class ReportService:
                         GeneratedReport.period_end == p_en,
                     )
                 )
-            except Exception:
-                pass
+            except (ValueError, TypeError) as exc:
+                logger.warning(
+                    "invalid_report_period_format", period=filters.period, error=str(exc)
+                )
 
         if conditions:
             stmt = stmt.where(and_(*conditions))

@@ -4,7 +4,7 @@ All client questions are answered. **CONFIRMED** = the client decided; **PROPOSE
 
 | ID | Topic | Final decision | Docs | Status |
 |---|---|---|---|---|
-| DEC-01 | Overtime | OT rate = basic / 208 x 1.25 (OT1) or x 1.5 (OT2). OT1 = ONLY hours worked beyond standard hours on normal working days (including remote stacking past standard hours; planner warns only, does not block). OT2 = all hours worked on public holidays and worker's weekly off day, nothing else. Fixed OT paid as given. OT is reviewed and approved before payment (Owner confirmation 19 Nov 2026) | 03, 05, 06, ADR-018, ADR-020 | CONFIRMED |
+| DEC-01 | Overtime | OT rate = basic / 208 x 1.25 (OT1) or x 1.5 (OT2). OT2 = all hours worked on public holidays and worker's own weekly off day, nothing else. OT1 = hours beyond standard hours on normal working days, and all hours on an unassigned non-off day. Sunday hardcoding removed; missing weekly off flags NO_WEEKLY_OFF_DAY. Fixed OT paid as given. OT is reviewed and approved before payment (Owner confirmation 19 Nov 2026) | 03, 05, 06, ADR-018, ADR-020, ADR-025 | CONFIRMED |
 | DEC-03 | Break and planned times | Break hierarchy (lowest to highest): company default (`default_break_minutes`) -> seasonal/effective time rule -> crew break stored in `employee_salary.break_minutes`. Crew break set on supervisor propagates to linked workers' salary structure. Attendance resolves salary break (>0) -> time rule -> company default. Job-item break override is display only and never affects calculation (Owner confirmation 19 Nov 2026) | 03, 05, D3, ADR-012 | CONFIRMED |
 | DEC-04 | Tracking gaps | Flag only; show unaccounted time = tracking-off minutes inside the shift minus the break | 05, ADR-018 | CONFIRMED |
 | DEC-05 | Missing exit | Estimate from last location, mark for review ("Estimated exit") | 05, ADR-018 | CONFIRMED |
@@ -24,7 +24,7 @@ All client questions are answered. **CONFIRMED** = the client decided; **PROPOSE
 | DEC-16 | Attendance record creation | One per employee/date with assignments or events | 05, ADR-018 | PROPOSED |
 | DEC-17 | Status | PRESENT = all assigned sites visited; PARTIAL = some; ABSENT = none | 05, 12, ADR-018 | CONFIRMED |
 | DEC-19 | Rounding | Minutes integer; money half-up 2 dp per line | 06 | PROPOSED |
-| DEC-21 | Weekly off | Per worker, else company default **Sunday** (setting); skipping only where defined | 03, 04 | CONFIRMED |
+| DEC-21 | Weekly off | Worker's own weekly off day (stored in employee.weekly_off_day). Missing weekly_off_day does not default to Sunday; raises NO_WEEKLY_OFF_DAY flag (Owner confirmation 19 Nov 2026) | 03, 04, 05, ADR-025 | CONFIRMED |
 | DEC-24 | Minimum time at site | Setting (default 10 min) for a visit to count | 05, ADR-018 | CONFIRMED |
 | DEC-25 | WPS / Mudad | Out of scope | 06 | CONFIRMED |
 | DEC-27 | Driver break | Deducted from accommodation-to-accommodation time | 05, ADR-018 | PROPOSED |

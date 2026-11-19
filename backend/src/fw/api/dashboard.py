@@ -3,7 +3,6 @@
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
-from zoneinfo import ZoneInfo
 
 import structlog
 from fastapi import APIRouter, Depends
@@ -11,6 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fw.core.clock import site_today
 from fw.core.db import get_db
 from fw.modules.attendance.models import (
     AttendanceCalculation,
@@ -64,7 +64,7 @@ async def get_dashboard_summary(
 ) -> DashboardSummaryResponse:
     """Get role-aware overview statistics: today's attendance, live workers, pending visits, late arrivals, OT."""
     now = datetime.now(UTC)
-    local_today = now.astimezone(ZoneInfo("Asia/Dubai")).date()
+    local_today = site_today()
 
     # Scope resolution
     scoped_ids: set[UUID] | None = None

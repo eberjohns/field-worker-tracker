@@ -1,12 +1,12 @@
 """Handler for Document Expiry Report."""
 
-from datetime import date
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fw.core.clock import site_today
 from fw.modules.org.models import Employee, EmployeeDocument, EmployeeReportingLine
 from fw.modules.reports.schemas import ReportFilterParams
 
@@ -55,7 +55,7 @@ async def fetch_document_expiry(
     mgr_res = await session.execute(mgr_stmt)
     supervisor_map: dict[UUID, str] = {row[0].employee_id: row[1].name for row in mgr_res.all()}
 
-    today = date.today()
+    today = site_today()
     rows: list[dict[str, Any]] = []
     for d in docs:
         if not d.expiry_date:

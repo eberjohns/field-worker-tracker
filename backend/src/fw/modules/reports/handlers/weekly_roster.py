@@ -1,13 +1,14 @@
 """Handler for Weekly Roster Export."""
 
 from collections import defaultdict
-from datetime import date, timedelta
+from datetime import timedelta
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fw.core.clock import site_today
 from fw.modules.jobs.models import Worksite
 from fw.modules.org.models import Employee
 from fw.modules.reports.schemas import ReportFilterParams
@@ -20,7 +21,7 @@ async def fetch_weekly_roster(
     scoped_ids: set[UUID] | None,
 ) -> list[dict[str, Any]]:
     """Generate weekly schedule in Mon-Sun worker grid format."""
-    ref_date = filters.week_start or filters.date_from or date.today()
+    ref_date = filters.week_start or filters.date_from or site_today()
     mon = ref_date - timedelta(days=ref_date.weekday())
     week_days = [mon + timedelta(days=i) for i in range(7)]
 
