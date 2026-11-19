@@ -388,6 +388,7 @@ class PendingVisitsService:
                 .where(
                     EmployeeReportingLine.employee_id.in_(emp_ids),
                     EmployeeReportingLine.relationship == "SUPERVISOR",
+                    EmployeeReportingLine.is_active == True,  # noqa: E712
                 )
             )
             sup_rows = (await session.execute(sup_stmt)).all()

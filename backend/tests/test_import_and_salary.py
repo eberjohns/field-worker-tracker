@@ -18,6 +18,7 @@ from uuid import uuid4
 import openpyxl
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 
 from fw.core.db import async_session_factory, engine
 from fw.main import app
@@ -49,11 +50,23 @@ async def admin_client():
 
     async with async_session_factory() as session:
         from fw.modules.identity import UserService
+        from fw.modules.org import Employee
 
         user = await UserService.get_or_create_system_admin(session)
+        res = await session.execute(select(Employee).where(Employee.tally_id == "TEST_EMP_SAL"))
+        emp = res.scalar_one_or_none()
+        if not emp:
+            emp = Employee(
+                tally_id="TEST_EMP_SAL",
+                name="Test Salary Worker",
+                role="WORKER",
+                country="AE",
+                is_active=True,
+            )
+            session.add(emp)
         await session.commit()
         admin_id = user.id
-        emp_id = user.employee_id
+        emp_id = emp.id
 
     token = AuthService.create_access_token(user)
     transport = ASGITransport(app=app)

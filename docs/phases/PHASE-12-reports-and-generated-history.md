@@ -3,7 +3,7 @@
 **Depends on:** PHASE-11
 
 ## Goal
-All 16 reports, Excel export for every report, automatic month-end generation, generated-report history with proper names and visibility.
+All 15 reports (driver-run-sheet dropped with transport), Excel export for every report, automatic month-end generation, generated-report history with proper names and visibility.
 
 ## Context (read only these)
 - `AGENTS.md`
@@ -19,7 +19,7 @@ All 16 reports, Excel export for every report, automatic month-end generation, g
 
 ## Deliverables
 - Report registry with typed filters, scope, columns, Excel/CSV/PDF formatters
-- Reports not yet built: movement, site visits, utilization, transportation time, late/early, project attendance summary, monthly attendance, staffing gaps, document expiry, weekly roster, driver run sheet, payroll, provisions-staff-cost, job costing
+- Reports not yet built: movement, site visits, utilization, transportation time, late/early, project attendance summary, monthly attendance, staffing gaps, document expiry, weekly roster, payroll, provisions-staff-cost, job costing (driver run sheet dropped with transport)
 - Month-end job generating the report set after the draft and final copies on approval
 - Generated Reports section: list, filter, download again; names `<Company>_<Report>_<Country>_<Period>_generated-<date>.xlsx`; versions; visibility by role
 - Notifications when ready

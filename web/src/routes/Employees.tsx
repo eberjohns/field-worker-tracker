@@ -91,6 +91,9 @@ export const Employees: React.FC = () => {
   // Supervisor crew break override modal
   const [editingSupervisor, setEditingSupervisor] = useState<Employee | null>(null);
   const [supervisorBreakMinutes, setSupervisorBreakMinutes] = useState<number | "">("");
+  const [supervisorBreakEffectiveFrom, setSupervisorBreakEffectiveFrom] = useState<string>(
+    new Date().toISOString().slice(0, 10)
+  );
   const [supervisorBreakLoading, setSupervisorBreakLoading] = useState(false);
 
   // Bulk update dialog state
@@ -608,6 +611,7 @@ export const Employees: React.FC = () => {
         body: JSON.stringify({
           break_override_minutes:
             supervisorBreakMinutes === "" ? null : Number(supervisorBreakMinutes),
+          effective_from: supervisorBreakEffectiveFrom || new Date().toISOString().slice(0, 10),
           version: editingSupervisor.version,
         }),
       });
@@ -1272,6 +1276,9 @@ export const Employees: React.FC = () => {
                                         setEditingSupervisor(group.supervisor);
                                         setSupervisorBreakMinutes(
                                           group.supervisor.break_override_minutes ?? ""
+                                        );
+                                        setSupervisorBreakEffectiveFrom(
+                                          new Date().toISOString().slice(0, 10)
                                         );
                                       }}
                                       className="ml-1 p-0.5 text-amber-700 hover:text-amber-950 hover:bg-amber-100 rounded transition"
@@ -2053,7 +2060,21 @@ export const Employees: React.FC = () => {
                 className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
               />
               <p className="text-[11px] text-slate-400 mt-1">
-                Attendance calculations prioritize this crew break setting above salary structure defaults.
+                Setting a crew break automatically propagates this duration into the salary structures (employee_salary.break_minutes) of all workers reporting to this supervisor.
+              </p>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">
+                Effective From Date
+              </label>
+              <input
+                type="date"
+                value={supervisorBreakEffectiveFrom}
+                onChange={(e) => setSupervisorBreakEffectiveFrom(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+              />
+              <p className="text-[11px] text-slate-400 mt-1">
+                Creates or updates effective-dated salary records from this date. Unlocked past attendance will be recalculated automatically.
               </p>
             </div>
             <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">

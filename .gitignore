@@ -50,6 +50,7 @@ storage/
 local_storage/
 !backend/src/fw/adapters/storage/
 !backend/src/fw/adapters/storage/*.py
+data/
 
 # System / IDE
 .DS_Store

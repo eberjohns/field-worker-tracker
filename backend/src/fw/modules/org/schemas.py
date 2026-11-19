@@ -110,6 +110,7 @@ class EmployeeUpdate(BaseModel):
     is_driver: bool | None = None
     country: str | None = None
     break_override_minutes: int | None = None
+    effective_from: date | None = None
     join_date: date | None = None
     employment_end_date: date | None = None
     is_active: bool | None = None
@@ -119,12 +120,14 @@ class EmployeeUpdate(BaseModel):
 class EmployeeBulkUpdateItem(BaseModel):
     accommodation_id: UUID | None = None
     break_override_minutes: int | None = None
+    effective_from: date | None = None
     weekly_off_day: str | None = None
 
 
 class EmployeeBulkUpdateRequest(BaseModel):
     employee_ids: list[UUID]
     changes: EmployeeBulkUpdateItem
+    effective_from: date | None = None
 
 
 class EmployeeRead(BaseModel):
@@ -168,8 +171,29 @@ class ReportingLineRead(BaseModel):
     relationship: str
     notes: str | None = None
     created_at: datetime
+    is_active: bool = True
     is_direct: bool = True
     via_name: str | None = None
+
+
+class HierarchyViolationItem(BaseModel):
+    reporting_line_id: UUID
+    employee_id: UUID
+    employee_tally_id: str
+    employee_name: str
+    employee_role: str
+    manager_id: UUID
+    manager_tally_id: str
+    manager_name: str
+    manager_role: str
+    relationship: str
+    violation_code: str
+    violation_message: str
+    supervisor_id: UUID | None = None
+    supervisor_tally_id: str | None = None
+    supervisor_name: str | None = None
+    supervisor_already_has_manager: bool = False
+    can_move_to_supervisor: bool = False
 
 
 class GradeChangeRequest(BaseModel):

@@ -102,7 +102,15 @@ erDiagram
 Indexes: unique(tally_id); (country); (staff_grade_description); (grade_code); (is_active).
 
 ### employee_reporting_lines
-Replaces single supervisor/superintendent/engineer columns. One row per link: `employee_id` FK, `manager_id` FK employees, `relationship` (SUPERVISOR | SUPERINTENDENT | ENGINEER), `notes`. **Unique (employee_id, manager_id, relationship)**; CHECK `employee_id <> manager_id`; a partial unique index allows **at most one SUPERVISOR per employee** (`unique (employee_id) where relationship = 'SUPERVISOR'`). A person can have several superintendents and several engineers. Indexes: (manager_id, relationship), (employee_id). Scope = rows where `manager_id` is the current user (see 02).
+Fixed crew hierarchy links: `employee_id` FK, `manager_id` FK employees, `relationship` (SUPERVISOR | SUPERINTENDENT | ENGINEER), `notes`, `is_active` bool default true, `deactivated_at` timestamptz nullable, `deactivated_by` uuid nullable.
+- Partial unique index `uq_employee_manager_relationship_active`: `UNIQUE (employee_id, manager_id, relationship) WHERE is_active = true`.
+- Partial unique index `ix_unique_single_supervisor`: `UNIQUE (employee_id) WHERE relationship = 'SUPERVISOR' AND is_active = true` (at most one active supervisor per employee).
+- CHECK constraint: `employee_id <> manager_id`.
+- Business constraints (DEC-10, ADR-024):
+  - Workers link ONLY to a manager with role `SUPERVISOR` (relationship `SUPERVISOR`). Direct worker links to superintendents/engineers are forbidden.
+  - `SUPERINTENDENT` and `ENGINEER` links attach ONLY to supervisors. Workers inherit them transitively.
+  - Links are never deleted; removal sets `is_active = false` with audit logging.
+- Indexes: `(is_active)`, `(manager_id, relationship)`, `(employee_id)`. Scope = active rows where `manager_id` is the current user or their transitive descendants (see 02, ADR-011, ADR-024).
 
 ### employee_grade_history
 `employee_id`, `old_grade_code`, `new_grade_code`, `effective_from` date, `changed_by_user_id`, `reason`.
@@ -267,7 +275,7 @@ Never updated after insert.
 ## Salary and payroll
 
 ### employee_salary (actual pay)
-`employee_id`, `effective_from` date, `standard_hours` numeric(4,1), `basic_salary`, `special_allowance`, `fixed_ot_amount`, `bonus`, `telephone_allowance`, `housing_transport_allowance` (numeric(14,2)), `break_minutes` int nullable (default daily unpaid break duration for explainability in attendance calculation), `import_batch_id`, `created_by_user_id`. Unique (employee_id, effective_from). History is kept; the last change date and difference are computed from the last two rows. Gratuity, leave salary, provisions and totals are **not stored** (calculated; snapshotted at payroll approval).
+`employee_id`, `effective_from` date, `standard_hours` numeric(4,1), `basic_salary`, `special_allowance`, `fixed_ot_amount`, `bonus`, `telephone_allowance`, `housing_transport_allowance` (numeric(14,2)), `break_minutes` int nullable (default daily unpaid break duration for explainability in attendance calculation), `change_source` varchar(50) nullable (e.g. `'CREW_BREAK'` when propagated from supervisor), `import_batch_id`, `created_by_user_id`. Unique (employee_id, effective_from). History is kept; the last change date and difference are computed from the last two rows. Gratuity, leave salary, provisions and totals are **not stored** (calculated; snapshotted at payroll approval).
 
 ### salary_revisions (job budget only)
 `code` unique, `name`, `country`, `effective_from`, `effective_to` nullable, `status`, `notes`. A revision may contain only the grades that changed.

@@ -57,6 +57,16 @@ def test_gratuity_and_leave_salary_formulas():
     assert leave_sal == Decimal("100.00")
 
 
+def test_gratuity_and_leave_salary_pin_1100():
+    """Pin exact client formula values for Basic 1100:
+    gratuity = 1100 / 365 * 30 = 90.41
+    leave_salary = 1100 / 12 = 91.67
+    """
+    basic = Decimal("1100")
+    assert calculate_gratuity(basic) == Decimal("90.41")
+    assert calculate_leave_salary(basic) == Decimal("91.67")
+
+
 def test_provisions_and_final_total_staff_cost():
     """Verify checklist requirement:
 

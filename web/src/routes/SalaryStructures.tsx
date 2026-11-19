@@ -32,6 +32,7 @@ interface SalaryHistoryRecord {
   standard_hours: number;
   basic_salary: number;
   break_minutes?: number | null;
+  change_source?: string | null;
   special_allowance: number;
   fixed_ot_amount: number;
   bonus: number;
@@ -341,8 +342,15 @@ export const SalaryStructures: React.FC = () => {
                           <span className="text-sm font-bold text-slate-900">
                             Effective from {rec.effective_from}
                           </span>
+                          {rec.change_source === "CREW_BREAK" && (
+                            <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-bold">
+                              Break change
+                            </span>
+                          )}
                         </div>
-                        {rec.difference !== 0 && (
+                        {rec.change_source === "CREW_BREAK" ? (
+                          <span className="text-xs text-slate-400 font-medium">No salary difference</span>
+                        ) : rec.difference !== 0 && (
                           <span
                             className={`text-xs font-bold px-2 py-0.5 rounded ${
                               rec.difference > 0

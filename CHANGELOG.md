@@ -1,8 +1,43 @@
 # Changelog
 All notable changes. Format: Keep a Changelog. Mobile-contract changes are also logged in `docs/09-mobile-sync-contract.md`.
 
-## [Unreleased]
+## [1.6.0] - 2026-11-19
 ### Added
+- Client Alignment (Batch 4): Breaks, Fixed Crew Structure, Payroll Formula Text, and Governance:
+  - Database Migration `0018_reporting_lines_active.py`:
+    - Added `is_active` (boolean, default True, indexed), `deactivated_at`, and `deactivated_by` to `employee_reporting_lines`.
+    - Converted unique constraint `uq_employee_manager_relationship` to partial index `uq_employee_manager_relationship_active` filtering `WHERE is_active = true`.
+    - Replaced index `ix_unique_single_supervisor` with partial unique index filtering `WHERE relationship = 'SUPERVISOR' AND is_active = true`.
+    - Added `change_source` column to `employee_salary` (nullable varchar(50)) to distinguish crew break propagation updates from formal salary revisions.
+  - Break Time: One Source of Truth (DEC-03, DEC-41):
+    - Attendance Engine break priority: Worker salary structure (`employee_salary.break_minutes` if > 0) -> Seasonal/Effective `TimeRule.break_minutes` -> Company Default (`default_break_minutes`).
+    - Removed hardcoded "or 30" fallback; company default setting is now the definitive calculation fallback.
+    - Job-item `break_override_minutes` is strictly display reference and never affects calculation (`DailyCalculationInputs.first_site_break_override` remains unused).
+    - Daily calculation result and explanations reflect definitive `break_source`: `SALARY_STRUCTURE` / `TIME_RULE` / `COMPANY_DEFAULT`.
+    - Setting or updating `break_override_minutes` on a supervisor propagates to all linked active crew members in `employee_salary` with effective dating (`change_source = 'CREW_BREAK'`).
+    - Propagation is strictly idempotent, updates future-dated salary rows, updates same-effective-date rows in-place (preserving non-crew change sources), never invents baseline salary rows for workers without prior salary history, and rejects locked payroll periods with `HTTP 422 PAYROLL_PERIOD_LOCKED`; retroactively recalculates unlocked attendance for dates prior to today; newly linked workers inherit supervisor's crew break upon assignment.
+    - Master Data Import pipeline commits `Employee_Salary` before applying idempotent crew-break propagation, defaulting new salary structures to the supervisor's crew break when omitted. Re-importing workers with a changed supervisor issues an `UPDATED` preview action and automatically soft-deactivates the former active supervisor link upon commit.
+    - Web UI salary history (Employee Detail & Payroll Salary Structures drawer) labels `CREW_BREAK` updates with a dedicated "Break change" badge with no false monetary difference.
+  - Fixed Crew Structure & Governance (DEC-10, ADR-024):
+    - Enforced fixed crew topology: Workers have exactly 1 supervisor (manager must have role `SUPERVISOR`); Superintendents and Engineers attach ONLY to Supervisors; direct `WORKER -> SUPERINTENDENT/ENGINEER` links are forbidden.
+    - Added pure validation rules in `fw.rules.hierarchy`: `WORKER_DIRECT_LINK_NOT_ALLOWED`, `SUPERVISOR_LINK_ROLE_MISMATCH`, `INVALID_LINK_SUBJECT` (rejects supervisor linking to a supervisor, or superintendent/engineer link to a non-supervisor), `HIERARCHY_ROLE_MISMATCH`, and `HIERARCHY_CYCLE`.
+    - Enforced validations in `OrgService.add_reporting_line` and Master Data Import pipeline preview (surfaced as blocking preview ERRORs, not crashes).
+    - Transitive scope & approval inheritance: Workers inherit supervisor's superintendents and engineers for transitive scope (`compute_transitive_scope`), approval routing (leaves, reassignments, attendance reviews), live map, and reporting.
+    - Soft deactivation & auditability: `OrgService.remove_reporting_line` and hierarchy editor soft-deactivate links (`is_active = False`) preserving complete history. All operational queries across attendance, scheduling, sync, live map, and reports filter `is_active = true`.
+    - Hierarchy Violations Audit & Remediation Tooling: Admin endpoint `GET /api/v1/employees/hierarchy-violations` lists non-conforming legacy links with `can_move_to_supervisor` indicators, `GET /api/v1/employees/hierarchy-violations/export` exports violation roster to Excel, `POST /api/v1/employees/hierarchy-violations/{id}/move-to-supervisor` safely attaches the manager to the worker's supervisor before deactivating the direct link, and `POST /api/v1/employees/hierarchy-violations/{id}/deactivate` soft-deactivates the link.
+    - Frontend Web UI: Employee Detail Hierarchy editor restricts worker manager candidates strictly to `SUPERVISOR`, hides direct supt/eng inputs on worker profiles, displays inherited leadership read-only with an `(inherited via supervisor)` badge, restricts supt/eng linking only to supervisor profiles, and provides an interactive "Hierarchy Audit & Violations" modal with live resolution actions and Excel download.
+  - Payroll Formula Text Alignment:
+    - Corrected formula descriptions across Web UI labels/guides (`web/src/routes/Payroll.tsx`), documentation (`docs/06-payroll-and-cost.md`, `docs/modules/payroll.md`, `docs/decisions/020-month-end-payroll-and-dynamic-budget.md`), and historical changelog entries:
+      - Gratuity formula: `basic / 365 * 30` (or 21 days for < 5 years service).
+      - Leave salary formula: `basic / 12` (or pro-rated basic / 30 * days).
+    - Pinned exact calculation test in `backend/tests/test_payroll_rules.py` (Basic 1,100 -> Gratuity 90.41, Leave Salary 91.67). `fw.rules.payroll.formulas.py` logic remained untouched.
+  - Decision Register & Documentation Updates:
+    - Updated `docs/decisions/decision-register.md` with client confirmations (dated 19 Nov 2026): DEC-01 (OT1/OT2 definitions), DEC-03/DEC-41 (break precedence), DEC-10 (fixed crew hierarchy), DEC-30 (missed-hours deductions remain), DEC-47 (salary reports restricted to Admin), DEC-49 (drivers measured camp-to-camp minus break).
+    - Status updates: DEC-38 & DEC-56 set to `HUMAN` ("implemented; awaiting client/counsel review"); DEC-44 set to `DROPPED` ("omitted by client in later meetings").
+    - Phase 10 status updated to `dropped (client omitted transport)` in `docs/phases/README.md`.
+    - Report inventory aligned from 16 to 15 reports across `docs/12-reports.md` and `docs/README.md` (`driver-run-sheet` dropped with transport).
+    - Regenerated master bulk import template `FieldWorkerTracker_Import_Template_v1.0.xlsx` with updated reporting instructions and validations.
+
 - System Refinements & Lifecycle Controls (Batch 3):
   - Database Migration `0016_leave_cover_and_batches.py`: Added `leave_requests.cover_employee_id` (indexed), `reassignment_requests.batch_id` (indexed), `reassignment_requests.batch_note`, and `scheduled_work.is_weekly_off_cover`.
   - Single Standalone System Admin (`0017_single_standalone_admin.py`, ADR-023): Decoupled the single `ADMIN001` system administrator from the `employees` table (`users.employee_id` nullable strictly when `role = 'ADMIN'`), added PostgreSQL partial unique index `uq_users_single_admin` guaranteeing at most one Admin account, restricted `employees.role` strictly to operational roles (`WORKER`, `SUPERVISOR`, `SUPERINTENDENT`, `ENGINEER`), blocked `ADMIN` creation/promotion in APIs & Excel imports (`ADMIN_ROLE_RESERVED`), updated database reset/seeding and all tests to reuse `ADMIN001` via `UserService.get_or_create_system_admin`, and removed `Admin` from Employees UI filters.
@@ -32,7 +67,7 @@ All notable changes. Format: Keep a Changelog. Mobile-contract changes are also 
   - Base Planner Sunday Quota Overflow & Target Styling Reset: When using "Fill Active Working Days", if a worker's weekly rest day falls within target days (e.g. Friday), automatically schedules Sunday to satisfy the required 6-day quota. Automatically disables cyan target styling on slot cells once planned quota has been reached.
   - Base Planner Monthly Week Selection Capping: Capped selectable weeks of the month in recurring monthly cadences to `occurrences_per_period` (e.g. 1 week for 1x/month, 2 weeks for 2x/month), disabling extra checkboxes and allowing 1-click week switching for single-visit cadences.
   - Approved Leave Cancellation Lockdown: Restricted leave cancellation strictly to `REQUESTED` leaves; attempts to cancel an `APPROVED` leave now return `HTTP 400 VALIDATION_ERROR` ("Approved leave cannot be cancelled once approved"), preserving coverage integrity and preventing orphaned shift gaps.
-  - Multi-Tier Break Duration Hierarchy: Configured break minutes priority: Supervisor Group (`break_override_minutes` on supervisor) > Salary Structure (`break_minutes` on `EmployeeSalary`) > Company Default / Time Rule. Added break duration column and editing modal to Salary Structures, added crew break configuration modal to Employees supervisor rows, and set worksite job item break times strictly for reference.
+  - Multi-Tier Break Duration Hierarchy (One Source of Truth): Configured break minutes priority: worker salary structure (`employee_salary.break_minutes`) > seasonal/effective time rule > company default (`default_break_minutes`). Setting crew break on a supervisor propagates directly to linked crew members' salary structures (`employee_salary`). Job-item break override is strictly display reference and never affects calculation.
   - Operational Planner Public Holiday Skipping: Configured operational planner template slot expansion to skip statutory public holidays by default when generating daily shifts from master base blueprints.
   - Daily Dashboard Document Expiry Alerts: Added automatic daily document expiry scanning during alert retrieval (`check_document_expiry_alerts`) and integrated a dedicated Document Expiry Alert card with lead time and expiration countdown badges into the Operations Dashboard linking to `/documents`.
   - Multi-Page Interactive Sorting Controls: Added interactive sorting toggles across Employees (Name vs Tally ID), Worksites (Job Number vs Name), Base Planner (Job Number Asc/Desc), and Operational & Master Planner (Worksite Job Number Asc/Desc).
@@ -125,7 +160,7 @@ All notable changes. Format: Keep a Changelog. Mobile-contract changes are also 
   - Pure Payroll Rules (`fw.rules.payroll`):
     - Overtime formulas complying with 208-hour standard monthly divisor (26 days × 8 hours): OT1 rate = `(basic / 208) * 1.25` (only hours beyond standard hours on normal working days); OT2 rate = `(basic / 208) * 1.50` (all hours worked on public holidays and worker's weekly off day). Benchmark: Basic $1,100 -> OT1 $6.61, OT2 $7.93.
     - Missed hours deduction: `missed_hours * (basic / 208)` deducted from monthly salary portion. Paid leaves (annual, sick) incur zero deduction.
-    - Statutory employer provisions: Gratuity accrual = `(basic / 30) * (21 / 12)`; Leave salary provision = `((basic + housing) / 30) * (30 / 12)`.
+    - Statutory employer provisions: Gratuity accrual = basic / 365 * 30; Leave salary provision = basic / 12.
     - 5 company provisions (Visa, Air Ticket, Uniform, Medical, Accommodation) from company settings.
     - HR overhead: 5% added to Total Staff Cost for Final Staff Cost.
     - Planned hourly cost calculation for job budgeting from grade revision lines.
@@ -145,7 +180,7 @@ All notable changes. Format: Keep a Changelog. Mobile-contract changes are also 
     - 3-tab layout: Payroll Runs & Approvals, Salary Revisions, and Job Budget vs Actual.
     - Payroll Runs tab: Run status badges (`DRAFT` / `APPROVED`), run numbers, summary KPI cards, Draft Inspector with collapsible Issues Panel, Re-run Draft button, Approve Payroll confirmation modal, and worker records table with search.
     - Worker Detail Drawer: Comprehensive employee pay breakdown and employer staff cost breakdown (with 5% HR OH).
-    - Explanatory Formula Guide ("i" icon modal): Detailed documentation of legal/contractual math (208 divisor, OT1 vs OT2 classification, 21-day gratuity, 30-day leave salary, 5% HR OH).
+    - Explanatory Formula Guide ("i" icon modal): Detailed documentation of legal/contractual math (208 divisor, OT1 vs OT2 classification, basic / 365 * 30 gratuity, basic / 12 leave salary, 5% HR OH).
     - Salary Revisions tab: Revision selector dropdown, grade pricing lines table, "Export Template" button generating pre-filled sheet, and "Import Revision & Diff" modal with side-by-side red/green diff preview.
     - Excel Template Import & Diff: Real `.xlsx` template export (`GET /api/v1/salary-revisions/{code}/export-template`), drag-and-drop Excel file upload, automated side-by-side diff (`POST /api/v1/salary-revisions/preview-file`), inline editable preview grid, and single-click revision commit.
     - Worker Records Table enhancements: Clear Role pills with color-coding, Role filtering dropdown (Workers, Supervisors, Engineers, Admins), employee Tally ID rendering, and explicit standard target vs worked hours display (`8h/d (208h) / XX.Xh`).

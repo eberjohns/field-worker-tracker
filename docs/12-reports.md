@@ -13,7 +13,7 @@ Sources: the client's *SGS Field Tracker - Inputs and Outputs* document (section
 - Dashboard statistics are derived or cached, never manually edited.
 
 ## 2. Traceability: client's list to our reports
-The client named ten reports (section 4.1). The requirements spec adds four more, and the weekly roster and driver run sheet are added from their schedule and transport. All sixteen are below.
+The client named ten reports (section 4.1). The requirements spec adds four more, and the weekly roster is added from scheduling (transport driver run sheet was omitted when the client dropped transport). All fifteen are below.
 
 | # | Client wording (paraphrased intent) | Our key | Notes |
 |---|---|---|---|
@@ -32,7 +32,6 @@ The client named ten reports (section 4.1). The requirements spec adds four more
 | - | (requirements spec) Staffing gaps | `staffing-gaps` | Split out of "pending visits and staffing gaps" |
 | - | (requirements spec + client alert) Document expiry | `document-expiry` | Also drives alerts |
 | - | (client's weekly schedule sheet) Weekly roster export | `weekly-roster` | Workers x days with sites and hours, in the client's layout |
-| - | (transport) Driver run sheet | `driver-run-sheet` | A driver's stops in order with passengers |
 
 Live monitoring (real-time map, management dashboard) and alerts are not reports; see sections 4 and 5.
 
@@ -112,9 +111,6 @@ Documents (Visa, Passport, Emirates ID, **Labour Card**, optional Driving Licenc
 
 ### 3.15 `weekly-roster`  (client's weekly schedule sheet)
 The roster in the client's familiar layout: one row per worker (ID, name, grade, supervisor, engineer, transport remark), one block per day Mon-Sun with the **sites (job number and name) and hours** for that day, markers (Free, Weekly-OFF, Skipped), and a **daily total against standard hours**. Compact and expanded variants. Export from the Planner for any week.
-
-### 3.16 `driver-run-sheet`
-For a driver and date: morning and evening runs with ordered stops and the passengers at each. Printable.
 
 ## 4. Live monitoring (web)   **[DEC-31]**
 **Real-time map** (client 4.2): all active field staff and their current location.

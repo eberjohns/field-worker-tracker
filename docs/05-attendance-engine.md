@@ -73,7 +73,7 @@ Inputs: ACTIVE Scheduled Work for the date, settings and time rules **as in forc
 `required_minutes = sum(assigned_hours) * 60` over ACTIVE assignments (the day's assigned work); `standard_minutes` = the worker's standard hours (salary structure) adjusted by time rules.
 `required_minutes = sum(assigned_hours) * 60` over ACTIVE FIELD_WORK Scheduled Work.
 
-**Effective break** **[DEC-03, DEC-41]**: the job-item `break_override_minutes` of the first site visited that day, else the resolved time rule (employee, team, drivers, company/season). A rule with a blocked window counts the window as break for the affected (outdoor) jobs. Save `break_minutes_used` and `break_source`. The attendance table shows the break applied by the rule, since actual break timing is not measured.
+**Effective break** **[DEC-03, DEC-41]**: resolved in priority order (lowest to highest): company default (`default_break_minutes`) -> seasonal/effective time rule -> crew break stored in `employee_salary.break_minutes` (propagated to crew members when set on a supervisor). Attendance resolves `employee_salary.break_minutes` (if set, > 0) -> resolved time rule break (season-aware) -> company default (`default_break_minutes`). Job-item `break_override_minutes` is display only and never affects calculation. Save `break_minutes_used` and `break_source` (`SALARY_STRUCTURE`, `TIME_RULE`, or `COMPANY_DEFAULT`). The attendance table shows the break applied, since actual break timing is not measured.
 
 **Regular worker**
 ```

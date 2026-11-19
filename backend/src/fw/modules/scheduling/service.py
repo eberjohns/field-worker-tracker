@@ -1249,6 +1249,7 @@ class SchedulingService:
                 .where(
                     EmployeeReportingLine.employee_id.in_(recent_emp_ids),
                     EmployeeReportingLine.relationship == "SUPERVISOR",
+                    EmployeeReportingLine.is_active == True,  # noqa: E712
                 )
                 .distinct()
             )
@@ -1262,7 +1263,10 @@ class SchedulingService:
                 EmployeeReportingLine.employee_id, EmployeeReportingLine.manager_id, Employee.name
             )
             .join(Employee, EmployeeReportingLine.manager_id == Employee.id)
-            .where(EmployeeReportingLine.relationship == "SUPERVISOR")
+            .where(
+                EmployeeReportingLine.relationship == "SUPERVISOR",
+                EmployeeReportingLine.is_active == True,  # noqa: E712
+            )
         )
         rep_rows = (await self.session.execute(reporting_stmt)).all()
         emp_to_supervisor: dict[UUID, tuple[UUID, str]] = {r[0]: (r[1], r[2]) for r in rep_rows}
@@ -1563,7 +1567,10 @@ class SchedulingService:
                 EmployeeReportingLine.employee_id, EmployeeReportingLine.manager_id, Employee.name
             )
             .join(Employee, EmployeeReportingLine.manager_id == Employee.id)
-            .where(EmployeeReportingLine.relationship == "SUPERVISOR")
+            .where(
+                EmployeeReportingLine.relationship == "SUPERVISOR",
+                EmployeeReportingLine.is_active == True,  # noqa: E712
+            )
         )
         rep_rows = (await self.session.execute(reporting_stmt)).all()
         emp_to_supervisor: dict[UUID, tuple[UUID, str]] = {r[0]: (r[1], r[2]) for r in rep_rows}
@@ -2916,7 +2923,8 @@ class SchedulingService:
 
         # Load supervisors for grouping
         sup_stmt = select(EmployeeReportingLine).where(
-            EmployeeReportingLine.relationship == "SUPERVISOR"
+            EmployeeReportingLine.relationship == "SUPERVISOR",
+            EmployeeReportingLine.is_active == True,  # noqa: E712
         )
         sup_links = (await self.session.execute(sup_stmt)).scalars().all()
         sup_by_emp: dict[UUID, UUID] = {link.employee_id: link.manager_id for link in sup_links}

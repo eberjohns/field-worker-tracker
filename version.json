@@ -1,9 +1,9 @@
 {
-  "version": "1.5.4",
+  "version": "1.6.3",
   "major": 1,
-  "minor": 5,
-  "patch": 4,
-  "last_branch": "feat/batch3-roles-undo-tally-deactivation",
-  "last_commit": "4146c3e",
-  "updated_at": "2026-11-18T17:48:57.789242+00:00"
+  "minor": 6,
+  "patch": 3,
+  "last_branch": "fix/batch4-client-alignment",
+  "last_commit": "e43577d",
+  "updated_at": "2026-11-19T02:02:11.382717+00:00"
 }

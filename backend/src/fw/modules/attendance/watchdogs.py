@@ -70,6 +70,7 @@ class AttendanceWatchdogs:
                 .where(
                     EmployeeReportingLine.employee_id == emp_id,
                     EmployeeReportingLine.relationship == "SUPERVISOR",
+                    EmployeeReportingLine.is_active == True,  # noqa: E712
                 )
                 .limit(1)
             )

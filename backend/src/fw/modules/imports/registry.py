@@ -351,7 +351,7 @@ SHEET_REGISTRY: dict[str, SheetDef] = {
     "Employee_Reporting": SheetDef(
         name="Employee_Reporting",
         title="Direct reporting relationship links. One row per link.",
-        description="Links workers to Supervisors, Superintendents, and Engineers.",
+        description="Fixed crew hierarchy links (DEC-10): Workers link to exactly one Supervisor (manager role SUPERVISOR). Superintendents and Engineers attach ONLY to Supervisors. Workers inherit leadership transitively.",
         primary_key=["employee_tally_id", "manager_tally_id", "relationship"],
         commit_order=5,
         is_in_scope_phase_03=True,
@@ -361,7 +361,7 @@ SHEET_REGISTRY: dict[str, SheetDef] = {
                 "text",
                 True,
                 "Required",
-                description="The person being reported on (must exist in Employees).",
+                description="The person being reported on (Worker for SUPERVISOR links; Supervisor for SUPERINTENDENT/ENGINEER links).",
                 example="1193",
             ),
             ColumnDef(
@@ -369,7 +369,7 @@ SHEET_REGISTRY: dict[str, SheetDef] = {
                 "text",
                 True,
                 "Required",
-                description="The supervisor / superintendent / engineer (must exist in Employees).",
+                description="The manager (must have role matching relationship: SUPERVISOR, SUPERINTENDENT, or ENGINEER).",
                 example="2001",
             ),
             ColumnDef(
@@ -378,7 +378,7 @@ SHEET_REGISTRY: dict[str, SheetDef] = {
                 True,
                 "Required",
                 enum_values=["SUPERVISOR", "SUPERINTENDENT", "ENGINEER"],
-                description="What the manager is to this person.",
+                description="SUPERVISOR (for workers; max 1 per worker), or SUPERINTENDENT / ENGINEER (attaches to supervisors only).",
                 example="SUPERVISOR",
             ),
             ColumnDef(
