@@ -54,7 +54,11 @@ def validate_reporting_link(
             message=f"Workers cannot be directly linked to a {norm_rel.lower()}. They inherit superintendents and engineers from their supervisor.",
         )
 
-    if norm_rel in ("SUPERINTENDENT", "ENGINEER") and emp_role is not None and emp_role != "SUPERVISOR":
+    if (
+        norm_rel in ("SUPERINTENDENT", "ENGINEER")
+        and emp_role is not None
+        and emp_role != "SUPERVISOR"
+    ):
         raise HierarchyRuleViolation(
             code="INVALID_LINK_SUBJECT",
             message=f"{norm_rel.capitalize()} links attach only to supervisors, but employee role is {emp_role}.",

@@ -173,7 +173,9 @@ class ImportService:
                         EmployeeReportingLine.is_active == True,  # noqa: E712
                     )
                 )
-            ).scalars().all()
+            )
+            .scalars()
+            .all()
         }
         emp_id_to_tally = {e.id: e.tally_id for e in existing_employees.values()}
         active_db_reporting_links: list[tuple[str, str, str]] = [
@@ -636,19 +638,29 @@ class ImportService:
                     emp_role = (
                         file_employees_roles.get(emp_tally)
                         if emp_tally in file_employees_roles
-                        else (existing_employees[emp_tally].role if emp_tally in existing_employees else None)
+                        else (
+                            existing_employees[emp_tally].role
+                            if emp_tally in existing_employees
+                            else None
+                        )
                     )
                     mgr_role = (
                         file_employees_roles.get(mgr_tally)
                         if mgr_tally in file_employees_roles
-                        else (existing_employees[mgr_tally].role if mgr_tally in existing_employees else None)
+                        else (
+                            existing_employees[mgr_tally].role
+                            if mgr_tally in existing_employees
+                            else None
+                        )
                     )
 
                     # Links for validation: active DB links, excluding any supervisor link being replaced for this employee
                     links_for_validation = [
                         link
                         for link in active_db_reporting_links
-                        if not (rel == "SUPERVISOR" and link[0] == emp_tally and link[2] == "SUPERVISOR")
+                        if not (
+                            rel == "SUPERVISOR" and link[0] == emp_tally and link[2] == "SUPERVISOR"
+                        )
                     ]
 
                     if emp_exists and mgr_exists and rel:
@@ -676,8 +688,17 @@ class ImportService:
                         emp_obj = existing_employees[emp_tally]
                         active_sup = existing_active_supervisors.get(emp_obj.id)
                         if active_sup:
-                            old_mgr = next((e for e in existing_employees.values() if e.id == active_sup.manager_id), None)
-                            old_mgr_tally = old_mgr.tally_id if old_mgr else str(active_sup.manager_id)
+                            old_mgr = next(
+                                (
+                                    e
+                                    for e in existing_employees.values()
+                                    if e.id == active_sup.manager_id
+                                ),
+                                None,
+                            )
+                            old_mgr_tally = (
+                                old_mgr.tally_id if old_mgr else str(active_sup.manager_id)
+                            )
                             if old_mgr_tally == mgr_tally:
                                 row_action = "UNCHANGED"
                             else:
@@ -1511,7 +1532,11 @@ class ImportService:
                     e_id = emp_id_map[e_t]
                     m_id = emp_id_map[m_t]
                     mgr_obj = emp_obj_map.get(m_id)
-                    if mgr_obj and mgr_obj.break_override_minutes and mgr_obj.break_override_minutes > 0:
+                    if (
+                        mgr_obj
+                        and mgr_obj.break_override_minutes
+                        and mgr_obj.break_override_minutes > 0
+                    ):
                         await PayrollSalaryService.propagate_crew_break_to_worker(
                             session=session,
                             worker_id=e_id,

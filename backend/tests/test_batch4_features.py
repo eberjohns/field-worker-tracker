@@ -17,7 +17,7 @@ from __future__ import annotations
 import asyncio
 import io
 import socket
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
@@ -27,12 +27,11 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
 from fw.core.db import async_session_factory, engine
-from fw.core.errors import AppError
 from fw.main import app
 from fw.modules.identity import AuthService, User, UserService
 from fw.modules.org import Employee, EmployeeReportingLine, OrgService
 from fw.modules.payroll import EmployeeSalary, PayrollRun, PayrollSalaryService
-from fw.modules.scheduling import LeaveRequest, SchedulingService
+from fw.modules.scheduling import LeaveRequest
 from fw.rules.attendance.engine import DailyCalculationInputs, compute_daily_attendance
 
 
@@ -81,6 +80,7 @@ async def get_admin_client():
 def test_pure_break_calculation_and_job_item_ignored():
     """Verify that job_item_break_override is ignored and break_source is populated."""
     from datetime import time
+
     from fw.rules.attendance.engine import ScheduledAssignment
     from fw.rules.attendance.visits import ConstructedVisit
     from fw.rules.time_rules import ResolvedTimeSchedule
@@ -113,10 +113,10 @@ def test_pure_break_calculation_and_job_item_ignored():
             accommodation_id=None,
             entry_event_id=uuid4(),
             exit_event_id=uuid4(),
-            entry_at=datetime(2026, 11, 19, 7, 0, tzinfo=timezone.utc),
-            exit_at=datetime(2026, 11, 19, 16, 0, tzinfo=timezone.utc),
+            entry_at=datetime(2026, 11, 19, 7, 0, tzinfo=UTC),
+            exit_at=datetime(2026, 11, 19, 16, 0, tzinfo=UTC),
             exit_inferred=False,
-            last_inside_at=datetime(2026, 11, 19, 16, 0, tzinfo=timezone.utc),
+            last_inside_at=datetime(2026, 11, 19, 16, 0, tzinfo=UTC),
             counts_as_completed=True,
             duration_minutes=540,
         )
@@ -679,7 +679,7 @@ async def test_hierarchy_violations_audit_excel_and_actions():
                 EmployeeReportingLine.employee_id == sup_id,
                 EmployeeReportingLine.manager_id == eng_id,
                 EmployeeReportingLine.relationship == "ENGINEER",
-                EmployeeReportingLine.is_active == True,
+                EmployeeReportingLine.is_active.is_(True),
             )
             sup_eng_line = (await session.execute(sup_eng_q)).scalar_one_or_none()
             assert sup_eng_line is not None
@@ -818,12 +818,18 @@ async def test_first_import_and_reimport_crew_break_idempotency():
 
         # Verify DB state after Pass 1: exactly 1 salary row with basic 1500.00 and break 45
         async with async_session_factory() as session:
-            emp = (await session.execute(select(Employee).where(Employee.tally_id == wrk_tally))).scalar_one()
+            emp = (
+                await session.execute(select(Employee).where(Employee.tally_id == wrk_tally))
+            ).scalar_one()
             sal_rows = (
-                await session.execute(
-                    select(EmployeeSalary).where(EmployeeSalary.employee_id == emp.id)
+                (
+                    await session.execute(
+                        select(EmployeeSalary).where(EmployeeSalary.employee_id == emp.id)
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
             assert len(sal_rows) == 1, f"Expected exactly 1 salary row, got {len(sal_rows)}"
             assert sal_rows[0].basic_salary == Decimal("1500.00")
             assert sal_rows[0].break_minutes == 45
@@ -848,13 +854,21 @@ async def test_first_import_and_reimport_crew_break_idempotency():
 
         # Verify DB state after Pass 2: still exactly 1 salary row
         async with async_session_factory() as session:
-            emp = (await session.execute(select(Employee).where(Employee.tally_id == wrk_tally))).scalar_one()
+            emp = (
+                await session.execute(select(Employee).where(Employee.tally_id == wrk_tally))
+            ).scalar_one()
             sal_rows = (
-                await session.execute(
-                    select(EmployeeSalary).where(EmployeeSalary.employee_id == emp.id)
+                (
+                    await session.execute(
+                        select(EmployeeSalary).where(EmployeeSalary.employee_id == emp.id)
+                    )
                 )
-            ).scalars().all()
-            assert len(sal_rows) == 1, f"Running same import twice should create no new rows, got {len(sal_rows)}"
+                .scalars()
+                .all()
+            )
+            assert len(sal_rows) == 1, (
+                f"Running same import twice should create no new rows, got {len(sal_rows)}"
+            )
             assert sal_rows[0].basic_salary == Decimal("1500.00")
             assert sal_rows[0].break_minutes == 45
     finally:
@@ -914,7 +928,6 @@ async def test_reimport_worker_with_new_supervisor():
         session.add(rep)
         await session.commit()
         w_id = w.id
-        sup1_id = sup1.id
         sup2_id = sup2.id
         old_rep_id = rep.id
 
@@ -973,7 +986,7 @@ async def test_reimport_worker_with_new_supervisor():
                 EmployeeReportingLine.employee_id == w_id,
                 EmployeeReportingLine.manager_id == sup2_id,
                 EmployeeReportingLine.relationship == "SUPERVISOR",
-                EmployeeReportingLine.is_active == True,
+                EmployeeReportingLine.is_active.is_(True),
             )
             new_line = (await session.execute(new_line_q)).scalar_one_or_none()
             assert new_line is not None

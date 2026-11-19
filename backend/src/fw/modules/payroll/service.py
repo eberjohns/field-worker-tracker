@@ -170,7 +170,7 @@ class PayrollSalaryService:
                 .where(
                     EmployeeReportingLine.employee_id == employee_id,
                     EmployeeReportingLine.relationship == "SUPERVISOR",
-                    EmployeeReportingLine.is_active == True,
+                    EmployeeReportingLine.is_active.is_(True),
                 )
                 .limit(1)
             )
@@ -276,7 +276,7 @@ class PayrollSalaryService:
                     .where(
                         EmployeeReportingLine.employee_id == employee_id,
                         EmployeeReportingLine.relationship == "SUPERVISOR",
-                        EmployeeReportingLine.is_active == True,
+                        EmployeeReportingLine.is_active.is_(True),
                     )
                     .limit(1)
                 )
@@ -303,7 +303,7 @@ class PayrollSalaryService:
                     .where(
                         EmployeeReportingLine.employee_id == employee_id,
                         EmployeeReportingLine.relationship == "SUPERVISOR",
-                        EmployeeReportingLine.is_active == True,
+                        EmployeeReportingLine.is_active.is_(True),
                     )
                     .limit(1)
                 )
@@ -495,12 +495,16 @@ class PayrollSalaryService:
                 return
 
         # Check c: Locked period check via PayrollRun
-        pay_run_stmt = select(PayrollRun.id).where(
-            PayrollRun.country == worker.country,
-            PayrollRun.status == "APPROVED",
-            PayrollRun.period_start <= effective_from,
-            PayrollRun.period_end >= effective_from,
-        ).limit(1)
+        pay_run_stmt = (
+            select(PayrollRun.id)
+            .where(
+                PayrollRun.country == worker.country,
+                PayrollRun.status == "APPROVED",
+                PayrollRun.period_start <= effective_from,
+                PayrollRun.period_end >= effective_from,
+            )
+            .limit(1)
+        )
         approved_run = (await session.execute(pay_run_stmt)).scalars().first()
         if approved_run:
             raise AppError(
@@ -512,11 +516,15 @@ class PayrollSalaryService:
         # Check if attendance is locked for finalized payroll
         from fw.modules.attendance.models import AttendanceRecord
 
-        att_locked_stmt = select(AttendanceRecord.id).where(
-            AttendanceRecord.employee_id == worker_id,
-            AttendanceRecord.work_date >= effective_from,
-            AttendanceRecord.locked.is_(True),
-        ).limit(1)
+        att_locked_stmt = (
+            select(AttendanceRecord.id)
+            .where(
+                AttendanceRecord.employee_id == worker_id,
+                AttendanceRecord.work_date >= effective_from,
+                AttendanceRecord.locked.is_(True),
+            )
+            .limit(1)
+        )
         if (await session.execute(att_locked_stmt)).scalars().first():
             raise AppError(
                 code="PAYROLL_PERIOD_LOCKED",

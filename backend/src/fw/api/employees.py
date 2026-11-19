@@ -339,9 +339,7 @@ async def export_hierarchy_violations(
     return Response(
         content=excel_bytes,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={
-            "Content-Disposition": "attachment; filename=hierarchy_violations.xlsx"
-        },
+        headers={"Content-Disposition": "attachment; filename=hierarchy_violations.xlsx"},
     )
 
 

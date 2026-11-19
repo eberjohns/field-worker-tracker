@@ -852,9 +852,7 @@ class OrgService:
                 )
             elif line.relationship == "SUPERINTENDENT" and mgr.role != "SUPERINTENDENT":
                 violation_code = "HIERARCHY_ROLE_MISMATCH"
-                violation_msg = (
-                    f"Superintendent link has manager {mgr.tally_id} ({mgr.name}) with role {mgr.role}."
-                )
+                violation_msg = f"Superintendent link has manager {mgr.tally_id} ({mgr.name}) with role {mgr.role}."
             elif line.relationship == "ENGINEER" and mgr.role != "ENGINEER":
                 violation_code = "HIERARCHY_ROLE_MISMATCH"
                 violation_msg = (
@@ -904,12 +902,16 @@ class OrgService:
         """Move a direct worker->supt/eng link to the worker's supervisor, then deactivate the direct link."""
         line = await session.get(EmployeeReportingLine, reporting_line_id)
         if not line or not line.is_active:
-            raise AppError(code="NOT_FOUND", message="Active reporting line not found.", status_code=404)
+            raise AppError(
+                code="NOT_FOUND", message="Active reporting line not found.", status_code=404
+            )
 
         emp = await session.get(Employee, line.employee_id)
         mgr = await session.get(Employee, line.manager_id)
         if not emp or not mgr:
-            raise AppError(code="NOT_FOUND", message="Employee or manager not found.", status_code=404)
+            raise AppError(
+                code="NOT_FOUND", message="Employee or manager not found.", status_code=404
+            )
 
         if emp.role != "WORKER" or line.relationship not in ("SUPERINTENDENT", "ENGINEER"):
             raise AppError(
@@ -985,6 +987,7 @@ class OrgService:
     @staticmethod
     def export_hierarchy_violations_excel(violations: list[HierarchyViolationItem]) -> bytes:
         import io
+
         import openpyxl
         from openpyxl.styles import Alignment, Font, PatternFill
         from openpyxl.utils import get_column_letter
@@ -1019,21 +1022,27 @@ class OrgService:
             cell.alignment = Alignment(horizontal="center", vertical="center")
 
         for v in violations:
-            sup_display = f"{v.supervisor_tally_id} ({v.supervisor_name})" if v.supervisor_tally_id else "None"
-            ws.append([
-                v.employee_tally_id,
-                v.employee_name,
-                v.employee_role,
-                v.manager_tally_id,
-                v.manager_name,
-                v.manager_role,
-                v.relationship,
-                v.violation_code,
-                v.violation_message,
-                sup_display,
-                "Yes" if v.supervisor_already_has_manager else "No",
-                "Yes" if v.can_move_to_supervisor else "No",
-            ])
+            sup_display = (
+                f"{v.supervisor_tally_id} ({v.supervisor_name})"
+                if v.supervisor_tally_id
+                else "None"
+            )
+            ws.append(
+                [
+                    v.employee_tally_id,
+                    v.employee_name,
+                    v.employee_role,
+                    v.manager_tally_id,
+                    v.manager_name,
+                    v.manager_role,
+                    v.relationship,
+                    v.violation_code,
+                    v.violation_message,
+                    sup_display,
+                    "Yes" if v.supervisor_already_has_manager else "No",
+                    "Yes" if v.can_move_to_supervisor else "No",
+                ]
+            )
 
         for col in ws.columns:
             max_len = max(len(str(cell.value or "")) for cell in col)

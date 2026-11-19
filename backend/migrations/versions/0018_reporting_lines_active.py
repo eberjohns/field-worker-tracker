@@ -40,7 +40,9 @@ def upgrade() -> None:
     )
 
     # 2. Replace uq_employee_manager_relationship with partial unique index for active rows
-    op.drop_constraint("uq_employee_manager_relationship", "employee_reporting_lines", type_="unique")
+    op.drop_constraint(
+        "uq_employee_manager_relationship", "employee_reporting_lines", type_="unique"
+    )
     op.create_index(
         "uq_employee_manager_relationship_active",
         "employee_reporting_lines",
