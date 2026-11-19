@@ -1684,6 +1684,8 @@ export const WorksiteDetail: React.FC = () => {
           setEditingItem(null);
         }}
         worksiteId={worksite.id}
+        worksiteStartDate={worksite.start_date}
+        salaryRevisionCode={worksite.salary_revision_code}
         initialData={editingItem}
         onSuccess={() => {
           setStatusMessage("Job item saved and occurrences updated.");

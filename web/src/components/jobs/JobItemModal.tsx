@@ -2,12 +2,14 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { X, Calculator, AlertCircle, Info } from "lucide-react";
 
-interface JobItem {
+export interface JobItem {
   id: string;
   worksite_id: string;
   sub_item_code: string;
   staff_grade_description: string;
   planned_grade_code: string | null;
+  start_date: string;
+  end_date: string | null;
   frequency_unit: "WEEK" | "MONTH" | "QUARTER" | "YEAR";
   occurrences_per_period: number;
   period_interval: number;
@@ -20,26 +22,29 @@ interface JobItem {
   version: number;
 }
 
-interface JobItemModalProps {
+export interface JobItemModalProps {
   isOpen: boolean;
   onClose: () => void;
   worksiteId: string;
+  worksiteStartDate?: string | null;
+  salaryRevisionCode?: string | null;
   initialData?: JobItem | null;
   onSuccess: () => void;
 }
 
-const COMMON_SGDS = [
-  "GARDENER",
-  "TEAM LEADER",
-  "DRIVER",
-  "IRRIGATION TECHNICIAN",
-  "FOREMAN",
-  "SUPERVISOR",
-  "CLEANER",
-  "LANDSCAPE WORKER",
-  "ARBORIST",
-  "OPERATOR",
-];
+import {
+  CONTROLLED_STAFF_GRADE_DESCRIPTIONS,
+  DEFAULT_GRADE_CODES,
+  formatApiError,
+  buildJobItemPayload,
+} from "./jobItemUtils";
+
+export {
+  CONTROLLED_STAFF_GRADE_DESCRIPTIONS,
+  DEFAULT_GRADE_CODES,
+  formatApiError,
+  buildJobItemPayload,
+};
 
 const WEEKDAYS = [
   { code: "MON", label: "Mon" },
@@ -69,13 +74,18 @@ export const JobItemModal: React.FC<JobItemModalProps> = ({
   isOpen,
   onClose,
   worksiteId,
+  worksiteStartDate,
+  salaryRevisionCode,
   initialData,
   onSuccess,
 }) => {
   const { token } = useAuth();
   const [subItemCode, setSubItemCode] = useState("");
-  const [sgd, setSgd] = useState("GARDENER");
+  const [sgd, setSgd] = useState("");
   const [plannedGrade, setPlannedGrade] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [availableGrades, setAvailableGrades] = useState<string[]>(DEFAULT_GRADE_CODES);
   const [frequencyUnit, setFrequencyUnit] = useState<"WEEK" | "MONTH" | "QUARTER" | "YEAR">("WEEK");
   const [occurrencesPerPeriod, setOccurrencesPerPeriod] = useState<number>(6);
   const [periodInterval, setPeriodInterval] = useState<number>(1);
@@ -96,10 +106,21 @@ export const JobItemModal: React.FC<JobItemModalProps> = ({
   const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(() => {
+    const todayStr = new Date().toISOString().split("T")[0];
     if (initialData) {
       setSubItemCode(initialData.sub_item_code);
-      setSgd(initialData.staff_grade_description);
+      setSgd(initialData.staff_grade_description || "");
       setPlannedGrade(initialData.planned_grade_code || "");
+      setStartDate(
+        initialData.start_date
+          ? String(initialData.start_date).substring(0, 10)
+          : worksiteStartDate
+            ? String(worksiteStartDate).substring(0, 10)
+            : todayStr
+      );
+      setEndDate(
+        initialData.end_date ? String(initialData.end_date).substring(0, 10) : ""
+      );
       setFrequencyUnit(initialData.frequency_unit);
       setOccurrencesPerPeriod(initialData.occurrences_per_period);
       setPeriodInterval(initialData.period_interval);
@@ -118,8 +139,10 @@ export const JobItemModal: React.FC<JobItemModalProps> = ({
       setBreakOverride(initialData.break_override_minutes ?? "");
     } else {
       setSubItemCode("");
-      setSgd("GARDENER");
+      setSgd("");
       setPlannedGrade("");
+      setStartDate(worksiteStartDate ? String(worksiteStartDate).substring(0, 10) : todayStr);
+      setEndDate("");
       setFrequencyUnit("WEEK");
       setOccurrencesPerPeriod(6);
       setPeriodInterval(1);
@@ -130,7 +153,43 @@ export const JobItemModal: React.FC<JobItemModalProps> = ({
       setBreakOverride("");
     }
     setErrorMsg("");
-  }, [initialData, isOpen]);
+
+    // Load available grade codes from active salary revision
+    const loadGrades = async () => {
+      try {
+        const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+        let targetCode = salaryRevisionCode;
+        if (!targetCode) {
+          const revListRes = await fetch("/api/v1/salary-revisions", { headers });
+          if (revListRes.ok) {
+            const revList = await revListRes.json();
+            const active = revList.find((r: any) => r.status === "ACTIVE") || revList[0];
+            if (active) targetCode = active.code;
+          }
+        }
+        if (targetCode) {
+          const detailRes = await fetch(`/api/v1/salary-revisions/${targetCode}`, { headers });
+          if (detailRes.ok) {
+            const detail = await detailRes.json();
+            if (detail.lines && detail.lines.length > 0) {
+              const codes: string[] = Array.from<string>(
+                new Set(detail.lines.map((l: any) => String(l.grade_code)))
+              ).sort();
+              if (codes.length > 0) {
+                setAvailableGrades(codes);
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load salary revision grade codes", err);
+      }
+    };
+
+    if (isOpen) {
+      loadGrades();
+    }
+  }, [initialData, isOpen, worksiteStartDate, salaryRevisionCode, token]);
 
   if (!isOpen) return null;
 
@@ -170,6 +229,14 @@ export const JobItemModal: React.FC<JobItemModalProps> = ({
       setErrorMsg("Staff grade description is required.");
       return;
     }
+    if (!plannedGrade.trim()) {
+      setErrorMsg("Planned grade code is required.");
+      return;
+    }
+    if (!startDate.trim()) {
+      setErrorMsg("Start date is required.");
+      return;
+    }
     if (parsedHours <= 0) {
       setErrorMsg("Hours per occurrence must be greater than 0.");
       return;
@@ -180,7 +247,9 @@ export const JobItemModal: React.FC<JobItemModalProps> = ({
       const payload: Record<string, any> = {
         sub_item_code: subItemCode.trim(),
         staff_grade_description: sgd.trim(),
-        planned_grade_code: plannedGrade.trim() || null,
+        planned_grade_code: plannedGrade.trim(),
+        start_date: startDate.trim(),
+        end_date: endDate.trim() || null,
         frequency_unit: frequencyUnit,
         occurrences_per_period: occurrencesPerPeriod,
         period_interval: interval,
@@ -211,7 +280,7 @@ export const JobItemModal: React.FC<JobItemModalProps> = ({
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.detail || "Failed to save job item.");
+        throw new Error(formatApiError(errData));
       }
 
       onSuccess();
@@ -233,7 +302,7 @@ export const JobItemModal: React.FC<JobItemModalProps> = ({
               {initialData ? "Edit Job Item" : "Add Job Item"}
             </h2>
             <p className="text-xs text-slate-500">
-              Define frequency, required staffing, and hours. Occurrences are automatically generated.
+              Define frequency, required staffing, dates, and hours. Occurrences are automatically generated.
             </p>
           </div>
           <button
@@ -247,8 +316,8 @@ export const JobItemModal: React.FC<JobItemModalProps> = ({
         {/* Modal Body */}
         <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto flex-1">
           {errorMsg && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-xs text-red-700">
-              <AlertCircle className="h-4 w-4 shrink-0" />
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2 text-xs text-red-700 whitespace-pre-line">
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
               <span>{errorMsg}</span>
             </div>
           )}
@@ -272,20 +341,19 @@ export const JobItemModal: React.FC<JobItemModalProps> = ({
               <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Staff Grade Description (SGD) *
               </label>
-              <input
-                type="text"
-                list="sgd-options"
+              <select
                 required
                 value={sgd}
                 onChange={(e) => setSgd(e.target.value)}
-                placeholder="Select or enter SGD"
-                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-              />
-              <datalist id="sgd-options">
-                {COMMON_SGDS.map((opt) => (
-                  <option key={opt} value={opt} />
+                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white"
+              >
+                <option value="">Select Staff Grade Description *</option>
+                {CONTROLLED_STAFF_GRADE_DESCRIPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
                 ))}
-              </datalist>
+              </select>
             </div>
           </div>
 
@@ -293,15 +361,21 @@ export const JobItemModal: React.FC<JobItemModalProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Planned Grade Code (Optional)
+                Planned Grade Code *
               </label>
-              <input
-                type="text"
+              <select
+                required
                 value={plannedGrade}
                 onChange={(e) => setPlannedGrade(e.target.value)}
-                placeholder="e.g. GARDENER_L1"
-                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-              />
+                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white"
+              >
+                <option value="">Select Grade Code *</option>
+                {availableGrades.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -318,7 +392,34 @@ export const JobItemModal: React.FC<JobItemModalProps> = ({
             </div>
           </div>
 
-          {/* Row 3: Frequency Configuration */}
+          {/* Row 3: Start Date & End Date */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Start Date *
+              </label>
+              <input
+                type="date"
+                required
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                End Date (Optional)
+              </label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white"
+              />
+            </div>
+          </div>
+
+          {/* Row 4: Frequency Configuration */}
           <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-3">
             <span className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
               Frequency & Schedule
@@ -396,7 +497,7 @@ export const JobItemModal: React.FC<JobItemModalProps> = ({
             )}
           </div>
 
-          {/* Row 4: Staffing & Hours */}
+          {/* Row 5: Staffing & Hours */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">

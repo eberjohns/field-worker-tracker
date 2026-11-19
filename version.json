@@ -1,9 +1,9 @@
 {
-  "version": "1.7.2",
+  "version": "1.7.4",
   "major": 1,
   "minor": 7,
-  "patch": 2,
-  "last_branch": "fix/batch5-audit-fixes",
-  "last_commit": "3b630d3",
-  "updated_at": "2026-11-19T06:55:37.086081+00:00"
+  "patch": 4,
+  "last_branch": "fix/worksite-job-item-create",
+  "last_commit": "32cf544",
+  "updated_at": "2026-11-19T17:00:46.821053+00:00"
 }
