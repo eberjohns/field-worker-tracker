@@ -287,7 +287,7 @@ export const Attendance: React.FC = () => {
             })
               .then((res) => res.json())
               .then((updated) => setSelectedRecord(updated))
-              .catch(() => {});
+              .catch((err) => console.error("Failed to refresh selected attendance record", err));
           }}
         />
       )}

@@ -49,6 +49,7 @@ export const SalaryStructures: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [countryFilter, setCountryFilter] = useState("");
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   // History modal state
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
@@ -80,6 +81,7 @@ export const SalaryStructures: React.FC = () => {
 
   const fetchSalaries = async () => {
     setLoading(true);
+    setFetchError(null);
     try {
       const params = new URLSearchParams();
       if (countryFilter) params.set("country", countryFilter);
@@ -89,9 +91,12 @@ export const SalaryStructures: React.FC = () => {
       if (res.ok) {
         const data = await res.json();
         setSalaries(data.filter((s: any) => s.tally_id !== "ADMIN001"));
+      } else {
+        setFetchError("Failed to fetch salary structures from server.");
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      console.error("Failed to fetch salary structures", err);
+      setFetchError("Network error while loading salary structures. Please retry.");
     } finally {
       setLoading(false);
     }
@@ -110,8 +115,9 @@ export const SalaryStructures: React.FC = () => {
         const data = await res.json();
         setHistoryList(data.history || []);
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      console.error("Failed to load salary history", err);
+      setHistoryList([]);
     } finally {
       setHistoryLoading(false);
     }
@@ -187,6 +193,12 @@ export const SalaryStructures: React.FC = () => {
           </p>
         </div>
       </div>
+
+      {fetchError && (
+        <div className="p-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl">
+          {fetchError}
+        </div>
+      )}
 
       {/* Filter and Search Bar */}
       <div className="flex flex-col sm:flex-row gap-4 justify-between bg-white p-4 rounded-xl border border-slate-200">

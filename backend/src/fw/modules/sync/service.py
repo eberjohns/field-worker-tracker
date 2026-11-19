@@ -9,9 +9,11 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.adapters.push import get_push_provider
+from fw.core.clock import get_country_timezone
 from fw.core.config import get_settings
 from fw.core.errors import AppError
 from fw.core.events import WorkerConsentWithdrawn, event_bus
+from fw.modules.audit import AuditService
 from fw.modules.identity import (
     AuthService,
     User,
@@ -630,7 +632,7 @@ class SyncService:
             schedule_sync_window_days=window_days,
             location_policy_version=1,
             alarm_lead_minutes=alarm_lead_minutes,
-            timezone="Asia/Dubai" if employee.country == "AE" else "Asia/Riyadh",
+            timezone=get_country_timezone(employee.country).key,
             upcoming=[],
         )
         entities.append(
@@ -1153,6 +1155,17 @@ class SyncService:
         device.revoked_at = now
         device.revoked_by_user_id = admin_user_id
         await session.flush()
+
+        await AuditService.log_action(
+            session=session,
+            action="REVOKE_DEVICE",
+            entity_type="registered_device",
+            entity_id=str(device.id),
+            actor_user_id=admin_user_id,
+            actor_role="ADMIN",
+            reason="Admin revoked device binding",
+            diff={"is_active": False, "revoked_at": now.isoformat()},
+        )
 
         logger.info(
             "device_binding_reset_by_admin",

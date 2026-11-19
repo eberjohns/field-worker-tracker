@@ -1,6 +1,35 @@
 # Changelog
 All notable changes. Format: Keep a Changelog. Mobile-contract changes are also logged in `docs/09-mobile-sync-contract.md`.
 
+## [1.7.0] - 2026-11-19
+### Added
+- Client Alignment & Audit Fixes (Batch 5):
+  - OT2 Overtime Rule Alignment (DEC-01):
+    - OT2 = all worked hours on a public holiday or on the worker's own weekly off day (`is_ot2_day = inputs.is_public_holiday or inputs.is_weekly_off`).
+    - Unassigned non-off day = OT1 for all worked hours (`day_type = "UNASSIGNED"`).
+    - Normal assigned day = OT1 for hours beyond standard hours.
+    - Removed hardcoded Sunday check (`is_ot2_weekday`); if worker's `weekly_off_day` is not configured, does not default to Sunday and raises `NO_WEEKLY_OFF_DAY` flag instead.
+  - Background Jobs Scheduler (`fw/worker.py`):
+    - Production async scheduler executing periodic watchdogs (`check_no_activity` & `check_stale_devices` every 15 minutes), daily pending visit detection & reminders (per site local date), daily document expiry checks, retention purge (>60d sync changes, >6mo notifications), and yearly archiving per DEC-38.
+    - Removed lazy document expiry check and global variable from `notifications/service.py`.
+    - Idempotent execution, structured start/complete logging, and admin `JOB_FAILURE` alert creation on error.
+  - Multi-Process Safety & Scaling:
+    - Database Migration `0019_stream_tickets.py`: Created `stream_tickets` table with 30s TTL and single-use atomic consumption for SSE authentication across multiple web worker processes.
+    - `LivePositionBroadcaster`: Added PostgreSQL `LISTEN live_positions` channel consumer that fans out live position updates to local SSE subscribers across processes with duplicate suppression.
+  - Site-Local Date & Clock:
+    - Added `site_today(country)` and `site_now(country)` in `fw/core/clock.py` resolving country timezone from settings.
+    - Replaced all raw `date.today()` calls and hardcoded `ZoneInfo("Asia/Dubai")` usages.
+  - Attendance & Payroll Resilience:
+    - Removed blanket exception swallows in attendance calculation; missing salary structures now explicitly flag `NO_SALARY_STRUCTURE`.
+    - Month-end report generation executes in a separate transaction post-commit, creating `MONTH_END_REPORTS_FAILED` alerts without rolling back approved payroll runs.
+  - Web UI & API Route Consolidation:
+    - Fixed salary revisions API endpoint URL in `WorksiteDetail.tsx` (`/api/v1/salary-revisions`).
+    - Handled silent/empty catch blocks across `WorksiteDetail.tsx`, `Attendance.tsx`, `AuthContext.tsx`, `Shell.tsx`, `BasePlanner.tsx`, `OperationalPlanner.tsx`, and `SalaryStructures.tsx` with error states and logging.
+    - Consolidated duplicate device revocation routes onto `POST /api/v1/devices/{device_id}/revoke` and `/reset` with `REVOKE_DEVICE` audit logging; removed orphaned `api/devices.py`.
+  - Documentation & ADRs:
+    - Created `ADR-025` (`docs/decisions/025-batch5-audit-fixes.md`).
+    - Updated `docs/03-business-rules.md`, `docs/05-attendance-engine.md`, `docs/06-payroll-and-cost.md`, `docs/12-reports.md`, `docs/decisions/decision-register.md`, and added clarification notes in `docs/reference/field_workforce_system_requirements.md`.
+
 ## [1.6.0] - 2026-11-19
 ### Added
 - Client Alignment (Batch 4): Breaks, Fixed Crew Structure, Payroll Formula Text, and Governance:

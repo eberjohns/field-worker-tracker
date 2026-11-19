@@ -31,8 +31,8 @@ class DailyCalculationInputs:
     gaps: list[ConstructedGap]
     is_public_holiday: bool
     is_weekly_off: bool
-    is_ot2_weekday: bool  # e.g. Sunday
-    has_approved_leave: bool
+    has_approved_leave: bool = False
+    is_ot2_weekday: bool = False  # Deprecated in DEC-01; OT2 is holiday or worker's own weekly off
     first_site_break_override: int | None = None
     break_source: str = "TIME_RULE"
     grace_period_minutes: int = 10
@@ -220,13 +220,14 @@ def compute_daily_attendance(inputs: DailyCalculationInputs) -> DailyCalculation
             )
 
     # 6. Overtime Calculation [DEC-01]
-    is_ot2_day = inputs.is_public_holiday or inputs.is_ot2_weekday
+    # Owner confirmed 19 Nov 2026: OT2 = all worked hours on a public holiday or on worker's OWN weekly off day; nothing else.
+    is_ot2_day = inputs.is_public_holiday or inputs.is_weekly_off
     if is_ot2_day:
         day_type = "OT2_DAY"
         ot2_minutes = worked_minutes
         ot1_minutes = 0
-    elif inputs.is_weekly_off or assigned_count == 0:
-        day_type = "WEEKLY_OFF"
+    elif assigned_count == 0:
+        day_type = "UNASSIGNED"
         ot1_minutes = worked_minutes
         ot2_minutes = 0
     else:

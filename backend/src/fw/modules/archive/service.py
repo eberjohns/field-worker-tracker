@@ -4,7 +4,7 @@ import asyncio
 import gzip
 import json
 import os
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -13,6 +13,7 @@ import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fw.core.clock import site_today
 from fw.core.config import get_settings
 from fw.core.errors import AppError
 from fw.modules.archive.crypto import (
@@ -254,9 +255,13 @@ class ArchiveService:
         now = datetime.now(UTC)
         sync_cutoff = now - timedelta(days=sync_days)
         notif_cutoff = now - timedelta(days=notif_months * 30)
+        tickets_cutoff = now - timedelta(days=1)
 
         sync_purged = await ArchiveRepository.purge_expired_sync_changes(session, sync_cutoff)
         notif_purged = await ArchiveRepository.purge_expired_alerts(session, notif_cutoff)
+        tickets_purged = await ArchiveRepository.purge_expired_stream_tickets(
+            session, tickets_cutoff
+        )
 
         if actor_id:
             await AuditService.log_action(
@@ -267,8 +272,10 @@ class ArchiveService:
                 diff={
                     "sync_changes_purged": sync_purged,
                     "notifications_purged": notif_purged,
+                    "stream_tickets_purged": tickets_purged,
                     "sync_cutoff": sync_cutoff.isoformat(),
                     "notif_cutoff": notif_cutoff.isoformat(),
+                    "tickets_cutoff": tickets_cutoff.isoformat(),
                 },
                 actor_user_id=actor_id,
                 reason="Routine retention policy schedule execution",
@@ -278,6 +285,7 @@ class ArchiveService:
         return RetentionPurgeResult(
             sync_changes_purged=sync_purged,
             notification_logs_purged=notif_purged,
+            stream_tickets_purged=tickets_purged,
             completed_at=datetime.now(UTC),
         )
 
@@ -289,7 +297,7 @@ class ArchiveService:
         actor_id: UUID | None = None,
     ) -> AnonymisationResult:
         """Anonymise workers whose employment terminated > 2 years ago (UAE labour claim expiry)."""
-        cutoff_date = date.today() - timedelta(days=older_than_years * 365)
+        cutoff_date = site_today() - timedelta(days=older_than_years * 365)
 
         if employee_ids:
             stmt = select(Employee).where(

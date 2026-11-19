@@ -23,6 +23,7 @@ from openpyxl.styles import Font, PatternFill
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fw.core.clock import site_today
 from fw.core.errors import AppError
 from fw.modules.audit import AuditService
 from fw.modules.identity import User, hash_password
@@ -743,7 +744,7 @@ class ImportService:
                     tally_id = normalized_dict["tally_id"]["value"]
                     eff_from = normalized_dict["effective_from"]["value"]
                     if not eff_from:
-                        eff_from = compute_next_payroll_month_start(date.today())
+                        eff_from = compute_next_payroll_month_start(site_today())
                         normalized_dict["effective_from"]["value"] = eff_from
 
                     emp_exists = (tally_id in existing_employees) or (tally_id in file_employees)
@@ -1488,7 +1489,7 @@ class ImportService:
                 emp_id = emp_id_map[t_id]
                 eff = to_date_obj(r.normalized.get("effective_from"))
                 if not eff:
-                    eff = compute_next_payroll_month_start(date.today())
+                    eff = compute_next_payroll_month_start(site_today())
 
                 raw_break = r.normalized.get("break_minutes")
                 break_mins = None
@@ -1541,7 +1542,7 @@ class ImportService:
                             session=session,
                             worker_id=e_id,
                             break_minutes=mgr_obj.break_override_minutes,
-                            effective_from=date.today(),
+                            effective_from=site_today(),
                             actor_user_id=user_id,
                             actor_role=actor_role,
                         )

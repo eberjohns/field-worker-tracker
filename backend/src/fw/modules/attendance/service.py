@@ -1,13 +1,13 @@
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 from uuid import UUID
-from zoneinfo import ZoneInfo
 
 import structlog
 from sqlalchemy import delete, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from fw.core.clock import get_country_timezone
 from fw.modules.attendance.models import (
     AttendanceApproval,
     AttendanceCalculation,
@@ -67,60 +67,54 @@ class AttendanceService:
             return None
 
         country = (employee.country or "AE").upper()
-        time_zone_str = "Asia/Dubai" if country == "AE" else "Asia/Riyadh"
-        tz = ZoneInfo(time_zone_str)
+        tz = get_country_timezone(country)
 
         # 2. Check if payroll is approved for this date (locked)
         locked = False
-        try:
-            from sqlalchemy import text
+        from sqlalchemy import text
 
-            chk_table = await session.execute(text("SELECT to_regclass('public.payroll_runs');"))
-            if chk_table.scalar() is not None:
-                p_res = await session.execute(
-                    text(
-                        """
-                        SELECT pr.id FROM payroll_runs pr
-                        JOIN payroll_records rec ON rec.payroll_run_id = pr.id
-                        WHERE rec.employee_id = :emp_id
-                          AND pr.period_start <= :w_date
-                          AND pr.period_end >= :w_date
-                          AND pr.status = 'APPROVED'
-                        LIMIT 1
-                        """
-                    ),
-                    {"emp_id": employee_id, "w_date": work_date},
-                )
-                if p_res.first() is not None:
-                    locked = True
-                    reason = "POST_FINALIZATION"
-        except Exception:
-            pass
-
-        # 3. Load employee standard hours and break minutes from salary structure (or fallback)
-        standard_hours = 8.0
-        salary_break_minutes: int | None = None
-        try:
-            from sqlalchemy import text
-
-            sal_res = await session.execute(
+        chk_table = await session.execute(text("SELECT to_regclass('public.payroll_runs');"))
+        if chk_table.scalar() is not None:
+            p_res = await session.execute(
                 text(
                     """
-                    SELECT standard_hours, break_minutes FROM employee_salary
-                    WHERE employee_id = :emp_id AND effective_from <= :w_date
-                    ORDER BY effective_from DESC LIMIT 1
+                    SELECT pr.id FROM payroll_runs pr
+                    JOIN payroll_records rec ON rec.payroll_run_id = pr.id
+                    WHERE rec.employee_id = :emp_id
+                      AND pr.period_start <= :w_date
+                      AND pr.period_end >= :w_date
+                      AND pr.status = 'APPROVED'
+                    LIMIT 1
                     """
                 ),
                 {"emp_id": employee_id, "w_date": work_date},
             )
-            sal_row = sal_res.first()
-            if sal_row is not None:
-                if sal_row[0] is not None:
-                    standard_hours = float(sal_row[0])
-                if sal_row[1] is not None:
-                    salary_break_minutes = int(sal_row[1])
-        except Exception:
-            pass
+            if p_res.first() is not None:
+                locked = True
+                reason = "POST_FINALIZATION"
+
+        # 3. Load employee standard hours and break minutes from salary structure (or fallback)
+        standard_hours = 8.0
+        salary_break_minutes: int | None = None
+        has_salary_structure = False
+
+        sal_res = await session.execute(
+            text(
+                """
+                SELECT standard_hours, break_minutes FROM employee_salary
+                WHERE employee_id = :emp_id AND effective_from <= :w_date
+                ORDER BY effective_from DESC LIMIT 1
+                """
+            ),
+            {"emp_id": employee_id, "w_date": work_date},
+        )
+        sal_row = sal_res.first()
+        if sal_row is not None:
+            has_salary_structure = True
+            if sal_row[0] is not None:
+                standard_hours = float(sal_row[0])
+            if sal_row[1] is not None:
+                salary_break_minutes = int(sal_row[1])
 
         # 4. Resolve time rules for this worker & date
         tr_q = select(TimeRule).where(
@@ -276,9 +270,13 @@ class AttendanceService:
         is_holiday = hol_res.scalar_one_or_none() is not None
 
         weekday_name = work_date.strftime("%A").upper()
-        worker_off = (employee.weekly_off_day or "SUNDAY").upper()
-        is_weekly_off = weekday_name == worker_off
-        is_ot2_weekday = weekday_name == "SUNDAY"
+        if employee.weekly_off_day and employee.weekly_off_day.strip():
+            worker_off = employee.weekly_off_day.strip().upper()
+            is_weekly_off = weekday_name == worker_off
+            has_weekly_off = True
+        else:
+            is_weekly_off = False
+            has_weekly_off = False
 
         leave_q = select(LeaveRequest.id).where(
             LeaveRequest.employee_id == employee_id,
@@ -395,6 +393,12 @@ class AttendanceService:
 
         resolved_schedule.break_minutes = effective_break_minutes
 
+        extra_flags: list[str] = []
+        if not has_salary_structure:
+            extra_flags.append("NO_SALARY_STRUCTURE")
+        if not has_weekly_off:
+            extra_flags.append("NO_WEEKLY_OFF_DAY")
+
         # 10. Run pure engine calculation
         calc_inputs = DailyCalculationInputs(
             employee_id=employee_id,
@@ -409,10 +413,11 @@ class AttendanceService:
             gaps=constructed_gaps,
             is_public_holiday=is_holiday,
             is_weekly_off=is_weekly_off,
-            is_ot2_weekday=is_ot2_weekday,
+            is_ot2_weekday=False,
             has_approved_leave=has_approved_leave,
             first_site_break_override=None,
             break_source=effective_break_source,
+            extra_flags=extra_flags,
         )
         calc_result = compute_daily_attendance(calc_inputs)
 

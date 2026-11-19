@@ -22,7 +22,7 @@ The client named ten reports (section 4.1). The requirements spec adds four more
 | 3 | **Site Visit Report**: visit details and time at each site, worker-wise | `site-visits` | Grouped by worker, with totals |
 | 4 | **Employee Utilization Report**: productive time versus idle or travel time | `employee-utilization` | Redefined: productive / travel / idle split (see 3.5) |
 | 5 | **Job Costing Report**: actual labour cost by project vs the project budget entered at setup, variance per job | `job-costing` | Budget is a **setup input** on the worksite |
-| 6 | **Payroll Report**: basic, overtime, allowances, deductions, net pay | `payroll` | Shows gross and net pay (equal in v1: the client has no deductions) |
+| 6 | **Payroll Report**: basic, overtime, allowances, deductions, net pay | `payroll` | Shows gross, deductions (missed hours at basic/208, DEC-30), and net pay |
 | 7 | **Transportation Time Report**: time travelling between accommodation and sites | `transportation-time` | Uses the same transit segments as utilization |
 | 8 | **Late Arrival / Early Departure Report**: deviations from scheduled working hours | `late-early-departure` | Also lists shortfall (requirements spec) |
 | 9 | **Project Attendance Summary**: manpower deployed per project over a period | `project-attendance-summary` | Planned vs deployed manpower |

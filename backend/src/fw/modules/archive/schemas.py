@@ -64,6 +64,7 @@ class RetentionPurgeResult(BaseModel):
 
     sync_changes_purged: int
     notification_logs_purged: int
+    stream_tickets_purged: int = 0
     completed_at: datetime
 
 

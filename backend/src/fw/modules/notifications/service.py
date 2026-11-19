@@ -1,20 +1,19 @@
 """Service layer for Notifications and Alerts."""
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fw.core.clock import site_today
 from fw.core.errors import AppError
 from fw.modules.identity.models import User
 from fw.modules.notifications.models import Alert
 from fw.modules.org import Employee, EmployeeDocument
 from fw.modules.org.service import OrgService
 from fw.modules.settings import SettingsService
-
-_last_doc_expiry_scan_date: date | None = None
 
 
 class NotificationService:
@@ -115,15 +114,6 @@ class NotificationService:
         user: User,
     ) -> list[Alert]:
         """Fetch open alerts visible to the given user based on their role and reporting scope."""
-        global _last_doc_expiry_scan_date
-        today = datetime.now(UTC).date()
-        if _last_doc_expiry_scan_date != today:
-            try:
-                await NotificationService.check_document_expiry_alerts(session)
-                _last_doc_expiry_scan_date = today
-            except Exception:
-                pass
-
         if user.role == "ADMIN":
             stmt = select(Alert).where(Alert.status == "OPEN").order_by(Alert.created_at.desc())
             return list((await session.execute(stmt)).scalars().all())
@@ -160,7 +150,7 @@ class NotificationService:
         except (ValueError, TypeError):
             lead_days = 30
 
-        today = datetime.now(UTC).date()
+        today = site_today()
         cutoff_date = today + timedelta(days=lead_days)
 
         stmt = (

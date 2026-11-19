@@ -106,13 +106,13 @@ Actual worked time is never changed to match the plan.
 
 **Overtime** **[DEC-01]** (OT is calculated for every worker; fixed OT is a fixed monthly amount and is not touched):
 ```
-ot2_day = date is a public holiday  or  weekday in ot2_weekdays (default Sunday)
+ot2_day = date is a public holiday  or  date is the worker's own weekly off day
 if ot2_day:                          ot2 = worked_min ; ot1 = 0
-elif date is the worker's weekly off day or the worker has no assignment that day:
-                                     ot1 = worked_min                 # normal rate rule: all hours are OT1
+elif the worker has no assignment that day:
+                                     ot1 = worked_min                 # unassigned non-off day: all hours are OT1
 else:                                ot1 = max(0, worked_min - standard_minutes)   # beyond standard hours (8/10/12 or reduced)
 ```
-A day that is both an OT2 day and a weekly off day is OT2. Days with no assignment but worked time also carry flag `UNSCHEDULED_WORK`. Overtime is reviewed by the Engineer before it is paid (see 7).
+A day that is both a public holiday and a weekly off day is OT2. Days with no assignment but worked time also carry flag `UNSCHEDULED_WORK`. If a worker's `weekly_off_day` is not configured, the engine does not default to Sunday; it raises the `NO_WEEKLY_OFF_DAY` flag instead. Overtime is reviewed by the Engineer before it is paid (see 7).
 
 ## 6b. Movement segments: productive, transit, idle   [DEC-28]
 Computed once per calculation and stored (used by the utilization and transportation reports).

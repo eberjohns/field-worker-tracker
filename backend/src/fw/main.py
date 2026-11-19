@@ -24,6 +24,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     settings = get_settings()
     setup_logging(log_level=settings.LOG_LEVEL)
     from fw.modules.attendance import register_attendance_listeners
+    from fw.modules.events.live_publisher import live_position_broadcaster
     from fw.modules.notifications import register_notification_handlers
     from fw.modules.reports import register_reports_listeners
     from fw.modules.sync import register_sync_listeners
@@ -32,7 +33,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     register_attendance_listeners()
     register_notification_handlers()
     register_reports_listeners()
-    yield
+    await live_position_broadcaster.start_listener()
+    try:
+        yield
+    finally:
+        await live_position_broadcaster.stop_listener()
 
 
 def create_app() -> FastAPI:

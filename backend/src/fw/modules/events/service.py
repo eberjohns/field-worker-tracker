@@ -1,12 +1,12 @@
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
-from zoneinfo import ZoneInfo
 
 import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fw.core.clock import get_country_timezone
 from fw.modules.events.models import EmployeeLastPosition, LiveLocationAccessLog, MobileEventLog
 from fw.modules.events.schemas import (
     EventBatchRequest,
@@ -41,7 +41,7 @@ class EventsService:
         emp_q = select(Employee.country).where(Employee.id == employee_id)
         emp_res = await session.execute(emp_q)
         country = emp_res.scalar_one_or_none() or "AE"
-        tz = ZoneInfo("Asia/Dubai" if country.upper() == "AE" else "Asia/Riyadh")
+        tz = get_country_timezone(country)
 
         # Find existing event IDs in database for duplicate detection
         incoming_ids = [e.event_id for e in batch.events]

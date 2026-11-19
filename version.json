@@ -1,9 +1,9 @@
 {
-  "version": "1.6.3",
+  "version": "1.7.2",
   "major": 1,
-  "minor": 6,
-  "patch": 3,
-  "last_branch": "fix/batch4-client-alignment",
-  "last_commit": "e43577d",
-  "updated_at": "2026-11-19T02:02:11.382717+00:00"
+  "minor": 7,
+  "patch": 2,
+  "last_branch": "fix/batch5-audit-fixes",
+  "last_commit": "3b630d3",
+  "updated_at": "2026-11-19T06:55:37.086081+00:00"
 }

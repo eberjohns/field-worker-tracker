@@ -1,12 +1,12 @@
 """Handler for Pending Visits Report (DEC-32)."""
 
-from datetime import date
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fw.core.clock import site_today
 from fw.modules.attendance.models import AttendanceComment, PendingVisit
 from fw.modules.jobs.models import Worksite
 from fw.modules.org.models import Employee
@@ -59,7 +59,7 @@ async def fetch_pending_visits(
         )
         comment_map = {c.id: c.comment_text for c in cres.scalars().all()}
 
-    today = date.today()
+    today = site_today()
     rows: list[dict[str, Any]] = []
     for p in pending_items:
         emp = emp_map.get(p.employee_id)

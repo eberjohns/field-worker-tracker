@@ -146,7 +146,9 @@ export const OperationalPlanner: React.FC = () => {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) return parsed;
       }
-    } catch {}
+    } catch (err) {
+      console.warn("Failed to parse initial draft batch from localStorage", err);
+    }
     return [];
   });
   const [batchSubmitModalOpen, setBatchSubmitModalOpen] = useState<boolean>(false);
@@ -175,7 +177,9 @@ export const OperationalPlanner: React.FC = () => {
     setDraftBatch(next);
     try {
       localStorage.setItem(draftStorageKey, JSON.stringify(next));
-    } catch {}
+    } catch (err) {
+      console.warn("Failed to persist draft batch to localStorage", err);
+    }
   };
 
   // Track latest shift IDs across repeated undo/redo cycles for direct edits
@@ -303,7 +307,9 @@ export const OperationalPlanner: React.FC = () => {
       else next.add(id);
       try {
         localStorage.setItem("fwt_pinned_worksites", JSON.stringify(Array.from(next)));
-      } catch {}
+      } catch (err) {
+        console.warn("Failed to persist pinned worksites to localStorage", err);
+      }
       return next;
     });
   };
@@ -324,7 +330,9 @@ export const OperationalPlanner: React.FC = () => {
       else next.add(id);
       try {
         localStorage.setItem("fwt_pinned_workers", JSON.stringify(Array.from(next)));
-      } catch {}
+      } catch (err) {
+        console.warn("Failed to persist pinned workers to localStorage", err);
+      }
       return next;
     });
   };

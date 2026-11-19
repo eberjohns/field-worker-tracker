@@ -1,14 +1,14 @@
 """API routes for pending visits follow-up workflow."""
 
-from datetime import UTC, date, datetime
+from datetime import date
 from typing import Any
 from uuid import UUID
-from zoneinfo import ZoneInfo
 
 import structlog
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fw.core.clock import site_today
 from fw.core.db import get_db
 from fw.modules.attendance import (
     PendingVisitCloseRequest,
@@ -112,8 +112,7 @@ async def trigger_detect_pending_visits(
 ) -> dict[str, Any]:
     """Trigger day-close pending visit detection job on demand."""
     if not target_date:
-        today = datetime.now(UTC).astimezone(ZoneInfo("Asia/Dubai")).date()
-        target_date = today
+        target_date = site_today()
     count = await PendingVisitsService.detect_pending_visits(
         session=session, target_date=target_date
     )

@@ -8,6 +8,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fw.core.clock import site_today
 from fw.core.db import get_db
 from fw.core.errors import AppError
 from fw.core.events import EmployeeProfileChanged, event_bus
@@ -301,7 +302,7 @@ async def bulk_update_employees(
         actor_role=current_user.role,
     )
     if request.changes.break_override_minutes is not None:
-        eff_from = request.effective_from or date.today()
+        eff_from = request.effective_from or site_today()
         sup_query = select(Employee).where(
             Employee.id.in_(request.employee_ids),
             Employee.role == "SUPERVISOR",
@@ -434,7 +435,7 @@ async def get_employee_deactivation_impact(
     if not employee:
         raise AppError(code="NOT_FOUND", message="Employee not found.", status_code=404)
 
-    eff = effective_date or date.today()
+    eff = effective_date or site_today()
     sched_impact = await SchedulingService(session).get_employee_deactivation_impact(
         employee_id=employee.id,
         effective_date=eff,
@@ -505,7 +506,7 @@ async def deactivate_employee(
             status_code=400,
         )
 
-    eff = payload.effective_date or date.today()
+    eff = payload.effective_date or site_today()
     now = datetime.now(UTC)
 
     employee.is_active = False
@@ -699,7 +700,7 @@ async def update_employee(
         actor_role=current_user.role,
     )
     if request.break_override_minutes is not None and employee.role == "SUPERVISOR":
-        eff_from = request.effective_from or date.today()
+        eff_from = request.effective_from or site_today()
         await PayrollSalaryService.propagate_crew_break_to_supervisor_crew(
             session=session,
             supervisor_id=employee.id,
@@ -762,7 +763,7 @@ async def add_reporting_line(
                 session=session,
                 worker_id=employee_id,
                 break_minutes=mgr.break_override_minutes,
-                effective_from=date.today(),
+                effective_from=site_today(),
                 actor_user_id=current_user.id,
                 actor_role=current_user.role,
             )

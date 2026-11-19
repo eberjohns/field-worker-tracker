@@ -5,7 +5,6 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
-from zoneinfo import ZoneInfo
 
 import structlog
 from fastapi import APIRouter, Depends, Query, Request
@@ -13,6 +12,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fw.core.clock import get_country_timezone, site_today
 from fw.core.db import async_session_factory, get_db
 from fw.core.errors import AppError
 from fw.modules.events import (
@@ -161,9 +161,9 @@ async def get_live_positions(
         scoped_list = await OrgService.get_scoped_employee_ids(session, current_user)
         scoped_ids = set(scoped_list) if scoped_list else set()
 
-    # 3. Determine today's date in local time zone (Asia/Dubai default)
+    # 3. Determine today's date in site local time zone (Asia/Dubai default)
     now = datetime.now(UTC)
-    local_today = now.astimezone(ZoneInfo("Asia/Dubai")).date()
+    local_today = site_today()
 
     # 4. Fetch today's scheduled work
     sched_stmt = (
@@ -236,11 +236,7 @@ async def get_worker_day_trail(
         ):
             raise AppError(code="FORBIDDEN", message="Worker outside your scope", status_code=403)
 
-    target_date = (
-        datetime.strptime(date, "%Y-%m-%d").date()
-        if date
-        else datetime.now(UTC).astimezone(ZoneInfo("Asia/Dubai")).date()
-    )
+    target_date = datetime.strptime(date, "%Y-%m-%d").date() if date else site_today()
 
     # Log trail view in live location access logs (audit of location views)
     client_ip = request.client.host if request.client else None
@@ -267,7 +263,7 @@ async def get_worker_day_trail(
     events = (await session.execute(stmt)).scalars().all()
 
     # Filter to events falling on the target local date
-    tz = ZoneInfo("Asia/Dubai")
+    tz = get_country_timezone()
     trail = []
     for ev in events:
         local_ev_date = ev.event_timestamp_utc.astimezone(tz).date()

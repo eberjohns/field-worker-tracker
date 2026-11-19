@@ -17,6 +17,7 @@ from fw.modules.attendance.schemas import (
     PendingVisitResponse,
 )
 from fw.modules.attendance.service import AttendanceService
+from fw.modules.attendance.watchdogs import AttendanceWatchdogs
 
 __all__ = [
     "AttendanceApproval",
@@ -24,6 +25,7 @@ __all__ = [
     "AttendanceComment",
     "AttendanceRecord",
     "AttendanceService",
+    "AttendanceWatchdogs",
     "PendingVisit",
     "PendingVisitCloseRequest",
     "PendingVisitExplainRequest",

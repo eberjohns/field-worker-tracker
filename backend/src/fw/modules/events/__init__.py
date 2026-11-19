@@ -1,7 +1,12 @@
 """Public interface for events module."""
 
 from fw.modules.events.enrichment import EventEnrichmentService
-from fw.modules.events.models import EmployeeLastPosition, LiveLocationAccessLog, MobileEventLog
+from fw.modules.events.models import (
+    EmployeeLastPosition,
+    LiveLocationAccessLog,
+    MobileEventLog,
+    StreamTicket,
+)
 from fw.modules.events.schemas import (
     EventBatchRequest,
     EventBatchResponse,
@@ -31,5 +36,6 @@ __all__ = [
     "MobileEventItem",
     "MobileEventLog",
     "RejectReason",
+    "StreamTicket",
     "StreamTicketResponse",
 ]
