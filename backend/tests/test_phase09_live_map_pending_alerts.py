@@ -586,6 +586,7 @@ async def test_live_location_view_is_audit_logged():
         assert len(logs) == 2
 
 
+@db_required
 @pytest.mark.asyncio
 async def test_stream_ticket_lifecycle():
     """Verify stream ticket single-use and expiration."""

@@ -1,5 +1,6 @@
 """Tests for Batch 5 audit fixes: OT2 calculation, worker scheduler, stream tickets, and device revocation."""
 
+import socket
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from uuid import uuid4
@@ -29,6 +30,20 @@ from fw.rules.attendance.engine import (
 from fw.rules.scheduling.reassignment import validate_reassignment_notice
 from fw.rules.time_rules import ResolvedTimeSchedule
 from fw.worker import WorkerScheduler
+
+
+def is_db_available() -> bool:
+    try:
+        with socket.create_connection(("127.0.0.1", 5432), timeout=0.5):
+            return True
+    except OSError:
+        return False
+
+
+db_required = pytest.mark.skipif(
+    not is_db_available(),
+    reason="Database integration tests require PostgreSQL running on localhost:5432",
+)
 
 
 def make_schedule(break_m: int = 30) -> ResolvedTimeSchedule:
@@ -242,6 +257,7 @@ def test_reassignment_notice_rule_site_local_date():
     assert "requires at least 3 days notice" in err_msg
 
 
+@db_required
 @pytest.mark.asyncio
 async def test_stream_tickets_db_and_single_use():
     """Verify stream tickets are stored in DB, consumed atomically, and expire."""
@@ -285,6 +301,7 @@ async def test_stream_tickets_db_and_single_use():
     assert second_consumed is None
 
 
+@db_required
 @pytest.mark.asyncio
 async def test_worker_scheduler_watchdogs_and_alert():
     """Verify WorkerScheduler executes watchdog job and creates JOB_FAILURE alert on error."""
@@ -311,6 +328,7 @@ async def test_worker_scheduler_watchdogs_and_alert():
         assert alert.details.get("job_name") == job_name
 
 
+@db_required
 @pytest.mark.asyncio
 async def test_device_revocation_and_audit():
     """Verify POST /api/v1/devices/{id}/revoke revokes device and writes REVOKE_DEVICE audit log."""
@@ -379,6 +397,7 @@ async def test_device_revocation_and_audit():
             assert audit.action == "REVOKE_DEVICE"
 
 
+@db_required
 @pytest.mark.asyncio
 async def test_pending_visits_only_detects_ended_day():
     """Target date is yesterday: scheduled work for today produces no pending visit, but unvisited scheduled work for yesterday does."""
@@ -496,6 +515,7 @@ async def test_pending_visits_only_detects_ended_day():
         assert pv_yesterday.status == "OPEN"
 
 
+@db_required
 @pytest.mark.asyncio
 async def test_retention_purge_deletes_expired_stream_tickets():
     """Verify retention purge deletes stream tickets where expires_at < now - 1 day."""
@@ -556,6 +576,7 @@ async def test_retention_purge_deletes_expired_stream_tickets():
         assert await session.get(StreamTicket, valid_ticket_str) is not None
 
 
+@db_required
 @pytest.mark.asyncio
 async def test_scheduler_startup_run_all_once_is_idempotent():
     """Running scheduler.run_all_once() twice creates no duplicate alerts on the same day."""
