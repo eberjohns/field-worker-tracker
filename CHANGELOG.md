@@ -1,6 +1,21 @@
 # Changelog
 All notable changes. Format: Keep a Changelog. Mobile-contract changes are also logged in `docs/09-mobile-sync-contract.md`.
 
+## [1.7.3] - 2026-11-19
+### Fixed
+- Hotfix: Worksite Page Errors & Job Item Creation Validation:
+  - Web UI:
+    - Fixed 404 error on `Worksites.tsx` by updating endpoint `/api/v1/payroll/salary-revisions` to `/api/v1/salary-revisions`.
+    - `JobItemModal`: Added required `start_date` input (defaulted to worksite start date or current date) and optional `end_date` input, sent on create and edit.
+    - `JobItemModal`: Replaced planned grade text input with required `<select>` populated from active salary revision lines (with `G1A`..`G7C` fallback).
+    - `JobItemModal`: Replaced staff grade description text input with required `<select>` strictly constrained to the 16 controlled items from the master import list without uncontrolled default values.
+    - `JobItemModal`: Formatted 422 error details into readable `<field>: <message>` lines under the form instead of `[object Object]`.
+    - Added unit test suite `JobItemModal.test.ts` verifying error parsing, payload generation, and controlled lists.
+  - Backend:
+    - Added `@field_validator("staff_grade_description")` on `JobItemBase` and `JobItemUpdate` enforcing membership in the controlled staff grade description list with descriptive error messages.
+    - Added test coverage in `test_jobs_api.py` verifying 422 rejection for uncontrolled descriptions, missing start dates, and missing planned grade codes, along with successful creation.
+
+
 ## [1.7.0] - 2026-11-19
 ### Added
 - Client Alignment & Audit Fixes (Batch 5):

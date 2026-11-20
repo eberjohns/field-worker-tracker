@@ -363,7 +363,7 @@ async def test_update_job_item_with_occurrence_regeneration(admin_client, test_o
         f"/api/v1/worksites/{ws_id}/job-items",
         json={
             "sub_item_code": "01",
-            "staff_grade_description": "GARDENER",
+            "staff_grade_description": "Gardener Expert",
             "planned_grade_code": "G1",
             "frequency_unit": "WEEK",
             "occurrences_per_period": 3,
@@ -488,3 +488,109 @@ async def test_boundaries_export_and_import(admin_client):
     reasons = [e["reason"] for e in result["errors"]]
     assert any("NON_EXISTENT_999" in r for r in reasons)
     assert any("UNKNOWN_CAMP_XYZ" in r for r in reasons)
+
+
+@db_required
+@pytest.mark.asyncio
+async def test_job_item_create_validations(admin_client, test_org_setup):
+    """Test JobItemCreate validations: required start_date, grade code, and controlled SGD."""
+    client = admin_client
+
+    # 1. Create worksite
+    j_num = f"99B{str(uuid4().int)[:5]}"
+    ws_res = await client.post(
+        "/api/v1/worksites",
+        json={
+            "job_number": j_num,
+            "job_name": "Job Item Validation Worksite",
+            "group_id": test_org_setup["group_id"],
+            "zone_id": test_org_setup["zone_id"],
+            "country": "AE",
+            "start_date": "2026-02-01",
+        },
+    )
+    assert ws_res.status_code == 201, ws_res.text
+    ws_id = ws_res.json()["id"]
+
+    # 2. Rejection when staff_grade_description is not in controlled list
+    res_bad_sgd = await client.post(
+        f"/api/v1/worksites/{ws_id}/job-items",
+        json={
+            "sub_item_code": "01",
+            "staff_grade_description": "GARDENER",
+            "planned_grade_code": "G1A",
+            "start_date": "2026-02-01",
+            "frequency_unit": "WEEK",
+            "occurrences_per_period": 6,
+            "period_interval": 1,
+            "required_staff_count": 1,
+            "hours_per_occurrence_per_staff": 8.0,
+            "deployment_type": "PERMANENT",
+        },
+    )
+    assert res_bad_sgd.status_code == 422
+    err_sgd = res_bad_sgd.json()
+    assert "not in the controlled list" in str(err_sgd)
+
+    # 3. Rejection when start_date is missing
+    res_no_date = await client.post(
+        f"/api/v1/worksites/{ws_id}/job-items",
+        json={
+            "sub_item_code": "02",
+            "staff_grade_description": "Gardener Helper",
+            "planned_grade_code": "G1A",
+            "frequency_unit": "WEEK",
+            "occurrences_per_period": 6,
+            "period_interval": 1,
+            "required_staff_count": 1,
+            "hours_per_occurrence_per_staff": 8.0,
+            "deployment_type": "PERMANENT",
+        },
+    )
+    assert res_no_date.status_code == 422
+    err_date = res_no_date.json()
+    assert "start_date" in str(err_date)
+
+    # 4. Rejection when planned_grade_code is missing
+    res_no_grade = await client.post(
+        f"/api/v1/worksites/{ws_id}/job-items",
+        json={
+            "sub_item_code": "03",
+            "staff_grade_description": "Gardener Helper",
+            "start_date": "2026-02-01",
+            "frequency_unit": "WEEK",
+            "occurrences_per_period": 6,
+            "period_interval": 1,
+            "required_staff_count": 1,
+            "hours_per_occurrence_per_staff": 8.0,
+            "deployment_type": "PERMANENT",
+        },
+    )
+    assert res_no_grade.status_code == 422
+    err_grade = res_no_grade.json()
+    assert "planned_grade_code" in str(err_grade)
+
+    # 5. Success with start_date, grade code, and controlled SGD
+    res_ok = await client.post(
+        f"/api/v1/worksites/{ws_id}/job-items",
+        json={
+            "sub_item_code": "01",
+            "staff_grade_description": "Gardener Expert",
+            "planned_grade_code": "G1A",
+            "start_date": "2026-02-01",
+            "end_date": "2026-12-31",
+            "frequency_unit": "WEEK",
+            "occurrences_per_period": 6,
+            "period_interval": 1,
+            "required_staff_count": 2,
+            "hours_per_occurrence_per_staff": 8.0,
+            "deployment_type": "PERMANENT",
+        },
+    )
+    assert res_ok.status_code == 201, res_ok.text
+    item_data = res_ok.json()
+    assert item_data["sub_item_code"] == "01"
+    assert item_data["staff_grade_description"] == "Gardener Expert"
+    assert item_data["planned_grade_code"] == "G1A"
+    assert item_data["start_date"] == "2026-02-01"
+    assert item_data["end_date"] == "2026-12-31"

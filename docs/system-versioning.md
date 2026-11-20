@@ -41,3 +41,5 @@ Field Worker Tracker follows semantic versioning `v<MAJOR>.<MINOR>.<PATCH>`:
 | **v1.7.0** | 2026-11-19 | `fix/batch5-audit-fixes` | `862e767` | New branch 'fix/batch5-audit-fixes' |
 | **v1.7.1** | 2026-11-19 | `fix/batch5-audit-fixes` | `6ab9f38` | Commit on 'fix/batch5-audit-fixes' |
 | **v1.7.2** | 2026-11-19 | `fix/batch5-audit-fixes` | `3b630d3` | Commit on 'fix/batch5-audit-fixes' |
+| **v1.7.3** | 2026-11-19 | `fix/worksite-job-item-create` | `32cf544` | Bumped patch to v1.7.3 |
+| **v1.7.4** | 2026-11-19 | `fix/worksite-job-item-create` | `32cf544` | Commit on 'fix/worksite-job-item-create' |

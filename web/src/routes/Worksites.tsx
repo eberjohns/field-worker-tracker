@@ -166,7 +166,7 @@ export const Worksites: React.FC = () => {
         fetch("/api/v1/groups", { headers }),
         fetch("/api/v1/zones", { headers }),
         fetch(`/api/v1/accommodations${accQs}`, { headers }),
-        fetch("/api/v1/payroll/salary-revisions", { headers }),
+        fetch("/api/v1/salary-revisions", { headers }),
       ]);
 
       if (wsRes.ok) {
