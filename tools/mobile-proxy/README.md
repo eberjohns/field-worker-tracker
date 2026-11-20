@@ -47,12 +47,12 @@ It provides:
 uv run --directory backend python ../tools/seed_phase07_demo.py
 ```
 This seeds:
-- Worker ID: `1193` ("Shanto Miah", Landscape Gardener)
+- Worker ID: `2001` ("Ravi Varghese", Landscape Gardener)
 - Password: `Welcome123!`
-- Supervisor: `SUP001` ("Shakir Khisham", `+971 50 123 4567`)
+- Supervisor: `SUP001` ("Salman Javed", `+971 50 123 4567`)
 - Worksite: `12A14301` ("Dubai Silicon Oasis Landscape Maintenance") with GeoJSON polygon boundary (~4.1 km from camp)
 - Accommodation: `WARSAN_01` ("Warsan Staff Accommodation Camp") with polygon boundary
-- Forward Schedule: 30 days of active shifts seeded for worker 1193 with Fridays off.
+- Forward Schedule: 30 days of active shifts seeded for worker 2001 with Fridays off.
 - Dynamic Company Settings: `day_plan_alarm_lead_minutes` (30 min), `geofence_circle_radius_m` (300 m), `approach_polling_interval_s` (60 s), `confirmation_polling_interval_s` (300 s).
 
 ### 2. Start the Backend API

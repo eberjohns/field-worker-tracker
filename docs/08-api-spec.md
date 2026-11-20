@@ -169,7 +169,7 @@ Roles: A = Admin, E = Engineer, S = Superintendent, V = Supervisor. "scope" = li
 | POST | /reports/{key}/export | by report | `{ format: xlsx|csv|pdf }` -> background job. **Every report supports `xlsx`** |
 | GET | /exports/{id} | requester | export job status, progress, and download URL |
 | GET | /exports/{id}/download | requester | download exported report file |
-| GET | /dashboard/summary | any | role-aware statistics: today's attendance, active/offline workers, pending visits, late arrivals, overtime hours today (site-day rule for today); alerts, documents and pending approvals follow the crew chain; `unassigned_worksites_count` (Admin only, else null) |
+| GET | /dashboard/summary | any | role-aware statistics: today's attendance, active/offline workers, pending visits (`pending_visits_count`, open; `pending_visits_escalated_count`, open and at least `pending_visit_escalation_days` past due), late arrivals, overtime hours today (site-day rule for today); alerts, documents and pending approvals follow the crew chain; `unassigned_worksites_count` (Admin only, else null) |
 | GET | /live/positions | A E S V scope | last known verified position per worker with age, `live_state`, tracking state, site; filters `supervisor_id, group_id, state` |
 | POST | /live/stream-ticket | A E S V | returns a one-time, short-lived ticket (30 s) for the stream |
 | GET | /live/stream?ticket= | A E S V scope | Server-Sent Events: `position` and `state` updates for the user's scope; heartbeat every 20 s; client falls back to polling `/live/positions` every 30 s |

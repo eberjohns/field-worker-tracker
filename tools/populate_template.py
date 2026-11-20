@@ -60,45 +60,45 @@ for idx, (code, name, addr, country, notes) in enumerate(accommodations_data, st
 ws_emp = clear_data_rows("Employees")
 employees_data = [
     # tally_id, name, role, grade_code, sgd, country, off_day, is_driver, acc_code, join, phone, email
-    ("1001", "Ahmed Al-Mansoor", "ENGINEER", "G5A", "HSE Engineer", "AE", "SUNDAY", "N", "ACC-02", "2024-01-01", "+971500001001", "ahmed.mansoor@example.com"),
-    ("1002", "Rashid Tariq", "SUPERINTENDENT", "G4B", "Superintendent", "AE", "SUNDAY", "N", "ACC-02", "2024-01-01", "+971500001002", "rashid.tariq@example.com"),
-    ("1003", "Faisal Khan", "SUPERINTENDENT", "G4B", "Superintendent", "AE", "SUNDAY", "N", "ACC-03", "2024-01-01", "+971500001003", "faisal.khan@example.com"),
-    ("1004", "Zaid Mahmoud", "SUPERVISOR", "G3B", "Supervisor", "AE", "SUNDAY", "N", "ACC-01", "2024-01-01", "+971500001004", "zaid.mahmoud@example.com"),
-    ("1005", "Bilal Hassan", "SUPERVISOR", "G3B", "Supervisor", "AE", "SUNDAY", "N", "ACC-02", "2024-01-01", "+971500001005", "bilal.hassan@example.com"),
-    ("1006", "Tariq Aziz", "SUPERVISOR", "G3B", "Supervisor", "AE", "SUNDAY", "N", "ACC-03", "2024-01-01", "+971500001006", "tariq.aziz@example.com"),
-    ("1007", "Ramesh Kumar", "WORKER", "G3B", "Team Leader", "AE", "SUNDAY", "N", "ACC-01", "2024-01-01", "+971500001007", None),
-    ("1008", "Suresh Babu", "WORKER", "G3B", "Team Leader", "AE", "SUNDAY", "N", "ACC-02", "2024-01-01", "+971500001008", None),
-    ("1009", "Vikram Singh", "WORKER", "G3B", "Team Leader", "AE", "SUNDAY", "N", "ACC-03", "2024-01-01", "+971500001009", None),
-    ("1010", "Manoj Patel", "WORKER", "G3B", "Irrigation Technician", "AE", "SUNDAY", "N", "ACC-01", "2024-01-01", "+971500001010", None),
-    ("1011", "Deepak Sharma", "WORKER", "G3B", "Irrigation Technician", "AE", "SUNDAY", "N", "ACC-02", "2024-01-01", "+971500001011", None),
-    ("1012", "Dinesh Rao", "WORKER", "G3B", "Irrigation Technician", "AE", "SUNDAY", "N", "ACC-03", "2024-01-01", "+971500001012", None),
-    ("1013", "Rajesh Nair", "WORKER", "G2B", "Gardener Expert", "AE", "SUNDAY", "N", "ACC-01", "2024-01-01", "+971500001013", None),
-    ("1014", "Prakash Varma", "WORKER", "G2B", "Gardener Expert", "AE", "SUNDAY", "N", "ACC-02", "2024-01-01", "+971500001014", None),
-    ("1015", "Anand Mohan", "WORKER", "G2B", "Gardener Expert", "AE", "SUNDAY", "N", "ACC-03", "2024-01-01", "+971500001015", None),
-    ("1016", "Sunilkumar G", "WORKER", "G2B", "Gardener Expert", "AE", "SUNDAY", "N", "ACC-04", "2024-01-01", "+971500001016", None),
-    ("1017", "Mohan Lal", "WORKER", "G1C", "Gardener Helper", "AE", "FRIDAY", "N", "ACC-01", "2024-01-01", "+971500001017", None),
-    ("1018", "Raju Prasad", "WORKER", "G1C", "Gardener Helper", "AE", "FRIDAY", "N", "ACC-01", "2024-01-01", "+971500001018", None),
-    ("1019", "Anil Yadav", "WORKER", "G1C", "Gardener Helper", "AE", "FRIDAY", "N", "ACC-02", "2024-01-01", "+971500001019", None),
-    ("1020", "Mukesh Das", "WORKER", "G1C", "Gardener Helper", "AE", "FRIDAY", "N", "ACC-02", "2024-01-01", "+971500001020", None),
-    ("1021", "Sanjay Gupta", "WORKER", "G1C", "Gardener Helper", "AE", "FRIDAY", "N", "ACC-03", "2024-01-01", "+971500001021", None),
-    ("1022", "Gopal Krishna", "WORKER", "G1C", "Gardener Helper", "AE", "FRIDAY", "N", "ACC-03", "2024-01-01", "+971500001022", None),
-    ("1023", "Santosh Kumar", "WORKER", "G1B", "Gardener - Hand Watering", "AE", "FRIDAY", "N", "ACC-01", "2024-01-01", "+971500001023", None),
-    ("1024", "Jitender Pal", "WORKER", "G1B", "Gardener - Hand Watering", "AE", "FRIDAY", "Y", "ACC-02", "2024-01-01", "+971500001024", None),
-    ("1025", "Prem Chand", "WORKER", "G1B", "Gardener - Hand Watering", "AE", "FRIDAY", "Y", "ACC-03", "2024-01-01", "+971500001025", None),
+    ("2901", "Rohan Menon", "ENGINEER", "G5A", "HSE Engineer", "AE", "SUNDAY", "N", "ACC-02", "2024-01-01", "+971500002901", "rohan.menon@example.com"),
+    ("2801", "Tariq Rahman", "SUPERINTENDENT", "G4B", "Superintendent", "AE", "SUNDAY", "N", "ACC-02", "2024-01-01", "+971500002801", "tariq.rahman@example.com"),
+    ("2802", "Yusuf Abdi", "SUPERINTENDENT", "G4B", "Superintendent", "AE", "SUNDAY", "N", "ACC-03", "2024-01-01", "+971500002802", "yusuf.abdi@example.com"),
+    ("2701", "Salman Javed", "SUPERVISOR", "G3B", "Supervisor", "AE", "SUNDAY", "N", "ACC-01", "2024-01-01", "+971500002701", "salman.javed@example.com"),
+    ("2702", "Kamran Aziz", "SUPERVISOR", "G3B", "Supervisor", "AE", "SUNDAY", "N", "ACC-02", "2024-01-01", "+971500002702", "kamran.aziz@example.com"),
+    ("2703", "Bilal Ahmed", "SUPERVISOR", "G3B", "Supervisor", "AE", "SUNDAY", "N", "ACC-03", "2024-01-01", "+971500002703", "bilal.ahmed@example.com"),
+    ("2001", "Ravi Varghese", "WORKER", "G3B", "Team Leader", "AE", "SUNDAY", "N", "ACC-01", "2024-01-01", "+971500002001", None),
+    ("2002", "Tesfaye Bekele", "WORKER", "G3B", "Team Leader", "AE", "SUNDAY", "N", "ACC-02", "2024-01-01", "+971500002002", None),
+    ("2003", "Arjun Das", "WORKER", "G3B", "Team Leader", "AE", "SUNDAY", "N", "ACC-03", "2024-01-01", "+971500002003", None),
+    ("2004", "Peter Mwangi", "WORKER", "G3B", "Irrigation Technician", "AE", "SUNDAY", "N", "ACC-01", "2024-01-01", "+971500002004", None),
+    ("2005", "Rafiq Hossain", "WORKER", "G3B", "Irrigation Technician", "AE", "SUNDAY", "N", "ACC-02", "2024-01-01", "+971500002005", None),
+    ("2006", "Usman Tariq", "WORKER", "G3B", "Irrigation Technician", "AE", "SUNDAY", "N", "ACC-03", "2024-01-01", "+971500002006", None),
+    ("2007", "Junaid Akhtar", "WORKER", "G2B", "Gardener Expert", "AE", "SUNDAY", "N", "ACC-01", "2024-01-01", "+971500002007", None),
+    ("2008", "Faisal Mahmood", "WORKER", "G2B", "Gardener Expert", "AE", "SUNDAY", "N", "ACC-02", "2024-01-01", "+971500002008", None),
+    ("2009", "Asif Raza", "WORKER", "G2B", "Gardener Expert", "AE", "SUNDAY", "N", "ACC-03", "2024-01-01", "+971500002009", None),
+    ("2010", "Abdi Hassan", "WORKER", "G2B", "Gardener Expert", "AE", "SUNDAY", "N", "ACC-04", "2024-01-01", "+971500002010", None),
+    ("2011", "Suresh Nair", "WORKER", "G1C", "Gardener Helper", "AE", "FRIDAY", "N", "ACC-01", "2024-01-01", "+971500002011", None),
+    ("2012", "Prakash Rao", "WORKER", "G1C", "Gardener Helper", "AE", "FRIDAY", "N", "ACC-01", "2024-01-01", "+971500002012", None),
+    ("2013", "Waqas Anjum", "WORKER", "G1C", "Gardener Helper", "AE", "FRIDAY", "N", "ACC-02", "2024-01-01", "+971500002013", None),
+    ("2014", "Danish Khan", "WORKER", "G1C", "Gardener Helper", "AE", "FRIDAY", "N", "ACC-02", "2024-01-01", "+971500002014", None),
+    ("2015", "Getachew Alemu", "WORKER", "G1C", "Gardener Helper", "AE", "FRIDAY", "N", "ACC-03", "2024-01-01", "+971500002015", None),
+    ("2016", "Farhan Siddiqui", "WORKER", "G1C", "Gardener Helper", "AE", "FRIDAY", "N", "ACC-03", "2024-01-01", "+971500002016", None),
+    ("2017", "Vinod Pillai", "WORKER", "G1B", "Gardener - Hand Watering", "AE", "FRIDAY", "N", "ACC-01", "2024-01-01", "+971500002017", None),
+    ("2018", "Anwar Hossain", "WORKER", "G1B", "Gardener - Hand Watering", "AE", "FRIDAY", "Y", "ACC-02", "2024-01-01", "+971500002018", None),
+    ("2019", "Harpreet Gill", "WORKER", "G1B", "Gardener - Hand Watering", "AE", "FRIDAY", "Y", "ACC-03", "2024-01-01", "+971500002019", None),
 ]
 
 for idx, (tid, name, role, gr_code, sgd, ctry, off_day, is_drv, acc_c, join_d, phone, email) in enumerate(employees_data, start=5):
     # Create realistic variation in document expiry dates for testing Phase 09 document monitoring:
-    # 1007: Visa expiring soon (Nov 20, 2026 - within 10 days)
-    # 1010: Passport expiring soon (Dec 5, 2026 - within 25 days)
-    # 1013: Emirates ID expired (Oct 15, 2026 - already expired)
-    # 1017: Labour Card expiring soon (Nov 28, 2026 - within 18 days)
-    # 1024: Driver's License expiring soon (Dec 2, 2026 - within 22 days)
-    visa_exp = "2026-11-20" if tid == "1007" else "2027-12-31"
-    passport_exp = "2026-12-05" if tid == "1010" else "2029-12-31"
-    eid_exp = "2026-10-15" if tid == "1013" else "2027-12-31"
-    labour_exp = "2026-11-28" if tid == "1017" else "2027-12-31"
-    dl_exp = "2026-12-02" if tid == "1024" else ("2028-12-31" if is_drv == "Y" else None)
+    # 2001: Visa expiring soon (Nov 20, 2026 - within 10 days)
+    # 2004: Passport expiring soon (Dec 5, 2026 - within 25 days)
+    # 2007: Emirates ID expired (Oct 15, 2026 - already expired)
+    # 2011: Labour Card expiring soon (Nov 28, 2026 - within 18 days)
+    # 2018: Driver's License expiring soon (Dec 2, 2026 - within 22 days)
+    visa_exp = "2026-11-20" if tid == "2001" else "2027-12-31"
+    passport_exp = "2026-12-05" if tid == "2004" else "2029-12-31"
+    eid_exp = "2026-10-15" if tid == "2007" else "2027-12-31"
+    labour_exp = "2026-11-28" if tid == "2011" else "2027-12-31"
+    dl_exp = "2026-12-02" if tid == "2018" else ("2028-12-31" if is_drv == "Y" else None)
 
     ws_emp.cell(row=idx, column=1, value=None)
     ws_emp.cell(row=idx, column=2, value=tid)
@@ -124,34 +124,34 @@ for idx, (tid, name, role, gr_code, sgd, ctry, off_day, is_drv, acc_c, join_d, p
 # 5. Employee_Reporting Sheet
 ws_rep = clear_data_rows("Employee_Reporting")
 reporting_data = [
-    ("1004", "1002", "SUPERINTENDENT"),
-    ("1004", "1001", "ENGINEER"),
-    ("1005", "1002", "SUPERINTENDENT"),
-    ("1005", "1001", "ENGINEER"),
-    ("1006", "1003", "SUPERINTENDENT"),
-    ("1006", "1001", "ENGINEER"),
-    # Workers under Zaid (1004)
-    ("1007", "1004", "SUPERVISOR"),
-    ("1010", "1004", "SUPERVISOR"),
-    ("1013", "1004", "SUPERVISOR"),
-    ("1017", "1004", "SUPERVISOR"),
-    ("1018", "1004", "SUPERVISOR"),
-    ("1023", "1004", "SUPERVISOR"),
-    # Workers under Bilal (1005)
-    ("1008", "1005", "SUPERVISOR"),
-    ("1011", "1005", "SUPERVISOR"),
-    ("1014", "1005", "SUPERVISOR"),
-    ("1019", "1005", "SUPERVISOR"),
-    ("1020", "1005", "SUPERVISOR"),
-    ("1024", "1005", "SUPERVISOR"),
-    # Workers under Tariq (1006)
-    ("1009", "1006", "SUPERVISOR"),
-    ("1012", "1006", "SUPERVISOR"),
-    ("1015", "1006", "SUPERVISOR"),
-    ("1016", "1006", "SUPERVISOR"),
-    ("1021", "1006", "SUPERVISOR"),
-    ("1022", "1006", "SUPERVISOR"),
-    ("1025", "1006", "SUPERVISOR"),
+    ("2701", "2801", "SUPERINTENDENT"),
+    ("2701", "2901", "ENGINEER"),
+    ("2702", "2801", "SUPERINTENDENT"),
+    ("2702", "2901", "ENGINEER"),
+    ("2703", "2802", "SUPERINTENDENT"),
+    ("2703", "2901", "ENGINEER"),
+    # Workers under Salman (2701)
+    ("2001", "2701", "SUPERVISOR"),
+    ("2004", "2701", "SUPERVISOR"),
+    ("2007", "2701", "SUPERVISOR"),
+    ("2011", "2701", "SUPERVISOR"),
+    ("2012", "2701", "SUPERVISOR"),
+    ("2017", "2701", "SUPERVISOR"),
+    # Workers under Kamran (2702)
+    ("2002", "2702", "SUPERVISOR"),
+    ("2005", "2702", "SUPERVISOR"),
+    ("2008", "2702", "SUPERVISOR"),
+    ("2013", "2702", "SUPERVISOR"),
+    ("2014", "2702", "SUPERVISOR"),
+    ("2018", "2702", "SUPERVISOR"),
+    # Workers under Bilal (2703)
+    ("2003", "2703", "SUPERVISOR"),
+    ("2006", "2703", "SUPERVISOR"),
+    ("2009", "2703", "SUPERVISOR"),
+    ("2010", "2703", "SUPERVISOR"),
+    ("2015", "2703", "SUPERVISOR"),
+    ("2016", "2703", "SUPERVISOR"),
+    ("2019", "2703", "SUPERVISOR"),
 ]
 for idx, (emp_id, mgr_id, rel) in enumerate(reporting_data, start=5):
     ws_rep.cell(row=idx, column=1, value=None)
@@ -163,31 +163,31 @@ for idx, (emp_id, mgr_id, rel) in enumerate(reporting_data, start=5):
 # 6. Employee_Salary Sheet
 ws_sal = clear_data_rows("Employee_Salary")
 salary_map = {
-    "1001": (6500.0, 1000.0, 0.0, 800.0),
-    "1002": (4800.0, 700.0, 0.0, 500.0),
-    "1003": (4800.0, 700.0, 0.0, 500.0),
-    "1004": (3200.0, 400.0, 150.0, 0.0),
-    "1005": (3200.0, 400.0, 150.0, 0.0),
-    "1006": (3200.0, 400.0, 150.0, 0.0),
-    "1007": (2200.0, 250.0, 0.0, 0.0),
-    "1008": (2200.0, 250.0, 0.0, 0.0),
-    "1009": (2200.0, 250.0, 0.0, 0.0),
-    "1010": (1800.0, 200.0, 0.0, 0.0),
-    "1011": (1800.0, 200.0, 0.0, 0.0),
-    "1012": (1800.0, 200.0, 0.0, 0.0),
-    "1013": (1800.0, 200.0, 0.0, 0.0),
-    "1014": (1800.0, 200.0, 0.0, 0.0),
-    "1015": (1800.0, 200.0, 0.0, 0.0),
-    "1016": (1800.0, 200.0, 0.0, 0.0),
-    "1017": (1200.0, 150.0, 0.0, 0.0),
-    "1018": (1200.0, 150.0, 0.0, 0.0),
-    "1019": (1200.0, 150.0, 0.0, 0.0),
-    "1020": (1200.0, 150.0, 0.0, 0.0),
-    "1021": (1200.0, 150.0, 0.0, 0.0),
-    "1022": (1200.0, 150.0, 0.0, 0.0),
-    "1023": (1300.0, 150.0, 0.0, 0.0),
-    "1024": (1400.0, 200.0, 0.0, 0.0), # Driver
-    "1025": (1400.0, 200.0, 0.0, 0.0), # Driver
+    "2901": (6500.0, 1000.0, 0.0, 800.0),
+    "2801": (4800.0, 700.0, 0.0, 500.0),
+    "2802": (4800.0, 700.0, 0.0, 500.0),
+    "2701": (3200.0, 400.0, 150.0, 0.0),
+    "2702": (3200.0, 400.0, 150.0, 0.0),
+    "2703": (3200.0, 400.0, 150.0, 0.0),
+    "2001": (2200.0, 250.0, 0.0, 0.0),
+    "2002": (2200.0, 250.0, 0.0, 0.0),
+    "2003": (2200.0, 250.0, 0.0, 0.0),
+    "2004": (1800.0, 200.0, 0.0, 0.0),
+    "2005": (1800.0, 200.0, 0.0, 0.0),
+    "2006": (1800.0, 200.0, 0.0, 0.0),
+    "2007": (1800.0, 200.0, 0.0, 0.0),
+    "2008": (1800.0, 200.0, 0.0, 0.0),
+    "2009": (1800.0, 200.0, 0.0, 0.0),
+    "2010": (1800.0, 200.0, 0.0, 0.0),
+    "2011": (1200.0, 150.0, 0.0, 0.0),
+    "2012": (1200.0, 150.0, 0.0, 0.0),
+    "2013": (1200.0, 150.0, 0.0, 0.0),
+    "2014": (1200.0, 150.0, 0.0, 0.0),
+    "2015": (1200.0, 150.0, 0.0, 0.0),
+    "2016": (1200.0, 150.0, 0.0, 0.0),
+    "2017": (1300.0, 150.0, 0.0, 0.0),
+    "2018": (1400.0, 200.0, 0.0, 0.0), # Driver
+    "2019": (1400.0, 200.0, 0.0, 0.0), # Driver
 }
 
 for idx, (emp_id, (basic, special, phone_al, house_tr)) in enumerate(salary_map.items(), start=5):
@@ -386,9 +386,9 @@ ws_time.cell(row=5, column=15, value="Standard company schedule and break window
 # 12. Leave Sheet
 ws_leave = clear_data_rows("Leave")
 leave_data = [
-    ("1010", "ANNUAL", "2026-12-10", "2026-12-20", "Annual vacation travel"),
-    ("1013", "SICK", "2026-11-20", "2026-11-22", "Medical sick leave with doctor certificate"),
-    ("1017", "EMERGENCY", "2026-11-25", "2026-11-27", "Family emergency leave"),
+    ("2004", "ANNUAL", "2026-12-10", "2026-12-20", "Annual vacation travel"),
+    ("2007", "SICK", "2026-11-20", "2026-11-22", "Medical sick leave with doctor certificate"),
+    ("2011", "EMERGENCY", "2026-11-25", "2026-11-27", "Family emergency leave"),
 ]
 for idx, (tid, l_type, f_date, t_date, reason) in enumerate(leave_data, start=5):
     ws_leave.cell(row=idx, column=1, value=None)

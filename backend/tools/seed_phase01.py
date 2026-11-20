@@ -138,19 +138,19 @@ async def seed_data(session: AsyncSession) -> None:
         await session.flush()
 
     # Operational Personas:
-    engineer = await create_person("ENG001", "Ahmed Al-Mansoor", "ENGINEER", grade_code="G5A")
-    supt1 = await create_person("SUPT001", "Rashid Tariq", "SUPERINTENDENT", grade_code="G4B")
-    supt2 = await create_person("SUPT002", "Faisal Khan", "SUPERINTENDENT", grade_code="G4B")
+    engineer = await create_person("ENG001", "Rohan Menon", "ENGINEER", grade_code="G5A")
+    supt1 = await create_person("SUPT001", "Tariq Rahman", "SUPERINTENDENT", grade_code="G4B")
+    supt2 = await create_person("SUPT002", "Yusuf Abdi", "SUPERINTENDENT", grade_code="G4B")
     supervisor1 = await create_person(
-        "SUP001", "Zaid Mahmoud", "SUPERVISOR", sgd="Senior Supervisor", grade_code="G3A"
+        "SUP001", "Salman Javed", "SUPERVISOR", sgd="Senior Supervisor", grade_code="G3A"
     )
     supervisor2 = await create_person(
-        "SUP002", "Bilal Hassan", "SUPERVISOR", sgd="Field Supervisor", grade_code="G3A"
+        "SUP002", "Kamran Aziz", "SUPERVISOR", sgd="Field Supervisor", grade_code="G3A"
     )
 
     worker1 = await create_person(
         "WRK001",
-        "Ali Hassan",
+        "Asif Raza",
         "WORKER",
         sgd="Gardener",
         grade_code="G2B26",
@@ -159,7 +159,7 @@ async def seed_data(session: AsyncSession) -> None:
     )
     worker2 = await create_person(
         "WRK002",
-        "Mohammed Qasim",
+        "Prakash Rao",
         "WORKER",
         sgd="Irrigation Helper",
         grade_code="G1A10",
@@ -169,7 +169,7 @@ async def seed_data(session: AsyncSession) -> None:
     )
     worker3 = await create_person(
         "WRK003",
-        "Suresh Kumar",
+        "Vinod Pillai",
         "WORKER",
         sgd="Driver",
         grade_code="G2A15",

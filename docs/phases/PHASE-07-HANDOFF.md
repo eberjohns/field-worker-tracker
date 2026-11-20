@@ -14,7 +14,7 @@ Phase 07 established the complete **Mobile Sync Contract** (`docs/09-mobile-sync
 
 To facilitate end-to-end integration without depending on external mobile hardware, a standalone **Mobile Tester Proxy** (`tools/mobile-proxy/`) was built. It mirrors a worker's mobile smartphone, renders server-synced spatial boundaries, generates realistic movement events, and dispatches event batches directly to the backend.
 
-During this phase, **102 raw location events** for worker `Mohan Lal (1017)` were simulated, dispatched, and verified in the database.
+During this phase, **102 raw location events** for worker `Suresh Nair (2011)` were simulated, dispatched, and verified in the database.
 
 ---
 

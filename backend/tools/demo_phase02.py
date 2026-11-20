@@ -44,7 +44,7 @@ def run_demo() -> None:
     )
     print(f"\n[Worker Setup] Worker ID: {worker_id}")
     print(" -> Country: AE | Driver: False | Accommodation: True")
-    print(f" -> Supervisor ID: {supervisor_id} (Mr. Dawood)")
+    print(f" -> Supervisor ID: {supervisor_id} (Kamran Aziz)")
 
     # 2. Company Default Rule
     company_rule = TimeRuleDefinition(
@@ -66,7 +66,7 @@ def run_demo() -> None:
     # 3. Add Team Rule (Supervisor Dawood's team)
     team_rule = TimeRuleDefinition(
         id=uuid4(),
-        name="Dawood Team Custom Rule",
+        name="Kamran Team Custom Rule",
         country="AE",
         scope_type=TimeRuleScope.TEAM,
         scope_employee_id=supervisor_id,

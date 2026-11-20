@@ -109,7 +109,7 @@ async def test_engineer_cannot_edit_another_engineers_team_rule():
 
     other_team_rule = TimeRule(
         id=uuid4(),
-        name="Team Dawood Rule",
+        name="Team Kamran Rule",
         scope_type="TEAM",
         scope_employee_id=engineer_b_mgr_id,
         applies_to="ALL",

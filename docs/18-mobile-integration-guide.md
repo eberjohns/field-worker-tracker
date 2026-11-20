@@ -27,7 +27,7 @@ The mobile application:
 - Device metadata **must be nested under `"device"`**:
   ```json
   {
-    "tally_id": "1193",
+    "tally_id": "2001",
     "password": "Welcome123!",
     "device": {
       "device_identifier": "b6c1482f-2d7c-473f-91ab-001122334455",
@@ -238,8 +238,8 @@ Open **[http://localhost:8085](http://localhost:8085)** to test:
 
 | Attribute | Value |
 |---|---|
-| Employee ID (`tally_id`) | `1193` |
-| Worker Name | Shanto Miah |
+| Employee ID (`tally_id`) | `2001` |
+| Worker Name | Ravi Varghese |
 | Initial Default Password | `Welcome123!` (must change on first login) |
 | Worksite Assigned | `12A14301` ("Dubai Marina Towers Landscape") |
 | Accommodation | `WARSAN_01` ("Warsan Staff Accommodation Camp") |

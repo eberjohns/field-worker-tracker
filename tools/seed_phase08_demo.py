@@ -110,13 +110,13 @@ async def run_demo():
             session.add(ji)
             await session.flush()
 
-        # 5. Worker (1193 - Shanto Miah)
-        res = await session.execute(select(Employee).where(Employee.tally_id == "1193"))
+        # 5. Worker (2001 - Ravi Varghese)
+        res = await session.execute(select(Employee).where(Employee.tally_id == "2001"))
         worker = res.scalar_one_or_none()
         if not worker:
             worker = Employee(
-                tally_id="1193",
-                name="Shanto Miah",
+                tally_id="2001",
+                name="Ravi Varghese",
                 role="WORKER",
                 country="AE",
                 accommodation_id=acc.id,
@@ -134,7 +134,7 @@ async def run_demo():
         if not dev:
             dev = RegisteredDevice(
                 employee_id=worker.id,
-                device_identifier="pixel8_shanto_demo",
+                device_identifier="pixel8_ravi_demo",
                 platform="ANDROID",
                 device_model="Google Pixel 8",
                 is_active=True,
@@ -147,7 +147,7 @@ async def run_demo():
         res = await session.execute(select(Employee).where(Employee.tally_id == "SUP001"))
         sup_emp = res.scalar_one_or_none()
         if not sup_emp:
-            sup_emp = Employee(tally_id="SUP001", name="Ahmed Al Mansoor", role="SUPERVISOR", country="AE")
+            sup_emp = Employee(tally_id="SUP001", name="Salman Javed", role="SUPERVISOR", country="AE")
             session.add(sup_emp)
             await session.flush()
             sup_user = User(
@@ -223,10 +223,10 @@ async def run_demo():
         await session.commit()
 
     print("✓ Infrastructure & Users Verified:")
-    print(f"  - Worker: Shanto Miah (Tally ID: 1193, Camp: Warsan)")
+    print(f"  - Worker: Ravi Varghese (Tally ID: 2001, Camp: Warsan)")
     print(f"  - Worksite: {ws.job_name} ({ws.job_number})")
     print(f"  - Planned Schedule: 05:00 Camp -> 06:00 Site -> 15:30 Exit -> 17:00 Camp (8h required)")
-    print(f"  - Supervisor: Ahmed Al Mansoor (SUP001)")
+    print(f"  - Supervisor: Salman Javed (SUP001)")
     print(f"  - Engineer: Rami Al Khouri (ENG001)")
     print("-" * 70)
 

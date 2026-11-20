@@ -31,8 +31,8 @@ Slot = a standing assignment day with no available worker (leave, weekly off). L
 ## Approvals inbox
 ```
 Approvals (12)   [Leave 3] [Reassignments 4] [Overtime / variation 5]   Filter: supervisor, date
- Leave  Cletus G.  10-24 Nov  annual   requested by Shakir      [Approve] [Reject]
- Reassign REPLACE Y -> W  Wed 4 Nov  12A14301 A  reason: leave   requested by Shakir  hours: W 9/8  [Approve] [Reject]
+ Leave  Peter M.   10-24 Nov  annual   requested by Salman      [Approve] [Reject]
+ Reassign REPLACE Y -> W  Wed 4 Nov  12A14301 A  reason: leave   requested by Salman  hours: W 9/8  [Approve] [Reject]
  Attendance rows needing review (variation / flags / overtime)   [Select all] [Approve selected]
 ```
 Engineers see only their scope; Admin sees all. Approving or rejecting records user, time and note. Bulk approve for attendance rows. Notification badge in the top bar; email/push optional through adapters.

@@ -173,7 +173,7 @@ async def sample_test_data():
         if not w1:
             w1 = Employee(
                 tally_id="W_SCHED_01",
-                name="Shanto Miah",
+                name="Ravi Varghese",
                 role="WORKER",
                 country="AE",
                 grade_code="G1C",
@@ -189,7 +189,7 @@ async def sample_test_data():
         if not w2:
             w2 = Employee(
                 tally_id="W_SCHED_02",
-                name="Rebiyu Aboli",
+                name="Tesfaye Bekele",
                 role="WORKER",
                 country="AE",
                 grade_code="G1C",
@@ -205,7 +205,7 @@ async def sample_test_data():
         if not w3:
             w3 = Employee(
                 tally_id="W_SCHED_03",
-                name="Cletus G.",
+                name="Peter M.",
                 role="WORKER",
                 country="AE",
                 grade_code="G2B",

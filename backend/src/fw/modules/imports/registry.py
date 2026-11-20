@@ -175,7 +175,7 @@ SHEET_REGISTRY: dict[str, SheetDef] = {
                 True,
                 "Required",
                 description="Unique ID, kept as text; also the login username.",
-                example="1193",
+                example="2002",
             ),
             ColumnDef(
                 "name",
@@ -326,8 +326,8 @@ SHEET_REGISTRY: dict[str, SheetDef] = {
         ],
         examples=[
             {
-                "tally_id": "1193",
-                "name": "Mohan Lal",
+                "tally_id": "2002",
+                "name": "Tesfaye Bekele",
                 "role": "WORKER",
                 "grade_code": "G1C",
                 "staff_grade_description": "Gardener Helper",
@@ -362,7 +362,7 @@ SHEET_REGISTRY: dict[str, SheetDef] = {
                 True,
                 "Required",
                 description="The person being reported on (Worker for SUPERVISOR links; Supervisor for SUPERINTENDENT/ENGINEER links).",
-                example="1193",
+                example="2002",
             ),
             ColumnDef(
                 "manager_tally_id",
@@ -370,7 +370,7 @@ SHEET_REGISTRY: dict[str, SheetDef] = {
                 True,
                 "Required",
                 description="The manager (must have role matching relationship: SUPERVISOR, SUPERINTENDENT, or ENGINEER).",
-                example="2001",
+                example="2701",
             ),
             ColumnDef(
                 "relationship",
@@ -387,8 +387,8 @@ SHEET_REGISTRY: dict[str, SheetDef] = {
         ],
         examples=[
             {
-                "employee_tally_id": "1193",
-                "manager_tally_id": "2001",
+                "employee_tally_id": "2002",
+                "manager_tally_id": "2701",
                 "relationship": "SUPERVISOR",
                 "notes": "Primary crew",
             },
@@ -408,7 +408,7 @@ SHEET_REGISTRY: dict[str, SheetDef] = {
                 True,
                 "Required",
                 description="Must exist in Employees.",
-                example="1193",
+                example="2002",
             ),
             ColumnDef(
                 "effective_from",
@@ -480,7 +480,7 @@ SHEET_REGISTRY: dict[str, SheetDef] = {
         ],
         examples=[
             {
-                "tally_id": "1193",
+                "tally_id": "2002",
                 "effective_from": "2026-01-01",
                 "standard_hours": "8.0",
                 "basic_salary": "1200.00",
@@ -739,14 +739,14 @@ SHEET_REGISTRY: dict[str, SheetDef] = {
                 True,
                 "Required",
                 description="Tally ID of an employee with role SUPERVISOR.",
-                example="2001",
+                example="2701",
             ),
             ColumnDef(
                 "notes", "text", False, "Optional", description="Free text notes.", example=None
             ),
         ],
         examples=[
-            {"job_number": "25A00001", "supervisor_tally_id": "2001", "notes": None},
+            {"job_number": "25A00001", "supervisor_tally_id": "2701", "notes": None},
         ],
     ),
     "Leave": SheetDef(
@@ -758,7 +758,7 @@ SHEET_REGISTRY: dict[str, SheetDef] = {
         is_in_scope_phase_03=False,
         columns=[
             ColumnDef(
-                "tally_id", "text", True, "Required", description="FK Employees.", example="1193"
+                "tally_id", "text", True, "Required", description="FK Employees.", example="2002"
             ),
             ColumnDef(
                 "leave_type",

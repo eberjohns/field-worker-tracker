@@ -44,10 +44,10 @@ python -m http.server 8085 --directory tools/mobile-proxy
 | Role | Username (Tally ID) | Default Password | What They Can Access |
 |---|---|---|---|
 | **Admin** | `ADMIN001` | `ChangeMe123!` | Full access: Imports, Users, Settings, System, Live Map, Boundaries, Approvals, Documents |
-| **Engineer** | `1001` | `ChangeMe123!` | Technical and engineering oversight: Planner, Live Map, Approvals, Attendance, Boundaries |
-| **Superintendent** | `1002` / `1003` | `ChangeMe123!` | Operational oversight: Planner, Employees, Attendance, Pending Visits |
-| **Supervisor** | `1004` / `1005` / `1006` | `ChangeMe123!` | Direct team management: Planner, Leave recording, Attendance, Pending Visits |
-| **Field Worker** | `1007` – `1025` | `Welcome123!` | Mobile App login (`http://localhost:8085`): Day plans, sync, GPS location transmission |
+| **Engineer** | `2901` | `ChangeMe123!` | Technical and engineering oversight: Planner, Live Map, Approvals, Attendance, Boundaries |
+| **Superintendent** | `2801` / `2802` | `ChangeMe123!` | Operational oversight: Planner, Employees, Attendance, Pending Visits |
+| **Supervisor** | `2701` / `2702` / `2703` | `ChangeMe123!` | Direct team management: Planner, Leave recording, Attendance, Pending Visits |
+| **Field Worker** | `2001` – `2019` | `Welcome123!` | Mobile App login (`http://localhost:8085`): Day plans, sync, GPS location transmission |
 
 > **Development Blank Login Shortcut**: On `http://localhost:5173/login`, in `local` environment you can simply click **"Sign In"** with blank credentials to log in instantly as `ADMIN001`.
 
@@ -96,16 +96,16 @@ Attendance and live GPS containment require geofence polygons:
 ### Step 4: Leave Requests & Cover Auto-Resolution
 1. Navigate to **Leave Management** (`/leave`).
 2. Record a leave request:
-   - Worker: Select `1010 - Manoj Patel` (Irrigation Technician)
+   - Worker: Select `2004 - Peter Mwangi` (Irrigation Technician)
    - Dates: Select next Monday to Wednesday
    - Type: `ANNUAL` or `SICK`
    - Reason: `Medical appointment`
 3. Switch to **Approvals Inbox** (`/approvals`) and approve the leave request.
 4. Check the **Dashboard** (`/`):
-   - Under **Active Operational Alerts**, observe a new `COVER_NEEDED` alert for `Manoj Patel`.
+   - Under **Active Operational Alerts**, observe a new `COVER_NEEDED` alert for `Peter Mwangi`.
 5. Click **"Assign Cover in Planner"** on the alert:
    - You are taken to `/operational-planner` filtered to that date and worker.
-   - Select the uncovered cell, assign a replacement worker (e.g. `1011 - Deepak Sharma`), and click **Save Roster**.
+   - Select the uncovered cell, assign a replacement worker (e.g. `2005 - Rafiq Hossain`), and click **Save Roster**.
 6. Return to **Dashboard** (`/`):
    - Verify the `COVER_NEEDED` alert has automatically disappeared and resolved!
 
@@ -114,11 +114,11 @@ Attendance and live GPS containment require geofence polygons:
 ### Step 5: Expiring Documents & Alerts
 1. Navigate to **Documents** (`/documents`):
    - Review the document status list populated from the import template:
-     - `1013 - Rajesh Nair`: **EXPIRED** Emirates ID (badge in red).
-     - `1007 - Ramesh Kumar`: **EXPIRING SOON** Visa (expires in < 15 days).
-     - `1010 - Manoj Patel`: **EXPIRING SOON** Passport.
-     - `1017 - Mohan Lal`: **EXPIRING SOON** Labour Card.
-     - `1024 - Jitender Pal`: **EXPIRING SOON** Driving License.
+     - `2007 - Junaid Akhtar`: **EXPIRED** Emirates ID (badge in red).
+     - `2001 - Ravi Varghese`: **EXPIRING SOON** Visa (expires in < 15 days).
+     - `2004 - Peter Mwangi`: **EXPIRING SOON** Passport.
+     - `2011 - Suresh Nair`: **EXPIRING SOON** Labour Card.
+     - `2018 - Anwar Hossain`: **EXPIRING SOON** Driving License.
 2. Filter by document type (`Visa`, `Emirates ID`, `Passport`, `Labour Card`, `Driving License`) or status (`Expiring Soon`, `Expired`, `Valid`).
 3. Click **"Check & Raise Alerts"** to test background compliance alert evaluation.
 4. Click **"Export CSV"** to verify audit compliance export.
@@ -128,7 +128,7 @@ Attendance and live GPS containment require geofence polygons:
 ### Step 6: Mobile Proxy Simulator (Simulating Worker GPS)
 1. Open the Mobile Simulator in your browser: **`http://localhost:8085`**.
 2. **Login as a Field Worker**:
-   - Tally ID: `1010` (or `1007`, `1013`, `1017`)
+   - Tally ID: `2004` (or `2001`, `2007`, `2011`)
    - Password: `Welcome123!`
    - Click **Login to Device**.
 3. **Explore the Phone Interface**:

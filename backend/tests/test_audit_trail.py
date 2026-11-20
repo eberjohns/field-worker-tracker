@@ -81,8 +81,8 @@ async def test_enrich_audit_logs_resolves_friendly_labels() -> None:
 
     mock_emp_row = MagicMock()
     mock_emp_row.id = emp_id
-    mock_emp_row.name = "Shanto Miah"
-    mock_emp_row.tally_id = "1193"
+    mock_emp_row.name = "Ravi Varghese"
+    mock_emp_row.tally_id = "2001"
 
     mock_ji_row = MagicMock()
     mock_ji_row.id = ji_id
@@ -100,6 +100,6 @@ async def test_enrich_audit_logs_resolves_friendly_labels() -> None:
 
     enriched = await enrich_audit_logs([mock_log], session)
     assert len(enriched) == 1
-    assert enriched[0].diff_labels["employee_id"] == "Shanto Miah (1193)"
+    assert enriched[0].diff_labels["employee_id"] == "Ravi Varghese (2001)"
     assert enriched[0].diff_labels["job_item_id"] == "Silicon Oasis (12A14301) - Gardener"
-    assert enriched[0].entity_label == "Shanto Miah (1193) @ Silicon Oasis (12A14301) - Gardener"
+    assert enriched[0].entity_label == "Ravi Varghese (2001) @ Silicon Oasis (12A14301) - Gardener"

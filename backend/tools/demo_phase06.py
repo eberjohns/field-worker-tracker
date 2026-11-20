@@ -47,7 +47,7 @@ async def run_demo() -> None:
             eng_emp = Employee(
                 id=uuid4(),
                 tally_id="1001",
-                name="Ahmed Al-Mansoor",
+                name="Rohan Menon",
                 role="ENGINEER",
                 country="AE",
                 is_active=True,
@@ -109,7 +109,7 @@ async def run_demo() -> None:
             sup_user.credential_hash = hash_password("ChangeMe123!")
             sup_user.must_change_password = False
 
-        # Worker 1 (Bilal Khan - Gardener)
+        # Worker 1 (Getachew Alemu - Gardener)
         w1_emp = (
             await session.execute(select(Employee).where(Employee.tally_id == "1010"))
         ).scalar_one_or_none()
@@ -117,7 +117,7 @@ async def run_demo() -> None:
             w1_emp = Employee(
                 id=uuid4(),
                 tally_id="1010",
-                name="Bilal Khan",
+                name="Getachew Alemu",
                 role="WORKER",
                 grade_code="G2A",
                 staff_grade_description="Gardener",

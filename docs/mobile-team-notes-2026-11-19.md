@@ -39,6 +39,7 @@ The same code is also returned when the default password was not changed in time
 
 - **Overtime:** OT2 now applies only on public holidays and the worker's own weekly off day. Previously every Sunday counted as OT2. The shape of `GET /mobile/me/payroll` is unchanged, but OT1/OT2 figures will differ from earlier test data.
 - **Reassignment dates:** the server now uses the site's local date (Dubai/KSA) instead of the server clock. The app needs no change.
+- **Example people (20 Nov, Batch 5.3a):** the example names and Tally IDs in `docs/09-mobile-sync-contract.md`, `docs/18-mobile-integration-guide.md` and `tools/mobile-proxy` now use the demo's mock people (for example worker 2001 Ravi Varghese, supervisor 2701 Salman Javed) instead of 1193 and 1017. No fields, types or endpoints changed. If your test fixtures use 1193, switch to the demo import (`tools/demo_data/FieldWorkerTracker_Demo_Import.xlsx`).
 
 ## Questions
 Please reply if the app depends on push anywhere else, or if `detail` isn't available in your error handling.
