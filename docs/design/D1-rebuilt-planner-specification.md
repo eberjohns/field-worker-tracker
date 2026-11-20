@@ -74,17 +74,17 @@ Both the **Base Planner** and the **Operational Planner** share the **identical,
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ TOP CONTROLS BAR                                                                                                                 │
-│ [Search Job # or Name...]   Supervisor Crew: [All Crews | Shakir (Hiace) | Deira Bus ▾]   Week: [<] Week 45: 02-08 Nov [>] [Today]│
+│ [Search Job # or Name...]   Supervisor Crew: [All Crews | Salman (Hiace) | Deira Bus ▾]   Week: [<] Week 45: 02-08 Nov [>] [Today]│
 ├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │ WORKSITE 12A14301 - Emirates Hills Villas (Outdoor) • Contract: 01 Jan 2026 – 31 Dec 2026 • Budget: 185,000 AED / yr            │
 ├──────────────────────────┬──────────────┬──────────────┬──────────────┬──────────────┬──────────────┬──────────────┬─────────────┤
 │ Job Item & Quota         │ MON          │ TUE          │ WED          │ THU          │ FRI          │ SAT          │ SUN         │
 ├──────────────────────────┼──────────────┼──────────────┼──────────────┼──────────────┼──────────────┼──────────────┼─────────────┤
-│ Item A: Gardener         │ Shanto Miah  │ Shanto Miah  │ Shanto Miah  │ Shanto Miah  │ Farooq Khan  │ Shanto Miah  │   —         │
-│ (G1 - 6x/week, 8h/day)   │ Hamid Ali    │ Hamid Ali    │ Hamid Ali    │ Hamid Ali    │ Bashir M.    │ Hamid Ali    │ (Rest Day)  │
+│ Item A: Gardener         │ Ravi V.      │ Ravi V.      │ Ravi V.      │ Ravi V.      │ Waqas Anjum  │ Ravi V.      │   —         │
+│ (G1 - 6x/week, 8h/day)   │ Usman T.     │ Usman T.     │ Usman T.     │ Usman T.     │ Faisal M.    │ Usman T.     │ (Rest Day)  │
 │ Quota: 6 / 6 Met ✓       │ (8h)         │ (8h)         │ (8h)         │ (8h)         │ (8h)         │ (8h)         │             │
 ├──────────────────────────┼──────────────┼──────────────┼──────────────┼──────────────┼──────────────┼──────────────┼─────────────┤
-│ Item I: Supervisor       │ Shakir (4h)  │   —          │   —          │   —          │   —          │   —          │   —         │
+│ Item I: Supervisor       │ Salman (4h)  │   —          │   —          │   —          │   —          │   —          │   —         │
 │ (G3 - 1x/week, 4h/visit) │ [Target] ✓   │ (Quota Met)  │ (Quota Met)  │ (Quota Met)  │ (Quota Met)  │ (Quota Met)  │ (Rest Day)  │
 └──────────────────────────┴──────────────┴──────────────┴──────────────┴──────────────┴──────────────┴──────────────┴─────────────┘
 ```
@@ -140,18 +140,18 @@ Clicking on any weekday cell/slot opens the **Assignment Modal**:
 │ [ Fill Across Active Working Days (Mon–Sat) ]  (Copies current crew without touching other days)      │
 ├────────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │ CURRENTLY ASSIGNED WORKERS IN THIS SLOT (1 / 2)                                                        │
-│  [ Shanto Miah (G1A) • 8.0h • Off: Friday ]                                                      [ ✕ ] │
+│  [ Ravi Varghese (G1A) • 8.0h • Off: Friday ]                                                      [ ✕ ] │
 ├────────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │ CANDIDATE WORKER RECOMMENDATIONS                                                                       │
-│ Search: [___________________]    ☑ Filter to Supervisor Shakir's Crew (Toggle to search all)         │
+│ Search: [___________________]    ☑ Filter to Supervisor Salman's Crew (Toggle to search all)         │
 │                                                                                                        │
-│  ★ Hamid Ali * (G1A) • Hand Watering             Today: 0/8h  Week: 32/48h   Off: Friday     [ + Add ] │
+│  ★ Usman T.  * (G1A) • Hand Watering             Today: 0/8h  Week: 32/48h   Off: Friday     [ + Add ] │
 │    Reason: Exact staff type match, same supervisor crew, worked at this site last week                 │
 │                                                                                                        │
-│  ★ Bashir M. (G1B) • Gardener Helper             Today: 0/8h  Week: 40/48h   Off: Sunday     [ + Add ] │
+│  ★ Faisal M. (G1B) • Gardener Helper             Today: 0/8h  Week: 40/48h   Off: Sunday     [ + Add ] │
 │    Reason: Same grade group (G1), same supervisor crew                                                 │
 │                                                                                                        │
-│  ⚠ Farooq Khan (G1A) • Hand Watering             Today: 8/8h  Week: 48/48h   Off: Wednesday  [ + Add ] │
+│  ⚠ Waqas Anjum (G1A) • Hand Watering             Today: 8/8h  Week: 48/48h   Off: Wednesday  [ + Add ] │
 │    Warning: Rest Day Today (OT applies) • Over standard weekly hours                                   │
 ├────────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │ [Cancel]                                                                         [ Save Slot Roster ]  │

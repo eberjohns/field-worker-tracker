@@ -319,6 +319,19 @@ class PendingVisitsService:
         return reminded_count
 
     @staticmethod
+    async def escalation_days(session: AsyncSession) -> int:
+        """Days after its due date that an OPEN pending visit counts as escalated."""
+        esc_days_setting = await SettingsService.get_setting(
+            session=session,
+            key="pending_visit_escalation_days",
+            default=3,
+        )
+        try:
+            return int(esc_days_setting) if esc_days_setting else 3
+        except (ValueError, TypeError):
+            return 3
+
+    @staticmethod
     async def get_pending_visits(
         session: AsyncSession,
         user: User,
@@ -333,15 +346,7 @@ class PendingVisitsService:
         today = datetime.now(UTC).date()
 
         # 1. Resolve escalation days setting
-        esc_days_setting = await SettingsService.get_setting(
-            session=session,
-            key="pending_visit_escalation_days",
-            default=3,
-        )
-        try:
-            esc_days = int(esc_days_setting) if esc_days_setting else 3
-        except (ValueError, TypeError):
-            esc_days = 3
+        esc_days = await PendingVisitsService.escalation_days(session)
 
         # 2. Build query
         stmt = (

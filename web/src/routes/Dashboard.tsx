@@ -15,6 +15,7 @@ import {
   FileText,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { mapDashboardSummary, type DashboardSummaryApi } from "../features/dashboard/summary";
 
 interface AlertItem {
   id: string;
@@ -32,7 +33,7 @@ interface AlertItem {
 export const Dashboard: React.FC = () => {
   const { token, user } = useAuth();
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
-  const [dashboardSummary, setDashboardSummary] = useState<any | null>(null);
+  const [dashboardSummary, setDashboardSummary] = useState<DashboardSummaryApi | null>(null);
   const [pendingBoundaryCount, setPendingBoundaryCount] = useState<number>(0);
   const [pendingLeaves, setPendingLeaves] = useState<any[]>([]);
   const [pendingReassigns, setPendingReassigns] = useState<any[]>([]);
@@ -98,7 +99,8 @@ export const Dashboard: React.FC = () => {
   const coverAlerts = alerts.filter((a) => a.alert_type === "COVER_NEEDED");
   const docExpiryAlerts = alerts.filter((a) => a.alert_type === "DOC_EXPIRY");
   // DEC-57: Admin-only count of worksites nobody but Admin can see.
-  const unassignedWorksites: number = dashboardSummary?.unassigned_worksites_count ?? 0;
+  const cards = mapDashboardSummary(dashboardSummary);
+  const unassignedWorksites = cards.unassignedWorksites;
 
   return (
     <div className="space-y-6">
@@ -122,17 +124,17 @@ export const Dashboard: React.FC = () => {
               <Clock className="h-4 w-4 text-blue-500 group-hover:scale-110 transition-transform" />
             </div>
             <div className="text-2xl font-bold text-slate-900">
-              {dashboardSummary.attendance?.present ?? 0}
+              {cards.attendance.present}
               <span className="text-xs font-normal text-slate-400 ml-1.5">
-                / {dashboardSummary.attendance?.total_scheduled ?? 0} scheduled
+                / {cards.attendance.totalScheduled} scheduled
               </span>
             </div>
             <div className="flex items-center gap-1.5 text-xs text-slate-500 pt-1 border-t border-slate-100">
-              <span className="text-emerald-600 font-semibold">{dashboardSummary.attendance?.present ?? 0} Pres</span>
+              <span className="text-emerald-600 font-semibold">{cards.attendance.present} Pres</span>
               <span>•</span>
-              <span className="text-amber-600 font-semibold">{dashboardSummary.attendance?.partial ?? 0} Part</span>
+              <span className="text-amber-600 font-semibold">{cards.attendance.partial} Part</span>
               <span>•</span>
-              <span className="text-rose-600 font-semibold">{dashboardSummary.attendance?.absent ?? 0} Abs</span>
+              <span className="text-rose-600 font-semibold">{cards.attendance.absent} Abs</span>
             </div>
           </Link>
 
@@ -146,15 +148,15 @@ export const Dashboard: React.FC = () => {
               <Radio className="h-4 w-4 text-emerald-500 group-hover:scale-110 transition-transform animate-pulse" />
             </div>
             <div className="text-2xl font-bold text-emerald-600">
-              {dashboardSummary.live?.active ?? 0}
+              {cards.live.active}
               <span className="text-xs font-normal text-slate-400 ml-1.5">
                 Active now
               </span>
             </div>
             <div className="flex items-center gap-1.5 text-xs text-slate-500 pt-1 border-t border-slate-100">
-              <span className="text-amber-600 font-medium">{dashboardSummary.live?.no_recent_signal ?? 0} No Signal</span>
+              <span className="text-amber-600 font-medium">{cards.live.noRecentSignal} No Signal</span>
               <span>•</span>
-              <span className="text-orange-600 font-medium">{dashboardSummary.live?.location_disabled ?? 0} Disabled</span>
+              <span className="text-orange-600 font-medium">{cards.live.locationDisabled} Disabled</span>
             </div>
           </Link>
 
@@ -168,10 +170,10 @@ export const Dashboard: React.FC = () => {
               <AlertTriangle className="h-4 w-4 text-amber-500 group-hover:scale-110 transition-transform" />
             </div>
             <div className="text-2xl font-bold text-slate-900 flex items-center justify-between">
-              <span>{dashboardSummary.pending_visits?.total_open ?? 0}</span>
-              {(dashboardSummary.pending_visits?.escalated_count ?? 0) > 0 && (
+              <span>{cards.pendingVisits.open}</span>
+              {cards.pendingVisits.escalated > 0 && (
                 <span className="px-2 py-0.5 rounded text-xs font-extrabold bg-red-100 text-red-700 border border-red-200">
-                  {dashboardSummary.pending_visits.escalated_count} Escalated
+                  {cards.pendingVisits.escalated} Escalated
                 </span>
               )}
             </div>
@@ -190,13 +192,13 @@ export const Dashboard: React.FC = () => {
               <TrendingUp className="h-4 w-4 text-purple-500 group-hover:scale-110 transition-transform" />
             </div>
             <div className="text-2xl font-bold text-purple-700">
-              {dashboardSummary.late_arrivals?.count ?? 0}
+              {cards.lateArrivals}
               <span className="text-xs font-normal text-slate-400 ml-1.5">
                 late arrivals
               </span>
             </div>
             <div className="text-xs text-slate-500 pt-1 border-t border-slate-100">
-              Overtime today: <span className="font-semibold text-slate-800">{dashboardSummary.overtime?.total_ot_hours ?? 0} hrs</span>
+              Overtime today: <span className="font-semibold text-slate-800">{cards.overtimeHours} hrs</span>
             </div>
           </Link>
         </div>

@@ -116,7 +116,7 @@ def test_scope_precedence_employee_over_team_over_driver_over_company():
     )
     team_rule = TimeRuleDefinition(
         id=uuid4(),
-        name="Supervisor Dawood Team",
+        name="Supervisor Kamran Team",
         country="AE",
         scope_type=TimeRuleScope.TEAM,
         scope_employee_id=supervisor_id,

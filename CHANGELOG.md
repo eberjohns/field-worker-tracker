@@ -1,6 +1,18 @@
 # Changelog
 All notable changes. Format: Keep a Changelog. Mobile-contract changes are also logged in `docs/09-mobile-sync-contract.md`.
 
+## [1.10.0] - 2026-11-20
+### Fixed
+- **Batch 5.3a: dashboard cards always showed 0.** The web read field names `/dashboard/summary` does not return. A typed mapper (`web/src/features/dashboard/summary.ts`, with tests) now reads the API's fields; no API field was renamed.
+### Added
+- `/dashboard/summary` returns `pending_visits_escalated_count` (open visits at least `pending_visit_escalation_days` past due; additive, web only). The pending-visits card shows it as the escalated badge.
+- Backend tests: non-zero dashboard counts (`test_dashboard_summary.py`) and the demo workbook previewing with 0 errors (`test_demo_import_preview.py`).
+- Mock demo data committed in `tools/demo_data/` (workbook, assignments, 5 route files, generator prompt). `.gitignore` keeps `docs/reference/client-files/` ignored.
+### Security
+- Personal-data scrub: real client names and Tally IDs in tests, seeds, demo scripts, docs, the mobile proxy and the import template examples replaced with the demo's mock people (2001-2024, 2701-2704, 2801-2802, 2901-2902). Git history is not rewritten.
+### Removed
+- `tools/demo_data/handover-2026-11-19.md` (an outdated copy of the handover).
+
 ## [1.9.1] - 2026-11-20
 ### Documentation
 - Rebased on main after PR #25; handover status and queue updated (Batch 5.3 split into 5.3a and 5.3b; Batch 9 note on caching `AccessScope`).
@@ -398,7 +410,7 @@ All notable changes. Format: Keep a Changelog. Mobile-contract changes are also 
     - Wired into React router and `Shell.tsx` navigation bar with `Smartphone` icon.
   - Developer & Integration Tooling:
     - Standalone Mobile Tester Proxy & GPS Simulator (`tools/mobile-proxy/`) with interactive Leaflet map, worksite/camp polygon rendering, geofence circle visualization, draggable worker pin, Point-in-Polygon detection, auto-event queueing, and batch dispatch.
-    - Demo seed script `tools/seed_phase07_demo.py` provisioning worker 1193 ("Shanto Miah"), company settings, consent policy, accommodation, and worksite.
+    - Demo seed script `tools/seed_phase07_demo.py` provisioning worker 2001 ("Ravi Varghese"), company settings, consent policy, accommodation, and worksite.
     - OpenAPI export script `tools/export_openapi.py --tag mobile` and exported `openapi-mobile.json`.
     - CI check in `.github/workflows/ci.yml` verifying OpenAPI schema synchronization.
     - Mobile developer onboarding guide in `docs/18-mobile-integration-guide.md`.

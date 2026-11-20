@@ -81,7 +81,7 @@ async def run_demo() -> None:
     ws_e = wb["Employees"]
     ws_e.cell(row=5, column=1, value="")
     ws_e.cell(row=5, column=2, value=test_worker_tally)
-    ws_e.cell(row=5, column=3, value="Rashid Khan")
+    ws_e.cell(row=5, column=3, value="Sohel Rana")
     ws_e.cell(row=5, column=4, value="WORKER")
     ws_e.cell(row=5, column=5, value="G1C")
     ws_e.cell(row=5, column=6, value="Gardener Helper")

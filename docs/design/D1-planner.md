@@ -14,10 +14,10 @@ Plan the whole year across all contracts, then see and adjust the plan week by w
 ```
 Week 45 (2 Nov - 8 Nov)  Supervisor [All]  Engineer [All]  Staff type [All]  [Compact|Expanded]  [Export Excel]
 Worker              | Mon 2        | Tue 3        | Wed 4        | ... | Sun 8        | Hours  | Remarks
-Shanto Miah  G2B 8h | 12A14301 A 9 | 12A14301 A 9 | 12A14301 A 9 |     | WEEKLY-OFF   | 54/48  | Deira Bus
-Rebiyu Aboli G1C 8h | 12A10604 2   | SKIPPED      | 12A10606 2.5 |     | WEEKLY-OFF   | 38/48  | Shakir (Hiace)
+Ravi V.      G2B 8h | 12A14301 A 9 | 12A14301 A 9 | 12A14301 A 9 |     | WEEKLY-OFF   | 54/48  | Deira Bus
+Tesfaye B.   G1C 8h | 12A10604 2   | SKIPPED      | 12A10606 2.5 |     | WEEKLY-OFF   | 38/48  | Salman (Hiace)
                     | 12A10605 2   | (Public hol.)| 12A10607 1.5 |     |              |        |
-Cletus G. G3C 8h    | FREE         | TO BE COVERED| ON LEAVE     |     | WEEKLY-OFF   | 9/48   |
+Peter M.  G3C 8h    | FREE         | TO BE COVERED| ON LEAVE     |     | WEEKLY-OFF   | 9/48   |
 ```
 - A cell = list of **site chips** (job number, short name, hours) or one marker. Day total shown under the chips; red when over standard hours (planned OT), amber when under.
 - Row footer: week total vs standard hours x working days.
@@ -33,8 +33,8 @@ Workers for: 12A14301 A  Gardener - Hand Watering  (G1)      Wed 4 Nov  9 h
 Search [______]   [x] same grade group   [ ] show leave/off
 Name           Grade  Staff type        Today    Week      Month   Status
 Ali K.         G1C    Gardener Helper   0/8 h    32/48 h   130/208  free
-Bashir M. *    G1B    Hand Watering     9/8 h !  45/48 h   ...      over by 1h
-Chand S.       G1C    Gardener Helper   --       --        --       ON LEAVE
+Faisal M. *    G1B    Hand Watering     9/8 h !  45/48 h   ...      over by 1h
+Suresh N.      G1C    Gardener Helper   --       --        --       ON LEAVE
 ```
 - Shows **allocated hours today / this week / this month against standard hours**, colour bars, and why a worker is unavailable (leave, weekly off, already on a PERMANENT job).
 - Ranking: same grade group eligible; exact staff type first (*), then recent at this site, same team, most free hours.

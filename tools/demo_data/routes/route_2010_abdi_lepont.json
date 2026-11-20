@@ -1,0 +1,173 @@
+{
+ "name": "2010 Abdi Hassan (mock) - Le Pont (permanent)",
+ "waypoints": [
+  {
+   "time": "06:00:00",
+   "lat": 25.136,
+   "lng": 55.233,
+   "label": "Arrive Camp Al Quoz"
+  },
+  {
+   "time": "06:20:00",
+   "lat": 25.136,
+   "lng": 55.233,
+   "label": "Leave Camp Al Quoz"
+  },
+  {
+   "time": "06:28:00",
+   "lat": 25.15925,
+   "lng": 55.23775,
+   "label": "Transit to 22A11702 Le Pont"
+  },
+  {
+   "time": "06:37:00",
+   "lat": 25.1825,
+   "lng": 55.2425,
+   "label": "Transit to 22A11702 Le Pont"
+  },
+  {
+   "time": "06:46:00",
+   "lat": 25.20575,
+   "lng": 55.24725,
+   "label": "Transit to 22A11702 Le Pont"
+  },
+  {
+   "time": "06:55:00",
+   "lat": 25.229,
+   "lng": 55.252,
+   "label": "Arrive 22A11702 Le Pont"
+  },
+  {
+   "time": "07:25:00",
+   "lat": 25.2291,
+   "lng": 55.2519,
+   "label": "At 22A11702 Le Pont"
+  },
+  {
+   "time": "07:55:00",
+   "lat": 25.2291,
+   "lng": 55.2519,
+   "label": "At 22A11702 Le Pont"
+  },
+  {
+   "time": "08:25:00",
+   "lat": 25.2291,
+   "lng": 55.2519,
+   "label": "At 22A11702 Le Pont"
+  },
+  {
+   "time": "08:55:00",
+   "lat": 25.2291,
+   "lng": 55.2519,
+   "label": "At 22A11702 Le Pont"
+  },
+  {
+   "time": "09:25:00",
+   "lat": 25.2291,
+   "lng": 55.2519,
+   "label": "At 22A11702 Le Pont"
+  },
+  {
+   "time": "09:55:00",
+   "lat": 25.2291,
+   "lng": 55.2519,
+   "label": "At 22A11702 Le Pont"
+  },
+  {
+   "time": "10:25:00",
+   "lat": 25.2291,
+   "lng": 55.2519,
+   "label": "At 22A11702 Le Pont"
+  },
+  {
+   "time": "10:55:00",
+   "lat": 25.2291,
+   "lng": 55.2519,
+   "label": "At 22A11702 Le Pont"
+  },
+  {
+   "time": "11:25:00",
+   "lat": 25.2291,
+   "lng": 55.2519,
+   "label": "At 22A11702 Le Pont"
+  },
+  {
+   "time": "11:55:00",
+   "lat": 25.2291,
+   "lng": 55.2519,
+   "label": "At 22A11702 Le Pont"
+  },
+  {
+   "time": "12:25:00",
+   "lat": 25.2291,
+   "lng": 55.2519,
+   "label": "At 22A11702 Le Pont"
+  },
+  {
+   "time": "12:55:00",
+   "lat": 25.2291,
+   "lng": 55.2519,
+   "label": "At 22A11702 Le Pont"
+  },
+  {
+   "time": "13:25:00",
+   "lat": 25.2291,
+   "lng": 55.2519,
+   "label": "At 22A11702 Le Pont"
+  },
+  {
+   "time": "13:55:00",
+   "lat": 25.2291,
+   "lng": 55.2519,
+   "label": "At 22A11702 Le Pont"
+  },
+  {
+   "time": "14:25:00",
+   "lat": 25.2291,
+   "lng": 55.2519,
+   "label": "At 22A11702 Le Pont"
+  },
+  {
+   "time": "14:55:00",
+   "lat": 25.2291,
+   "lng": 55.2519,
+   "label": "At 22A11702 Le Pont"
+  },
+  {
+   "time": "15:25:00",
+   "lat": 25.2291,
+   "lng": 55.2519,
+   "label": "At 22A11702 Le Pont"
+  },
+  {
+   "time": "15:30:00",
+   "lat": 25.229,
+   "lng": 55.252,
+   "label": "Leave 22A11702 Le Pont"
+  },
+  {
+   "time": "15:38:00",
+   "lat": 25.20575,
+   "lng": 55.24725,
+   "label": "Transit to Camp Al Quoz"
+  },
+  {
+   "time": "15:47:00",
+   "lat": 25.1825,
+   "lng": 55.2425,
+   "label": "Transit to Camp Al Quoz"
+  },
+  {
+   "time": "15:56:00",
+   "lat": 25.15925,
+   "lng": 55.23775,
+   "label": "Transit to Camp Al Quoz"
+  },
+  {
+   "time": "16:05:00",
+   "lat": 25.136,
+   "lng": 55.233,
+   "label": "Arrive Camp Al Quoz"
+  }
+ ]
+}

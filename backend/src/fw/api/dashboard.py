@@ -1,6 +1,6 @@
 """Dashboard management summary statistics API endpoint."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.core.clock import site_today
 from fw.core.db import get_db
+from fw.modules.attendance import PendingVisitsService
 from fw.modules.attendance.models import (
     AttendanceCalculation,
     AttendanceRecord,
@@ -51,6 +52,7 @@ class DashboardSummaryResponse(BaseModel):
     attendance: AttendanceSummaryItem
     live_workers: LiveWorkersSummaryItem
     pending_visits_count: int
+    pending_visits_escalated_count: int = 0  # OPEN and past the escalation days (web only)
     late_arrivals_count: int
     overtime_hours_today: float
     open_alerts_count: int
@@ -139,6 +141,9 @@ async def get_dashboard_summary(
     if pv_clause is not None:
         pv_q = pv_q.where(pv_clause)
     pending_visits_count = (await session.execute(pv_q)).scalar() or 0
+    esc_days = await PendingVisitsService.escalation_days(session)
+    esc_q = pv_q.where(PendingVisit.due_date <= now.date() - timedelta(days=esc_days))
+    pending_visits_escalated_count = (await session.execute(esc_q)).scalar() or 0
 
     # 5. Overtime hours today & Late arrivals
     calc_q = (
@@ -222,6 +227,7 @@ async def get_dashboard_summary(
             total=live_resp.total_count,
         ),
         pending_visits_count=pending_visits_count,
+        pending_visits_escalated_count=pending_visits_escalated_count,
         unassigned_worksites_count=unassigned_worksites_count,
         late_arrivals_count=late_arrivals_count,
         overtime_hours_today=round(ot_minutes_total / 60.0, 1),

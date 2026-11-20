@@ -1579,7 +1579,7 @@ export const Settings: React.FC = () => {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Ramadan 2027, Summer Outdoor, Dawood Team"
+                  placeholder="e.g. Ramadan 2027, Summer Outdoor, Kamran Team"
                   value={newRuleForm.name}
                   onChange={(e) => setNewRuleForm({ ...newRuleForm, name: e.target.value })}
                   className="w-full border border-slate-200 rounded-lg p-2"

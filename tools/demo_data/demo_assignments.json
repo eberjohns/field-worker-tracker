@@ -1,0 +1,536 @@
+{
+ "note": "MOCK people. Standing assignments for the demo crews, derived from the client's Week 39 roster structure. Weekdays are the days each worker covers that item.",
+ "assignments": [
+  {
+   "tally_id": "2003",
+   "job_number": "12A15001",
+   "sub_item_code": "A",
+   "weekdays": [
+    "MON",
+    "TUE",
+    "WED",
+    "THU",
+    "FRI",
+    "SAT"
+   ],
+   "deployment_type": "PERMANENT"
+  },
+  {
+   "tally_id": "2004",
+   "job_number": "12A15003",
+   "sub_item_code": "A",
+   "weekdays": [
+    "MON",
+    "TUE",
+    "WED",
+    "THU",
+    "FRI",
+    "SAT"
+   ],
+   "deployment_type": "REMOTE"
+  },
+  {
+   "tally_id": "2001",
+   "job_number": "12A15005",
+   "sub_item_code": "A",
+   "weekdays": [
+    "MON",
+    "WED",
+    "FRI"
+   ],
+   "deployment_type": "REMOTE"
+  },
+  {
+   "tally_id": "2001",
+   "job_number": "12A15006",
+   "sub_item_code": "A",
+   "weekdays": [
+    "MON",
+    "WED",
+    "FRI"
+   ],
+   "deployment_type": "REMOTE"
+  },
+  {
+   "tally_id": "2001",
+   "job_number": "12A15007",
+   "sub_item_code": "A",
+   "weekdays": [
+    "MON",
+    "WED",
+    "FRI"
+   ],
+   "deployment_type": "REMOTE"
+  },
+  {
+   "tally_id": "2001",
+   "job_number": "12A15501",
+   "sub_item_code": "A",
+   "weekdays": [
+    "TUE",
+    "THU",
+    "SAT"
+   ],
+   "deployment_type": "REMOTE"
+  },
+  {
+   "tally_id": "2001",
+   "job_number": "12A15502",
+   "sub_item_code": "A",
+   "weekdays": [
+    "TUE",
+    "THU",
+    "SAT"
+   ],
+   "deployment_type": "REMOTE"
+  },
+  {
+   "tally_id": "2002",
+   "job_number": "12A15005",
+   "sub_item_code": "B",
+   "weekdays": [
+    "MON",
+    "WED",
+    "FRI"
+   ],
+   "deployment_type": "REMOTE"
+  },
+  {
+   "tally_id": "2002",
+   "job_number": "12A15006",
+   "sub_item_code": "B",
+   "weekdays": [
+    "MON",
+    "WED",
+    "FRI"
+   ],
+   "deployment_type": "REMOTE"
+  },
+  {
+   "tally_id": "2002",
+   "job_number": "12A15007",
+   "sub_item_code": "B",
+   "weekdays": [
+    "MON",
+    "WED",
+    "FRI"
+   ],
+   "deployment_type": "REMOTE"
+  },
+  {
+   "tally_id": "2002",
+   "job_number": "12A15501",
+   "sub_item_code": "B",
+   "weekdays": [
+    "TUE",
+    "THU",
+    "SAT"
+   ],
+   "deployment_type": "REMOTE"
+  },
+  {
+   "tally_id": "2002",
+   "job_number": "12A15502",
+   "sub_item_code": "B",
+   "weekdays": [
+    "TUE",
+    "THU",
+    "SAT"
+   ],
+   "deployment_type": "REMOTE"
+  },
+  {
+   "tally_id": "2005",
+   "job_number": "12A11159",
+   "sub_item_code": "A",
+   "weekdays": [
+    "MON",
+    "TUE",
+    "WED",
+    "THU",
+    "FRI",
+    "SAT"
+   ],
+   "deployment_type": "PERMANENT"
+  },
+  {
+   "tally_id": "2006",
+   "job_number": "12A11159",
+   "sub_item_code": "B",
+   "weekdays": [
+    "MON",
+    "TUE",
+    "WED",
+    "THU",
+    "FRI",
+    "SAT"
+   ],
+   "deployment_type": "PERMANENT"
+  },
+  {
+   "tally_id": "2007",
+   "job_number": "22A11501",
+   "sub_item_code": "A",
+   "weekdays": [
+    "MON",
+    "TUE",
+    "WED",
+    "THU",
+    "FRI",
+    "SAT"
+   ],
+   "deployment_type": "PERMANENT"
+  },
+  {
+   "tally_id": "2008",
+   "job_number": "22A15201",
+   "sub_item_code": "A",
+   "weekdays": [
+    "MON",
+    "TUE",
+    "WED",
+    "THU",
+    "FRI"
+   ],
+   "deployment_type": "REMOTE"
+  },
+  {
+   "tally_id": "2008",
+   "job_number": "22A11501",
+   "sub_item_code": "B",
+   "weekdays": [
+    "SAT"
+   ],
+   "deployment_type": "REMOTE"
+  },
+  {
+   "tally_id": "2009",
+   "job_number": "22A11701",
+   "sub_item_code": "A",
+   "weekdays": [
+    "MON",
+    "TUE",
+    "WED",
+    "THU",
+    "FRI",
+    "SUN"
+   ],
+   "deployment_type": "PERMANENT"
+  },
+  {
+   "tally_id": "2010",
+   "job_number": "22A11702",
+   "sub_item_code": "A",
+   "weekdays": [
+    "MON",
+    "WED",
+    "THU",
+    "FRI",
+    "SAT",
+    "SUN"
+   ],
+   "deployment_type": "PERMANENT"
+  },
+  {
+   "tally_id": "2011",
+   "job_number": "22A11703",
+   "sub_item_code": "A",
+   "weekdays": [
+    "MON",
+    "TUE",
+    "WED",
+    "THU",
+    "FRI",
+    "SAT"
+   ],
+   "deployment_type": "PERMANENT"
+  },
+  {
+   "tally_id": "2012",
+   "job_number": "22A11704",
+   "sub_item_code": "A",
+   "weekdays": [
+    "MON",
+    "TUE",
+    "WED",
+    "THU",
+    "FRI",
+    "SAT"
+   ],
+   "deployment_type": "PERMANENT"
+  },
+  {
+   "tally_id": "2013",
+   "job_number": "22A11705",
+   "sub_item_code": "A",
+   "weekdays": [
+    "MON",
+    "TUE",
+    "WED",
+    "FRI",
+    "SAT",
+    "SUN"
+   ],
+   "deployment_type": "REMOTE"
+  },
+  {
+   "tally_id": "2013",
+   "job_number": "22A11706",
+   "sub_item_code": "A",
+   "weekdays": [
+    "MON",
+    "TUE",
+    "WED",
+    "FRI",
+    "SAT",
+    "SUN"
+   ],
+   "deployment_type": "REMOTE"
+  },
+  {
+   "tally_id": "2014",
+   "job_number": "22A11708",
+   "sub_item_code": "A",
+   "weekdays": [
+    "MON",
+    "TUE",
+    "WED",
+    "THU",
+    "FRI",
+    "SAT"
+   ],
+   "deployment_type": "PERMANENT"
+  },
+  {
+   "tally_id": "2015",
+   "job_number": "22A11708",
+   "sub_item_code": "B",
+   "weekdays": [
+    "MON",
+    "WED"
+   ],
+   "deployment_type": "REMOTE"
+  },
+  {
+   "tally_id": "2015",
+   "job_number": "22A11702",
+   "sub_item_code": "A",
+   "weekdays": [
+    "TUE"
+   ],
+   "deployment_type": "PERMANENT"
+  },
+  {
+   "tally_id": "2015",
+   "job_number": "22A11705",
+   "sub_item_code": "A",
+   "weekdays": [
+    "THU"
+   ],
+   "deployment_type": "REMOTE"
+  },
+  {
+   "tally_id": "2015",
+   "job_number": "22A11706",
+   "sub_item_code": "A",
+   "weekdays": [
+    "THU"
+   ],
+   "deployment_type": "REMOTE"
+  },
+  {
+   "tally_id": "2015",
+   "job_number": "22A11701",
+   "sub_item_code": "A",
+   "weekdays": [
+    "SAT"
+   ],
+   "deployment_type": "PERMANENT"
+  },
+  {
+   "tally_id": "2015",
+   "job_number": "22A11703",
+   "sub_item_code": "A",
+   "weekdays": [
+    "SUN"
+   ],
+   "deployment_type": "PERMANENT"
+  },
+  {
+   "tally_id": "2016",
+   "job_number": "22A15101",
+   "sub_item_code": "B",
+   "weekdays": [
+    "MON",
+    "TUE",
+    "WED",
+    "THU",
+    "FRI",
+    "SAT"
+   ],
+   "deployment_type": "PERMANENT"
+  },
+  {
+   "tally_id": "2018",
+   "job_number": "22A15101",
+   "sub_item_code": "A",
+   "weekdays": [
+    "MON",
+    "TUE",
+    "WED",
+    "THU",
+    "FRI",
+    "SAT"
+   ],
+   "deployment_type": "PERMANENT"
+  },
+  {
+   "tally_id": "2017",
+   "job_number": "22A15101",
+   "sub_item_code": "C",
+   "weekdays": [
+    "MON",
+    "WED",
+    "THU",
+    "FRI",
+    "SAT",
+    "SUN"
+   ],
+   "deployment_type": "PERMANENT"
+  },
+  {
+   "tally_id": "2019",
+   "job_number": "22A14107",
+   "sub_item_code": "A",
+   "weekdays": [
+    "MON",
+    "TUE",
+    "WED",
+    "THU",
+    "FRI",
+    "SAT"
+   ],
+   "deployment_type": "REMOTE"
+  },
+  {
+   "tally_id": "2019",
+   "job_number": "22A14114",
+   "sub_item_code": "A",
+   "weekdays": [
+    "MON",
+    "TUE",
+    "WED",
+    "THU",
+    "FRI",
+    "SAT"
+   ],
+   "deployment_type": "REMOTE"
+  },
+  {
+   "tally_id": "2020",
+   "job_number": "22A14107",
+   "sub_item_code": "A",
+   "weekdays": [
+    "MON",
+    "TUE",
+    "WED",
+    "THU",
+    "FRI",
+    "SAT"
+   ],
+   "deployment_type": "REMOTE"
+  },
+  {
+   "tally_id": "2020",
+   "job_number": "22A14114",
+   "sub_item_code": "A",
+   "weekdays": [
+    "MON",
+    "TUE",
+    "WED",
+    "THU",
+    "FRI",
+    "SAT"
+   ],
+   "deployment_type": "REMOTE"
+  },
+  {
+   "tally_id": "2021",
+   "job_number": "22A15102",
+   "sub_item_code": "A",
+   "weekdays": [
+    "MON",
+    "TUE",
+    "WED",
+    "THU",
+    "FRI",
+    "SAT"
+   ],
+   "deployment_type": "PERMANENT"
+  },
+  {
+   "tally_id": "2022",
+   "job_number": "22A13405",
+   "sub_item_code": "A",
+   "weekdays": [
+    "MON",
+    "WED",
+    "FRI"
+   ],
+   "deployment_type": "REMOTE"
+  },
+  {
+   "tally_id": "2022",
+   "job_number": "22A11601",
+   "sub_item_code": "B",
+   "weekdays": [
+    "TUE",
+    "THU",
+    "SAT"
+   ],
+   "deployment_type": "REMOTE"
+  },
+  {
+   "tally_id": "2023",
+   "job_number": "22A11601",
+   "sub_item_code": "A",
+   "weekdays": [
+    "MON",
+    "TUE",
+    "WED",
+    "THU",
+    "FRI",
+    "SAT"
+   ],
+   "deployment_type": "REMOTE"
+  },
+  {
+   "tally_id": "2024",
+   "job_number": "22A11501",
+   "sub_item_code": "J",
+   "weekdays": [
+    "MON",
+    "TUE",
+    "WED",
+    "THU",
+    "SAT",
+    "SUN"
+   ],
+   "deployment_type": "REMOTE"
+  },
+  {
+   "tally_id": "2024",
+   "job_number": "22A11708",
+   "sub_item_code": "E",
+   "weekdays": [
+    "MON",
+    "TUE",
+    "WED",
+    "THU",
+    "SAT",
+    "SUN"
+   ],
+   "deployment_type": "REMOTE"
+  }
+ ]
+}

@@ -55,7 +55,7 @@ treats every Sunday as a rest day; leave it alone, but don't reuse its approach.
 4. **Day close.** For each day, run the attendance calculation through AttendanceService (the same entry
    point the day close uses), then `PendingVisitsService.detect_pending_visits(target_date=day)` as the
    worker does.
-5. **Reviews.** As engineer 9001, approve every PENDING_REVIEW day older than 7 days through the attendance
+5. **Reviews.** As engineer 2901, approve every PENDING_REVIEW day older than 7 days through the attendance
    approval service, so October has no open reviews. Leave the last 7 days unreviewed for the demo.
 6. **Payroll.** Create the October 2026 draft run through PayrollService (treat_leaves_as_paid = false).
    Do NOT approve it.
@@ -63,16 +63,16 @@ treats every Sunday as a rest day; leave it alone, but don't reuse its approach.
 ## Planted scenarios (D = the last generated day)
 | # | Worker | When | What | What it shows |
 |---|---|---|---|---|
-| P1 | 1193 | latest Mon/Wed/Fri ≤ D | arrives at the first site 45 min late (same pattern as the 1193 Mon/Wed/Fri late-arrival route file in `demo_routes/routes/`) | late arrival, review |
-| P2 | 1144 | D | 7 min late | inside the 10 min grace, not flagged |
-| P3 | 1302 | D-2 | leaves 70 min early | early departure, shortfall |
-| P4 | 1366 | D-3 and D-10 | stays 75 min after the planned end | OT1 |
-| P5 | 1340 | latest Tuesday ≤ D (the worker's weekly off) | works at Le Pont. Plan it first with an approved temporary reassignment created through the service | OT2 on own weekly off |
-| P6 | 1281 | D-1 and D-9 | skips 22A14107 | open pending visit, and one past 7 days (escalation) |
-| P7 | 1226 | D-4 | no events at all, no leave | absent, missed-hours deduction |
-| P8 | 1256 | D-2 | location disabled 11:00-12:30 (send the location OFF/ON events) | tracking gap, alert |
-| P9 | 1343 | D-3 | that day's events uploaded at D-1 evening | late upload, new calculation version |
-| P10 | 1307, 1322, 1351 | their imported leave days | no events | leave exempts pending visits; 1322 unpaid leave deduction |
+| P1 | 2001 | latest Mon/Wed/Fri ≤ D | arrives at the first site 45 min late (same pattern as the 2001 Mon/Wed/Fri late-arrival route file in `demo_routes/routes/`) | late arrival, review |
+| P2 | 2007 | D | 7 min late | inside the 10 min grace, not flagged |
+| P3 | 2012 | D-2 | leaves 70 min early | early departure, shortfall |
+| P4 | 2013 | D-3 and D-10 | stays 75 min after the planned end | OT1 |
+| P5 | 2010 | latest Tuesday ≤ D (the worker's weekly off) | works at Le Pont. Plan it first with an approved temporary reassignment created through the service | OT2 on own weekly off |
+| P6 | 2019 | D-1 and D-9 | skips 22A14107 | open pending visit, and one past 7 days (escalation) |
+| P7 | 2011 | D-4 | no events at all, no leave | absent, missed-hours deduction |
+| P8 | 2008 | D-2 | location disabled 11:00-12:30 (send the location OFF/ON events) | tracking gap, alert |
+| P9 | 2020 | D-3 | that day's events uploaded at D-1 evening | late upload, new calculation version |
+| P10 | 2023, 2017, 2003 | their imported leave days | no events | leave exempts pending visits; 2017 unpaid leave deduction |
 
 All other days are normal, with jitter. If a scenario date falls on the worker's weekly off or a holiday,
 move it to the nearest earlier working day and say so in the summary.

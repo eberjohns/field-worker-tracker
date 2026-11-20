@@ -77,7 +77,7 @@ Workers log in with **`tally_id`** (their employee ID) and a **password**. New w
 **Request:**
 ```json
 {
-  "tally_id": "1193",
+  "tally_id": "2001",
   "password": "TempPassword123!",
   "device": {
     "device_identifier": "b6c1f8a0-9e4d-4c2a-81e3-55a2c77d1022",
@@ -102,8 +102,8 @@ Workers log in with **`tally_id`** (their employee ID) and a **password**. New w
   "must_change_password": true,
   "employee": {
     "employee_id": "8a1f3d90-2b4e-4b72-a111-9c002e4b1100",
-    "tally_id": "1193",
-    "name": "Shanto Miah",
+    "tally_id": "2001",
+    "name": "Ravi Varghese",
     "role": "WORKER"
   }
 }
@@ -486,16 +486,16 @@ When an urgent change occurs (e.g., reassignment or cancellation), the server ma
 ```json
 {
   "employee_id": "8a1f3d90-2b4e-4b72-a111-9c002e4b1100",
-  "tally_id": "1193",
-  "name": "Shanto Miah",
+  "tally_id": "2001",
+  "name": "Ravi Varghese",
   "phone": "+971509876543",
-  "email": "shanto.miah@company.com",
+  "email": "ravi.varghese@example.com",
   "role": "WORKER",
   "staff_grade_description": "Gardener Expert",
   "weekly_off_day": "FRIDAY",
   "is_driver": false,
   "supervisor": {
-    "name": "Shakir Khisham",
+    "name": "Salman Javed",
     "phone": "+971501234567"
   },
   "accommodation_id": "44c2e100-1122-4a89-99aa-001122334455"
@@ -631,7 +631,7 @@ One entity per unique worksite referenced by the worker's 30-day `SCHEDULE_ITEM`
   "run_date": "2026-11-03",
   "direction": "MORNING",
   "vehicle_label": "Hiace 04",
-  "driver": { "name": "Shakir Khisham", "phone": "+971501234567" },
+  "driver": { "name": "Salman Javed", "phone": "+971501234567" },
   "stops": [
     {
       "sequence": 1,
@@ -639,7 +639,7 @@ One entity per unique worksite referenced by the worker's 30-day `SCHEDULE_ITEM`
       "job_id": "77b10011-aaaa-4f22-b888-112233445566",
       "name": "Wasl R1068",
       "planned_time": null,
-      "passengers": [{ "name": "Shanto Miah", "tally_id": "1193" }]
+      "passengers": [{ "name": "Ravi Varghese", "tally_id": "2001" }]
     }
   ]
 }
@@ -811,8 +811,8 @@ Returns an array of `WorkerMobilePayrollSlip` sorted newest first (`[]` if no pa
     "period_start": "2026-10-01",
     "period_end": "2026-10-31",
     "status": "APPROVED",
-    "employee_tally_id": "1193",
-    "employee_name": "Shanto Miah",
+    "employee_tally_id": "2001",
+    "employee_name": "Ravi Varghese",
     "currency": "AED",
     "standard_hours": "208.00",
     "worked_hours": "216.50",

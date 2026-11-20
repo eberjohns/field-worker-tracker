@@ -173,7 +173,7 @@ async def _setup_group_zone_worksite(
 async def test_payroll_draft_generation_and_rerun(db_session: AsyncSession):
     """Test generating a draft payroll run and re-running it increments run_no."""
     await _cleanup_period(db_session, date(2026, 10, 1), date(2026, 10, 31))
-    emp = await _create_test_employee(db_session, f"T_{uuid4().hex[:6]}", "Ahmed Khan")
+    emp = await _create_test_employee(db_session, f"T_{uuid4().hex[:6]}", "Junaid Akhtar")
     admin_emp = await _create_test_employee(
         db_session, f"ADM_{uuid4().hex[:6]}", "Admin User", role="ADMIN"
     )
@@ -355,7 +355,7 @@ async def test_unapproved_overtime_issues_and_approval(db_session: AsyncSession)
 async def test_approved_run_immutability(db_session: AsyncSession):
     """Verify that after approval, later events or changes do not alter approved payroll."""
     await _cleanup_period(db_session, date(2026, 9, 1), date(2026, 9, 30))
-    emp = await _create_test_employee(db_session, f"T_{uuid4().hex[:6]}", "Farooq Tariq")
+    emp = await _create_test_employee(db_session, f"T_{uuid4().hex[:6]}", "Waqas Anjum")
     admin_emp = await _create_test_employee(
         db_session, f"ADM_{uuid4().hex[:6]}", "System Admin", role="ADMIN"
     )
@@ -468,7 +468,7 @@ async def test_role_based_scoping(db_session: AsyncSession):
 async def test_worker_mobile_own_approved_payroll(db_session: AsyncSession):
     """Verify worker can access their own approved monthly payroll via /payroll/my-records."""
     await _cleanup_period(db_session, date(2026, 7, 1), date(2026, 7, 31))
-    worker = await _create_test_employee(db_session, f"W_{uuid4().hex[:6]}", "Bilal Siddiqui")
+    worker = await _create_test_employee(db_session, f"W_{uuid4().hex[:6]}", "Farhan Siddiqui")
     admin = await _create_test_employee(db_session, f"ADM_{uuid4().hex[:6]}", "Admin", role="ADMIN")
 
     _, worker_token = await _create_test_user(db_session, worker, "WORKER")

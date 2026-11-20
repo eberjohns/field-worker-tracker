@@ -23,7 +23,7 @@ Name            Scope            Applies  From        To          Acc.start Firs
 Company std     Company          All      01 Jan 26   -           05:00     06:00      0:30  15:30     17:00    -
 Summer          Company          Outdoor  15 Jun 27   15 Sep 27   04:30     05:00      2:30  16:30     17:30    -
 Ramadan         Company          All      08 Feb 27   09 Mar 27   05:00     05:30      0:00  12:30     13:30    -2 h
-Dawood team     Team: Dawood     All      01 Jan 26   -           05:30     06:30      1:00  16:00     17:30    -
+Kamran team     Team: Kamran     All      01 Jan 26   -           05:30     06:30      1:00  16:00     17:30    -
 ```
 - **New rule**: choose scope (pick the team/person), applies-to, dates, the five times, standard-hours change; save.
 - **Check tool (`GET /time-rules/resolve`)**: pick a person and a date -> shows the effective plan, planned total/worked minutes, and **which rule won** with field-level inheritance sources (explainability, ADR-012).

@@ -9,9 +9,9 @@ Users: Admin (import, accounts), Admin and Engineer (boundaries). Rules: `11-imp
 Import preview  FieldWorkerTracker_Import.xlsx   Employees: 12 new | 30 updated | 118 unchanged | 2 errors
 Filter [All|New|Updated|Unchanged|Errors|Warnings]   Sheet [Employees]
 Row  Key   Status    Changes
- 7   1193  UPDATED   weekly_off_day: (blank) -> FRIDAY ; accommodation_code: ACC-01 -> ACC-02
+ 7   2001  UPDATED   weekly_off_day: (blank) -> FRIDAY ; accommodation_code: ACC-01 -> ACC-02
  9   1411  NEW       Gardener Helper, G1C, AE
-15   1202  ERROR     KEY_CLASH: appears twice with different grade
+15   2002  ERROR     KEY_CLASH: appears twice with different grade
 ```
 Every row shows its classification and, for updates, **old value -> new value per field**. Warnings (unknown staff type, salary missing) are listed. Download the preview as Excel.
 3. **Confirm**: Admin presses Commit; one transaction; a result page lists created/updated counts and links to the records. Cannot commit while errors exist.

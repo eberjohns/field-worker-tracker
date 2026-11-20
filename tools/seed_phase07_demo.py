@@ -5,9 +5,9 @@ Provisions:
 2. Active Consent Policy.
 3. Accommodation (Warsan Staff Accommodation) with polygon boundary.
 4. Worksite (Dubai Marina Towers) with polygon boundary and Job Item.
-5. Worker (1193 - Shanto Miah) with default password 'Welcome123!' (must_change_password=True).
+5. Worker (2001 - Ravi Varghese) with default password 'Welcome123!' (must_change_password=True).
 6. Admin user (ADMIN001) with 'Admin123!'.
-7. ScheduledWork items for the next 7 days for worker 1193.
+7. ScheduledWork items for the next 7 days for worker 2001.
 """
 
 import asyncio
@@ -186,7 +186,7 @@ async def seed():
             await session.flush()
         print("  ✓ Job Item ready")
 
-        # 7. Supervisor Employee (SUP001 - Shakir Khisham)
+        # 7. Supervisor Employee (SUP001 - Salman Javed)
         res = await session.execute(
             select(Employee).where(Employee.tally_id == "SUP001")
         )
@@ -194,7 +194,7 @@ async def seed():
         if not supervisor:
             supervisor = Employee(
                 tally_id="SUP001",
-                name="Shakir Khisham",
+                name="Salman Javed",
                 role="SUPERVISOR",
                 staff_grade_description="Field Supervisor",
                 phone="+971501234567",
@@ -204,21 +204,21 @@ async def seed():
             session.add(supervisor)
             await session.flush()
         else:
-            supervisor.name = "Shakir Khisham"
+            supervisor.name = "Salman Javed"
             supervisor.phone = "+971501234567"
             supervisor.is_active = True
             await session.flush()
         print(f"  ✓ Supervisor '{supervisor.name}' (ID: SUP001) ready")
 
-        # 8. Employee 1193 (Shanto Miah)
+        # 8. Employee 2001 (Ravi Varghese)
         res = await session.execute(
-            select(Employee).where(Employee.tally_id == "1193")
+            select(Employee).where(Employee.tally_id == "2001")
         )
         worker = res.scalar_one_or_none()
         if not worker:
             worker = Employee(
-                tally_id="1193",
-                name="Shanto Miah",
+                tally_id="2001",
+                name="Ravi Varghese",
                 role="WORKER",
                 staff_grade_description="Landscape Gardener",
                 phone="+971509876543",
@@ -234,7 +234,7 @@ async def seed():
             worker.weekly_off_day = "FRIDAY"
             worker.is_active = True
             await session.flush()
-        print(f"  ✓ Employee '{worker.name}' (ID: 1193) ready")
+        print(f"  ✓ Employee '{worker.name}' (ID: 2001) ready")
 
         # 9. Reporting line: worker -> supervisor
         rep_res = await session.execute(
@@ -257,14 +257,14 @@ async def seed():
             await session.flush()
         print(f"  ✓ Reporting line linked: {worker.name} reports to {supervisor.name}")
 
-        # 10. User for Employee 1193
+        # 10. User for Employee 2001
         res = await session.execute(
-            select(User).where(User.username == "1193")
+            select(User).where(User.username == "2001")
         )
         user_worker = res.scalar_one_or_none()
         if not user_worker:
             user_worker = User(
-                username="1193",
+                username="2001",
                 employee_id=worker.id,
                 role="WORKER",
                 credential_hash=hash_password("Welcome123!"),
@@ -279,7 +279,7 @@ async def seed():
             user_worker.must_change_password = False
             user_worker.is_active = True
             await session.flush()
-        print("  ✓ Worker user account (1193 / Welcome123!) ready (must_change_password=False)")
+        print("  ✓ Worker user account (2001 / Welcome123!) ready (must_change_password=False)")
 
         # 9. Admin User (ADMIN001)
         res = await session.execute(

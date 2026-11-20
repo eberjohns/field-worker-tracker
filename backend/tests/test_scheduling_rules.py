@@ -597,7 +597,7 @@ def test_build_roster_excel_bytes():
     ]
 
     row = ExcelRosterWorkerRow(
-        employee_name="Shanto Miah",
+        employee_name="Ravi Varghese",
         tally_id="E00123",
         grade_code="G2B",
         staff_grade_description="Gardener",
@@ -620,7 +620,7 @@ def test_build_roster_excel_bytes():
     # Check header
     assert ws["A3"].value == "Worker Name"
     # Check worker row
-    assert ws["A4"].value == "Shanto Miah"
+    assert ws["A4"].value == "Ravi Varghese"
     assert ws["B4"].value == "E00123"
     assert ws["F4"].value == "12A14301 A (9.0h)"
     assert ws["G4"].value == "SKIPPED"

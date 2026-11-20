@@ -1747,7 +1747,7 @@ export const Employees: React.FC = () => {
                   <input
                     type="text"
                     required
-                    placeholder="e.g. Mohammad Ali"
+                    placeholder="e.g. Ravi Varghese"
                     value={createFormData.name}
                     onChange={(e) =>
                       setCreateFormData({ ...createFormData, name: e.target.value })
