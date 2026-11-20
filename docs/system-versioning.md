@@ -47,3 +47,4 @@ Field Worker Tracker follows semantic versioning `v<MAJOR>.<MINOR>.<PATCH>`:
 | **v1.8.1** | 2026-11-20 | `feat/batch6-worksite-scoping-salary-enhancements` | `7169f9d` | Commit on 'feat/batch6-worksite-scoping-salary-enhancements' |
 | **v1.8.2** | 2026-11-20 | `feat/batch6-worksite-scoping-salary-enhancements` | `8259291` | Commit on 'feat/batch6-worksite-scoping-salary-enhancements' |
 | **v1.9.0** | 2026-11-20 | `fix/batch5.2-dec57-scope` | `2bf319c` | New branch 'fix/batch5.2-dec57-scope' |
+| **v1.9.1** | 2026-11-20 | `docs/handover-update` | `94dc9a5` | Commit on 'docs/handover-update' |

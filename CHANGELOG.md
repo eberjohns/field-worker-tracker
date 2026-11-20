@@ -1,8 +1,10 @@
 # Changelog
 All notable changes. Format: Keep a Changelog. Mobile-contract changes are also logged in `docs/09-mobile-sync-contract.md`.
 
-## [Unreleased]
+## [1.9.1] - 2026-11-20
 ### Documentation
+- Rebased on main after PR #25; handover status and queue updated (Batch 5.3 split into 5.3a and 5.3b; Batch 9 note on caching `AccessScope`).
+- Added `docs/handover-addendum-batches-8-10.md` (Batches 8, 9 and 10).
 - Handover updated with section 0 (changes since 19 Nov, owner decisions of 20 Nov, DEC-57 rule, PR #23 regressions, new work queue); the handover's Batch 6 is renamed Batch 7.
 - Added the post-merge review of PR #22/#23 (`docs/reviews/review-pr22-23-2026-11-20.md`), the 19 Nov audit, the mobile-team notes, the client meeting notes of 19 Nov and `CLAUDE.md`.
 - Demo data built from client files (`tools/demo_data/` workbook, assignments, routes) is git-ignored (golden rule 8).
