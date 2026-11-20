@@ -152,6 +152,10 @@ class EmployeeRead(BaseModel):
     version: int
     created_at: datetime
     updated_at: datetime
+    read_only: bool = Field(
+        False,
+        description="True when the caller sees this employee only through a worksite (DEC-57): view and comment only",
+    )
 
 
 class ReportingLineCreate(BaseModel):

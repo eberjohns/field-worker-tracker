@@ -97,6 +97,8 @@ export const Dashboard: React.FC = () => {
 
   const coverAlerts = alerts.filter((a) => a.alert_type === "COVER_NEEDED");
   const docExpiryAlerts = alerts.filter((a) => a.alert_type === "DOC_EXPIRY");
+  // DEC-57: Admin-only count of worksites nobody but Admin can see.
+  const unassignedWorksites: number = dashboardSummary?.unassigned_worksites_count ?? 0;
 
   return (
     <div className="space-y-6">
@@ -208,7 +210,11 @@ export const Dashboard: React.FC = () => {
             <h3 className="text-base font-bold text-slate-900">Active Operational Alerts & Pending Actions</h3>
           </div>
           <span className="text-xs font-medium text-slate-400">
-            {coverAlerts.length + docExpiryAlerts.length + (pendingBoundaryCount > 0 ? 1 : 0)} items requiring attention
+            {coverAlerts.length +
+              docExpiryAlerts.length +
+              (pendingBoundaryCount > 0 ? 1 : 0) +
+              (unassignedWorksites > 0 ? 1 : 0)}{" "}
+            items requiring attention
           </span>
         </div>
 
@@ -233,6 +239,31 @@ export const Dashboard: React.FC = () => {
                 className="inline-flex items-center gap-1 text-xs font-bold text-amber-900 hover:text-amber-700 pt-1"
               >
                 Draw / Review Boundaries <ArrowRight className="h-3 w-3" />
+              </Link>
+            </div>
+          )}
+
+          {/* Unassigned worksites (Admin, DEC-57) */}
+          {user?.role === "ADMIN" && unassignedWorksites > 0 && (
+            <div className="p-4 rounded-lg border border-amber-200 bg-amber-50/70 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-800">
+                  <ShieldAlert className="h-4 w-4 text-amber-600" />
+                  Worksites without a supervisor
+                </span>
+                <span className="bg-amber-200 text-amber-900 text-2xs font-extrabold px-2 py-0.5 rounded-full">
+                  {unassignedWorksites} Unassigned
+                </span>
+              </div>
+              <p className="text-xs text-amber-900">
+                Only Admin can see these worksites. Assign a supervisor so supervisors, superintendents
+                and engineers can plan and follow them.
+              </p>
+              <Link
+                to="/worksites"
+                className="inline-flex items-center gap-1 text-xs font-bold text-amber-900 hover:text-amber-700 pt-1"
+              >
+                Review worksites <ArrowRight className="h-3 w-3" />
               </Link>
             </div>
           )}
@@ -326,7 +357,10 @@ export const Dashboard: React.FC = () => {
             );
           })}
 
-          {coverAlerts.length === 0 && docExpiryAlerts.length === 0 && pendingBoundaryCount === 0 && (
+          {coverAlerts.length === 0 &&
+            docExpiryAlerts.length === 0 &&
+            pendingBoundaryCount === 0 &&
+            unassignedWorksites === 0 && (
             <div className="col-span-2 p-8 text-center text-slate-400 space-y-1 bg-slate-50/60 rounded-lg border border-dashed border-slate-200">
               <CheckCircle2 className="h-8 w-8 text-emerald-500 mx-auto" />
               <div className="text-sm font-semibold text-slate-700">All Operations Clear</div>

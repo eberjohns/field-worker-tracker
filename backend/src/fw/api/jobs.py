@@ -26,6 +26,7 @@ from fw.modules.jobs import (
     GenerateOccurrencesRequest,
     JobItem,
     JobItemCreate,
+    JobItemDestination,
     JobItemResponse,
     JobItemUpdate,
     JobItemValidationResponse,
@@ -37,11 +38,18 @@ from fw.modules.jobs import (
     WorksiteDetailResponse,
     WorksiteResponse,
     WorksiteSupervisorAssign,
+    WorksiteSupervisorBulkAssign,
+    WorksiteSupervisorBulkAssignResult,
+    WorksiteSupervisorProposal,
     WorksiteSupervisorRead,
     WorksiteUpdate,
 )
 from fw.modules.org import DeactivateRequest, EntityLifecycleResponse, ReactivateRequest
-from fw.modules.scheduling import SchedulingService
+from fw.modules.scheduling import (
+    AccessScope,
+    SchedulingService,
+    WorksiteSupervisorProposalService,
+)
 
 router = APIRouter(tags=["jobs"])
 
@@ -57,15 +65,20 @@ async def list_worksites(
     is_active: bool | None = True,
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
+    unassigned: bool = Query(False, description="Only worksites with no active supervisor"),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> list[WorksiteResponse]:
-    """List worksites with operational scoping (deactivated visible to Admin only; budget hidden for non-admins)."""
+    """List worksites in the caller's scope (DEC-57).
+
+    Deactivated worksites are visible to Admin only; budget is hidden for non-admins.
+    """
     effective_is_active = is_active if current_user.role == "ADMIN" else True
-    scoped_ids = await JobsService.get_scoped_worksite_ids(session, current_user)
+    scope = await AccessScope.resolve(session, current_user)
     worksites = await JobsService.list_worksites(
         session=session,
-        scoped_ids=scoped_ids,
+        scoped_ids=scope.worksite_filter,
+        unassigned_only=unassigned,
         q=q,
         group_id=group_id,
         zone_id=zone_id,
@@ -81,6 +94,41 @@ async def list_worksites(
     return worksites
 
 
+@router.get("/worksites/supervisor-proposals", response_model=list[WorksiteSupervisorProposal])
+async def list_worksite_supervisor_proposals(
+    current_user: User = Depends(require_role("ADMIN")),
+    session: AsyncSession = Depends(get_db),
+) -> list[WorksiteSupervisorProposal]:
+    """Propose supervisors from current crews for each worksite (Admin reviews; DEC-57)."""
+    return await WorksiteSupervisorProposalService.propose(session)
+
+
+@router.post(
+    "/worksites/supervisors/bulk-assign", response_model=WorksiteSupervisorBulkAssignResult
+)
+async def bulk_assign_worksite_supervisors(
+    payload: WorksiteSupervisorBulkAssign,
+    current_user: User = Depends(require_role("ADMIN")),
+    session: AsyncSession = Depends(get_db),
+) -> WorksiteSupervisorBulkAssignResult:
+    """Assign the worksite/supervisor pairs Admin confirmed (all or nothing, audited)."""
+    return await WorksiteSupervisorProposalService.bulk_assign(
+        session=session,
+        payload=payload,
+        actor_user_id=current_user.id,
+        actor_role=current_user.role,
+    )
+
+
+@router.get("/job-items/destinations", response_model=list[JobItemDestination])
+async def list_job_item_destinations(
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERINTENDENT", "SUPERVISOR")),
+    session: AsyncSession = Depends(get_db),
+) -> list[JobItemDestination]:
+    """All active job items, for reassignment request destinations (not scoped; no costs)."""
+    return await JobsService.list_destinations(session)
+
+
 @router.get("/worksites/export")
 async def export_worksites_excel(
     q: str | None = Query(None),
@@ -91,10 +139,10 @@ async def export_worksites_excel(
 ):
     """Export worksites list with a dedicated Job_Items worksheet (Admin & Engineer only)."""
     effective_is_active = is_active if current_user.role == "ADMIN" else True
-    scoped_ids = await JobsService.get_scoped_worksite_ids(session, current_user)
+    scope = await AccessScope.resolve(session, current_user)
     worksites = await JobsService.list_worksites(
         session=session,
-        scoped_ids=scoped_ids,
+        scoped_ids=scope.worksite_filter,
         q=q,
         country=country,
         is_active=effective_is_active,
@@ -234,7 +282,10 @@ async def get_worksite_detail(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> WorksiteDetailResponse:
-    """Get full details of a worksite including items and boundary GeoJSON."""
+    """Get full details of a worksite in the caller's scope (DEC-57)."""
+    scope = await AccessScope.resolve(session, current_user)
+    if not scope.can_view_worksite(worksite_id):
+        raise AppError(code="NOT_FOUND", message="Worksite not found.", status_code=404)
     detail = await JobsService.get_worksite(session=session, worksite_id=worksite_id)
     if current_user.role != "ADMIN":
         if not detail.is_active:
@@ -250,7 +301,10 @@ async def list_worksite_supervisors(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> list[WorksiteSupervisorRead]:
-    """List supervisors assigned to a worksite."""
+    """List supervisors assigned to a worksite in the caller's scope."""
+    scope = await AccessScope.resolve(session, current_user)
+    if not scope.can_view_worksite(worksite_id):
+        raise AppError(code="NOT_FOUND", message="Worksite not found.", status_code=404)
     return await JobsService.list_worksite_supervisors(session, worksite_id)
 
 

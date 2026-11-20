@@ -2,7 +2,6 @@
 
 from decimal import Decimal
 from typing import Any
-from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,12 +9,13 @@ from sqlalchemy.orm import selectinload
 
 from fw.modules.payroll.models import PayrollRecord, PayrollRun
 from fw.modules.reports.schemas import ReportFilterParams
+from fw.modules.scheduling import AccessScope
 
 
 async def fetch_provisions_staff_cost(
     session: AsyncSession,
     filters: ReportFilterParams,
-    scoped_ids: set[UUID] | None = None,
+    scope: AccessScope | None = None,
 ) -> list[dict[str, Any]]:
     """Query employer cost, statutory provisions, and HR overhead."""
     run_stmt = select(PayrollRun).order_by(PayrollRun.period_start.desc(), PayrollRun.run_no.desc())

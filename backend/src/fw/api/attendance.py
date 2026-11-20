@@ -29,8 +29,8 @@ from fw.modules.attendance.service import AttendanceService
 from fw.modules.events.models import MobileEventLog
 from fw.modules.events.schemas import MobileEventResponse
 from fw.modules.identity import User, get_current_user, require_role
-from fw.modules.org import ScopeService
 from fw.modules.org.models import Employee
+from fw.modules.scheduling import AccessScope
 
 router = APIRouter(tags=["attendance"])
 
@@ -87,6 +87,16 @@ def _to_calc_snapshot(calc: AttendanceCalculation | None) -> AttendanceCalculati
         inputs_snapshot=calc.inputs_snapshot or {},
         source_event_ids=calc.source_event_ids or [],
     )
+
+
+async def _require_record_access(
+    session: AsyncSession, current_user: User, record: AttendanceRecord
+) -> AccessScope:
+    """403 unless the caller may see this employee-day (site-day rule, DEC-57)."""
+    scope = await AccessScope.resolve(session, current_user)
+    if await scope.operations_access(session, record.employee_id, record.work_date) is None:
+        raise AppError(code="OUT_OF_SCOPE", message="Record is out of scope", status_code=403)
+    return scope
 
 
 def _to_record_response(
@@ -154,7 +164,7 @@ async def list_attendance(
     session: AsyncSession = Depends(get_db),
 ) -> AttendanceListResponse:
     """List attendance records with filtering and scope restrictions."""
-    scoped_ids = await ScopeService.get_scoped_employee_ids(session, current_user)
+    scope = await AccessScope.resolve(session, current_user)
 
     q = (
         select(AttendanceRecord, Employee)
@@ -170,8 +180,9 @@ async def list_attendance(
         )
     )
 
-    if scoped_ids is not None:
-        q = q.where(AttendanceRecord.employee_id.in_(scoped_ids))
+    scope_clause = scope.operations_clause(AttendanceRecord.employee_id, AttendanceRecord.work_date)
+    if scope_clause is not None:
+        q = q.where(scope_clause)
 
     if employee_id:
         q = q.where(AttendanceRecord.employee_id == employee_id)
@@ -201,6 +212,8 @@ async def list_attendance(
     rows = res.all()
 
     items = [_to_record_response(rec, emp) for rec, emp in rows]
+    for item in items:
+        item.read_only = scope.is_read_only(item.employee_id)
     return AttendanceListResponse(items=items, total=total)
 
 
@@ -248,11 +261,11 @@ async def get_attendance_detail(
         raise AppError(code="NOT_FOUND", message="Attendance record not found", status_code=404)
 
     record, employee = row
-    scoped_ids = await ScopeService.get_scoped_employee_ids(session, current_user)
-    if scoped_ids is not None and record.employee_id not in scoped_ids:
-        raise AppError(code="OUT_OF_SCOPE", message="Record is out of scope", status_code=403)
+    scope = await _require_record_access(session, current_user, record)
 
-    return _to_record_response(record, employee)
+    result = _to_record_response(record, employee)
+    result.read_only = scope.is_read_only(record.employee_id)
+    return result
 
 
 @router.get(
@@ -270,9 +283,7 @@ async def list_attendance_calculations(
     if not record:
         raise AppError(code="NOT_FOUND", message="Attendance record not found", status_code=404)
 
-    scoped_ids = await ScopeService.get_scoped_employee_ids(session, current_user)
-    if scoped_ids is not None and record.employee_id not in scoped_ids:
-        raise AppError(code="OUT_OF_SCOPE", message="Record is out of scope", status_code=403)
+    await _require_record_access(session, current_user, record)
 
     calcs_q = (
         select(AttendanceCalculation)
@@ -302,9 +313,7 @@ async def get_attendance_timeline(
     if not record:
         raise AppError(code="NOT_FOUND", message="Attendance record not found", status_code=404)
 
-    scoped_ids = await ScopeService.get_scoped_employee_ids(session, current_user)
-    if scoped_ids is not None and record.employee_id not in scoped_ids:
-        raise AppError(code="OUT_OF_SCOPE", message="Record is out of scope", status_code=403)
+    await _require_record_access(session, current_user, record)
 
     return await AttendanceService.get_timeline(session, attendance_id)
 
@@ -323,9 +332,7 @@ async def add_attendance_comment(
     if not record:
         raise AppError(code="NOT_FOUND", message="Attendance record not found", status_code=404)
 
-    scoped_ids = await ScopeService.get_scoped_employee_ids(session, current_user)
-    if scoped_ids is not None and record.employee_id not in scoped_ids:
-        raise AppError(code="OUT_OF_SCOPE", message="Record is out of scope", status_code=403)
+    await _require_record_access(session, current_user, record)
 
     comment = await AttendanceService.add_comment(
         session=session,
@@ -360,9 +367,13 @@ async def record_attendance_decision(
     if not record:
         raise AppError(code="NOT_FOUND", message="Attendance record not found", status_code=404)
 
-    scoped_ids = await ScopeService.get_scoped_employee_ids(session, current_user)
-    if scoped_ids is not None and record.employee_id not in scoped_ids:
-        raise AppError(code="OUT_OF_SCOPE", message="Record is out of scope", status_code=403)
+    scope = await _require_record_access(session, current_user, record)
+    if not scope.can_decide(record.employee_id):
+        raise AppError(
+            code="READ_ONLY_SCOPE",
+            message="This worker is outside your crew chain: you can view and comment, but not decide (DEC-10).",
+            status_code=403,
+        )
 
     try:
         approval = await AttendanceService.record_decision(
@@ -432,13 +443,25 @@ async def list_events(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> list[MobileEventResponse]:
-    """Query verified raw event logs in scope (read-only audit)."""
-    scoped_ids = await ScopeService.get_scoped_employee_ids(session, current_user)
+    """Query verified raw event logs (read-only audit).
+
+    Non-admins must name one employee and one date, and may see it only when that
+    employee-day is in their operational scope (site-day rule, DEC-57).
+    """
+    scope = await AccessScope.resolve(session, current_user)
+    if not scope.unrestricted:
+        if employee_id is None or event_date is None:
+            raise AppError(
+                code="VALIDATION_ERROR",
+                message="employee_id and event_date are required.",
+                status_code=422,
+            )
+        if await scope.operations_access(session, employee_id, event_date) is None:
+            raise AppError(
+                code="OUT_OF_SCOPE", message="Worker day is out of scope", status_code=403
+            )
 
     q = select(MobileEventLog).order_by(desc(MobileEventLog.event_timestamp_utc)).limit(limit)
-
-    if scoped_ids is not None:
-        q = q.where(MobileEventLog.employee_id.in_(scoped_ids))
     if employee_id:
         q = q.where(MobileEventLog.employee_id == employee_id)
     if event_type:

@@ -212,6 +212,52 @@ class WorksiteSupervisorAssign(BaseModel):
     supervisor_id: UUID
 
 
+class SupervisorProposal(BaseModel):
+    """A supervisor whose crew works on a worksite but who is not assigned to it yet."""
+
+    supervisor_id: UUID
+    supervisor_name: str
+    supervisor_tally_id: str
+    crew_members_on_site: int = Field(
+        ..., description="Crew members with active standing assignments here"
+    )
+
+
+class WorksiteSupervisorProposal(BaseModel):
+    worksite_id: UUID
+    job_number: str
+    job_name: str
+    assigned_supervisor_ids: list[UUID] = []
+    proposals: list[SupervisorProposal] = []
+
+
+class WorksiteSupervisorPair(BaseModel):
+    worksite_id: UUID
+    supervisor_id: UUID
+
+
+class WorksiteSupervisorBulkAssign(BaseModel):
+    assignments: list[WorksiteSupervisorPair] = Field(..., min_length=1, max_length=2000)
+
+
+class WorksiteSupervisorBulkAssignResult(BaseModel):
+    assigned: int
+    already_assigned: int
+
+
+class JobItemDestination(BaseModel):
+    """Reassignment destination: names and codes only, no budget or cost figures."""
+
+    job_item_id: UUID
+    worksite_id: UUID
+    job_number: str
+    job_name: str
+    country: str
+    sub_item_code: str
+    staff_grade_description: str
+    deployment_type: str
+
+
 class WorksiteDetailResponse(WorksiteResponse):
     boundary_geojson: dict[str, Any] | None = None
     items: list[JobItemResponse] = []

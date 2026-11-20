@@ -787,6 +787,14 @@ export const EmployeeDetail: React.FC = () => {
               <span className="font-mono text-xs px-2 py-0.5 rounded bg-slate-100 font-semibold text-slate-700">
                 {employee.tally_id}
               </span>
+              {employee.read_only && (
+                <span
+                  className="text-xs px-2 py-0.5 rounded bg-amber-50 border border-amber-200 font-semibold text-amber-800"
+                  title="Works on one of your worksites but is not in your crew: view only (DEC-57)"
+                >
+                  Read-only: worksite view
+                </span>
+              )}
               {user?.role === "ADMIN" && (
                 <button
                   type="button"
@@ -840,7 +848,7 @@ export const EmployeeDetail: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {(user?.role === "ADMIN" || user?.role === "ENGINEER") && (
+          {(user?.role === "ADMIN" || user?.role === "ENGINEER") && !employee.read_only && (
             <>
               <button
                 type="button"

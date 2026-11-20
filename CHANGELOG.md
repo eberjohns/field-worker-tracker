@@ -1,6 +1,21 @@
 # Changelog
 All notable changes. Format: Keep a Changelog. Mobile-contract changes are also logged in `docs/09-mobile-sync-contract.md`.
 
+## [Unreleased]
+### Fixed
+- **Batch 5.2: DEC-57 worksite scope applied everywhere (ADR-027).** Non-admins no longer see an empty Worksites page once supervisors are assigned. Worksites, the planner job-item picker, Employees, Attendance, Live Map, Pending Visits, the dashboard and all 15 reports now use one scope service (`AccessScope`) and the same rule.
+- Worksite detail and the worksite supervisor list had no scope check (any user could read any worksite by ID); they now return 404 outside scope.
+- `/live/trail/{id}` and the employee DSAR export let a user with an empty scope through; both now refuse.
+- Pending-visit explain/reschedule/close now check scope.
+- Dashboard pending-approvals counts were not scoped and counted reassignments with a status that does not exist; both fixed.
+### Added
+- `Worksite_Supervisors` import sheet (`job_number`, `supervisor_tally_id`, `notes`; role must be SUPERVISOR; commits after Worksites and Employees; idempotent). Template regenerated.
+- Admin "Assign supervisors from crews" review (`GET /worksites/supervisor-proposals`, `POST /worksites/supervisors/bulk-assign`), "Unassigned only" Worksites filter, and an unassigned-worksites dashboard warning.
+- `GET /job-items/destinations`: reassignment destinations list every active worksite (no costs).
+- `read_only` flag on employee, attendance, leave and reassignment responses; the web hides edit and approve controls for cross-crew workers, and the server refuses attendance decisions on them (`READ_ONLY_SCOPE`).
+- Company setting `scope_site_worker_window_days` (default 31, PROPOSED_DEFAULT).
+- Deactivating a supervisor or changing their role ends their worksite assignments (audited, automatic).
+
 ## [1.8.0] - 2026-11-20
 ### Added
 - Operational Enhancements & Access Control Hardening (Batch 6):

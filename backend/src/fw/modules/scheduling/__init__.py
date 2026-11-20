@@ -74,9 +74,12 @@ from fw.modules.scheduling.schemas import (
     ValidationReportRead,
     WorkerAllocationResponse,
 )
+from fw.modules.scheduling.scope import AccessScope
 from fw.modules.scheduling.service import SchedulingService
+from fw.modules.scheduling.worksite_supervisors import WorksiteSupervisorProposalService
 
 __all__: list[str] = [
+    "AccessScope",
     "ApprovalsCounts",
     "ApprovalsInboxResponse",
     "AssignedWorkerSummary",
@@ -146,4 +149,5 @@ __all__: list[str] = [
     "ValidationIssueRead",
     "ValidationReportRead",
     "WorkerAllocationResponse",
+    "WorksiteSupervisorProposalService",
 ]

@@ -93,6 +93,7 @@ class AttendanceApprovalResponse(BaseModel):
 
 class AttendanceRecordResponse(BaseModel):
     id: UUID
+    read_only: bool = False  # seen through a worksite only (DEC-57): view and comment
     employee_id: UUID
     employee_name: str
     tally_id: str

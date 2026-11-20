@@ -17,6 +17,7 @@ import { useAuth } from "../context/AuthContext";
 
 interface LeaveRequestItem {
   id: string;
+  read_only?: boolean; // DEC-57: visible through a worksite, managed by the crew chain
   employee_id: string;
   employee_name: string;
   tally_id: string;
@@ -604,7 +605,7 @@ export const LeaveManagement: React.FC = () => {
                     </td>
                     <td className="py-3.5 px-4 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        {l.status === "APPROVED" && canManageCover && (
+                        {l.status === "APPROVED" && canManageCover && !l.read_only && (
                           <button
                             type="button"
                             onClick={() => {

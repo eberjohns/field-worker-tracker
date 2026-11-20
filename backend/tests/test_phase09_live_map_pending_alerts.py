@@ -25,7 +25,15 @@ from fw.modules.identity import User
 from fw.modules.jobs import JobItem, Worksite
 from fw.modules.notifications import NotificationService
 from fw.modules.notifications.models import Alert
-from fw.modules.org import Employee, EmployeeDocument, Group, OrgService, RegisteredDevice, Zone
+from fw.modules.org import (
+    Employee,
+    EmployeeDocument,
+    EmployeeReportingLine,
+    Group,
+    OrgService,
+    RegisteredDevice,
+    Zone,
+)
 from fw.modules.scheduling import LeaveRequest, ScheduledWork
 
 
@@ -408,6 +416,16 @@ async def test_pending_visit_lifecycle_and_reminders():
         emp1 = _make_employee("Missed Worker")
         emp_on_leave = _make_employee("Leave Worker")
         session.add_all([user, emp1, emp_on_leave])
+        await session.flush()
+        # The engineer acts on their own crew (DEC-10 / DEC-57 scope on pending-visit actions)
+        session.add(
+            EmployeeReportingLine(
+                id=uuid.uuid4(),
+                employee_id=emp1.id,
+                manager_id=eng_emp.id,
+                relationship="ENGINEER",
+            )
+        )
         await session.flush()
 
         # Scheduled work for emp1 (missed visit)

@@ -9,12 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fw.core.clock import site_today
 from fw.modules.org.models import Employee, EmployeeDocument, EmployeeReportingLine
 from fw.modules.reports.schemas import ReportFilterParams
+from fw.modules.scheduling import AccessScope
 
 
 async def fetch_document_expiry(
     session: AsyncSession,
     filters: ReportFilterParams,
-    scoped_ids: set[UUID] | None,
+    scope: AccessScope | None,
 ) -> list[dict[str, Any]]:
     """Query documents expiring soon or already expired."""
     stmt = (
@@ -25,8 +26,9 @@ async def fetch_document_expiry(
     )
 
     conditions = []
-    if scoped_ids is not None:
-        conditions.append(EmployeeDocument.employee_id.in_(scoped_ids))
+    # Employee-level report: crew chain only (DEC-10)
+    if scope is not None and not scope.unrestricted:
+        conditions.append(EmployeeDocument.employee_id.in_(list(scope.crew_ids)))
     if filters.employee_id:
         conditions.append(EmployeeDocument.employee_id == filters.employee_id)
     if filters.country:

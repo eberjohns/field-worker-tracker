@@ -18,6 +18,7 @@ import { formatMinutes, formatSignedMinutes, formatDate } from "../features/atte
 
 interface LeaveRequestItem {
   id: string;
+  read_only?: boolean; // DEC-57: visible through a worksite, decided by the crew chain
   employee_id: string;
   employee_name: string;
   tally_id: string;
@@ -43,6 +44,7 @@ interface LeaveRequestItem {
 
 interface ReassignmentItem {
   id: string;
+  read_only?: boolean;
   batch_id?: string | null;
   batch_note?: string | null;
   reassignment_type: string;
@@ -412,7 +414,7 @@ export const Approvals: React.FC = () => {
                           </span>
                         </td>
                         <td className="py-3.5 px-4 text-right">
-                          {isPending && canApprove ? (
+                          {isPending && canApprove && !l.read_only ? (
                             <div className="flex items-center justify-end gap-2">
                               <button
                                 onClick={() => handleOpenDecision("LEAVE", "APPROVE", l)}
@@ -587,7 +589,7 @@ export const Approvals: React.FC = () => {
                               )}
                             </td>
                             <td className="py-3.5 px-4 text-right">
-                              {isPending && canApprove ? (
+                              {isPending && canApprove && !r.read_only ? (
                                 <div className="flex items-center justify-end gap-2">
                                   <button
                                     onClick={() => handleOpenDecision("REASSIGNMENT", "APPROVE", r)}

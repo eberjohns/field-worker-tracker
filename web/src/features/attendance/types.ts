@@ -77,6 +77,8 @@ export interface AttendanceApproval {
 
 export interface AttendanceRecord {
   id: string;
+  /** Seen through a worksite only (DEC-57): view and comment, no decision. */
+  read_only?: boolean;
   employee_id: string;
   employee_name: string;
   tally_id: string;

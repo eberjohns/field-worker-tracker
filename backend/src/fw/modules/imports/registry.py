@@ -712,6 +712,43 @@ SHEET_REGISTRY: dict[str, SheetDef] = {
             ),
         ],
     ),
+    "Worksite_Supervisors": SheetDef(
+        name="Worksite_Supervisors",
+        title="Supervisors assigned to worksites (DEC-57). One row per worksite and supervisor.",
+        description=(
+            "Decides which worksites each Supervisor sees, and through them which worksites "
+            "their Superintendents and Engineers see. The employee must have role SUPERVISOR. "
+            "Committed after Worksites and Employees. Rows are never removed by import: end an "
+            "assignment in the app."
+        ),
+        primary_key=["job_number", "supervisor_tally_id"],
+        commit_order=15,
+        is_in_scope_phase_03=True,
+        columns=[
+            ColumnDef(
+                "job_number",
+                "text",
+                True,
+                "Required",
+                description="Worksite job number (in the database or on the Worksites sheet).",
+                example="25A00001",
+            ),
+            ColumnDef(
+                "supervisor_tally_id",
+                "text",
+                True,
+                "Required",
+                description="Tally ID of an employee with role SUPERVISOR.",
+                example="2001",
+            ),
+            ColumnDef(
+                "notes", "text", False, "Optional", description="Free text notes.", example=None
+            ),
+        ],
+        examples=[
+            {"job_number": "25A00001", "supervisor_tally_id": "2001", "notes": None},
+        ],
+    ),
     "Leave": SheetDef(
         name="Leave",
         title="Approved leave records. One row per leave event.",
@@ -1450,6 +1487,15 @@ SHEET_REGISTRY: dict[str, SheetDef] = {
                 "effective_from": "2026-01-01",
                 "status": "PROPOSED_DEFAULT",
                 "description": "Days before an open pending visit escalates to Engineer/Admin review",
+            },
+            {
+                "setting_key": "scope_site_worker_window_days",
+                "value": "31",
+                "unit": "days",
+                "country": None,
+                "effective_from": "2026-01-01",
+                "status": "PROPOSED_DEFAULT",
+                "description": "DEC-57: days either side of today that scheduled work counts as working on a worksite",
             },
         ],
     ),

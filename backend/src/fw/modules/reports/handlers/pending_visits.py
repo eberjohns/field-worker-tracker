@@ -11,19 +11,26 @@ from fw.modules.attendance.models import AttendanceComment, PendingVisit
 from fw.modules.jobs.models import Worksite
 from fw.modules.org.models import Employee
 from fw.modules.reports.schemas import ReportFilterParams
+from fw.modules.scheduling import AccessScope
 
 
 async def fetch_pending_visits(
     session: AsyncSession,
     filters: ReportFilterParams,
-    scoped_ids: set[UUID] | None,
+    scope: AccessScope | None,
 ) -> list[dict[str, Any]]:
     """Query pending site visit follow-up records."""
     stmt = select(PendingVisit).order_by(PendingVisit.due_date.asc())
 
     conditions = []
-    if scoped_ids is not None:
-        conditions.append(PendingVisit.employee_id.in_(scoped_ids))
+    # Worksite rows (DEC-57): visits on my worksites (+ crew for Supt/Eng)
+    pv_scope = (
+        scope.worksite_row_clause(PendingVisit.employee_id, PendingVisit.worksite_id)
+        if scope
+        else None
+    )
+    if pv_scope is not None:
+        conditions.append(pv_scope)
     if filters.employee_id:
         conditions.append(PendingVisit.employee_id == filters.employee_id)
     if filters.worksite_id:

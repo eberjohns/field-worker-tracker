@@ -23,11 +23,23 @@ from fw.modules.attendance.schemas import (
 from fw.modules.identity import User
 from fw.modules.jobs import JobItem, Worksite
 from fw.modules.notifications import NotificationService
-from fw.modules.org import Employee, EmployeeReportingLine, OrgService
-from fw.modules.scheduling import LeaveRequest, ScheduledWork
+from fw.modules.org import Employee, EmployeeReportingLine
+from fw.modules.scheduling import AccessScope, LeaveRequest, ScheduledWork
 from fw.modules.settings import SettingsService
 
 logger = structlog.get_logger(__name__)
+
+
+async def _require_visible(session: AsyncSession, user: User, pv: PendingVisit) -> None:
+    """403 unless the pending visit is in the caller's scope (worksite rule, DEC-57)."""
+    scope = await AccessScope.resolve(session, user)
+    if scope.unrestricted:
+        return
+    if pv.worksite_id in scope.worksite_ids:
+        return
+    if user.role in ("SUPERINTENDENT", "ENGINEER") and pv.employee_id in scope.crew_ids:
+        return
+    raise AppError(code="OUT_OF_SCOPE", message="Pending visit is out of scope", status_code=403)
 
 
 class PendingVisitsService:
@@ -124,6 +136,7 @@ class PendingVisitsService:
         pv = await session.get(PendingVisit, pending_visit_id)
         if not pv:
             raise AppError(code="NOT_FOUND", message="Pending visit not found", status_code=404)
+        await _require_visible(session, user, pv)
         if pv.status == "CLOSED":
             raise AppError(
                 code="INVALID_STATUS",
@@ -174,6 +187,7 @@ class PendingVisitsService:
         pv = await session.get(PendingVisit, pending_visit_id)
         if not pv:
             raise AppError(code="NOT_FOUND", message="Pending visit not found", status_code=404)
+        await _require_visible(session, user, pv)
         if not employee_ids:
             raise AppError(
                 code="VALIDATION_ERROR",
@@ -232,6 +246,7 @@ class PendingVisitsService:
         pv = await session.get(PendingVisit, pending_visit_id)
         if not pv:
             raise AppError(code="NOT_FOUND", message="Pending visit not found", status_code=404)
+        await _require_visible(session, user, pv)
         if not reason or not reason.strip():
             raise AppError(
                 code="VALIDATION_ERROR",
@@ -354,14 +369,10 @@ class PendingVisitsService:
         )
 
         # Scope restriction
-        if user.role != "ADMIN":
-            scoped_ids = await OrgService.get_scoped_employee_ids(session, user)
-            if scoped_ids:
-                stmt = stmt.where(PendingVisit.employee_id.in_(scoped_ids))
-            elif user.employee_id:
-                stmt = stmt.where(PendingVisit.employee_id == user.employee_id)
-            else:
-                stmt = stmt.where(PendingVisit.employee_id.in_([]))
+        scope = await AccessScope.resolve(session, user)
+        scope_clause = scope.worksite_row_clause(PendingVisit.employee_id, PendingVisit.worksite_id)
+        if scope_clause is not None:
+            stmt = stmt.where(scope_clause)
 
         if employee_id:
             stmt = stmt.where(PendingVisit.employee_id == employee_id)

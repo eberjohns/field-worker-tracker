@@ -60,9 +60,14 @@ Roles: A = Admin, E = Engineer, S = Superintendent, V = Supervisor. "scope" = li
 ### Worksites and job items
 | Method | Path | Roles | Purpose |
 |---|---|---|---|
-| GET | /worksites | scope | list; filters `q, group_id, zone_id, country, has_boundary, is_active` |
+| GET | /worksites | scope | list (DEC-57 worksite scope); filters `q, group_id, zone_id, country, has_boundary, is_active`, `unassigned` (Admin: no active supervisor) |
 | POST/PATCH | /worksites, /worksites/{id} | A | |
-| GET | /worksites/{id} | scope | detail with items and staffing summary |
+| GET | /worksites/{id} | scope | detail with items and staffing summary; 404 when out of scope |
+| GET | /worksites/{id}/supervisors | scope | assigned supervisors; 404 when out of scope |
+| POST / DELETE | /worksites/{id}/supervisors, /worksites/{id}/supervisors/{employee_id} | A | assign (role SUPERVISOR, active) / end an assignment (deactivates the row) |
+| GET | /worksites/supervisor-proposals | A | per worksite: supervisors whose crew holds standing assignments there today and who are not assigned yet, plus unassigned worksites |
+| POST | /worksites/supervisors/bulk-assign | A | body `{ assignments: [{worksite_id, supervisor_id}] }` (1-2000); all or nothing; returns `{assigned, already_assigned}` |
+| GET | /job-items/destinations | A E SI S | every active job item on an active worksite (job number, name, sub-item, staff type; no costs), for reassignment requests; not scoped |
 | PUT | /worksites/{id}/boundary | A E | GeoJSON Polygon; validates (valid ring, area > 0, SRID 4326) and emits `SITE_BOUNDARY` sync changes |
 | POST | /worksites/{id}/copy-boundary | A E | Copy boundary polygon from source worksite into this worksite |
 | POST | /worksites/{id}/copy-boundary-to | A E | Copy this worksite's boundary to target worksites list (`target_worksite_ids`) |
@@ -113,7 +118,7 @@ Roles: A = Admin, E = Engineer, S = Superintendent, V = Supervisor. "scope" = li
 ### Events, attendance, approvals
 | Method | Path | Roles | Purpose |
 |---|---|---|---|
-| GET | /events | A E S V scope | raw events; filters `employee_id, date, type, flags` (read-only) |
+| GET | /events | A E S V scope | raw events; filters `employee_id, date, type, flags` (read-only). Non-admins must give `employee_id` and `event_date`, and that employee-day must be in scope (site-day rule) |
 | GET | /attendance | scope | list; filters `from, to, employee_id, supervisor_id, review_status, business_status, flag` |
 | GET | /attendance/{id} | scope | current calculation, planned vs actual, comments, approvals |
 | GET | /attendance/{id}/calculations | scope | all versions |
@@ -164,7 +169,7 @@ Roles: A = Admin, E = Engineer, S = Superintendent, V = Supervisor. "scope" = li
 | POST | /reports/{key}/export | by report | `{ format: xlsx|csv|pdf }` -> background job. **Every report supports `xlsx`** |
 | GET | /exports/{id} | requester | export job status, progress, and download URL |
 | GET | /exports/{id}/download | requester | download exported report file |
-| GET | /dashboard/summary | any | role-aware statistics: today's attendance, active/offline workers, pending visits, late arrivals, overtime hours today (derived/cached) |
+| GET | /dashboard/summary | any | role-aware statistics: today's attendance, active/offline workers, pending visits, late arrivals, overtime hours today (site-day rule for today); alerts, documents and pending approvals follow the crew chain; `unassigned_worksites_count` (Admin only, else null) |
 | GET | /live/positions | A E S V scope | last known verified position per worker with age, `live_state`, tracking state, site; filters `supervisor_id, group_id, state` |
 | POST | /live/stream-ticket | A E S V | returns a one-time, short-lived ticket (30 s) for the stream |
 | GET | /live/stream?ticket= | A E S V scope | Server-Sent Events: `position` and `state` updates for the user's scope; heartbeat every 20 s; client falls back to polling `/live/positions` every 30 s |
