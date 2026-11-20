@@ -29,6 +29,7 @@ One decision per file, numbered. Use the `write-adr` skill. Status: Proposed, Ac
 | 023 | [Single Standalone System Administrator (Decoupled from Employees)](023-single-standalone-admin.md) | Accepted |
 | 024 | [Fixed Crew Hierarchy Structure and Transitive Leadership Inheritance](024-fixed-crew-hierarchy-structure.md) | Accepted |
 | 025 | [Batch 5 Audit Fixes: Overtime Alignment, Worker Scheduling, and Multi-Process Safety](025-batch5-audit-fixes.md) | Accepted |
+| 026 | [Worksite Scoping, Multi-Supervisor Assignment, RBAC Hardening & Salary Cost Transparency](026-worksite-scoping-salary-cost-transparency.md) | Accepted |
 
 See also [decision-register.md](decision-register.md) for business decisions awaiting client confirmation.
 

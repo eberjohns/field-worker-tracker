@@ -115,6 +115,9 @@ Fixed crew hierarchy links: `employee_id` FK, `manager_id` FK employees, `relati
 ### employee_grade_history
 `employee_id`, `old_grade_code`, `new_grade_code`, `effective_from` date, `changed_by_user_id`, `reason`.
 
+### employee_attribute_history
+`id` uuid PK, `employee_id` uuid FK employees, `attribute_name` text (`STAFF_GRADE_DESCRIPTION`, `GRADE_CODE`, `IS_DRIVER`), `old_value` text nullable, `new_value` text, `effective_from` date, `reason` text, `changed_by_user_id` uuid FK users, `actor_role` text, `created_at` timestamptz. Indexes: (`employee_id`, `created_at`), (`attribute_name`). Immutable audit trail of designation, grade code, and driver status changes (ADR-026).
+
 ### users
 `employee_id` FK (unique, **nullable exclusively for `role = 'ADMIN'`**), `username` (`ADMIN001` for standalone admin; employee `tally_id` for operational users, unique), `credential_hash` (Argon2id), `role`, `is_active`, `must_change_password` bool, `password_changed_at`, `failed_attempts`, `locked_until`, `last_login_at`. Constraints (ADR-023): `CHECK ((role = 'ADMIN' AND employee_id IS NULL) OR (role <> 'ADMIN' AND employee_id IS NOT NULL))` and partial unique index `uq_users_single_admin ON users ((true)) WHERE role = 'ADMIN'` guaranteeing a single standalone System Admin. Every operational user starts with the company default password and must change it at first login; an account that still has the default after `default_password_max_days` is locked. Only Admin resets a user (back to the default).
 
@@ -154,8 +157,11 @@ Fixed crew hierarchy links: `employee_id` FK, `manager_id` FK employees, `relati
 | start_date, end_date | date | contract period |
 | boundary | geometry(Polygon,4326) | nullable until drawn; GiST index; must be valid, area > 0 |
 | rep_latitude, rep_longitude | numeric(9,6) | derived from the boundary (`ST_PointOnSurface`) |
-| budget_amount | numeric(14,2) | optional manual labour budget for the **whole contract**; overrides the budget calculated from job items (see 06 section 6) |
+| budget_amount | numeric(14,2) | optional manual labour budget for the **whole contract**; overrides the budget calculated from job items (see 06 section 6). Strictly visible to ADMIN only (DEC-47, ADR-026) |
 | is_active | bool | |
+
+### worksite_supervisors
+`id uuid PK`, `worksite_id uuid FK worksites ON DELETE CASCADE`, `supervisor_id uuid FK employees ON DELETE CASCADE`, `assigned_at timestamptz`, `assigned_by_user_id uuid FK users`. Unique (`worksite_id`, `supervisor_id`). Enables multiple assigned field supervisors per worksite and scopes their operational visibility (ADR-026).
 
 ### job_items
 `worksite_id` FK, `sub_item_code` text, `staff_grade_description` (required), `planned_grade_code` (required; base code, year suffix stripped; used for the budget and grade-group suggestions), `frequency_unit`, `occurrences_per_period` numeric(6,2), `period_interval` int default 1, `weekday_pattern` text[] nullable, `required_staff_count` int, `hours_per_occurrence_per_staff` numeric(8,3), `declared_activities_per_year` numeric nullable, `declared_total_hours_per_year` numeric nullable, `start_date`, `end_date` nullable, `deployment_type` (PERMANENT/REMOTE, required), `break_override_minutes` nullable, `is_active`, `version`.

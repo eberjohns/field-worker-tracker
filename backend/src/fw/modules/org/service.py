@@ -6,6 +6,7 @@ from uuid import UUID
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fw.core.clock import site_today
 from fw.core.errors import AppError
 from fw.core.events import EmployeeProfileChanged, event_bus
 from fw.modules.audit import AuditLog, AuditService
@@ -13,6 +14,7 @@ from fw.modules.identity import User, hash_password
 from fw.modules.org.models import (
     Accommodation,
     Employee,
+    EmployeeAttributeHistory,
     EmployeeDocument,
     EmployeeGradeHistory,
     EmployeeReportingLine,
@@ -23,9 +25,11 @@ from fw.modules.org.models import (
 from fw.modules.org.schemas import (
     AccommodationCreate,
     AccommodationUpdate,
+    EmployeeAttributeHistoryRead,
     EmployeeBulkUpdateRequest,
     EmployeeCreate,
     EmployeeDocumentCreate,
+    EmployeeProfileDetailsUpdate,
     EmployeeUpdate,
     ExpiringDocumentItem,
     ExpiringDocumentsResponse,
@@ -541,6 +545,112 @@ class OrgService:
             reason=request.reason,
         )
         return employee
+
+    @staticmethod
+    async def update_profile_details(
+        session: AsyncSession,
+        employee_id: UUID,
+        request: EmployeeProfileDetailsUpdate,
+        actor_user_id: UUID,
+        actor_role: str,
+    ) -> Employee:
+        employee = await OrgService.get_employee(session, employee_id)
+        eff_from = request.effective_from or site_today(employee.country)
+        diff: dict[str, Any] = {}
+
+        # 1. Staff grade description change
+        if (
+            request.staff_grade_description is not None
+            and request.staff_grade_description != employee.staff_grade_description
+        ):
+            old_sgd = employee.staff_grade_description
+            employee.staff_grade_description = request.staff_grade_description
+            diff["staff_grade_description"] = {
+                "old": old_sgd,
+                "new": request.staff_grade_description,
+            }
+            hist_sgd = EmployeeAttributeHistory(
+                employee_id=employee.id,
+                attribute_name="STAFF_GRADE_DESCRIPTION",
+                old_value=old_sgd,
+                new_value=request.staff_grade_description,
+                effective_from=eff_from,
+                changed_by_user_id=actor_user_id,
+                reason=request.reason,
+            )
+            session.add(hist_sgd)
+
+        # 2. Grade code change
+        if request.grade_code is not None and request.grade_code != employee.grade_code:
+            old_gc = employee.grade_code
+            employee.grade_code = request.grade_code
+            diff["grade_code"] = {"old": old_gc, "new": request.grade_code}
+            hist_gc = EmployeeAttributeHistory(
+                employee_id=employee.id,
+                attribute_name="GRADE_CODE",
+                old_value=old_gc,
+                new_value=request.grade_code,
+                effective_from=eff_from,
+                changed_by_user_id=actor_user_id,
+                reason=request.reason,
+            )
+            session.add(hist_gc)
+            # Also keep EmployeeGradeHistory in sync for backward compatibility
+            grade_hist = EmployeeGradeHistory(
+                employee_id=employee.id,
+                old_grade_code=old_gc,
+                new_grade_code=request.grade_code,
+                effective_from=eff_from,
+                changed_by_user_id=actor_user_id,
+                reason=request.reason,
+            )
+            session.add(grade_hist)
+
+        # 3. Driver status change
+        if request.is_driver is not None and request.is_driver != employee.is_driver:
+            old_drv = employee.is_driver
+            employee.is_driver = request.is_driver
+            diff["is_driver"] = {"old": str(old_drv), "new": str(request.is_driver)}
+            hist_drv = EmployeeAttributeHistory(
+                employee_id=employee.id,
+                attribute_name="IS_DRIVER",
+                old_value=str(old_drv),
+                new_value=str(request.is_driver),
+                effective_from=eff_from,
+                changed_by_user_id=actor_user_id,
+                reason=request.reason,
+            )
+            session.add(hist_drv)
+
+        if diff:
+            employee.version += 1
+            await session.flush()
+            await AuditService.log_action(
+                session=session,
+                action="UPDATE_EMPLOYEE_PROFILE_DETAILS",
+                entity_type="employee",
+                entity_id=str(employee.id),
+                diff=diff,
+                actor_user_id=actor_user_id,
+                actor_role=actor_role,
+                reason=request.reason,
+            )
+
+        return employee
+
+    @staticmethod
+    async def list_attribute_history(
+        session: AsyncSession,
+        employee_id: UUID,
+    ) -> list[EmployeeAttributeHistoryRead]:
+        """List attribute change history for an employee."""
+        stmt = (
+            select(EmployeeAttributeHistory)
+            .where(EmployeeAttributeHistory.employee_id == employee_id)
+            .order_by(EmployeeAttributeHistory.created_at.desc())
+        )
+        res = await session.execute(stmt)
+        return [EmployeeAttributeHistoryRead.model_validate(h) for h in res.scalars().all()]
 
     # --- Reporting Lines ---
     @staticmethod

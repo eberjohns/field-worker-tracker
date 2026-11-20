@@ -21,7 +21,12 @@ import {
   ArrowUpDown,
   AlertTriangle,
   AlertCircle,
+  Banknote,
 } from "lucide-react";
+import {
+  CONTROLLED_STAFF_GRADE_DESCRIPTIONS,
+  DEFAULT_GRADE_CODES,
+} from "../components/jobs/jobItemUtils";
 
 interface Employee {
   id: string;
@@ -129,6 +134,18 @@ export const Employees: React.FC = () => {
   const [createError, setCreateError] = useState<string | null>(null);
   const [createTallyCheck, setCreateTallyCheck] = useState<any | null>(null);
   const [createConfirmReuse, setCreateConfirmReuse] = useState(false);
+  const [includeInitialSalary, setIncludeInitialSalary] = useState(false);
+  const [initialSalaryData, setInitialSalaryData] = useState({
+    basic_salary: 1200,
+    special_allowance: 0,
+    fixed_ot_amount: 0,
+    bonus: 0,
+    telephone_allowance: 0,
+    housing_transport_allowance: 0,
+    standard_hours: 8,
+    break_minutes: 60,
+    effective_from: "",
+  });
   const [successToast, setSuccessToast] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
 
@@ -509,7 +526,32 @@ export const Employees: React.FC = () => {
         await Promise.all(reportingPromises);
       }
 
+      if (includeInitialSalary && initialSalaryData.basic_salary > 0) {
+        await fetch(`/api/v1/employees/${created.id}/salary`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            basic_salary: initialSalaryData.basic_salary,
+            special_allowance: initialSalaryData.special_allowance,
+            fixed_ot_amount: initialSalaryData.fixed_ot_amount,
+            bonus: initialSalaryData.bonus,
+            telephone_allowance: initialSalaryData.telephone_allowance,
+            housing_transport_allowance: initialSalaryData.housing_transport_allowance,
+            standard_hours: initialSalaryData.standard_hours,
+            break_minutes: initialSalaryData.break_minutes,
+            effective_from:
+              initialSalaryData.effective_from ||
+              createFormData.join_date ||
+              new Date().toISOString().slice(0, 10),
+          }),
+        });
+      }
+
       setCreateModalOpen(false);
+      setIncludeInitialSalary(false);
       setSuccessToast(`Employee ${created.name} (${created.tally_id}) created successfully!`);
       setTimeout(() => setSuccessToast(null), 5000);
 
@@ -695,24 +737,28 @@ export const Employees: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
-          <button
-            onClick={handleExport}
-            disabled={exporting}
-            className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 bg-white text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 transition shadow-xs disabled:opacity-50"
-            title="Export Employees to Excel"
-          >
-            <Download className="h-4 w-4 text-slate-500" />
-            {exporting ? "Exporting..." : "Export"}
-          </button>
+          {(user?.role === "ADMIN" || user?.role === "ENGINEER") && (
+            <>
+              <button
+                onClick={handleExport}
+                disabled={exporting}
+                className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 bg-white text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 transition shadow-xs disabled:opacity-50"
+                title="Export Employees to Excel"
+              >
+                <Download className="h-4 w-4 text-slate-500" />
+                {exporting ? "Exporting..." : "Export"}
+              </button>
 
-          <Link
-            to="/imports"
-            className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 bg-white text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 transition shadow-xs"
-            title="Import Employees from Excel"
-          >
-            <Upload className="h-4 w-4 text-slate-500" />
-            Import
-          </Link>
+              <Link
+                to="/imports"
+                className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 bg-white text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 transition shadow-xs"
+                title="Import Employees from Excel"
+              >
+                <Upload className="h-4 w-4 text-slate-500" />
+                Import
+              </Link>
+            </>
+          )}
 
           {selectedIds.length > 0 && (user?.role === "ADMIN" || user?.role === "ENGINEER") && (
             <button
@@ -1749,9 +1795,21 @@ export const Employees: React.FC = () => {
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Role</label>
                   <select
                     value={createFormData.role}
-                    onChange={(e) =>
-                      setCreateFormData({ ...createFormData, role: e.target.value })
-                    }
+                    onChange={(e) => {
+                      const newRole = e.target.value;
+                      let newDesig = createFormData.staff_grade_description;
+                      if (newRole === "SUPERVISOR") newDesig = "Supervisor";
+                      else if (newRole === "SUPERINTENDENT") newDesig = "Superintendent";
+                      else if (newRole === "ENGINEER") newDesig = "Landscaping Engineer";
+                      else if (!newDesig || newDesig === "Supervisor" || newDesig === "Superintendent") {
+                        newDesig = "Gardener Helper";
+                      }
+                      setCreateFormData({
+                        ...createFormData,
+                        role: newRole,
+                        staff_grade_description: newDesig,
+                      });
+                    }}
                     className="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   >
                     <option value="WORKER">Field Worker (Mobile)</option>
@@ -1779,31 +1837,65 @@ export const Employees: React.FC = () => {
                   <label className="block text-xs font-medium text-slate-700 mb-1">
                     Trade / Designation
                   </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Landscape Gardener"
-                    value={createFormData.staff_grade_description}
-                    onChange={(e) =>
-                      setCreateFormData({
-                        ...createFormData,
-                        staff_grade_description: e.target.value,
-                      })
-                    }
-                    className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
+                  {createFormData.role === "SUPERVISOR" || createFormData.role === "SUPERINTENDENT" ? (
+                    <input
+                      type="text"
+                      disabled
+                      value={createFormData.role === "SUPERVISOR" ? "Supervisor" : "Superintendent"}
+                      className="w-full border border-slate-200 bg-slate-50 text-slate-500 rounded-lg p-2 text-xs font-medium cursor-not-allowed"
+                    />
+                  ) : createFormData.role === "ENGINEER" ? (
+                    <select
+                      value={createFormData.staff_grade_description}
+                      onChange={(e) =>
+                        setCreateFormData({
+                          ...createFormData,
+                          staff_grade_description: e.target.value,
+                        })
+                      }
+                      className="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value="Landscaping Engineer">Landscaping Engineer</option>
+                      <option value="Irrigation Engineer">Irrigation Engineer</option>
+                      <option value="HSE Engineer">HSE Engineer</option>
+                      <option value="Project Manager">Project Manager</option>
+                    </select>
+                  ) : (
+                    <select
+                      value={createFormData.staff_grade_description}
+                      onChange={(e) =>
+                        setCreateFormData({
+                          ...createFormData,
+                          staff_grade_description: e.target.value,
+                        })
+                      }
+                      className="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      {CONTROLLED_STAFF_GRADE_DESCRIPTIONS.map((d) => (
+                        <option key={d} value={d}>
+                          {d}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
 
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">Grade Code</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. SGD_12"
+                  <select
                     value={createFormData.grade_code}
                     onChange={(e) =>
                       setCreateFormData({ ...createFormData, grade_code: e.target.value })
                     }
-                    className="w-full border border-slate-300 rounded-lg p-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
+                    className="w-full border border-slate-300 rounded-lg p-2 text-xs font-mono bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="">None / Unassigned</option>
+                    {DEFAULT_GRADE_CODES.map((g) => (
+                      <option key={g} value={g}>
+                        {g}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
@@ -1996,6 +2088,125 @@ export const Employees: React.FC = () => {
                   />
                   <span>Designated Driver (eligible for site transport runs)</span>
                 </label>
+              </div>
+
+              {/* Optional Initial Salary Structure Setup */}
+              <div className="border-t border-slate-100 pt-3 space-y-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={includeInitialSalary}
+                    onChange={(e) => setIncludeInitialSalary(e.target.checked)}
+                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <Banknote className="h-4 w-4 text-indigo-600" />
+                    Configure Initial Salary Structure Now (Optional)
+                  </span>
+                </label>
+
+                {includeInitialSalary && (
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-3">
+                    <p className="text-[11px] text-slate-500">
+                      Creates effective-dated employee salary components upon onboarding.
+                    </p>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Basic Salary (AED)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          required
+                          value={initialSalaryData.basic_salary}
+                          onChange={(e) => setInitialSalaryData({ ...initialSalaryData, basic_salary: Number(e.target.value) })}
+                          className="w-full p-1.5 border rounded bg-white text-xs font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Special Allowance</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={initialSalaryData.special_allowance}
+                          onChange={(e) => setInitialSalaryData({ ...initialSalaryData, special_allowance: Number(e.target.value) })}
+                          className="w-full p-1.5 border rounded bg-white text-xs font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Fixed OT Amount</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={initialSalaryData.fixed_ot_amount}
+                          onChange={(e) => setInitialSalaryData({ ...initialSalaryData, fixed_ot_amount: Number(e.target.value) })}
+                          className="w-full p-1.5 border rounded bg-white text-xs font-mono"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Bonus</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={initialSalaryData.bonus}
+                          onChange={(e) => setInitialSalaryData({ ...initialSalaryData, bonus: Number(e.target.value) })}
+                          className="w-full p-1.5 border rounded bg-white text-xs font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Telephone Allowance</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={initialSalaryData.telephone_allowance}
+                          onChange={(e) => setInitialSalaryData({ ...initialSalaryData, telephone_allowance: Number(e.target.value) })}
+                          className="w-full p-1.5 border rounded bg-white text-xs font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Housing/Transport</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={initialSalaryData.housing_transport_allowance}
+                          onChange={(e) => setInitialSalaryData({ ...initialSalaryData, housing_transport_allowance: Number(e.target.value) })}
+                          className="w-full p-1.5 border rounded bg-white text-xs font-mono"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Standard Hours</label>
+                        <input
+                          type="number"
+                          step="0.5"
+                          value={initialSalaryData.standard_hours}
+                          onChange={(e) => setInitialSalaryData({ ...initialSalaryData, standard_hours: Number(e.target.value) })}
+                          className="w-full p-1.5 border rounded bg-white text-xs font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Break (Minutes)</label>
+                        <input
+                          type="number"
+                          value={initialSalaryData.break_minutes}
+                          onChange={(e) => setInitialSalaryData({ ...initialSalaryData, break_minutes: Number(e.target.value) })}
+                          className="w-full p-1.5 border rounded bg-white text-xs font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Effective Date</label>
+                        <input
+                          type="date"
+                          value={initialSalaryData.effective_from || createFormData.join_date}
+                          onChange={(e) => setInitialSalaryData({ ...initialSalaryData, effective_from: e.target.value })}
+                          className="w-full p-1.5 border rounded bg-white text-xs"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">

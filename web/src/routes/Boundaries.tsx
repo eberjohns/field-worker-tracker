@@ -15,7 +15,7 @@ import {
   Upload,
   FileText,
 } from "lucide-react";
-import { MapContainer, PolygonEditor } from "../features/map";
+import { MapContainer, PolygonEditor, PlaceSearch } from "../features/map";
 import { Map as MapLibreMap } from "maplibre-gl";
 
 interface QueueItem {
@@ -622,12 +622,15 @@ export const Boundaries: React.FC = () => {
             </div>
 
             <div className="p-4 space-y-4 flex-1 overflow-y-auto">
-              <MapContainer
-                initialZoom={15}
-                onMapReady={(map) => setMapInstance(map)}
-                onMapUnmount={() => setMapInstance(null)}
-                className="w-full h-[450px]"
-              />
+              <div className="relative">
+                <PlaceSearch map={mapInstance} />
+                <MapContainer
+                  initialZoom={15}
+                  onMapReady={(map) => setMapInstance(map)}
+                  onMapUnmount={() => setMapInstance(null)}
+                  className="w-full h-[450px]"
+                />
+              </div>
 
               <PolygonEditor
                 map={mapInstance}

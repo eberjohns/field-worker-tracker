@@ -43,3 +43,5 @@ Field Worker Tracker follows semantic versioning `v<MAJOR>.<MINOR>.<PATCH>`:
 | **v1.7.2** | 2026-11-19 | `fix/batch5-audit-fixes` | `3b630d3` | Commit on 'fix/batch5-audit-fixes' |
 | **v1.7.3** | 2026-11-19 | `fix/worksite-job-item-create` | `32cf544` | Bumped patch to v1.7.3 |
 | **v1.7.4** | 2026-11-19 | `fix/worksite-job-item-create` | `32cf544` | Commit on 'fix/worksite-job-item-create' |
+| **v1.8.0** | 2026-11-20 | `feat/batch6-worksite-scoping-salary-enhancements` | `7169f9d` | Batch 6: Worksite scoping, multi-supervisor assignment, RBAC hardening, employee attribute history, salary cost breakdown |
+| **v1.8.1** | 2026-11-20 | `feat/batch6-worksite-scoping-salary-enhancements` | `7169f9d` | Commit on 'feat/batch6-worksite-scoping-salary-enhancements' |

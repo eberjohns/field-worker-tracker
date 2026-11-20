@@ -47,13 +47,14 @@ All client questions are answered. **CONFIRMED** = the client decided; **PROPOSE
 | DEC-44 | Transport | Drivers section and daily vehicle runs omitted by client in later meetings | D5 | DROPPED |
 | DEC-45 | Month-end | Auto draft 5 days after month-end (`payroll_auto_run_delay_days`); Admin re-runs (increments run_no) and approves; approval locks attendance and creates immutable snapshots | 06, D4, ADR-020 | CONFIRMED |
 | DEC-46 | Reports history | Month-end reports auto-generated and every file kept, named `<Company>_<Report>_<Country>_<Period>_generated-<datetime>.xlsx`; versioned and immutable; re-downloads verified | 12, D4, ADR-021 | CONFIRMED |
-| DEC-47 | Report visibility | Operational reports: Admin, Engineers, Superintendents, Supervisors; salary/cost reports: strictly ADMIN only (403 for other roles) (Owner confirmation 19 Nov 2026) | 12, ADR-021 | CONFIRMED |
+| DEC-47 | Report & cost visibility | Operational reports: Admin, Engineers, Superintendents, Supervisors; salary/cost reports, worksite budgets, and price-related figures: strictly ADMIN only (403/masked for other roles) (Owner confirmation 19 Nov 2026, Batch 6) | 12, ADR-021, ADR-026 | CONFIRMED |
 | DEC-48 | Budget-only list | (see DEC-09) | 03 | CONFIRMED |
 | DEC-49 | Who is measured how | Everyone by site visits; only drivers accommodation-to-accommodation minus break; no-accommodation workers have n/a accommodation columns (Owner confirmation 19 Nov 2026) | 05, ADR-018 | CONFIRMED |
 | DEC-50 | Product name | Field Worker Tracker (FWT) | all | CONFIRMED |
-| DEC-51 | Import rules | Admin only; preview with new/updated (old->new)/unchanged/clashes; blank keeps, `_` clears; no deletion, deactivate used records; keys editable on screen, not by import | 11, D6, ADR-013 | CONFIRMED |
+| DEC-51 | Import & Export rules | Admin and Engineer only (Batch 6); preview with new/updated (old->new)/unchanged/clashes; blank keeps, `_` clears; no deletion, deactivate used records; keys editable on screen, not by import | 11, D6, ADR-013, ADR-026 | CONFIRMED |
 | DEC-52 | Suggestions | Same grade group first-class eligible, exact staff type first | 04, ADR-014 | CONFIRMED |
 | DEC-53 | Accounts | Username = worker ID; one default password for all (setting), forced change at first login, lock after `default_password_max_days`, Admin-only reset, workers bound to first device | 02, 09 | CONFIRMED |
 | DEC-54 | Saudi Arabia | Separate stack inside the Kingdom when Saudi goes live; UAE stack stays; ADR-009 | 13, ADR-009 | HUMAN |
 | DEC-55 | Hosting | Azure UAE North + UAE Central, managed PostgreSQL/PostGIS, quarterly restore drills; automated drill tool verified; ADR-022 | 14, ADR-009, ADR-022 | CONFIRMED |
 | DEC-56 | Legal | Worker notice, DPIA, inventory, breach runbook; implemented; awaiting client/counsel review; Runbooks 01-05; ADR-022 | legal/, ADR-022 | HUMAN |
+| DEC-57 | Worksite supervisors & scoping | Worksites can have multiple assigned field supervisors; supervisors see only assigned worksites and workers scheduled to their worksite's job items; superintendents/engineers see their subtree; admin sees all | 01, 07, ADR-026 | CONFIRMED |

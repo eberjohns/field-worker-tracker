@@ -28,7 +28,7 @@ router = APIRouter(prefix="/imports", tags=["imports"])
 
 @router.get("/template")
 async def download_import_template(
-    current_user: User = Depends(require_role("ADMIN")),
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
 ) -> Response:
     """Download the generated master data import template workbook."""
     content = generate_import_template_bytes()
@@ -48,7 +48,7 @@ async def upload_workbook(
         None,
         description="Optional comma-separated list of sheet names to import (e.g. Worksites,Job_Items).",
     ),
-    current_user: User = Depends(require_role("ADMIN")),
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
     session: AsyncSession = Depends(get_db),
 ) -> ImportPreviewResponse:
     """Upload workbook (multipart or raw bytes) and return safe preview with field-level diffs without committing."""
@@ -129,7 +129,7 @@ async def get_import_preview(
     action: str | None = None,
     limit: int = 200,
     offset: int = 0,
-    current_user: User = Depends(require_role("ADMIN")),
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
     session: AsyncSession = Depends(get_db),
 ) -> ImportPreviewResponse:
     """Get preview details, counts, and filtered rows for an import batch."""
@@ -173,7 +173,7 @@ async def get_import_preview(
 @router.post("/{batch_id}/commit", response_model=ImportCommitResponse)
 async def commit_import_batch(
     batch_id: UUID,
-    current_user: User = Depends(require_role("ADMIN")),
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
     session: AsyncSession = Depends(get_db),
 ) -> ImportCommitResponse:
     """Commit an uploaded and previewed import batch in a single atomic transaction."""
@@ -195,7 +195,7 @@ async def commit_import_batch(
 @router.post("/{batch_id}/rollback", response_model=ImportRollbackResponse)
 async def rollback_import_batch(
     batch_id: UUID,
-    current_user: User = Depends(require_role("ADMIN")),
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
     session: AsyncSession = Depends(get_db),
 ) -> ImportRollbackResponse:
     """Rollback a committed import batch if safe."""
@@ -217,7 +217,7 @@ async def rollback_import_batch(
 @router.get("/{batch_id}/errors.xlsx")
 async def download_error_report(
     batch_id: UUID,
-    current_user: User = Depends(require_role("ADMIN")),
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
     session: AsyncSession = Depends(get_db),
 ) -> Response:
     """Download an Excel report of errors and warnings for a batch."""
@@ -241,7 +241,7 @@ async def download_error_report(
 async def list_import_batches(
     limit: int = 50,
     offset: int = 0,
-    current_user: User = Depends(require_role("ADMIN")),
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
     session: AsyncSession = Depends(get_db),
 ) -> list[ImportBatchRead]:
     """List history of past import batches."""

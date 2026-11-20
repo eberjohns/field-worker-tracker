@@ -580,7 +580,7 @@ async def test_salary_revisions_and_side_by_side_diff(db_session: AsyncSession):
         assert len(data["lines"]) == 2
 
         # Check planned hourly cost calculated
-        ge_line = next(line for line in data["lines"] if line["grade_code"] == "GE")
+        ge_line = next(line for line in data["lines"] if line["grade_code"].startswith("GE"))
         # Salary portion: 1200 + 200 + 100 = 1500. Provisions: 550. Base = 2050.
         # With 5% HR OH = 2152.5. Divisor 208 = 10.348... -> 10.35
         assert Decimal(str(ge_line["planned_hourly_cost"])) == Decimal("10.35")

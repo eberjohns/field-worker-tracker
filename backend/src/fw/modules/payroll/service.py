@@ -5,6 +5,7 @@ import io
 from collections.abc import Mapping
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 import openpyxl
@@ -31,6 +32,7 @@ from fw.modules.payroll.schemas import (
     EmployeeSalaryCreate,
     EmployeeSalaryHistoryResponse,
     EmployeeSalaryRead,
+    EmployeeSalaryUpdate,
     PayrollIssueItem,
     PayrollRecordRead,
     PayrollRunCreate,
@@ -378,6 +380,179 @@ class PayrollSalaryService:
         )
 
     @staticmethod
+    async def update_future_salary_revision(
+        session: AsyncSession,
+        employee_id: UUID,
+        salary_id: UUID,
+        data: EmployeeSalaryUpdate,
+        actor_user_id: UUID | None = None,
+        actor_role: str = "ADMIN",
+    ) -> EmployeeSalaryRead:
+        """Update an existing future-dated salary revision (DEC-06). Rejects current/past rows."""
+        emp = await session.get(Employee, employee_id)
+        if not emp:
+            raise AppError("EMPLOYEE_NOT_FOUND", "Employee not found", status_code=404)
+
+        row = await session.get(EmployeeSalary, salary_id)
+        if not row or row.employee_id != employee_id:
+            raise AppError(
+                "SALARY_REVISION_NOT_FOUND", "Salary revision not found", status_code=404
+            )
+
+        today_local = site_today(emp.country)
+        if row.effective_from <= today_local:
+            raise AppError(
+                "CANNOT_MODIFY_HISTORICAL_SALARY",
+                "Cannot edit historical or currently active salary revisions. Only future revisions can be modified.",
+                status_code=422,
+            )
+
+        diff: dict[str, Any] = {}
+        if data.standard_hours is not None and data.standard_hours != row.standard_hours:
+            diff["standard_hours"] = {
+                "old": float(row.standard_hours),
+                "new": float(data.standard_hours),
+            }
+            row.standard_hours = data.standard_hours
+        if data.basic_salary is not None and data.basic_salary != row.basic_salary:
+            diff["basic_salary"] = {"old": float(row.basic_salary), "new": float(data.basic_salary)}
+            row.basic_salary = data.basic_salary
+        if data.special_allowance is not None and data.special_allowance != row.special_allowance:
+            diff["special_allowance"] = {
+                "old": float(row.special_allowance),
+                "new": float(data.special_allowance),
+            }
+            row.special_allowance = data.special_allowance
+        if data.fixed_ot_amount is not None and data.fixed_ot_amount != row.fixed_ot_amount:
+            diff["fixed_ot_amount"] = {
+                "old": float(row.fixed_ot_amount),
+                "new": float(data.fixed_ot_amount),
+            }
+            row.fixed_ot_amount = data.fixed_ot_amount
+        if data.bonus is not None and data.bonus != row.bonus:
+            diff["bonus"] = {"old": float(row.bonus), "new": float(data.bonus)}
+            row.bonus = data.bonus
+        if (
+            data.telephone_allowance is not None
+            and data.telephone_allowance != row.telephone_allowance
+        ):
+            diff["telephone_allowance"] = {
+                "old": float(row.telephone_allowance),
+                "new": float(data.telephone_allowance),
+            }
+            row.telephone_allowance = data.telephone_allowance
+        if (
+            data.housing_transport_allowance is not None
+            and data.housing_transport_allowance != row.housing_transport_allowance
+        ):
+            diff["housing_transport_allowance"] = {
+                "old": float(row.housing_transport_allowance),
+                "new": float(data.housing_transport_allowance),
+            }
+            row.housing_transport_allowance = data.housing_transport_allowance
+        if data.break_minutes is not None and data.break_minutes != row.break_minutes:
+            diff["break_minutes"] = {"old": row.break_minutes, "new": data.break_minutes}
+            row.break_minutes = data.break_minutes
+        if data.effective_from is not None and data.effective_from != row.effective_from:
+            if data.effective_from <= today_local:
+                raise AppError(
+                    "CANNOT_MODIFY_HISTORICAL_SALARY",
+                    "New effective date must be in the future.",
+                    status_code=422,
+                )
+            diff["effective_from"] = {
+                "old": str(row.effective_from),
+                "new": str(data.effective_from),
+            }
+            row.effective_from = data.effective_from
+
+        if diff:
+            await session.flush()
+            await AuditService.log_action(
+                session=session,
+                action="UPDATE_FUTURE_SALARY_REVISION",
+                entity_type="employee_salary",
+                entity_id=str(salary_id),
+                diff=diff,
+                actor_user_id=actor_user_id,
+                actor_role=actor_role,
+                reason="Future salary revision updated",
+            )
+
+        portion = (
+            row.basic_salary
+            + row.special_allowance
+            + row.fixed_ot_amount
+            + row.bonus
+            + row.telephone_allowance
+            + row.housing_transport_allowance
+        )
+        return EmployeeSalaryRead(
+            id=row.id,
+            employee_id=row.employee_id,
+            tally_id=emp.tally_id,
+            employee_name=emp.name,
+            effective_from=row.effective_from,
+            standard_hours=row.standard_hours,
+            basic_salary=row.basic_salary,
+            special_allowance=row.special_allowance,
+            fixed_ot_amount=row.fixed_ot_amount,
+            break_minutes=row.break_minutes,
+            bonus=row.bonus,
+            telephone_allowance=row.telephone_allowance,
+            housing_transport_allowance=row.housing_transport_allowance,
+            change_source=row.change_source,
+            salary_portion=portion,
+            difference=Decimal("0.00"),
+            created_at=row.created_at,
+        )
+
+    @staticmethod
+    async def delete_future_salary_revision(
+        session: AsyncSession,
+        employee_id: UUID,
+        salary_id: UUID,
+        actor_user_id: UUID | None = None,
+        actor_role: str = "ADMIN",
+    ) -> bool:
+        """Delete an existing future-dated salary revision (DEC-06). Rejects current/past rows."""
+        emp = await session.get(Employee, employee_id)
+        if not emp:
+            raise AppError("EMPLOYEE_NOT_FOUND", "Employee not found", status_code=404)
+
+        row = await session.get(EmployeeSalary, salary_id)
+        if not row or row.employee_id != employee_id:
+            raise AppError(
+                "SALARY_REVISION_NOT_FOUND", "Salary revision not found", status_code=404
+            )
+
+        today_local = site_today(emp.country)
+        if row.effective_from <= today_local:
+            raise AppError(
+                "CANNOT_MODIFY_HISTORICAL_SALARY",
+                "Cannot delete historical or currently active salary revisions. Only future revisions can be deleted.",
+                status_code=422,
+            )
+
+        await session.delete(row)
+        await session.flush()
+
+        await AuditService.log_action(
+            session=session,
+            action="DELETE_FUTURE_SALARY_REVISION",
+            entity_type="employee_salary",
+            entity_id=str(salary_id),
+            diff={
+                "deleted_effective_from": str(row.effective_from),
+                "basic_salary": float(row.basic_salary),
+            },
+            actor_user_id=actor_user_id,
+            actor_role=actor_role,
+            reason="Future salary revision deleted",
+        )
+        return True
+
+    @staticmethod
     async def list_salary_structures(
         session: AsyncSession,
         country: str | None = None,
@@ -398,6 +573,43 @@ class PayrollSalaryService:
 
         items: list[SalaryStructureListItem] = []
         today = as_of or datetime.now(UTC).date()
+        prov_cache: dict[str, Decimal] = {}
+
+        async def get_prov_sum(cntry: str, as_of_d: date) -> Decimal:
+            if cntry in prov_cache:
+                return prov_cache[cntry]
+            visa = await SettingsService.get_setting(
+                session, "visa_provision", country=cntry, as_of=as_of_d, default=Decimal("100.00")
+            )
+            air = await SettingsService.get_setting(
+                session,
+                "air_ticket_provision",
+                country=cntry,
+                as_of=as_of_d,
+                default=Decimal("75.00"),
+            )
+            uni = await SettingsService.get_setting(
+                session, "uniform_provision", country=cntry, as_of=as_of_d, default=Decimal("25.00")
+            )
+            acc = await SettingsService.get_setting(
+                session,
+                "accommodation_provision",
+                country=cntry,
+                as_of=as_of_d,
+                default=Decimal("300.00"),
+            )
+            med = await SettingsService.get_setting(
+                session, "medical_provision", country=cntry, as_of=as_of_d, default=Decimal("50.00")
+            )
+            total_prov = calculate_provisions(
+                visa=Decimal(str(visa if visa is not None else 100)),
+                air_ticket=Decimal(str(air if air is not None else 75)),
+                uniform=Decimal(str(uni if uni is not None else 25)),
+                accommodation=Decimal(str(acc if acc is not None else 300)),
+                medical=Decimal(str(med if med is not None else 50)),
+            )
+            prov_cache[cntry] = total_prov
+            return total_prov
 
         for emp in employees:
             salary = await PayrollRepository.get_latest_salary_for_employee(session, emp.id, today)
@@ -410,6 +622,14 @@ class PayrollSalaryService:
                     telephone_allowance=salary.telephone_allowance,
                     housing_transport_allowance=salary.housing_transport_allowance,
                 )
+                grat = calculate_gratuity(salary.basic_salary)
+                leave_sal = calculate_leave_salary(salary.basic_salary)
+                prov_sum = await get_prov_sum(emp.country, today)
+                per_month_prov = calculate_per_month_provision(prov_sum, grat, leave_sal)
+                staff_cost = calculate_total_staff_cost(portion, per_month_prov)
+                hr_oh_val = calculate_hr_overhead(staff_cost)
+                final_val = calculate_final_total_staff_cost(staff_cost, hr_oh_val)
+
                 items.append(
                     SalaryStructureListItem(
                         employee_id=emp.id,
@@ -420,6 +640,17 @@ class PayrollSalaryService:
                         standard_hours=salary.standard_hours,
                         salary_portion=portion,
                         basic_salary=salary.basic_salary,
+                        special_allowance=salary.special_allowance,
+                        fixed_ot_amount=salary.fixed_ot_amount,
+                        bonus=salary.bonus,
+                        telephone_allowance=salary.telephone_allowance,
+                        housing_transport_allowance=salary.housing_transport_allowance,
+                        gratuity=grat,
+                        leave_salary=leave_sal,
+                        per_month_provision=per_month_prov,
+                        total_staff_cost=staff_cost,
+                        hr_oh=hr_oh_val,
+                        final_cost=final_val,
                         break_minutes=salary.break_minutes,
                         effective_from=salary.effective_from,
                         last_change_date=salary.effective_from,
@@ -1348,9 +1579,12 @@ class PayrollService:
         )
 
         for line_in in payload.lines:
+            gc = line_in.grade_code.strip()
+            if not gc.endswith(f"-{payload.code}") and payload.code not in gc:
+                gc = f"{gc}-{payload.code}"
             rev.lines.append(
                 SalaryRevisionLine(
-                    grade_code=line_in.grade_code,
+                    grade_code=gc,
                     grade_group_title=line_in.grade_group_title,
                     basic_salary=line_in.basic_salary,
                     special_allowance=line_in.special_allowance,
@@ -1491,6 +1725,10 @@ class PayrollService:
         if base_rev:
             for rev_line in base_rev.lines:
                 base_map[rev_line.grade_code] = rev_line
+                if base_rev.code and rev_line.grade_code.endswith(f"-{base_rev.code}"):
+                    base_code = rev_line.grade_code[: -len(f"-{base_rev.code}")]
+                    if base_code not in base_map:
+                        base_map[base_code] = rev_line
 
         diffs: list[SalaryRevisionLineDiff] = []
         new_count = 0
@@ -1511,7 +1749,16 @@ class PayrollService:
         ]
 
         for inc in incoming_lines:
-            base_line = base_map.get(inc.grade_code)
+            inc_code = inc.grade_code.strip()
+            base_line = base_map.get(inc_code)
+            if (
+                not base_line
+                and target_revision_code
+                and inc_code.endswith(f"-{target_revision_code}")
+            ):
+                base_line = base_map.get(inc_code[: -len(f"-{target_revision_code}")])
+            if not base_line:
+                base_line = base_map.get(inc_code.split("-")[0])
             if not base_line:
                 new_count += 1
                 for f, label in fields_to_compare:
@@ -1617,8 +1864,11 @@ class PayrollService:
 
         if lines:
             for line in lines:
+                export_grade = line.grade_code
+                if rev and rev.code and export_grade.endswith(f"-{rev.code}"):
+                    export_grade = export_grade[: -len(f"-{rev.code}")]
                 row_data = [
-                    line.grade_code,
+                    export_grade,
                     line.grade_group_title or "",
                     float(line.basic_salary),
                     float(line.special_allowance),

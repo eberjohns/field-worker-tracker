@@ -342,3 +342,25 @@ class EntityLifecycleResponse(BaseModel):
     effective_date: date | None = None
     summary: dict[str, Any] = Field(default_factory=dict)
     message: str
+
+
+class EmployeeAttributeHistoryRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    employee_id: UUID
+    attribute_name: str
+    old_value: str | None = None
+    new_value: str | None = None
+    effective_from: date
+    changed_by_user_id: UUID
+    reason: str
+    created_at: datetime
+
+
+class EmployeeProfileDetailsUpdate(BaseModel):
+    staff_grade_description: str | None = None
+    grade_code: str | None = None
+    is_driver: bool | None = None
+    effective_from: date | None = None
+    reason: str
