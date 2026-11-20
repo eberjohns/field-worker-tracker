@@ -2,6 +2,12 @@
 All notable changes. Format: Keep a Changelog. Mobile-contract changes are also logged in `docs/09-mobile-sync-contract.md`.
 
 ## [Unreleased]
+### Documentation
+- Handover updated with section 0 (changes since 19 Nov, owner decisions of 20 Nov, DEC-57 rule, PR #23 regressions, new work queue); the handover's Batch 6 is renamed Batch 7.
+- Added the post-merge review of PR #22/#23 (`docs/reviews/review-pr22-23-2026-11-20.md`), the 19 Nov audit, the mobile-team notes, the client meeting notes of 19 Nov and `CLAUDE.md`.
+- Demo data built from client files (`tools/demo_data/` workbook, assignments, routes) is git-ignored (golden rule 8).
+
+## [1.9.0] - 2026-11-20
 ### Fixed
 - **Batch 5.2: DEC-57 worksite scope applied everywhere (ADR-027).** Non-admins no longer see an empty Worksites page once supervisors are assigned. Worksites, the planner job-item picker, Employees, Attendance, Live Map, Pending Visits, the dashboard and all 15 reports now use one scope service (`AccessScope`) and the same rule.
 - Worksite detail and the worksite supervisor list had no scope check (any user could read any worksite by ID); they now return 404 outside scope.
