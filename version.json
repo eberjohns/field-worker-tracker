@@ -1,9 +1,9 @@
 {
-  "version": "1.8.2",
+  "version": "1.9.0",
   "major": 1,
-  "minor": 8,
-  "patch": 2,
-  "last_branch": "feat/batch6-worksite-scoping-salary-enhancements",
-  "last_commit": "8259291",
-  "updated_at": "2026-11-20T05:38:42.320436+00:00"
+  "minor": 9,
+  "patch": 0,
+  "last_branch": "fix/batch5.2-dec57-scope",
+  "last_commit": "2bf319c",
+  "updated_at": "2026-11-20T11:47:20.524358+00:00"
 }

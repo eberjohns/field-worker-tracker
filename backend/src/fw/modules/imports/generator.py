@@ -84,6 +84,10 @@ def generate_import_template_bytes() -> bytes:
         ("Employee_Salary", "Effective-dated worker fixed salary structures (Phase 03)."),
         ("Worksites", "Parent worksites/jobs (Phase 04)."),
         ("Job_Items", "Recurring job staffing items (Phase 04)."),
+        (
+            "Worksite_Supervisors",
+            "Supervisors assigned to worksites; drives worksite scope (DEC-57).",
+        ),
         ("Leave", "Approved leave records (Phase 06)."),
         ("Public_Holidays", "Country public holidays qualifying for OT2 (Phase 03)."),
         ("Salary_Revisions", "Job budget grade cost revisions (Phase 11)."),

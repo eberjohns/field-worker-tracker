@@ -35,7 +35,7 @@ from fw.modules.imports.schemas import (
     ImportRollbackResponse,
     ImportRowRead,
 )
-from fw.modules.jobs import JobItem, JobsService, Worksite
+from fw.modules.jobs import JobItem, JobsService, Worksite, WorksiteSupervisor
 from fw.modules.org import (
     Accommodation,
     Employee,
@@ -215,6 +215,10 @@ class ImportService:
         existing_revision_lines = {
             (r.revision_id, r.grade_code): r
             for r in (await session.execute(select(SalaryRevisionLine))).scalars().all()
+        }
+        existing_worksite_supervisors = {
+            (r.worksite_id, r.supervisor_id): r
+            for r in (await session.execute(select(WorksiteSupervisor))).scalars().all()
         }
 
         # Pre-collect natural keys present in this workbook for same-file foreign key resolution
@@ -1067,6 +1071,79 @@ class ImportService:
                             row_action = "UNCHANGED"
                     else:
                         row_action = "NEW"
+
+                elif sheet_name == "Worksite_Supervisors":
+                    ws_job = normalized_dict.get("job_number", {}).get("value")
+                    sup_tally = normalized_dict.get("supervisor_tally_id", {}).get("value")
+                    ws_job = str(ws_job).strip() if ws_job is not None else None
+                    sup_tally = str(sup_tally).strip() if sup_tally is not None else None
+                    ws_exists = ws_job in existing_worksites or ws_job in file_worksites
+                    sup_exists = sup_tally in existing_employees or sup_tally in file_employees
+                    if ws_job and not ws_exists:
+                        row_codes.append("REFERENCE_NOT_FOUND")
+                        row_messages.append(
+                            {
+                                "field": "job_number",
+                                "code": "REFERENCE_NOT_FOUND",
+                                "message": f"Worksite {ws_job} not found",
+                            }
+                        )
+                        row_status = "ERROR"
+                    if sup_tally and not sup_exists:
+                        row_codes.append("REFERENCE_NOT_FOUND")
+                        row_messages.append(
+                            {
+                                "field": "supervisor_tally_id",
+                                "code": "REFERENCE_NOT_FOUND",
+                                "message": f"Employee {sup_tally} not found",
+                            }
+                        )
+                        row_status = "ERROR"
+                    sup_role = (
+                        file_employees_roles.get(sup_tally)
+                        if sup_tally in file_employees_roles
+                        else (
+                            existing_employees[sup_tally].role
+                            if sup_tally in existing_employees
+                            else None
+                        )
+                    )
+                    if sup_exists and (sup_role or "").upper() != "SUPERVISOR":
+                        row_codes.append("NOT_A_SUPERVISOR")
+                        row_messages.append(
+                            {
+                                "field": "supervisor_tally_id",
+                                "code": "NOT_A_SUPERVISOR",
+                                "message": (
+                                    f"Employee {sup_tally} has role {sup_role or 'none'}; "
+                                    "only a SUPERVISOR can be assigned to a worksite"
+                                ),
+                            }
+                        )
+                        row_status = "ERROR"
+                    if (
+                        sup_tally in existing_employees
+                        and sup_tally not in file_employees
+                        and not existing_employees[sup_tally].is_active
+                    ):
+                        row_codes.append("EMPLOYEE_INACTIVE")
+                        row_messages.append(
+                            {
+                                "field": "supervisor_tally_id",
+                                "code": "EMPLOYEE_INACTIVE",
+                                "message": f"Employee {sup_tally} is deactivated",
+                            }
+                        )
+                        row_status = "ERROR"
+                    row_action = "NEW"
+                    if ws_job in existing_worksites and sup_tally in existing_employees:
+                        pair = (
+                            existing_worksites[ws_job].id,
+                            existing_employees[sup_tally].id,
+                        )
+                        existing_ws_sup = existing_worksite_supervisors.get(pair)
+                        if existing_ws_sup is not None:
+                            row_action = "UNCHANGED" if existing_ws_sup.is_active else "REACTIVATED"
 
                 elif sheet_name == "Salary_Revision_Lines":
                     rev_code = normalized_dict.get("revision_code", {}).get("value")
@@ -1971,6 +2048,44 @@ class ImportService:
                     )
                     session.add(new_line)
 
+        await session.flush()
+
+        # 14. Worksite_Supervisors (after Worksites and Employees; DEC-57)
+        ws_sup_rows = [
+            r
+            for r in sheet_to_rows.get("Worksite_Supervisors", [])
+            if r.action in ("NEW", "REACTIVATED")
+        ]
+        if ws_sup_rows:
+            ws_by_job = {
+                w.job_number: w.id
+                for w in (await session.execute(select(Worksite))).scalars().all()
+            }
+            emp_by_tally = {
+                e.tally_id: e.id for e in (await session.execute(select(Employee))).scalars().all()
+            }
+            for r in ws_sup_rows:
+                ws_id = ws_by_job.get(str(r.normalized.get("job_number") or "").strip())
+                sup_id = emp_by_tally.get(
+                    str(r.normalized.get("supervisor_tally_id") or "").strip()
+                )
+                if ws_id is None or sup_id is None:
+                    continue
+                # Idempotent: assigning an already active pair is a no-op.
+                await JobsService.assign_worksite_supervisor(
+                    session=session,
+                    worksite_id=ws_id,
+                    supervisor_id=sup_id,
+                    actor_user_id=user_id,
+                    actor_role=actor_role,
+                )
+        # Role or status changes in this file can make existing assignments invalid.
+        await JobsService.end_assignments_for_ineligible_supervisors(
+            session,
+            actor_user_id=user_id,
+            actor_role=actor_role,
+            reason="Supervisor no longer eligible after import",
+        )
         await session.flush()
 
         # Update batch status

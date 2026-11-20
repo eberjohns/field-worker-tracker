@@ -24,7 +24,6 @@ from sqlalchemy.orm import joinedload, selectinload
 from fw.core.errors import AppError
 from fw.core.events import AccommodationBoundaryChanged, WorksiteBoundaryChanged, event_bus
 from fw.modules.audit import AuditService
-from fw.modules.identity import User
 from fw.modules.jobs.models import JobItem, JobOccurrence, Worksite, WorksiteSupervisor
 from fw.modules.jobs.schemas import (
     BoundaryExportItem,
@@ -34,6 +33,7 @@ from fw.modules.jobs.schemas import (
     BoundaryQueueItemResponse,
     BoundaryQueueResponse,
     JobItemCreate,
+    JobItemDestination,
     JobItemResponse,
     JobItemUpdate,
     JobItemValidationResponse,
@@ -45,9 +45,8 @@ from fw.modules.jobs.schemas import (
     WorksiteSupervisorRead,
     WorksiteUpdate,
 )
-from fw.modules.org import Accommodation, Employee, EmployeeReportingLine, Group, Zone
+from fw.modules.org import Accommodation, Employee, Group, Zone
 from fw.modules.settings import SettingsService
-from fw.rules.hierarchy import compute_transitive_scope
 from fw.rules.jobs import (
     calculate_days_per_occurrence,
     calculate_expected_activities_per_year,
@@ -74,8 +73,13 @@ class JobsService:
         is_active: bool | None = None,
         limit: int = 100,
         offset: int = 0,
+        unassigned_only: bool = False,
     ) -> list[WorksiteResponse]:
-        """List worksites matching search and filter criteria."""
+        """List worksites matching search and filter criteria.
+
+        ``scoped_ids`` comes from the caller's access scope (DEC-57); None = unrestricted.
+        ``unassigned_only`` keeps worksites with no active supervisor assignment.
+        """
         query = (
             select(
                 Worksite,
@@ -88,6 +92,8 @@ class JobsService:
 
         if scoped_ids is not None:
             query = query.where(Worksite.id.in_(scoped_ids))
+        if unassigned_only:
+            query = query.where(~JobsService._has_active_supervisor())
         if is_active is not None:
             query = query.where(Worksite.is_active == is_active)
         if group_id:
@@ -268,51 +274,97 @@ class JobsService:
         )
 
     @staticmethod
-    async def get_scoped_worksite_ids(
-        session: AsyncSession,
-        user: User,
-    ) -> set[UUID] | None:
-        """Resolve worksite IDs in user's operational scope.
+    def _has_active_supervisor() -> Any:
+        """EXISTS clause: the worksite has at least one active supervisor assignment."""
+        return (
+            select(WorksiteSupervisor.id)
+            .where(
+                WorksiteSupervisor.worksite_id == Worksite.id,
+                WorksiteSupervisor.is_active == True,  # noqa: E712
+            )
+            .exists()
+        )
 
-        Returns None if user is ADMIN (unrestricted).
-        Returns {worksite_id} where supervisor is assigned if user is SUPERVISOR.
-        Returns worksites assigned to supervisors reporting to this user if SUPERINTENDENT or ENGINEER.
+    @staticmethod
+    async def count_unassigned_worksites(session: AsyncSession) -> int:
+        """Active worksites with no active supervisor (DEC-57 Admin warning)."""
+        stmt = select(func.count(Worksite.id)).where(
+            Worksite.is_active == True,  # noqa: E712
+            ~JobsService._has_active_supervisor(),
+        )
+        return int(await session.scalar(stmt) or 0)
+
+    @staticmethod
+    async def list_destinations(session: AsyncSession) -> list[JobItemDestination]:
+        """All active job items on active worksites, for reassignment request destinations.
+
+        Requests may move a crew to another supervisor's site, so this list is not scoped.
+        It carries names and codes only: no budget or cost figures.
         """
-        if user.role == "ADMIN":
-            return None
+        stmt = (
+            select(JobItem, Worksite)
+            .join(Worksite, JobItem.worksite_id == Worksite.id)
+            .where(
+                JobItem.is_active == True,  # noqa: E712
+                Worksite.is_active == True,  # noqa: E712
+            )
+            .order_by(Worksite.job_number, JobItem.sub_item_code)
+        )
+        rows = (await session.execute(stmt)).all()
+        return [
+            JobItemDestination(
+                job_item_id=item.id,
+                worksite_id=ws.id,
+                job_number=ws.job_number,
+                job_name=ws.job_name,
+                country=ws.country,
+                sub_item_code=item.sub_item_code,
+                staff_grade_description=item.staff_grade_description,
+                deployment_type=item.deployment_type,
+            )
+            for item, ws in rows
+        ]
 
-        if user.employee_id is None:
-            return set()
+    @staticmethod
+    async def end_assignments_for_ineligible_supervisors(
+        session: AsyncSession,
+        employee_id: UUID | None = None,
+        actor_user_id: UUID | None = None,
+        actor_role: str | None = None,
+        reason: str = "Supervisor deactivated or no longer has the SUPERVISOR role",
+    ) -> int:
+        """Deactivate worksite assignments of supervisors who are inactive or not SUPERVISOR.
 
-        if user.role == "SUPERVISOR":
-            stmt = select(WorksiteSupervisor.worksite_id).where(
-                WorksiteSupervisor.supervisor_id == user.employee_id,
+        Called when an employee's profile changes (one employee) and after an import commit
+        (all employees). Rows are deactivated, never deleted (golden rule 5).
+        """
+        stmt = (
+            select(WorksiteSupervisor)
+            .join(Employee, WorksiteSupervisor.supervisor_id == Employee.id)
+            .where(
                 WorksiteSupervisor.is_active == True,  # noqa: E712
+                or_(Employee.is_active == False, Employee.role != "SUPERVISOR"),  # noqa: E712
             )
-            res = await session.execute(stmt)
-            return set(res.scalars().all())
-
-        if user.role in ("SUPERINTENDENT", "ENGINEER"):
-            # Load active reporting lines to compute transitive supervisor descendants
-            lines_stmt = select(
-                EmployeeReportingLine.employee_id,
-                EmployeeReportingLine.manager_id,
-            ).where(
-                EmployeeReportingLine.is_active == True  # noqa: E712
+        )
+        if employee_id is not None:
+            stmt = stmt.where(WorksiteSupervisor.supervisor_id == employee_id)
+        rows = list((await session.execute(stmt)).scalars().all())
+        for row in rows:
+            row.is_active = False
+            row.version += 1
+            await AuditService.log_action(
+                session=session,
+                action="REMOVE_WORKSITE_SUPERVISOR",
+                entity_type="worksite",
+                entity_id=str(row.worksite_id),
+                diff={"supervisor_id": str(row.supervisor_id), "automatic": True},
+                actor_user_id=actor_user_id,
+                actor_role=actor_role,
+                reason=reason,
             )
-            lines_res = await session.execute(lines_stmt)
-            links = [(str(row.employee_id), str(row.manager_id)) for row in lines_res.all()]
-            descendant_str_ids = compute_transitive_scope(str(user.employee_id), links)
-            descendant_uuids = [UUID(x) for x in descendant_str_ids]
-
-            stmt = select(WorksiteSupervisor.worksite_id).where(
-                WorksiteSupervisor.supervisor_id.in_(descendant_uuids),
-                WorksiteSupervisor.is_active == True,  # noqa: E712
-            )
-            res = await session.execute(stmt)
-            return set(res.scalars().all())
-
-        return set()
+        if rows:
+            await session.flush()
+        return len(rows)
 
     @staticmethod
     async def list_worksite_supervisors(
@@ -363,6 +415,12 @@ class JobsService:
         emp = await session.get(Employee, supervisor_id)
         if not emp:
             raise AppError("EMPLOYEE_NOT_FOUND", "Employee not found", status_code=404)
+        if not ws.is_active:
+            raise AppError("WORKSITE_INACTIVE", "Worksite is deactivated", status_code=422)
+        if not emp.is_active:
+            raise AppError(
+                "EMPLOYEE_INACTIVE", f"Employee {emp.name} is deactivated", status_code=422
+            )
         if emp.role != "SUPERVISOR":
             raise AppError(
                 "INVALID_SUPERVISOR_ROLE",
@@ -379,6 +437,8 @@ class JobsService:
         if existing:
             if not existing.is_active:
                 existing.is_active = True
+                existing.version += 1
+                existing.created_by_user_id = actor_user_id
                 await session.flush()
             row = existing
         else:

@@ -1,7 +1,6 @@
 """Handler for Job Costing Report (Admin Only, DEC-29)."""
 
 from typing import Any
-from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,12 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fw.modules.jobs.models import Worksite
 from fw.modules.payroll.service import PayrollService
 from fw.modules.reports.schemas import ReportFilterParams
+from fw.modules.scheduling import AccessScope
 
 
 async def fetch_job_costing(
     session: AsyncSession,
     filters: ReportFilterParams,
-    scoped_ids: set[UUID] | None = None,
+    scope: AccessScope | None = None,
 ) -> list[dict[str, Any]]:
     """Query contract budget vs actual labor costs allocated by worked minutes."""
     as_of = filters.date_to or None

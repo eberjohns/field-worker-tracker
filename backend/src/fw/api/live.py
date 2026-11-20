@@ -27,7 +27,8 @@ from fw.modules.events.live_publisher import (
 )
 from fw.modules.identity import User, get_current_user
 from fw.modules.jobs import Worksite
-from fw.modules.org import Group, OrgService, Zone
+from fw.modules.org import Group, Zone
+from fw.modules.scheduling import AccessScope
 from fw.modules.scheduling.models import ScheduledWork
 
 logger = structlog.get_logger(__name__)
@@ -73,8 +74,11 @@ async def live_position_stream(
         # Fetch user
         user = await session.get(User, user_id)
         if user and role != "ADMIN":
-            scoped_list = await OrgService.get_scoped_employee_ids(session, user)
-            scoped_ids = set(scoped_list) if scoped_list else set()
+            # DEC-57 site-day rule for today; the set is fixed for the life of the stream.
+            scope = await AccessScope.resolve(session, user)
+            scoped_ids = await scope.operations_ids_on(session, site_today()) or set()
+        elif not user:
+            scoped_ids = set()
 
         await EventsService.log_live_access(
             session=session,
@@ -158,8 +162,8 @@ async def get_live_positions(
     # 2. Scope resolution
     scoped_ids: set[UUID] | None = None
     if current_user.role != "ADMIN":
-        scoped_list = await OrgService.get_scoped_employee_ids(session, current_user)
-        scoped_ids = set(scoped_list) if scoped_list else set()
+        scope = await AccessScope.resolve(session, current_user)
+        scoped_ids = await scope.operations_ids_on(session, site_today()) or set()
 
     # 3. Determine today's date in site local time zone (Asia/Dubai default)
     now = datetime.now(UTC)
@@ -226,17 +230,13 @@ async def get_worker_day_trail(
     session: AsyncSession = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """Retrieve chronological event trail for a worker on a given date (for route drawing)."""
-    # Scope check
-    if current_user.role != "ADMIN":
-        scoped_list = await OrgService.get_scoped_employee_ids(session, current_user)
-        if (
-            scoped_list
-            and employee_id not in scoped_list
-            and current_user.employee_id != employee_id
-        ):
-            raise AppError(code="FORBIDDEN", message="Worker outside your scope", status_code=403)
-
     target_date = datetime.strptime(date, "%Y-%m-%d").date() if date else site_today()
+
+    # Scope check (site-day rule, DEC-57). An empty scope refuses too.
+    if current_user.role != "ADMIN" and current_user.employee_id != employee_id:
+        scope = await AccessScope.resolve(session, current_user)
+        if await scope.operations_access(session, employee_id, target_date) is None:
+            raise AppError(code="FORBIDDEN", message="Worker outside your scope", status_code=403)
 
     # Log trail view in live location access logs (audit of location views)
     client_ip = request.client.host if request.client else None

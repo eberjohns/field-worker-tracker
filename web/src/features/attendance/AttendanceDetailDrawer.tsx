@@ -481,7 +481,13 @@ export const AttendanceDetailDrawer: React.FC<AttendanceDetailDrawerProps> = ({
         {activeTab === "comments" && (
           <div className="space-y-6">
             {/* Approval Decision Box (Supervisors / Engineers) */}
-            {isSupervisorOrEngineer && !record.locked && (
+            {record.read_only && (
+              <div className="p-3 rounded-lg border border-amber-200 bg-amber-50 text-amber-900 text-xs">
+                This worker is not in your crew. You can view and comment; the review decision
+                belongs to their own crew chain (DEC-57).
+              </div>
+            )}
+            {isSupervisorOrEngineer && !record.locked && !record.read_only && (
               <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-3">
                 <div className="flex items-center justify-between">
                   <h4 className="font-semibold text-slate-900 text-xs flex items-center gap-1.5">

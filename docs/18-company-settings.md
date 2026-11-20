@@ -87,6 +87,7 @@ When resolving a setting for a worker, worksite, or process:
 | `live_active_window_minutes` | integer | `15` | minutes | Global | PROPOSED_DEFAULT | Time window in minutes within which the latest worker location ping is rendered as "Active/Online" on Live Map. |
 | `document_expiry_lead_days` | integer | `30` | days | Global | PROPOSED_DEFAULT | Advance notification window before passport, residency visa, or driving license expiration triggers an HR alert. |
 | `payroll_auto_run_delay_days` | integer | `5` | days | Global | PROPOSED_DEFAULT | Working days after calendar month-end before automated draft payroll calculations are triggered for approval review. |
+| `scope_site_worker_window_days` | integer | `31` | days | Global | PROPOSED_DEFAULT | DEC-57: a worker counts as "on my worksite" for the Employees list when they hold an active standing assignment there today, or have scheduled work there within this many days before or after today. |
 
 ---
 

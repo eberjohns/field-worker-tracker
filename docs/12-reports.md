@@ -5,6 +5,12 @@ Sources: the client's *SGS Field Tracker - Inputs and Outputs* document (section
 ## 1. Rules for every report
 - **Every report exports to Excel (XLSX).** CSV is also offered; PDF only for daily attendance and the payroll sheet. (Client: "All reports can be exported to Excel".)
 - Role- and **reporting-scope** restricted (see `02-roles-and-permissions.md`). Supervisors never see salary, provision, payroll or cost reports.
+- **Scope rule per report (DEC-57, ADR-027).** "Site-day" means the employee had ACTIVE or COMPLETED scheduled work on one of my worksites on that work date. Superintendents and Engineers also see their whole crew.
+  - Site-day: `daily-attendance`, `monthly-attendance`, `late-early-departure`, `employee-utilization`, `transportation-time`, `site-visits`, `employee-movement` (visits and tracking gaps), `project-attendance-summary` (also limited to my worksites), `weekly-roster` (per cell; out-of-scope days show `-`).
+  - Worksite rows: `pending-visits` (visits on my worksites).
+  - `staffing-gaps`: crew, or scheduled (any status) on my worksites during the leave; the missing-boundary list shows my worksites only.
+  - Crew chain: `document-expiry`.
+  - Admin only: `payroll`, `provisions-staff-cost`, `job-costing`.
 - Filters common to all: date range, group, zone, worksite, supervisor, superintendent, engineer, employee, SGD.
 - Figures are **traceable**: each row links to its attendance record, visits and raw events. Inferred values are labelled INFERRED.
 - **Generated history**: month-end reports run automatically and **every generated file is kept** in the Generated Reports section (nothing is overwritten; re-generations get a new version). Names: `<Company>_<Report>_<Country>_<Period>_generated-<date>.xlsx`, e.g. `FieldWorkerTracker_Payroll-Cost_AE_2026-10_generated-2026-11-06.xlsx`.

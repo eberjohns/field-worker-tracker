@@ -10,12 +10,13 @@ from fw.modules.attendance.models import SiteVisit
 from fw.modules.jobs.models import Worksite
 from fw.modules.org.models import Employee
 from fw.modules.reports.schemas import ReportFilterParams
+from fw.modules.scheduling import AccessScope
 
 
 async def fetch_site_visits(
     session: AsyncSession,
     filters: ReportFilterParams,
-    scoped_ids: set[UUID] | None,
+    scope: AccessScope | None,
 ) -> list[dict[str, Any]]:
     """Query verified site visits grouped by worker."""
     stmt = (
@@ -25,8 +26,12 @@ async def fetch_site_visits(
     )
 
     conditions = []
-    if scoped_ids is not None:
-        conditions.append(SiteVisit.employee_id.in_(scoped_ids))
+    # DEC-57 site-day rule: employee-days scheduled on my worksites (+ crew for Supt/Eng)
+    conditions_scope = (
+        scope.operations_clause(SiteVisit.employee_id, SiteVisit.work_date) if scope else None
+    )
+    if conditions_scope is not None:
+        conditions.append(conditions_scope)
     if filters.employee_id:
         conditions.append(SiteVisit.employee_id == filters.employee_id)
     if filters.worksite_id:

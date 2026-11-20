@@ -161,7 +161,7 @@ Fixed crew hierarchy links: `employee_id` FK, `manager_id` FK employees, `relati
 | is_active | bool | |
 
 ### worksite_supervisors
-`id uuid PK`, `worksite_id uuid FK worksites ON DELETE CASCADE`, `supervisor_id uuid FK employees ON DELETE CASCADE`, `assigned_at timestamptz`, `assigned_by_user_id uuid FK users`. Unique (`worksite_id`, `supervisor_id`). Enables multiple assigned field supervisors per worksite and scopes their operational visibility (ADR-026).
+`id uuid PK`, `worksite_id uuid FK worksites ON DELETE CASCADE`, `supervisor_id uuid FK employees ON DELETE RESTRICT` (must have role SUPERVISOR), `created_by_user_id uuid FK users ON DELETE SET NULL`, `is_active bool`, `version int`, `created_at`, `updated_at`. Unique (`worksite_id`, `supervisor_id`); indexes on `worksite_id`, `supervisor_id`, `is_active`. Ending an assignment sets `is_active = false` (never deleted); assigning again reactivates the row. Rows end automatically when the supervisor is deactivated or stops being a SUPERVISOR. Drives worksite scope (DEC-57, ADR-026, ADR-027). Imported from the `Worksite_Supervisors` sheet.
 
 ### job_items
 `worksite_id` FK, `sub_item_code` text, `staff_grade_description` (required), `planned_grade_code` (required; base code, year suffix stripped; used for the budget and grade-group suggestions), `frequency_unit`, `occurrences_per_period` numeric(6,2), `period_interval` int default 1, `weekday_pattern` text[] nullable, `required_staff_count` int, `hours_per_occurrence_per_staff` numeric(8,3), `declared_activities_per_year` numeric nullable, `declared_total_hours_per_year` numeric nullable, `start_date`, `end_date` nullable, `deployment_type` (PERMANENT/REMOTE, required), `break_override_minutes` nullable, `is_active`, `version`.

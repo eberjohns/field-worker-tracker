@@ -515,6 +515,9 @@ class LeaveRequestResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
+    read_only: bool = (
+        False  # seen through a worksite only (DEC-57); decisions follow the crew chain
+    )
     employee_id: UUID
     employee_name: str | None = None
     tally_id: str | None = None
@@ -656,6 +659,9 @@ class ReassignmentResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
+    read_only: bool = (
+        False  # seen through a worksite only (DEC-57); decisions follow the crew chain
+    )
     batch_id: UUID | None = None
     batch_note: str | None = None
     reassignment_type: str

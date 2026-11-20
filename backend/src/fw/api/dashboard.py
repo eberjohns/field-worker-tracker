@@ -19,9 +19,10 @@ from fw.modules.attendance.models import (
 )
 from fw.modules.events import EventsService
 from fw.modules.identity import User, get_current_user
-from fw.modules.jobs import Worksite
+from fw.modules.jobs import JobsService, Worksite
 from fw.modules.notifications.models import Alert
-from fw.modules.org import EmployeeDocument, OrgService
+from fw.modules.org import EmployeeDocument
+from fw.modules.scheduling import AccessScope
 from fw.modules.scheduling.models import LeaveRequest, ReassignmentRequest, ScheduledWork
 
 logger = structlog.get_logger(__name__)
@@ -55,6 +56,7 @@ class DashboardSummaryResponse(BaseModel):
     open_alerts_count: int
     expiring_documents_count: int
     pending_approvals_count: int
+    unassigned_worksites_count: int | None = None  # Admin only (DEC-57)
 
 
 @router.get("/summary", response_model=DashboardSummaryResponse)
@@ -66,11 +68,11 @@ async def get_dashboard_summary(
     now = datetime.now(UTC)
     local_today = site_today()
 
-    # Scope resolution
-    scoped_ids: set[UUID] | None = None
-    if current_user.role != "ADMIN":
-        scoped_list = await OrgService.get_scoped_employee_ids(session, current_user)
-        scoped_ids = set(scoped_list) if scoped_list else set()
+    # Scope resolution (DEC-57): operational counts use today's site-day rule; alerts,
+    # documents and approvals follow the crew chain (DEC-10).
+    scope = await AccessScope.resolve(session, current_user)
+    scoped_ids = await scope.operations_ids_on(session, local_today)
+    crew_ids: set[UUID] | None = None if scope.unrestricted else set(scope.crew_ids)
 
     # 1. Scheduled work today
     sched_q = (
@@ -133,10 +135,9 @@ async def get_dashboard_summary(
 
     # 4. Pending visits
     pv_q = select(func.count(PendingVisit.id)).where(PendingVisit.status == "OPEN")
-    if scoped_ids is not None:
-        pv_q = pv_q.where(PendingVisit.employee_id.in_(scoped_ids))
-    elif current_user.role != "ADMIN" and current_user.employee_id:
-        pv_q = pv_q.where(PendingVisit.employee_id == current_user.employee_id)
+    pv_clause = scope.worksite_row_clause(PendingVisit.employee_id, PendingVisit.worksite_id)
+    if pv_clause is not None:
+        pv_q = pv_q.where(pv_clause)
     pending_visits_count = (await session.execute(pv_q)).scalar() or 0
 
     # 5. Overtime hours today & Late arrivals
@@ -161,9 +162,9 @@ async def get_dashboard_summary(
 
     # 6. Open alerts
     alert_q = select(func.count(Alert.id)).where(Alert.status == "OPEN")
-    if scoped_ids is not None:
+    if crew_ids is not None:
         alert_q = alert_q.where(
-            (Alert.employee_id.in_(scoped_ids))
+            (Alert.employee_id.in_(crew_ids))
             | (Alert.target_user_id == current_user.id)
             | (Alert.target_role == current_user.role)
         )
@@ -180,31 +181,29 @@ async def get_dashboard_summary(
         EmployeeDocument.is_active.is_(True),
         EmployeeDocument.expiry_date <= local_today,
     )
-    if scoped_ids is not None:
-        doc_q = doc_q.where(EmployeeDocument.employee_id.in_(scoped_ids))
+    if crew_ids is not None:
+        doc_q = doc_q.where(EmployeeDocument.employee_id.in_(crew_ids))
     expiring_docs_count = (await session.execute(doc_q)).scalar() or 0
 
-    # 8. Pending approvals count
-    pending_leaves = (
-        await session.execute(
-            select(func.count(LeaveRequest.id)).where(LeaveRequest.status == "REQUESTED")
-        )
-    ).scalar() or 0
-    pending_reassign = (
-        await session.execute(
-            select(func.count(ReassignmentRequest.id)).where(
-                ReassignmentRequest.status == "REQUESTED"
-            )
-        )
-    ).scalar() or 0
-    pending_att_reviews = (
-        await session.execute(
-            select(func.count(AttendanceRecord.id)).where(
-                AttendanceRecord.review_status == "PENDING_REVIEW"
-            )
-        )
-    ).scalar() or 0
+    # 8. Pending approvals count (crew chain only: these are decisions, DEC-10)
+    leave_q = select(func.count(LeaveRequest.id)).where(LeaveRequest.status == "REQUESTED")
+    reassign_q = select(func.count(ReassignmentRequest.id)).where(
+        ReassignmentRequest.status == "PENDING"
+    )
+    review_q = select(func.count(AttendanceRecord.id)).where(
+        AttendanceRecord.review_status == "PENDING_REVIEW"
+    )
+    if crew_ids is not None:
+        leave_q = leave_q.where(LeaveRequest.employee_id.in_(crew_ids))
+        reassign_q = reassign_q.where(ReassignmentRequest.original_employee_id.in_(crew_ids))
+        review_q = review_q.where(AttendanceRecord.employee_id.in_(crew_ids))
+    pending_leaves = (await session.execute(leave_q)).scalar() or 0
+    pending_reassign = (await session.execute(reassign_q)).scalar() or 0
+    pending_att_reviews = (await session.execute(review_q)).scalar() or 0
     pending_approvals_count = pending_leaves + pending_reassign + pending_att_reviews
+    unassigned_worksites_count = (
+        await JobsService.count_unassigned_worksites(session) if scope.unrestricted else None
+    )
 
     return DashboardSummaryResponse(
         today_date=str(local_today),
@@ -223,6 +222,7 @@ async def get_dashboard_summary(
             total=live_resp.total_count,
         ),
         pending_visits_count=pending_visits_count,
+        unassigned_worksites_count=unassigned_worksites_count,
         late_arrivals_count=late_arrivals_count,
         overtime_hours_today=round(ot_minutes_total / 60.0, 1),
         open_alerts_count=open_alerts_count,

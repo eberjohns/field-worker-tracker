@@ -22,10 +22,14 @@ For user U (an employee), `scope(U)` is the set of employees E where:
 
 ADMIN sees everything. WORKER sees self only. Superintendents are view-only, except that they may create temporary reassignments (see the matrix).
 
-Derived visibility:
-- **Employees**: `scope(U)`.
-- **Worksites / Job Items**: those with scheduled work or occurrences involving any employee in `scope(U)`, plus any a Supervisor/Engineer is explicitly assigned. (Admin: all.)
-- **Attendance, comments, events, payroll**: for employees in `scope(U)`.
+Derived visibility (DEC-57, ADR-027; one implementation: `fw.modules.scheduling.AccessScope`):
+- **Worksites / Job Items**: Admin all. Supervisor: the worksites assigned to them in `worksite_supervisors`. Superintendent/Engineer: the worksites assigned to any supervisor in `scope(U)`. Worksites with no supervisor are visible to Admin only (dashboard warning and "Unassigned" filter). Out-of-scope worksite detail returns 404.
+- **Employees**: `scope(U)` plus workers on my worksites (active standing assignment today, or scheduled there within ± `scope_site_worker_window_days`, default 31), read-only.
+- **Leave and reassignment requests**: Supervisor: own crew. Superintendent/Engineer: `scope(U)` plus workers on their worksites (read-only).
+- **Attendance, comments, events, live map, pending visits, dashboard, dated reports**: the *site-day rule*. An employee-day is visible when that employee had ACTIVE or COMPLETED scheduled work on one of my worksites on that date. Superintendent/Engineer also see `scope(U)` on every day. A Supervisor's own crew on another supervisor's site belongs to that site's supervisor.
+- **Read-only**: workers seen only through a worksite carry `read_only: true`. The viewer may view and comment; edits and approvals follow `scope(U)` (DEC-10) and are refused with `READ_ONLY_SCOPE` / `OUT_OF_SCOPE`.
+- **Reassignment destinations** (`GET /job-items/destinations`): every active job item (names and codes only), because supervisors move their own crew onto other supervisors' sites.
+- **Payroll and costs**: Admin only (DEC-47).
 Every list and detail endpoint must apply the scope filter in the service/repository layer, not only in the UI.
 
 ## Permission matrix

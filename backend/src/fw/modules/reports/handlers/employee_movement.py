@@ -11,18 +11,23 @@ from fw.modules.attendance.models import SiteVisit, TrackingGap
 from fw.modules.jobs.models import Worksite
 from fw.modules.org.models import Accommodation, Employee
 from fw.modules.reports.schemas import ReportFilterParams
+from fw.modules.scheduling import AccessScope
 
 
 async def fetch_employee_movement(
     session: AsyncSession,
     filters: ReportFilterParams,
-    scoped_ids: set[UUID] | None,
+    scope: AccessScope | None,
 ) -> list[dict[str, Any]]:
     """Reconstruct daily chronological movement trail for workers."""
     visit_stmt = select(SiteVisit).order_by(SiteVisit.work_date.asc(), SiteVisit.entry_at.asc())
     visit_conds = []
-    if scoped_ids is not None:
-        visit_conds.append(SiteVisit.employee_id.in_(scoped_ids))
+    # DEC-57 site-day rule: employee-days scheduled on my worksites (+ crew for Supt/Eng)
+    visit_conds_scope = (
+        scope.operations_clause(SiteVisit.employee_id, SiteVisit.work_date) if scope else None
+    )
+    if visit_conds_scope is not None:
+        visit_conds.append(visit_conds_scope)
     if filters.employee_id:
         visit_conds.append(SiteVisit.employee_id == filters.employee_id)
     if filters.date_from:
@@ -38,8 +43,12 @@ async def fetch_employee_movement(
 
     gap_stmt = select(TrackingGap).order_by(TrackingGap.work_date.asc())
     gap_conds = []
-    if scoped_ids is not None:
-        gap_conds.append(TrackingGap.employee_id.in_(scoped_ids))
+    # DEC-57 site-day rule: employee-days scheduled on my worksites (+ crew for Supt/Eng)
+    gap_conds_scope = (
+        scope.operations_clause(TrackingGap.employee_id, TrackingGap.work_date) if scope else None
+    )
+    if gap_conds_scope is not None:
+        gap_conds.append(gap_conds_scope)
     if filters.employee_id:
         gap_conds.append(TrackingGap.employee_id == filters.employee_id)
     if filters.date_from:

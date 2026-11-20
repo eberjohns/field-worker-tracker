@@ -92,6 +92,7 @@ from fw.modules.scheduling.schemas import (
     ValidationReportRead,
     WorkerAllocationResponse,
 )
+from fw.modules.scheduling.scope import AccessScope
 from fw.modules.settings import CompanySettingValue, PublicHoliday, TimeRule
 from fw.rules.scheduling import (
     INT_TO_WEEKDAY,
@@ -3544,10 +3545,14 @@ class SchedulingService:
             .order_by(LeaveRequest.from_date.desc(), LeaveRequest.created_at.desc())
         )
 
+        scope: AccessScope | None = None
         if current_user:
-            scoped_ids = await ScopeService.get_scoped_employee_ids(self.session, current_user)
-            if scoped_ids is not None:
-                stmt = stmt.where(LeaveRequest.employee_id.in_(scoped_ids))
+            # DEC-57: supervisors their own crew; superintendents/engineers their crew plus
+            # workers on their worksites (read-only). Decisions stay with the crew chain.
+            scope = await AccessScope.resolve(self.session, current_user)
+            request_ids = await scope.request_ids(self.session)
+            if request_ids is not None:
+                stmt = stmt.where(LeaveRequest.employee_id.in_(request_ids))
 
         if employee_id:
             stmt = stmt.where(LeaveRequest.employee_id == employee_id)
@@ -3559,7 +3564,11 @@ class SchedulingService:
             stmt = stmt.where(LeaveRequest.from_date <= to_date)
 
         rows = (await self.session.execute(stmt)).scalars().all()
-        return [self._build_leave_response(item) for item in rows]
+        responses = [self._build_leave_response(item) for item in rows]
+        if scope is not None:
+            for resp in responses:
+                resp.read_only = scope.is_read_only(resp.employee_id)
+        return responses
 
     async def _apply_cover_worker_to_leave(
         self,
@@ -4008,9 +4017,10 @@ class SchedulingService:
         """Compute leave taken per worker, type, and calendar year (working vs calendar days)."""
         emp_stmt = select(Employee).where(Employee.is_active.is_(True))
         if current_user:
-            scoped_ids = await ScopeService.get_scoped_employee_ids(self.session, current_user)
-            if scoped_ids is not None:
-                emp_stmt = emp_stmt.where(Employee.id.in_(scoped_ids))
+            scope = await AccessScope.resolve(self.session, current_user)
+            request_ids = await scope.request_ids(self.session)
+            if request_ids is not None:
+                emp_stmt = emp_stmt.where(Employee.id.in_(request_ids))
         if employee_id:
             emp_stmt = emp_stmt.where(Employee.id == employee_id)
 
@@ -4336,13 +4346,15 @@ class SchedulingService:
             .order_by(ReassignmentRequest.date_from.desc(), ReassignmentRequest.created_at.desc())
         )
 
+        scope: AccessScope | None = None
         if current_user:
-            scoped_ids = await ScopeService.get_scoped_employee_ids(self.session, current_user)
-            if scoped_ids is not None:
+            scope = await AccessScope.resolve(self.session, current_user)
+            request_ids = await scope.request_ids(self.session)
+            if request_ids is not None:
                 stmt = stmt.where(
                     or_(
-                        ReassignmentRequest.original_employee_id.in_(scoped_ids),
-                        ReassignmentRequest.new_employee_id.in_(scoped_ids),
+                        ReassignmentRequest.original_employee_id.in_(request_ids),
+                        ReassignmentRequest.new_employee_id.in_(request_ids),
                     )
                 )
 
@@ -4361,7 +4373,7 @@ class SchedulingService:
                 r.status = "EXPIRED"
         await self.session.commit()
 
-        return [
+        responses = [
             ReassignmentResponse(
                 id=r.id,
                 batch_id=r.batch_id,
@@ -4398,6 +4410,13 @@ class SchedulingService:
             )
             for r in rows
         ]
+        if scope is not None:
+            for resp, r in zip(responses, rows, strict=True):
+                resp.read_only = not any(
+                    eid is not None and scope.can_decide(eid)
+                    for eid in (r.original_employee_id, r.new_employee_id)
+                )
+        return responses
 
     async def preview_reassignment(
         self,

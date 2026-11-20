@@ -11,13 +11,14 @@ from fw.modules.attendance.models import SiteVisit
 from fw.modules.jobs.models import Worksite
 from fw.modules.org.models import Group, Zone
 from fw.modules.reports.schemas import ReportFilterParams
+from fw.modules.scheduling import AccessScope
 from fw.modules.scheduling.models import ScheduledWork
 
 
 async def fetch_project_attendance_summary(
     session: AsyncSession,
     filters: ReportFilterParams,
-    scoped_ids: set[UUID] | None,
+    scope: AccessScope | None,
 ) -> list[dict[str, Any]]:
     """Aggregate planned vs deployed manpower and hours per project/worksite."""
     ws_stmt = select(Worksite).where(Worksite.is_active.is_(True))
@@ -25,6 +26,9 @@ async def fetch_project_attendance_summary(
         ws_stmt = ws_stmt.where(Worksite.id == filters.worksite_id)
     if filters.country:
         ws_stmt = ws_stmt.where(Worksite.country == filters.country)
+    # Rows are per worksite: non-admins see only the worksites in their scope (DEC-57)
+    if scope is not None and scope.worksite_filter is not None:
+        ws_stmt = ws_stmt.where(Worksite.id.in_(list(scope.worksite_filter)))
 
     ws_res = await session.execute(ws_stmt)
     worksites = ws_res.scalars().all()
@@ -50,8 +54,13 @@ async def fetch_project_attendance_summary(
         sched_stmt = sched_stmt.where(ScheduledWork.work_date >= filters.date_from)
     if filters.date_to:
         sched_stmt = sched_stmt.where(ScheduledWork.work_date <= filters.date_to)
-    if scoped_ids is not None:
-        sched_stmt = sched_stmt.where(ScheduledWork.employee_id.in_(scoped_ids))
+    sched_stmt_scope = (
+        scope.operations_clause(ScheduledWork.employee_id, ScheduledWork.work_date)
+        if scope
+        else None
+    )
+    if sched_stmt_scope is not None:
+        sched_stmt = sched_stmt.where(sched_stmt_scope)
 
     sched_res = await session.execute(sched_stmt)
     scheduled_items = sched_res.scalars().all()
@@ -63,8 +72,11 @@ async def fetch_project_attendance_summary(
         visit_stmt = visit_stmt.where(SiteVisit.work_date >= filters.date_from)
     if filters.date_to:
         visit_stmt = visit_stmt.where(SiteVisit.work_date <= filters.date_to)
-    if scoped_ids is not None:
-        visit_stmt = visit_stmt.where(SiteVisit.employee_id.in_(scoped_ids))
+    visit_stmt_scope = (
+        scope.operations_clause(SiteVisit.employee_id, SiteVisit.work_date) if scope else None
+    )
+    if visit_stmt_scope is not None:
+        visit_stmt = visit_stmt.where(visit_stmt_scope)
 
     visit_res = await session.execute(visit_stmt)
     visits = visit_res.scalars().all()

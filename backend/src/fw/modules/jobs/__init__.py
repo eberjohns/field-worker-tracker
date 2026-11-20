@@ -1,5 +1,6 @@
 """Public interface for jobs module."""
 
+from fw.modules.jobs.listeners import register_jobs_listeners
 from fw.modules.jobs.models import JobItem, JobOccurrence, Worksite, WorksiteSupervisor
 from fw.modules.jobs.schemas import (
     BoundaryCopyRequest,
@@ -14,15 +15,21 @@ from fw.modules.jobs.schemas import (
     BoundaryUpdateRequest,
     GenerateOccurrencesRequest,
     JobItemCreate,
+    JobItemDestination,
     JobItemResponse,
     JobItemUpdate,
     JobItemValidationResponse,
     JobOccurrenceResponse,
     JobOccurrenceUpdate,
+    SupervisorProposal,
     WorksiteCreate,
     WorksiteDetailResponse,
     WorksiteResponse,
     WorksiteSupervisorAssign,
+    WorksiteSupervisorBulkAssign,
+    WorksiteSupervisorBulkAssignResult,
+    WorksiteSupervisorPair,
+    WorksiteSupervisorProposal,
     WorksiteSupervisorRead,
     WorksiteUpdate,
 )
@@ -54,7 +61,14 @@ __all__ = [
     "WorksiteDetailResponse",
     "WorksiteResponse",
     "WorksiteSupervisor",
+    "JobItemDestination",
+    "SupervisorProposal",
     "WorksiteSupervisorAssign",
+    "WorksiteSupervisorBulkAssign",
+    "WorksiteSupervisorBulkAssignResult",
+    "WorksiteSupervisorPair",
+    "WorksiteSupervisorProposal",
     "WorksiteSupervisorRead",
     "WorksiteUpdate",
+    "register_jobs_listeners",
 ]

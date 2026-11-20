@@ -26,6 +26,7 @@ import {
   CONTROLLED_STAFF_GRADE_DESCRIPTIONS,
   DEFAULT_GRADE_CODES,
 } from "../components/jobs/jobItemUtils";
+import SupervisorProposalsModal from "../components/jobs/SupervisorProposalsModal";
 
 interface Worksite {
   id: string;
@@ -119,6 +120,9 @@ export const Worksites: React.FC = () => {
   const [revisions, setRevisions] = useState<{ code: string; name: string; country: string }[]>([]);
   const [boundaryFilter, setBoundaryFilter] = useState<string>("SET");
   const [statusFilter, setStatusFilter] = useState<"active" | "inactive" | "all">("active");
+  // DEC-57 (Admin): worksites with no active supervisor, and the "assign from crews" review.
+  const [unassignedOnly, setUnassignedOnly] = useState(false);
+  const [showProposals, setShowProposals] = useState(false);
   const [sortBy, setSortBy] = useState<"job_number" | "name">("job_number");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
@@ -177,6 +181,7 @@ export const Worksites: React.FC = () => {
       if (countryFilter) params.set("country", countryFilter);
       if (boundaryFilter === "SET") params.set("has_boundary", "true");
       if (boundaryFilter === "UNSET") params.set("has_boundary", "false");
+      if (user?.role === "ADMIN" && unassignedOnly) params.set("unassigned", "true");
 
       const accParams = new URLSearchParams();
       if (user?.role === "ADMIN") {
@@ -225,7 +230,7 @@ export const Worksites: React.FC = () => {
 
   useEffect(() => {
     fetchData();
-  }, [search, groupFilter, zoneFilter, countryFilter, boundaryFilter, statusFilter]);
+  }, [search, groupFilter, zoneFilter, countryFilter, boundaryFilter, statusFilter, unassignedOnly]);
 
   const handleSaveAccommodationBoundary = async (polygon: GeoJSON.Polygon) => {
     if (!drawingAccommodation) return;
@@ -476,6 +481,15 @@ export const Worksites: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
+          {user?.role === "ADMIN" && (
+            <button
+              onClick={() => setShowProposals(true)}
+              className="flex items-center gap-1.5 px-3 py-2 border border-indigo-200 bg-indigo-50 text-indigo-700 rounded-md text-sm font-medium hover:bg-indigo-100 transition shadow-xs"
+              title="Suggest worksite supervisors from current crews, review, then confirm"
+            >
+              Assign supervisors from crews
+            </button>
+          )}
           {isAdminOrEngineer && (
             <>
               <button
@@ -613,6 +627,20 @@ export const Worksites: React.FC = () => {
               <option value="inactive">Status: Deactivated</option>
               <option value="all">Status: All</option>
             </select>
+          )}
+
+          {user?.role === "ADMIN" && activeTab === "worksites" && (
+            <label
+              className="flex items-center gap-1.5 text-sm text-slate-700 border border-slate-300 rounded-md py-1.5 px-3 bg-white cursor-pointer"
+              title="Admin only: worksites with no active supervisor. Non-admins cannot see these (DEC-57)."
+            >
+              <input
+                type="checkbox"
+                checked={unassignedOnly}
+                onChange={(e) => setUnassignedOnly(e.target.checked)}
+              />
+              Unassigned only
+            </label>
           )}
 
           {activeTab === "worksites" && (
@@ -1431,6 +1459,11 @@ export const Worksites: React.FC = () => {
           </div>
         </div>
       )}
+      <SupervisorProposalsModal
+        isOpen={showProposals}
+        onClose={() => setShowProposals(false)}
+        onAssigned={fetchData}
+      />
     </div>
   );
 };

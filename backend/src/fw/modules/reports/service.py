@@ -13,7 +13,6 @@ from fw.adapters.storage import get_file_storage
 from fw.core.errors import AppError
 from fw.modules.identity.models import User
 from fw.modules.notifications import NotificationService
-from fw.modules.org.service import ScopeService
 from fw.modules.payroll.models import PayrollRun
 from fw.modules.reports.formatters.csv_formatter import generate_csv_report
 from fw.modules.reports.formatters.excel import generate_excel_report
@@ -46,6 +45,7 @@ from fw.modules.reports.schemas import (
     ReportExportResponse,
     ReportFilterParams,
 )
+from fw.modules.scheduling import AccessScope
 from fw.modules.settings.service import SettingsService
 
 logger = structlog.get_logger(__name__)
@@ -99,10 +99,10 @@ class ReportService:
             )
 
         # 2. Scope resolution
-        scoped_ids = await ScopeService.get_scoped_employee_ids(session, current_user)
+        scope = await AccessScope.resolve(session, current_user)
 
         # 3. Handler execution
-        all_rows = await handler(session=session, filters=filters, scoped_ids=scoped_ids)
+        all_rows = await handler(session=session, filters=filters, scope=scope)
 
         total_rows = len(all_rows)
         # 4. Pagination
@@ -157,9 +157,9 @@ class ReportService:
         # Execute export
         try:
             filter_obj = ReportFilterParams(**params)
-            scoped_ids = await ScopeService.get_scoped_employee_ids(session, current_user)
+            scope = await AccessScope.resolve(session, current_user)
             handler = HANDLERS[report_key]
-            rows = await handler(session=session, filters=filter_obj, scoped_ids=scoped_ids)
+            rows = await handler(session=session, filters=filter_obj, scope=scope)
 
             # Generate format content
             ts_str = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
@@ -300,7 +300,7 @@ class ReportService:
                 year=run.period_start.year,
                 month=run.period_start.month,
             )
-            rows = await handler(session=session, filters=filter_params, scoped_ids=None)
+            rows = await handler(session=session, filters=filter_params, scope=None)
 
             # Name: <Company>_<Report>_<Country>_<Period>_generated-<datetime>.xlsx
             report_title_slug = re.sub(
@@ -498,7 +498,7 @@ class ReportService:
                     year=r.period_start.year if r.period_start else None,
                     month=r.period_start.month if r.period_start else None,
                 )
-                rows = await handler(session=session, filters=fp, scoped_ids=None)
+                rows = await handler(session=session, filters=fp, scope=None)
                 applied = r.params or {
                     "country": r.country,
                     "period": f"{r.period_start} to {r.period_end}",

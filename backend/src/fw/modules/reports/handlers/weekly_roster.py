@@ -1,7 +1,7 @@
 """Handler for Weekly Roster Export."""
 
 from collections import defaultdict
-from datetime import timedelta
+from datetime import date, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -12,22 +12,30 @@ from fw.core.clock import site_today
 from fw.modules.jobs.models import Worksite
 from fw.modules.org.models import Employee
 from fw.modules.reports.schemas import ReportFilterParams
+from fw.modules.scheduling import AccessScope
 from fw.modules.scheduling.models import ScheduledWork
 
 
 async def fetch_weekly_roster(
     session: AsyncSession,
     filters: ReportFilterParams,
-    scoped_ids: set[UUID] | None,
+    scope: AccessScope | None,
 ) -> list[dict[str, Any]]:
     """Generate weekly schedule in Mon-Sun worker grid format."""
     ref_date = filters.week_start or filters.date_from or site_today()
     mon = ref_date - timedelta(days=ref_date.weekday())
     week_days = [mon + timedelta(days=i) for i in range(7)]
 
+    # DEC-57 per-cell site-day rule: a worker appears when any day of the week is in scope;
+    # days outside scope show as hidden.
+    site_days: set[tuple[UUID, date]] = set()
     emp_stmt = select(Employee).where(Employee.is_active.is_(True))
-    if scoped_ids is not None:
-        emp_stmt = emp_stmt.where(Employee.id.in_(scoped_ids))
+    if scope is not None and not scope.unrestricted:
+        site_days = await scope.site_days(session, week_days[0], week_days[6])
+        visible = {e for e, _ in site_days}
+        if scope.role in ("SUPERINTENDENT", "ENGINEER"):
+            visible |= set(scope.crew_ids)
+        emp_stmt = emp_stmt.where(Employee.id.in_(list(visible)))
     if filters.employee_id:
         emp_stmt = emp_stmt.where(Employee.id == filters.employee_id)
     if filters.country:
@@ -65,6 +73,9 @@ async def fetch_weekly_roster(
         day_cells = []
         tot_planned_hrs = 0.0
         for d in week_days:
+            if scope is not None and scope.employee_day_access(emp.id, d, site_days) is None:
+                day_cells.append("-")
+                continue
             items = work_by_emp_day.get((emp.id, d), [])
             if items:
                 cell_text = "; ".join(items)

@@ -562,8 +562,27 @@ export const OperationalPlanner: React.FC = () => {
     }
   };
 
-  // Available job items for reassignment targets
+  // Reassignment destinations: every active job item, not only my worksites. A supervisor
+  // moves their own crew onto other supervisors' sites; scope limits viewing, not
+  // destinations (DEC-57). Names and codes only, no budget.
+  const [destinations, setDestinations] = useState<
+    { job_item_id: string; job_number: string; job_name: string; sub_item_code: string; staff_grade_description: string }[]
+  >([]);
+  useEffect(() => {
+    if (!token) return;
+    fetch("/api/v1/job-items/destinations", { headers: { Authorization: `Bearer ${token}` } })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((rows) => setDestinations(Array.isArray(rows) ? rows : []))
+      .catch(() => setDestinations([]));
+  }, [token]);
   const availableJobItems = useMemo(() => {
+    if (destinations.length > 0) {
+      return destinations.map((d) => ({
+        job_item_id: d.job_item_id,
+        label: `${d.job_number} - ${d.job_name} (${d.sub_item_code} - ${d.staff_grade_description})`,
+      }));
+    }
+    // Fallback while loading or for roles without the endpoint: items on visible worksites.
     if (!coverageData?.worksites) return [];
     const list: { job_item_id: string; label: string }[] = [];
     for (const ws of coverageData.worksites) {
@@ -575,7 +594,7 @@ export const OperationalPlanner: React.FC = () => {
       }
     }
     return list;
-  }, [coverageData]);
+  }, [destinations, coverageData]);
 
   // Available employees for reassignment
   const availableEmployees = useMemo(() => {

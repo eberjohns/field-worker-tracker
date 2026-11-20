@@ -49,7 +49,7 @@ from fw.modules.org import (
     TallyIdCheckResponse,
 )
 from fw.modules.payroll import PayrollSalaryService
-from fw.modules.scheduling import SchedulingService
+from fw.modules.scheduling import AccessScope, SchedulingService
 from fw.modules.settings import SettingsService
 from fw.modules.sync import MobileConsentWithdrawRequest, SyncService
 
@@ -72,28 +72,9 @@ async def list_employees(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> list[EmployeeRead]:
-    scoped_ids = await ScopeService.get_scoped_employee_ids(session, current_user)
-    if current_user.role == "SUPERVISOR" and current_user.employee_id:
-        from fw.modules.jobs import JobItem, WorksiteSupervisor
-        from fw.modules.scheduling.models import ScheduledWork, StandingAssignment
-
-        ws_stmt = select(WorksiteSupervisor.worksite_id).where(
-            WorksiteSupervisor.supervisor_id == current_user.employee_id,
-            WorksiteSupervisor.is_active == True,  # noqa: E712
-        )
-        ws_ids = list((await session.execute(ws_stmt)).scalars().all())
-        if ws_ids:
-            extra_ids: set[UUID] = set()
-            sa_stmt = (
-                select(StandingAssignment.employee_id)
-                .join(JobItem, StandingAssignment.job_item_id == JobItem.id)
-                .where(JobItem.worksite_id.in_(ws_ids), StandingAssignment.is_active == True)  # noqa: E712
-            )
-            extra_ids.update((await session.execute(sa_stmt)).scalars().all())
-            sw_stmt = select(ScheduledWork.employee_id).where(ScheduledWork.worksite_id.in_(ws_ids))
-            extra_ids.update((await session.execute(sw_stmt)).scalars().all())
-            if scoped_ids is not None:
-                scoped_ids = scoped_ids | extra_ids
+    # DEC-57: crew + workers on my worksites (read-only); one scope service for every route.
+    scope = await AccessScope.resolve(session, current_user)
+    scoped_ids = await scope.directory_ids(session)
 
     effective_is_active = is_active if current_user.role == "ADMIN" else True
     employees = await OrgService.list_employees(
@@ -111,7 +92,10 @@ async def list_employees(
         limit=limit,
         offset=offset,
     )
-    return [EmployeeRead.model_validate(e) for e in employees]
+    result = [EmployeeRead.model_validate(e) for e in employees]
+    for item in result:
+        item.read_only = scope.is_read_only(item.id)
+    return result
 
 
 @router.get("/export")
@@ -123,28 +107,9 @@ async def export_employees_directory(
     session: AsyncSession = Depends(get_db),
 ):
     """Export filtered employee directory as an Excel spreadsheet."""
-    scoped_ids = await ScopeService.get_scoped_employee_ids(session, current_user)
-    if current_user.role == "SUPERVISOR" and current_user.employee_id:
-        from fw.modules.jobs import JobItem, WorksiteSupervisor
-        from fw.modules.scheduling.models import ScheduledWork, StandingAssignment
-
-        ws_stmt = select(WorksiteSupervisor.worksite_id).where(
-            WorksiteSupervisor.supervisor_id == current_user.employee_id,
-            WorksiteSupervisor.is_active == True,  # noqa: E712
-        )
-        ws_ids = list((await session.execute(ws_stmt)).scalars().all())
-        if ws_ids:
-            extra_ids: set[UUID] = set()
-            sa_stmt = (
-                select(StandingAssignment.employee_id)
-                .join(JobItem, StandingAssignment.job_item_id == JobItem.id)
-                .where(JobItem.worksite_id.in_(ws_ids), StandingAssignment.is_active == True)  # noqa: E712
-            )
-            extra_ids.update((await session.execute(sa_stmt)).scalars().all())
-            sw_stmt = select(ScheduledWork.employee_id).where(ScheduledWork.worksite_id.in_(ws_ids))
-            extra_ids.update((await session.execute(sw_stmt)).scalars().all())
-            if scoped_ids is not None:
-                scoped_ids = scoped_ids | extra_ids
+    # DEC-57: crew + workers on my worksites (read-only); one scope service for every route.
+    scope = await AccessScope.resolve(session, current_user)
+    scoped_ids = await scope.directory_ids(session)
 
     effective_is_active = is_active if current_user.role == "ADMIN" else True
     employees = await OrgService.list_employees(
@@ -210,7 +175,8 @@ async def export_employee_dsar(
     """Export complete Subject Access Request (DSAR) multi-sheet Excel file for an employee."""
     if current_user.role != "ADMIN" and current_user.employee_id != employee_id:
         scoped = await ScopeService.get_scoped_employee_ids(session, current_user)
-        if scoped and employee_id not in scoped:
+        # An empty scope must refuse too (it used to let anyone through).
+        if scoped is not None and employee_id not in scoped:
             raise AppError(
                 code="FORBIDDEN",
                 message="Cannot export data for employee outside your scope.",
@@ -443,11 +409,15 @@ async def get_employee(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> EmployeeRead:
-    scoped_ids = await ScopeService.get_scoped_employee_ids(session, current_user)
-    employee = await OrgService.get_employee(session, employee_id, scoped_ids)
+    scope = await AccessScope.resolve(session, current_user)
+    if not scope.unrestricted and await scope.directory_access(session, employee_id) is None:
+        raise AppError(code="OUT_OF_SCOPE", message="Employee is out of scope.", status_code=403)
+    employee = await OrgService.get_employee(session, employee_id)
     if not employee.is_active and current_user.role != "ADMIN":
         raise AppError(code="NOT_FOUND", message="Employee not found.", status_code=404)
-    return EmployeeRead.model_validate(employee)
+    result = EmployeeRead.model_validate(employee)
+    result.read_only = scope.is_read_only(employee.id)
+    return result
 
 
 @router.post("/{employee_id}/change-tally-id", response_model=EmployeeRead)
@@ -815,8 +785,8 @@ async def list_reporting_lines(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> list[ReportingLineRead]:
-    scoped_ids = await ScopeService.get_scoped_employee_ids(session, current_user)
-    if scoped_ids is not None and employee_id not in scoped_ids:
+    scope = await AccessScope.resolve(session, current_user)
+    if not scope.unrestricted and await scope.directory_access(session, employee_id) is None:
         raise AppError(code="OUT_OF_SCOPE", message="Employee is out of scope.", status_code=403)
     lines = await OrgService.list_reporting_lines(session, employee_id)
     return lines
