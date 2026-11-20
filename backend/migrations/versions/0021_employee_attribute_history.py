@@ -54,6 +54,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_employee_attribute_history_attribute", table_name="employee_attribute_history")
+    op.drop_index(
+        "ix_employee_attribute_history_attribute", table_name="employee_attribute_history"
+    )
     op.drop_index("ix_employee_attribute_history_employee", table_name="employee_attribute_history")
     op.drop_table("employee_attribute_history")

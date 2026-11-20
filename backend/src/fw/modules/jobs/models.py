@@ -181,7 +181,7 @@ class JobOccurrence(Base):
     job_item: Mapped[JobItem] = relationship("JobItem", back_populates="occurrences")
 
 
-class WorksiteSupervisor(Base):
+class WorksiteSupervisor(ModelBase):
     """Many-to-many relationship linking a Worksite to assigned Supervisors."""
 
     __tablename__ = "worksite_supervisors"
@@ -192,7 +192,6 @@ class WorksiteSupervisor(Base):
         Index("ix_worksite_supervisors_is_active", "is_active"),
     )
 
-    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
     worksite_id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("worksites.id", ondelete="CASCADE"),
@@ -202,10 +201,6 @@ class WorksiteSupervisor(Base):
         PG_UUID(as_uuid=True),
         ForeignKey("employees.id", ondelete="RESTRICT"),
         nullable=False,
-    )
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
     )
     created_by_user_id: Mapped[UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
