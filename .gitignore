@@ -61,3 +61,7 @@ Thumbs.db
 *.swo
 
 docs/reference/client-files/
+# Demo data built from client files (real names and salaries): keep local only (golden rule 8)
+tools/demo_data/FieldWorkerTracker_Demo_Import.xlsx
+tools/demo_data/demo_assignments.json
+tools/demo_data/demo_routes/

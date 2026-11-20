@@ -1,9 +1,9 @@
 {
-  "version": "1.9.0",
+  "version": "1.9.1",
   "major": 1,
   "minor": 9,
-  "patch": 0,
-  "last_branch": "fix/batch5.2-dec57-scope",
-  "last_commit": "2bf319c",
-  "updated_at": "2026-11-20T11:47:20.524358+00:00"
+  "patch": 1,
+  "last_branch": "docs/handover-update",
+  "last_commit": "94dc9a5",
+  "updated_at": "2026-11-20T12:24:30.469953+00:00"
 }
