@@ -10,7 +10,7 @@ import { TerraDrawMapLibreGLAdapter } from "terra-draw-maplibre-gl-adapter";
 import area from "@turf/area";
 import booleanValid from "@turf/boolean-valid";
 import kinks from "@turf/kinks";
-import { CheckCircle2, AlertCircle, Trash2, Save, MousePointer, Hexagon, Info, Clipboard, X } from "lucide-react";
+import { CheckCircle2, AlertCircle, Trash2, Save, MousePointer, Hexagon, Info, Clipboard, X, Crosshair } from "lucide-react";
 
 interface PolygonEditorProps {
   map: MapLibreMap | null;
@@ -291,6 +291,33 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   const [validationMessage, setValidationMessage] = useState<string>("");
   const [showPasteModal, setShowPasteModal] = useState<boolean>(false);
   const [pasteInput, setPasteInput] = useState<string>("");
+  const [locating, setLocating] = useState<boolean>(false);
+
+  const handleLocateMe = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser");
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLocating(false);
+        const { longitude, latitude } = pos.coords;
+        if (map) {
+          map.flyTo({
+            center: [longitude, latitude],
+            zoom: 16,
+            essential: true,
+          });
+        }
+      },
+      (err) => {
+        setLocating(false);
+        alert(`Could not get GPS location: ${err.message}`);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
 
   // Initialize Terra Draw & preview layers once map is ready
   useEffect(() => {
@@ -806,6 +833,17 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
           >
             <MousePointer className="h-3.5 w-3.5" />
             Select / Edit
+          </button>
+
+          <button
+            type="button"
+            onClick={handleLocateMe}
+            disabled={locating}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md text-xs font-semibold transition"
+            title="Focus map to my current GPS location"
+          >
+            <Crosshair className={`h-3.5 w-3.5 text-indigo-600 ${locating ? "animate-spin" : ""}`} />
+            {locating ? "Locating..." : "My Location"}
           </button>
 
           <button

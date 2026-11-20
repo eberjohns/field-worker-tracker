@@ -333,7 +333,7 @@ async def preview_salary_revision_file(
 async def get_budget_vs_actual(
     country: str | None = None,
     as_of: date | None = None,
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    current_user: User = Depends(require_role("ADMIN")),
     session: AsyncSession = Depends(get_db),
 ) -> list[WorksiteBudgetVsActualItem]:
     """Calculate dynamic contract budget from assigned revision lines and items vs actual allocated cost."""

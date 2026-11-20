@@ -24,7 +24,8 @@ from sqlalchemy.orm import joinedload, selectinload
 from fw.core.errors import AppError
 from fw.core.events import AccommodationBoundaryChanged, WorksiteBoundaryChanged, event_bus
 from fw.modules.audit import AuditService
-from fw.modules.jobs.models import JobItem, JobOccurrence, Worksite
+from fw.modules.identity import User
+from fw.modules.jobs.models import JobItem, JobOccurrence, Worksite, WorksiteSupervisor
 from fw.modules.jobs.schemas import (
     BoundaryExportItem,
     BoundaryImportError,
@@ -41,10 +42,12 @@ from fw.modules.jobs.schemas import (
     WorksiteCreate,
     WorksiteDetailResponse,
     WorksiteResponse,
+    WorksiteSupervisorRead,
     WorksiteUpdate,
 )
-from fw.modules.org import Accommodation, Employee, Group, Zone
+from fw.modules.org import Accommodation, Employee, EmployeeReportingLine, Group, Zone
 from fw.modules.settings import SettingsService
+from fw.rules.hierarchy import compute_transitive_scope
 from fw.rules.jobs import (
     calculate_days_per_occurrence,
     calculate_expected_activities_per_year,
@@ -62,6 +65,7 @@ class JobsService:
     @staticmethod
     async def list_worksites(
         session: AsyncSession,
+        scoped_ids: set[UUID] | None = None,
         q: str | None = None,
         group_id: UUID | None = None,
         zone_id: UUID | None = None,
@@ -82,6 +86,8 @@ class JobsService:
             .join(Zone, Worksite.zone_id == Zone.id)
         )
 
+        if scoped_ids is not None:
+            query = query.where(Worksite.id.in_(scoped_ids))
         if is_active is not None:
             query = query.where(Worksite.is_active == is_active)
         if group_id:
@@ -204,6 +210,34 @@ class JobsService:
                 )
             )
 
+        # Load active assigned supervisors
+        sup_query = (
+            select(
+                WorksiteSupervisor,
+                Employee.name.label("emp_name"),
+                Employee.tally_id.label("emp_tally"),
+            )
+            .join(Employee, WorksiteSupervisor.supervisor_id == Employee.id)
+            .where(
+                WorksiteSupervisor.worksite_id == worksite_id,
+                WorksiteSupervisor.is_active == True,  # noqa: E712
+            )
+            .order_by(Employee.name.asc())
+        )
+        sup_result = await session.execute(sup_query)
+        supervisors = [
+            WorksiteSupervisorRead(
+                id=s.id,
+                worksite_id=s.worksite_id,
+                supervisor_id=s.supervisor_id,
+                supervisor_name=name,
+                supervisor_tally_id=tally,
+                is_active=s.is_active,
+                created_at=s.created_at,
+            )
+            for s, name, tally in sup_result.all()
+        ]
+
         return WorksiteDetailResponse(
             id=ws.id,
             job_number=ws.job_number,
@@ -230,7 +264,186 @@ class JobsService:
             boundary_geojson=boundary_dict,
             items=item_responses,
             job_items=item_responses,
+            supervisors=supervisors,
         )
+
+    @staticmethod
+    async def get_scoped_worksite_ids(
+        session: AsyncSession,
+        user: User,
+    ) -> set[UUID] | None:
+        """Resolve worksite IDs in user's operational scope.
+
+        Returns None if user is ADMIN (unrestricted).
+        Returns {worksite_id} where supervisor is assigned if user is SUPERVISOR.
+        Returns worksites assigned to supervisors reporting to this user if SUPERINTENDENT or ENGINEER.
+        """
+        if user.role == "ADMIN":
+            return None
+
+        if user.employee_id is None:
+            return set()
+
+        if user.role == "SUPERVISOR":
+            stmt = select(WorksiteSupervisor.worksite_id).where(
+                WorksiteSupervisor.supervisor_id == user.employee_id,
+                WorksiteSupervisor.is_active == True,  # noqa: E712
+            )
+            res = await session.execute(stmt)
+            return set(res.scalars().all())
+
+        if user.role in ("SUPERINTENDENT", "ENGINEER"):
+            # Load active reporting lines to compute transitive supervisor descendants
+            lines_stmt = select(
+                EmployeeReportingLine.employee_id,
+                EmployeeReportingLine.manager_id,
+            ).where(
+                EmployeeReportingLine.is_active == True  # noqa: E712
+            )
+            lines_res = await session.execute(lines_stmt)
+            links = [(str(row.employee_id), str(row.manager_id)) for row in lines_res.all()]
+            descendant_str_ids = compute_transitive_scope(str(user.employee_id), links)
+            descendant_uuids = [UUID(x) for x in descendant_str_ids]
+
+            stmt = select(WorksiteSupervisor.worksite_id).where(
+                WorksiteSupervisor.supervisor_id.in_(descendant_uuids),
+                WorksiteSupervisor.is_active == True,  # noqa: E712
+            )
+            res = await session.execute(stmt)
+            return set(res.scalars().all())
+
+        return set()
+
+    @staticmethod
+    async def list_worksite_supervisors(
+        session: AsyncSession,
+        worksite_id: UUID,
+    ) -> list[WorksiteSupervisorRead]:
+        """List active supervisors assigned to a worksite."""
+        query = (
+            select(
+                WorksiteSupervisor,
+                Employee.name.label("emp_name"),
+                Employee.tally_id.label("emp_tally"),
+            )
+            .join(Employee, WorksiteSupervisor.supervisor_id == Employee.id)
+            .where(
+                WorksiteSupervisor.worksite_id == worksite_id,
+                WorksiteSupervisor.is_active == True,  # noqa: E712
+            )
+            .order_by(Employee.name.asc())
+        )
+        res = await session.execute(query)
+        return [
+            WorksiteSupervisorRead(
+                id=s.id,
+                worksite_id=s.worksite_id,
+                supervisor_id=s.supervisor_id,
+                supervisor_name=name,
+                supervisor_tally_id=tally,
+                is_active=s.is_active,
+                created_at=s.created_at,
+            )
+            for s, name, tally in res.all()
+        ]
+
+    @staticmethod
+    async def assign_worksite_supervisor(
+        session: AsyncSession,
+        worksite_id: UUID,
+        supervisor_id: UUID,
+        actor_user_id: UUID | None = None,
+        actor_role: str | None = None,
+    ) -> WorksiteSupervisorRead:
+        """Assign a supervisor to a worksite."""
+        ws = await session.get(Worksite, worksite_id)
+        if not ws:
+            raise AppError("WORKSITE_NOT_FOUND", "Worksite not found", status_code=404)
+
+        emp = await session.get(Employee, supervisor_id)
+        if not emp:
+            raise AppError("EMPLOYEE_NOT_FOUND", "Employee not found", status_code=404)
+        if emp.role != "SUPERVISOR":
+            raise AppError(
+                "INVALID_SUPERVISOR_ROLE",
+                f"Employee {emp.name} has role {emp.role}; only SUPERVISOR can be assigned to worksites.",
+                status_code=422,
+            )
+
+        # Check existing assignment
+        stmt = select(WorksiteSupervisor).where(
+            WorksiteSupervisor.worksite_id == worksite_id,
+            WorksiteSupervisor.supervisor_id == supervisor_id,
+        )
+        existing = await session.scalar(stmt)
+        if existing:
+            if not existing.is_active:
+                existing.is_active = True
+                await session.flush()
+            row = existing
+        else:
+            row = WorksiteSupervisor(
+                worksite_id=worksite_id,
+                supervisor_id=supervisor_id,
+                is_active=True,
+                created_by_user_id=actor_user_id,
+            )
+            session.add(row)
+            await session.flush()
+
+        await AuditService.log_action(
+            session=session,
+            action="ASSIGN_WORKSITE_SUPERVISOR",
+            entity_type="worksite",
+            entity_id=str(worksite_id),
+            diff={"supervisor_id": str(supervisor_id), "supervisor_name": emp.name},
+            actor_user_id=actor_user_id,
+            actor_role=actor_role,
+            reason="Supervisor assigned to worksite",
+        )
+
+        return WorksiteSupervisorRead(
+            id=row.id,
+            worksite_id=row.worksite_id,
+            supervisor_id=row.supervisor_id,
+            supervisor_name=emp.name,
+            supervisor_tally_id=emp.tally_id,
+            is_active=row.is_active,
+            created_at=row.created_at,
+        )
+
+    @staticmethod
+    async def remove_worksite_supervisor(
+        session: AsyncSession,
+        worksite_id: UUID,
+        supervisor_id: UUID,
+        actor_user_id: UUID | None = None,
+        actor_role: str | None = None,
+    ) -> bool:
+        """Remove (deactivate) a supervisor from a worksite."""
+        stmt = select(WorksiteSupervisor).where(
+            WorksiteSupervisor.worksite_id == worksite_id,
+            WorksiteSupervisor.supervisor_id == supervisor_id,
+            WorksiteSupervisor.is_active == True,  # noqa: E712
+        )
+        existing = await session.scalar(stmt)
+        if not existing:
+            return False
+
+        existing.is_active = False
+        await session.flush()
+
+        await AuditService.log_action(
+            session=session,
+            action="REMOVE_WORKSITE_SUPERVISOR",
+            entity_type="worksite",
+            entity_id=str(worksite_id),
+            diff={"supervisor_id": str(supervisor_id)},
+            actor_user_id=actor_user_id,
+            actor_role=actor_role,
+            reason="Supervisor unassigned from worksite",
+        )
+        return True
 
     @staticmethod
     async def create_worksite(

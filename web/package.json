@@ -1,7 +1,7 @@
 {
   "name": "field-worker-tracker-web",
   "private": true,
-  "version": "1.7.4",
+  "version": "1.8.2",
   "type": "module",
   "scripts": {
     "dev": "vite",

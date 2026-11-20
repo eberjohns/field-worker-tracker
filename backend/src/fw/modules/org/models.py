@@ -206,6 +206,38 @@ class EmployeeGradeHistory(Base):
     )
 
 
+class EmployeeAttributeHistory(Base):
+    """Immutable audit log of employee profile attribute changes (Grade, Designation, Driver status)."""
+
+    __tablename__ = "employee_attribute_history"
+    __table_args__ = (
+        Index("ix_employee_attribute_history_employee", "employee_id"),
+        Index("ix_employee_attribute_history_attribute", "attribute_name"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    employee_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("employees.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    attribute_name: Mapped[str] = mapped_column(String(50), nullable=False)
+    old_value: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    new_value: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    effective_from: Mapped[date] = mapped_column(Date, nullable=False)
+    changed_by_user_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    reason: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        nullable=False,
+    )
+
+
 class EmployeeDocument(Base):
     """Employee document validity records (Visa, Passport, Emirates ID, etc.)."""
 

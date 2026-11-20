@@ -16,9 +16,16 @@ import {
   Download,
   Upload,
   ArrowUpDown,
+  Edit2,
+  PowerOff,
+  Trash2,
 } from "lucide-react";
-import { MapContainer, PolygonEditor } from "../features/map";
+import { MapContainer, PolygonEditor, PlaceSearch } from "../features/map";
 import { Map as MapLibreMap } from "maplibre-gl";
+import {
+  CONTROLLED_STAFF_GRADE_DESCRIPTIONS,
+  DEFAULT_GRADE_CODES,
+} from "../components/jobs/jobItemUtils";
 
 interface Worksite {
   id: string;
@@ -68,6 +75,20 @@ interface Zone {
   name: string;
 }
 
+interface InitialJobItem {
+  sub_item_code: string;
+  staff_grade_description: string;
+  planned_grade_code: string;
+  start_date: string;
+  end_date: string;
+  required_staff_count: number;
+  hours_per_occurrence_per_staff: number;
+  frequency_unit: string;
+  occurrences_per_period: number;
+  period_interval: number;
+  deployment_type: string;
+}
+
 export const Worksites: React.FC = () => {
   const navigate = useNavigate();
   const { token, user } = useAuth();
@@ -82,6 +103,12 @@ export const Worksites: React.FC = () => {
   const [drawingAccommodation, setDrawingAccommodation] = useState<AccommodationItem | null>(null);
   const [mapInstance, setMapInstance] = useState<MapLibreMap | null>(null);
   const [savingAccommodationBoundary, setSavingAccommodationBoundary] = useState(false);
+
+  // Edit Accommodation modal state
+  const [editingAccommodation, setEditingAccommodation] = useState<AccommodationItem | null>(null);
+  const [editAccName, setEditAccName] = useState("");
+  const [editAccAddress, setEditAccAddress] = useState("");
+  const [savingAcc, setSavingAcc] = useState(false);
 
   // Filters & Sorting
   const [search, setSearch] = useState("");
@@ -102,11 +129,16 @@ export const Worksites: React.FC = () => {
   const [formNumber, setFormNumber] = useState("");
   const [formName, setFormName] = useState("");
   const [formGroupId, setFormGroupId] = useState("");
+  const [newGroupName, setNewGroupName] = useState("");
+  const [newGroupCode, setNewGroupCode] = useState("");
   const [formZoneId, setFormZoneId] = useState("");
+  const [newZoneName, setNewZoneName] = useState("");
+  const [newZoneCode, setNewZoneCode] = useState("");
   const [formCountry, setFormCountry] = useState("AE");
   const [formCustomerType, setFormCustomerType] = useState("Direct");
   const [formRenewalRef, setFormRenewalRef] = useState("");
   const [formBudget, setFormBudget] = useState("");
+  const [initialJobItems, setInitialJobItems] = useState<InitialJobItem[]>([]);
   const [exporting, setExporting] = useState(false);
 
   const handleExport = async () => {
@@ -237,6 +269,42 @@ export const Worksites: React.FC = () => {
 
     setCreateLoading(true);
     try {
+      let effectiveGroupId = formGroupId;
+      if (formGroupId === "__NEW__") {
+        if (!newGroupName.trim()) throw new Error("Please enter a name for the new Customer Group.");
+        const code = (newGroupCode.trim() || newGroupName.trim().toUpperCase().replace(/[^A-Z0-9]/g, "_")).slice(0, 16);
+        const gRes = await fetch("/api/v1/groups", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+          body: JSON.stringify({ name: newGroupName.trim(), code }),
+        });
+        if (!gRes.ok) {
+          const gErr = await gRes.json().catch(() => ({}));
+          throw new Error(gErr.detail || "Failed to create new customer group.");
+        }
+        const createdG = await gRes.json();
+        effectiveGroupId = createdG.id;
+        setGroups((prev) => [...prev, createdG]);
+      }
+
+      let effectiveZoneId = formZoneId;
+      if (formZoneId === "__NEW__") {
+        if (!newZoneName.trim()) throw new Error("Please enter a name for the new Zone.");
+        const code = (newZoneCode.trim() || newZoneName.trim().toUpperCase().replace(/[^A-Z0-9]/g, "_")).slice(0, 16);
+        const zRes = await fetch("/api/v1/zones", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+          body: JSON.stringify({ name: newZoneName.trim(), code, country: formCountry }),
+        });
+        if (!zRes.ok) {
+          const zErr = await zRes.json().catch(() => ({}));
+          throw new Error(zErr.detail || "Failed to create new zone.");
+        }
+        const createdZ = await zRes.json();
+        effectiveZoneId = createdZ.id;
+        setZones((prev) => [...prev, createdZ]);
+      }
+
       const res = await fetch("/api/v1/worksites", {
         method: "POST",
         headers: {
@@ -246,12 +314,12 @@ export const Worksites: React.FC = () => {
         body: JSON.stringify({
           job_number: cleanedNumber,
           job_name: formName.trim(),
-          group_id: formGroupId,
-          zone_id: formZoneId,
+          group_id: effectiveGroupId,
+          zone_id: effectiveZoneId,
           country: formCountry,
           customer_type: formCustomerType || null,
           renewal_reference: formRenewalRef.trim() || null,
-          budget_amount: formBudget ? parseFloat(formBudget) : null,
+          budget_amount: user?.role === "ADMIN" && formBudget ? parseFloat(formBudget) : null,
         }),
       });
 
@@ -260,16 +328,99 @@ export const Worksites: React.FC = () => {
         throw new Error(errData.detail || "Failed to create worksite");
       }
 
+      const createdWs = await res.json();
+
+      // Create initial job items if added
+      for (const item of initialJobItems) {
+        if (!item.sub_item_code.trim()) continue;
+        await fetch(`/api/v1/worksites/${createdWs.id}/job-items`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            sub_item_code: item.sub_item_code.trim(),
+            staff_grade_description: item.staff_grade_description,
+            planned_grade_code: item.planned_grade_code,
+            start_date: item.start_date || new Date().toISOString().slice(0, 10),
+            end_date: item.end_date || null,
+            frequency_unit: item.frequency_unit,
+            occurrences_per_period: item.occurrences_per_period,
+            period_interval: item.period_interval,
+            required_staff_count: item.required_staff_count,
+            hours_per_occurrence_per_staff: item.hours_per_occurrence_per_staff,
+            deployment_type: item.deployment_type,
+          }),
+        });
+      }
+
       setModalOpen(false);
       setFormNumber("");
       setFormName("");
+      setFormGroupId("");
+      setNewGroupName("");
+      setNewGroupCode("");
+      setFormZoneId("");
+      setNewZoneName("");
+      setNewZoneCode("");
       setFormRenewalRef("");
       setFormBudget("");
+      setInitialJobItems([]);
       fetchData();
     } catch (err: any) {
       setErrorMsg(err.message || "Failed to create worksite");
     } finally {
       setCreateLoading(false);
+    }
+  };
+
+  const handleSaveAccommodation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingAccommodation) return;
+    setSavingAcc(true);
+    try {
+      const res = await fetch(`/api/v1/accommodations/${editingAccommodation.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({
+          name: editAccName.trim(),
+          address: editAccAddress.trim() || null,
+          version: editingAccommodation.version,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to update accommodation");
+      }
+      setEditingAccommodation(null);
+      fetchData();
+    } catch (err: any) {
+      alert(err.message || "Failed to update accommodation");
+    } finally {
+      setSavingAcc(false);
+    }
+  };
+
+  const handleToggleAccommodationActive = async (acc: AccommodationItem) => {
+    const action = acc.is_active ? "deactivate" : "reactivate";
+    if (!window.confirm(`Are you sure you want to ${action} accommodation '${acc.name}' (${acc.accommodation_code})?`)) return;
+    try {
+      const res = await fetch(`/api/v1/accommodations/${acc.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({
+          is_active: !acc.is_active,
+          version: acc.version,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Failed to ${action} accommodation`);
+      }
+      fetchData();
+    } catch (err: any) {
+      alert(err.message || `Failed to ${action} accommodation`);
     }
   };
 
@@ -325,24 +476,28 @@ export const Worksites: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
-          <button
-            onClick={handleExport}
-            disabled={exporting}
-            className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 bg-white text-slate-700 rounded-md text-sm font-medium hover:bg-slate-50 transition shadow-xs disabled:opacity-50"
-            title="Export Worksites to Excel"
-          >
-            <Download className="h-4 w-4 text-slate-500" />
-            {exporting ? "Exporting..." : "Export"}
-          </button>
+          {isAdminOrEngineer && (
+            <>
+              <button
+                onClick={handleExport}
+                disabled={exporting}
+                className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 bg-white text-slate-700 rounded-md text-sm font-medium hover:bg-slate-50 transition shadow-xs disabled:opacity-50"
+                title="Export Worksites to Excel"
+              >
+                <Download className="h-4 w-4 text-slate-500" />
+                {exporting ? "Exporting..." : "Export"}
+              </button>
 
-          <Link
-            to="/imports"
-            className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 bg-white text-slate-700 rounded-md text-sm font-medium hover:bg-slate-50 transition shadow-xs"
-            title="Import Worksites from Excel"
-          >
-            <Upload className="h-4 w-4 text-slate-500" />
-            Import
-          </Link>
+              <Link
+                to="/imports"
+                className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 bg-white text-slate-700 rounded-md text-sm font-medium hover:bg-slate-50 transition shadow-xs"
+                title="Import Worksites from Excel"
+              >
+                <Upload className="h-4 w-4 text-slate-500" />
+                Import
+              </Link>
+            </>
+          )}
 
           <Link
             to="/boundaries"
@@ -607,7 +762,7 @@ export const Worksites: React.FC = () => {
                         </div>
                         <div className="text-[11px] text-slate-500 flex items-center gap-2 mt-0.5 font-normal">
                           <span>Period: {ws.start_date || "Start N/A"} – {ws.end_date || "Ongoing"}</span>
-                          {ws.budget_amount != null && (
+                          {ws.budget_amount != null && user?.role === "ADMIN" && (
                             <span>• Budget: {Number(ws.budget_amount).toLocaleString()} AED/yr</span>
                           )}
                         </div>
@@ -743,13 +898,13 @@ export const Worksites: React.FC = () => {
                           </span>
                         )}
                       </td>
-                      <td className="py-3.5 px-4 text-right">
+                      <td className="py-3.5 px-4 text-right space-x-1.5 whitespace-nowrap">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             setDrawingAccommodation(acc);
                           }}
-                          className={`px-3 py-1.5 rounded-md text-xs font-semibold inline-flex items-center gap-1.5 shadow-xs transition ${
+                          className={`px-2.5 py-1 rounded-md text-xs font-semibold inline-flex items-center gap-1 shadow-xs transition ${
                             acc.has_boundary
                               ? "bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200"
                               : "bg-blue-600 hover:bg-blue-700 text-white"
@@ -758,6 +913,40 @@ export const Worksites: React.FC = () => {
                           <MapPin className="h-3.5 w-3.5" />
                           {acc.has_boundary ? "Edit Boundary" : "Draw Boundary"}
                         </button>
+
+                        {isAdminOrEngineer && (
+                          <>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingAccommodation(acc);
+                                setEditAccName(acc.name);
+                                setEditAccAddress(acc.address || "");
+                              }}
+                              className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md text-xs font-medium inline-flex items-center gap-1 transition"
+                              title="Edit Accommodation Name & Address"
+                            >
+                              <Edit2 className="h-3 w-3 text-slate-600" />
+                              Edit
+                            </button>
+
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleAccommodationActive(acc);
+                              }}
+                              className={`px-2.5 py-1 rounded-md text-xs font-medium inline-flex items-center gap-1 transition ${
+                                acc.is_active
+                                  ? "bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200"
+                                  : "bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200"
+                              }`}
+                              title={acc.is_active ? "Deactivate Accommodation" : "Reactivate Accommodation"}
+                            >
+                              <PowerOff className="h-3 w-3" />
+                              {acc.is_active ? "Deactivate" : "Activate"}
+                            </button>
+                          </>
+                        )}
                       </td>
                     </tr>
                   ))
@@ -791,12 +980,15 @@ export const Worksites: React.FC = () => {
             </div>
 
             <div className="p-4 space-y-4 flex-1 overflow-y-auto">
-              <MapContainer
-                initialZoom={15}
-                onMapReady={(map) => setMapInstance(map)}
-                onMapUnmount={() => setMapInstance(null)}
-                className="w-full h-[450px]"
-              />
+              <div className="relative">
+                <PlaceSearch map={mapInstance} />
+                <MapContainer
+                  initialZoom={15}
+                  onMapReady={(map) => setMapInstance(map)}
+                  onMapUnmount={() => setMapInstance(null)}
+                  className="w-full h-[450px]"
+                />
+              </div>
 
               <PolygonEditor
                 map={mapInstance}
@@ -811,12 +1003,21 @@ export const Worksites: React.FC = () => {
 
       {/* Create Worksite Modal */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-lg w-full p-6 space-y-4">
-            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-              <Building2 className="h-5 w-5 text-indigo-600" />
-              Create New Worksite
-            </h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-2xl w-full p-6 space-y-4 my-8 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b pb-3">
+              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Building2 className="h-5 w-5 text-indigo-600" />
+                Create New Worksite
+              </h2>
+              <button
+                type="button"
+                onClick={() => setModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
 
             {errorMsg && (
               <div className="p-3 bg-red-50 border border-red-200 rounded text-xs text-red-700 flex items-center gap-2">
@@ -825,7 +1026,7 @@ export const Worksites: React.FC = () => {
               </div>
             )}
 
-            <form onSubmit={handleCreateWorksite} className="space-y-4">
+            <form onSubmit={handleCreateWorksite} className="space-y-4 flex-1 overflow-y-auto pr-1">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
@@ -888,7 +1089,27 @@ export const Worksites: React.FC = () => {
                         {g.name}
                       </option>
                     ))}
+                    <option value="__NEW__">+ Add New Group...</option>
                   </select>
+                  {formGroupId === "__NEW__" && (
+                    <div className="mt-2 space-y-1.5 p-2.5 bg-slate-50 border border-slate-200 rounded">
+                      <input
+                        type="text"
+                        required
+                        placeholder="New Group Name (e.g. Emaar)"
+                        value={newGroupName}
+                        onChange={(e) => setNewGroupName(e.target.value)}
+                        className="w-full px-2.5 py-1 text-xs border border-slate-300 rounded bg-white"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Group Code (Optional, e.g. EMAAR)"
+                        value={newGroupCode}
+                        onChange={(e) => setNewGroupCode(e.target.value.toUpperCase())}
+                        className="w-full px-2.5 py-1 text-xs font-mono border border-slate-300 rounded bg-white"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -907,7 +1128,27 @@ export const Worksites: React.FC = () => {
                         {z.name}
                       </option>
                     ))}
+                    <option value="__NEW__">+ Add New Zone...</option>
                   </select>
+                  {formZoneId === "__NEW__" && (
+                    <div className="mt-2 space-y-1.5 p-2.5 bg-slate-50 border border-slate-200 rounded">
+                      <input
+                        type="text"
+                        required
+                        placeholder="New Zone Name (e.g. Dubai Marina)"
+                        value={newZoneName}
+                        onChange={(e) => setNewZoneName(e.target.value)}
+                        className="w-full px-2.5 py-1 text-xs border border-slate-300 rounded bg-white"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Zone Code (Optional, e.g. MARINA)"
+                        value={newZoneCode}
+                        onChange={(e) => setNewZoneCode(e.target.value.toUpperCase())}
+                        className="w-full px-2.5 py-1 text-xs font-mono border border-slate-300 rounded bg-white"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -939,22 +1180,175 @@ export const Worksites: React.FC = () => {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Labour Budget
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="e.g. 50000"
-                    value={formBudget}
-                    onChange={(e) => setFormBudget(e.target.value)}
-                    className="w-full px-2 py-1.5 border border-slate-300 rounded text-xs"
-                  />
-                </div>
+                {user?.role === "ADMIN" && (
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">
+                      Labour Budget (AED)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="e.g. 50000"
+                      value={formBudget}
+                      onChange={(e) => setFormBudget(e.target.value)}
+                      className="w-full px-2 py-1.5 border border-slate-300 rounded text-xs"
+                    />
+                  </div>
+                )}
               </div>
 
-              <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
+              {/* Inline Job Items Section */}
+              <div className="border-t border-slate-200 pt-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-900">Job Items (Staff Requirements)</h3>
+                    <p className="text-[11px] text-slate-500">Optional: Add staffing lines directly with this worksite.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextNum = String(initialJobItems.length + 1).padStart(2, "0");
+                      setInitialJobItems((prev) => [
+                        ...prev,
+                        {
+                          sub_item_code: nextNum,
+                          staff_grade_description: CONTROLLED_STAFF_GRADE_DESCRIPTIONS[6] || "Gardener Helper",
+                          planned_grade_code: DEFAULT_GRADE_CODES[8] || "G3C",
+                          start_date: new Date().toISOString().slice(0, 10),
+                          end_date: "",
+                          required_staff_count: 1,
+                          hours_per_occurrence_per_staff: 8.0,
+                          frequency_unit: "MONTH",
+                          occurrences_per_period: 26,
+                          period_interval: 1,
+                          deployment_type: "SCHEDULED",
+                        },
+                      ]);
+                    }}
+                    className="flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded text-xs font-semibold transition"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Add Job Item
+                  </button>
+                </div>
+
+                {initialJobItems.map((item, idx) => (
+                  <div key={idx} className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-slate-700">Item #{idx + 1} ({item.sub_item_code})</span>
+                      <button
+                        type="button"
+                        onClick={() => setInitialJobItems((prev) => prev.filter((_, i) => i !== idx))}
+                        className="text-red-500 hover:text-red-700 p-0.5"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-[10px] text-slate-500 mb-0.5">Sub-Item Code</label>
+                        <input
+                          type="text"
+                          required
+                          value={item.sub_item_code}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setInitialJobItems((prev) => prev.map((it, i) => i === idx ? { ...it, sub_item_code: val } : it));
+                          }}
+                          className="w-full p-1 border rounded bg-white text-xs font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-slate-500 mb-0.5">Staff Designation</label>
+                        <select
+                          value={item.staff_grade_description}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setInitialJobItems((prev) => prev.map((it, i) => i === idx ? { ...it, staff_grade_description: val } : it));
+                          }}
+                          className="w-full p-1 border rounded bg-white text-xs"
+                        >
+                          {CONTROLLED_STAFF_GRADE_DESCRIPTIONS.map((d) => (
+                            <option key={d} value={d}>{d}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-slate-500 mb-0.5">Planned Grade</label>
+                        <select
+                          value={item.planned_grade_code}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setInitialJobItems((prev) => prev.map((it, i) => i === idx ? { ...it, planned_grade_code: val } : it));
+                          }}
+                          className="w-full p-1 border rounded bg-white text-xs font-mono"
+                        >
+                          {DEFAULT_GRADE_CODES.map((g) => (
+                            <option key={g} value={g}>{g}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-4 gap-2">
+                      <div>
+                        <label className="block text-[10px] text-slate-500 mb-0.5">Start Date</label>
+                        <input
+                          type="date"
+                          required
+                          value={item.start_date}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setInitialJobItems((prev) => prev.map((it, i) => i === idx ? { ...it, start_date: val } : it));
+                          }}
+                          className="w-full p-1 border rounded bg-white text-[11px]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-slate-500 mb-0.5">Staff Count</label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={item.required_staff_count}
+                          onChange={(e) => {
+                            const val = Number(e.target.value) || 1;
+                            setInitialJobItems((prev) => prev.map((it, i) => i === idx ? { ...it, required_staff_count: val } : it));
+                          }}
+                          className="w-full p-1 border rounded bg-white text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-slate-500 mb-0.5">Hours / Staff</label>
+                        <input
+                          type="number"
+                          step="0.5"
+                          min="0.5"
+                          value={item.hours_per_occurrence_per_staff}
+                          onChange={(e) => {
+                            const val = Number(e.target.value) || 8;
+                            setInitialJobItems((prev) => prev.map((it, i) => i === idx ? { ...it, hours_per_occurrence_per_staff: val } : it));
+                          }}
+                          className="w-full p-1 border rounded bg-white text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-slate-500 mb-0.5">Occurrences / Period</label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={item.occurrences_per_period}
+                          onChange={(e) => {
+                            const val = Number(e.target.value) || 1;
+                            setInitialJobItems((prev) => prev.map((it, i) => i === idx ? { ...it, occurrences_per_period: val } : it));
+                          }}
+                          className="w-full p-1 border rounded bg-white text-xs"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
@@ -968,6 +1362,69 @@ export const Worksites: React.FC = () => {
                   className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-medium shadow-sm transition disabled:opacity-50"
                 >
                   {createLoading ? "Creating..." : "Save Worksite"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Accommodation Modal */}
+      {editingAccommodation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center justify-between border-b pb-3">
+              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Edit2 className="h-5 w-5 text-indigo-600" />
+                Edit Accommodation ({editingAccommodation.accommodation_code})
+              </h2>
+              <button
+                type="button"
+                onClick={() => setEditingAccommodation(null)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <form onSubmit={handleSaveAccommodation} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Accommodation Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editAccName}
+                  onChange={(e) => setEditAccName(e.target.value)}
+                  className="w-full p-2 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Address / Location
+                </label>
+                <input
+                  type="text"
+                  value={editAccAddress}
+                  onChange={(e) => setEditAccAddress(e.target.value)}
+                  placeholder="e.g. Al Quoz Industrial Area 4, Dubai"
+                  className="w-full p-2 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <button
+                  type="button"
+                  onClick={() => setEditingAccommodation(null)}
+                  className="px-4 py-2 border border-slate-300 rounded text-xs font-medium text-slate-700 hover:bg-slate-50 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingAcc}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-semibold shadow-sm transition disabled:opacity-50"
+                >
+                  {savingAcc ? "Saving..." : "Save Changes"}
                 </button>
               </div>
             </form>

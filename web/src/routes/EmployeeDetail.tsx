@@ -26,7 +26,25 @@ import {
   AlertTriangle,
   X,
   Loader2,
+  Truck,
 } from "lucide-react";
+import {
+  CONTROLLED_STAFF_GRADE_DESCRIPTIONS,
+  DEFAULT_GRADE_CODES,
+} from "../components/jobs/jobItemUtils";
+
+interface AttributeHistoryItem {
+  id: string;
+  employee_id: string;
+  attribute_name: string;
+  old_value: string | null;
+  new_value: string;
+  effective_from: string;
+  reason: string;
+  actor_user_id?: string | null;
+  actor_role: string;
+  created_at: string;
+}
 
 export const EmployeeDetail: React.FC = () => {
   const { employeeId } = useParams({ strict: false }) as { employeeId: string };
@@ -66,6 +84,19 @@ export const EmployeeDetail: React.FC = () => {
   const [hierarchyViolations, setHierarchyViolations] = useState<any[]>([]);
   const [loadingViolations, setLoadingViolations] = useState(false);
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
+
+  // Profile details edit (designation, grade, driver)
+  const [editDetailsModalOpen, setEditDetailsModalOpen] = useState(false);
+  const [detailDesig, setDetailDesig] = useState("");
+  const [detailGrade, setDetailGrade] = useState("");
+  const [detailDriver, setDetailDriver] = useState(false);
+  const [detailReason, setDetailReason] = useState("");
+  const [savingDetails, setSavingDetails] = useState(false);
+
+  // Attribute history
+  const [attributeHistoryModalOpen, setAttributeHistoryModalOpen] = useState(false);
+  const [attributeHistory, setAttributeHistory] = useState<AttributeHistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   // Phase 13 DSAR and Consent actions
   const [exportingDsar, setExportingDsar] = useState(false);
@@ -458,6 +489,13 @@ export const EmployeeDetail: React.FC = () => {
   const handleAddReportingLine = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newManagerId) return;
+
+    const mgr = allManagers.find((m) => m.id === newManagerId);
+    const mgrLabel = mgr ? `${mgr.name} (${mgr.role})` : "selected leader";
+    if (!window.confirm(`Are you sure you want to assign direct reporting line to ${mgrLabel} as ${newRelType}?`)) {
+      return;
+    }
+
     setSavingHierarchy(true);
     setStatusMessage(null);
     setErrorMessage(null);
@@ -508,6 +546,61 @@ export const EmployeeDetail: React.FC = () => {
       setErrorMessage(err.message || "Failed to update hierarchy.");
     } finally {
       setSavingHierarchy(false);
+    }
+  };
+
+  const handleSaveProfileDetails = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!detailReason.trim()) {
+      alert("A reason for this change is required for audit compliance.");
+      return;
+    }
+    setSavingDetails(true);
+    setErrorMessage(null);
+    try {
+      const res = await fetch(`/api/v1/employees/${employeeId}/profile-details`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          staff_grade_description: detailDesig.trim() || null,
+          grade_code: detailGrade.trim() || null,
+          is_driver: detailDriver,
+          reason: detailReason.trim(),
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail?.message || err.detail || "Failed to update profile details.");
+      }
+      setEditDetailsModalOpen(false);
+      setStatusMessage("Employee designation, grade, and driver status updated.");
+      await fetchData();
+    } catch (err: any) {
+      setErrorMessage(err.message || "Failed to update profile details.");
+    } finally {
+      setSavingDetails(false);
+    }
+  };
+
+  const openAttributeHistory = async () => {
+    setAttributeHistoryModalOpen(true);
+    setHistoryLoading(true);
+    try {
+      const res = await fetch(`/api/v1/employees/${employeeId}/attribute-history`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAttributeHistory(data || []);
+      }
+    } catch (err) {
+      console.error("Failed to load attribute history", err);
+      setAttributeHistory([]);
+    } finally {
+      setHistoryLoading(false);
     }
   };
 
@@ -729,13 +822,54 @@ export const EmployeeDetail: React.FC = () => {
                 Consent: {employee.consent_status || "ACCEPTED"}
               </span>
             </div>
-            <p className="text-xs text-slate-500 mt-1">
-              {employee.staff_grade_description || "Field Worker"} • {employee.country} Operations
+            <p className="text-xs text-slate-500 mt-1 flex flex-wrap items-center gap-2">
+              <span className="font-medium text-slate-700">{employee.staff_grade_description || "Field Worker"}</span>
+              {employee.grade_code && (
+                <span className="font-mono text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded text-[11px] font-semibold">
+                  Grade {employee.grade_code}
+                </span>
+              )}
+              {employee.is_driver && (
+                <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded text-[11px] font-semibold flex items-center gap-1">
+                  <Truck className="h-3 w-3" /> Driver
+                </span>
+              )}
+              <span>• {employee.country} Operations</span>
             </p>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {(user?.role === "ADMIN" || user?.role === "ENGINEER") && (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setDetailDesig(employee.staff_grade_description || "");
+                  setDetailGrade(employee.grade_code || "");
+                  setDetailDriver(!!employee.is_driver);
+                  setDetailReason("");
+                  setEditDetailsModalOpen(true);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 border border-indigo-200 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-semibold hover:bg-indigo-100 transition shadow-xs cursor-pointer"
+                title="Edit designation, grade code, and driver status"
+              >
+                <Pencil className="h-3.5 w-3.5 text-indigo-600" />
+                Edit Role / Grade / Driver
+              </button>
+
+              <button
+                type="button"
+                onClick={openAttributeHistory}
+                className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 bg-white text-slate-700 rounded-lg text-xs font-semibold hover:bg-slate-50 transition shadow-xs cursor-pointer"
+                title="View history of designation, grade, and driver changes"
+              >
+                <History className="h-3.5 w-3.5 text-slate-500" />
+                Attribute History
+              </button>
+            </>
+          )}
+
           <button
             onClick={handleExportDsar}
             disabled={exportingDsar}
@@ -2078,6 +2212,217 @@ export const EmployeeDetail: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setViolationsModalOpen(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Role / Grade / Driver Details Modal */}
+      {editDetailsModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center justify-between border-b pb-3">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Pencil className="h-5 w-5 text-indigo-600" />
+                Edit Profile Details ({employee.tally_id})
+              </h3>
+              <button
+                type="button"
+                onClick={() => setEditDetailsModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveProfileDetails} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Staff Grade Description (Designation)
+                </label>
+                {employee.role === "SUPERVISOR" || employee.role === "SUPERINTENDENT" ? (
+                  <input
+                    type="text"
+                    disabled
+                    value={employee.role === "SUPERVISOR" ? "Supervisor" : "Superintendent"}
+                    className="w-full border border-slate-200 bg-slate-50 text-slate-500 rounded-lg p-2 text-xs font-medium cursor-not-allowed"
+                  />
+                ) : employee.role === "ENGINEER" ? (
+                  <select
+                    value={detailDesig}
+                    onChange={(e) => setDetailDesig(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="Landscaping Engineer">Landscaping Engineer</option>
+                    <option value="Irrigation Engineer">Irrigation Engineer</option>
+                    <option value="HSE Engineer">HSE Engineer</option>
+                    <option value="Project Manager">Project Manager</option>
+                  </select>
+                ) : (
+                  <select
+                    value={detailDesig}
+                    onChange={(e) => setDetailDesig(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="">None / Unassigned</option>
+                    {CONTROLLED_STAFF_GRADE_DESCRIPTIONS.map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Grade Code
+                </label>
+                <select
+                  value={detailGrade}
+                  onChange={(e) => setDetailGrade(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg p-2 text-xs font-mono bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">None / Unassigned</option>
+                  {DEFAULT_GRADE_CODES.map((g) => (
+                    <option key={g} value={g}>
+                      {g}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Authorized Company Driver
+                </label>
+                <select
+                  value={detailDriver ? "true" : "false"}
+                  onChange={(e) => setDetailDriver(e.target.value === "true")}
+                  className="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="false">No (Non-Driver)</option>
+                  <option value="true">Yes (Authorized Driver)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Reason for Change <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Annual promotion, DL renewal, role reassignment"
+                  value={detailReason}
+                  onChange={(e) => setDetailReason(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <button
+                  type="button"
+                  onClick={() => setEditDetailsModalOpen(false)}
+                  className="px-4 py-2 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-50 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingDetails}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-xs transition disabled:opacity-50"
+                >
+                  {savingDetails ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Attribute History Modal */}
+      {attributeHistoryModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-2xl w-full p-6 space-y-4 max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <History className="h-5 w-5 text-indigo-600" />
+                  Attribute Change History ({employee.name} - {employee.tally_id})
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Immutable audit trail of designation, grade, and driver status modifications.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAttributeHistoryModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              {historyLoading ? (
+                <div className="flex items-center justify-center py-12 text-slate-500 text-xs gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />
+                  Loading history logs...
+                </div>
+              ) : attributeHistory.length === 0 ? (
+                <div className="p-8 text-center bg-slate-50 border border-slate-200 rounded-xl text-slate-500 text-xs">
+                  No attribute changes recorded for this employee yet.
+                </div>
+              ) : (
+                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
+                      <tr>
+                        <th className="p-3">Attribute</th>
+                        <th className="p-3">Previous</th>
+                        <th className="p-3">New Value</th>
+                        <th className="p-3">Effective Date</th>
+                        <th className="p-3">Reason / Author</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {attributeHistory.map((item) => (
+                        <tr key={item.id} className="hover:bg-slate-50 transition">
+                          <td className="p-3 font-semibold text-slate-900 capitalize">
+                            {item.attribute_name.replace(/_/g, " ")}
+                          </td>
+                          <td className="p-3 text-slate-500 font-mono">
+                            {item.old_value || "—"}
+                          </td>
+                          <td className="p-3 font-mono font-bold text-indigo-700">
+                            {item.new_value}
+                          </td>
+                          <td className="p-3 text-slate-600">
+                            {item.effective_from}
+                          </td>
+                          <td className="p-3 text-slate-600">
+                            <div className="font-medium text-slate-800">{item.reason}</div>
+                            <div className="text-[10px] text-slate-400 mt-0.5">
+                              by {item.actor_role} • {new Date(item.created_at).toLocaleString()}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end pt-2 border-t">
+              <button
+                type="button"
+                onClick={() => setAttributeHistoryModalOpen(false)}
                 className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition"
               >
                 Close

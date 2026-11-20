@@ -1,6 +1,6 @@
 """Public interface for jobs module."""
 
-from fw.modules.jobs.models import JobItem, JobOccurrence, Worksite
+from fw.modules.jobs.models import JobItem, JobOccurrence, Worksite, WorksiteSupervisor
 from fw.modules.jobs.schemas import (
     BoundaryCopyRequest,
     BoundaryCopyToRequest,
@@ -22,6 +22,8 @@ from fw.modules.jobs.schemas import (
     WorksiteCreate,
     WorksiteDetailResponse,
     WorksiteResponse,
+    WorksiteSupervisorAssign,
+    WorksiteSupervisorRead,
     WorksiteUpdate,
 )
 from fw.modules.jobs.service import JobsService
@@ -51,5 +53,8 @@ __all__ = [
     "WorksiteCreate",
     "WorksiteDetailResponse",
     "WorksiteResponse",
+    "WorksiteSupervisor",
+    "WorksiteSupervisorAssign",
+    "WorksiteSupervisorRead",
     "WorksiteUpdate",
 ]

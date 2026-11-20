@@ -36,6 +36,8 @@ from fw.modules.jobs import (
     WorksiteCreate,
     WorksiteDetailResponse,
     WorksiteResponse,
+    WorksiteSupervisorAssign,
+    WorksiteSupervisorRead,
     WorksiteUpdate,
 )
 from fw.modules.org import DeactivateRequest, EntityLifecycleResponse, ReactivateRequest
@@ -58,10 +60,12 @@ async def list_worksites(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> list[WorksiteResponse]:
-    """List worksites with optional filtering (deactivated visible to Admin only)."""
+    """List worksites with operational scoping (deactivated visible to Admin only; budget hidden for non-admins)."""
     effective_is_active = is_active if current_user.role == "ADMIN" else True
-    return await JobsService.list_worksites(
+    scoped_ids = await JobsService.get_scoped_worksite_ids(session, current_user)
+    worksites = await JobsService.list_worksites(
         session=session,
+        scoped_ids=scoped_ids,
         q=q,
         group_id=group_id,
         zone_id=zone_id,
@@ -71,6 +75,10 @@ async def list_worksites(
         limit=limit,
         offset=offset,
     )
+    if current_user.role != "ADMIN":
+        for w in worksites:
+            w.budget_amount = None
+    return worksites
 
 
 @router.get("/worksites/export")
@@ -78,13 +86,15 @@ async def export_worksites_excel(
     q: str | None = Query(None),
     country: str | None = None,
     is_active: bool | None = True,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
     session: AsyncSession = Depends(get_db),
 ):
-    """Export worksites list to an Excel spreadsheet."""
+    """Export worksites list with a dedicated Job_Items worksheet (Admin & Engineer only)."""
     effective_is_active = is_active if current_user.role == "ADMIN" else True
+    scoped_ids = await JobsService.get_scoped_worksite_ids(session, current_user)
     worksites = await JobsService.list_worksites(
         session=session,
+        scoped_ids=scoped_ids,
         q=q,
         country=country,
         is_active=effective_is_active,
@@ -94,11 +104,13 @@ async def export_worksites_excel(
 
     output = io.BytesIO()
     workbook = xlsxwriter.Workbook(output, {"in_memory": True})
-    sheet = workbook.add_worksheet("Worksites")
     hdr = workbook.add_format(
         {"bold": True, "bg_color": "#1E293B", "font_color": "#FFFFFF", "border": 1}
     )
     cell = workbook.add_format({"border": 1})
+
+    # Sheet 1: Worksites
+    ws_sheet = workbook.add_worksheet("Worksites")
     headers = [
         "Job Number",
         "Worksite Name",
@@ -110,20 +122,87 @@ async def export_worksites_excel(
         "Rep Longitude",
         "Status",
     ]
+    is_admin = current_user.role == "ADMIN"
+    if is_admin:
+        headers.append("Budget Amount")
+
     for i, h in enumerate(headers):
-        sheet.write(0, i, h, hdr)
-        sheet.set_column(i, i, max(len(h) + 4, 15))
+        ws_sheet.write(0, i, h, hdr)
+        ws_sheet.set_column(i, i, max(len(h) + 4, 15))
 
     for row_idx, w in enumerate(worksites, start=1):
-        sheet.write(row_idx, 0, w.job_number, cell)
-        sheet.write(row_idx, 1, w.job_name, cell)
-        sheet.write(row_idx, 2, w.country, cell)
-        sheet.write(row_idx, 3, w.group_name or "", cell)
-        sheet.write(row_idx, 4, w.zone_name or "", cell)
-        sheet.write(row_idx, 5, "Yes" if w.has_boundary else "No", cell)
-        sheet.write(row_idx, 6, str(w.rep_latitude) if w.rep_latitude else "", cell)
-        sheet.write(row_idx, 7, str(w.rep_longitude) if w.rep_longitude else "", cell)
-        sheet.write(row_idx, 8, "ACTIVE" if w.is_active else "INACTIVE", cell)
+        ws_sheet.write(row_idx, 0, w.job_number, cell)
+        ws_sheet.write(row_idx, 1, w.job_name, cell)
+        ws_sheet.write(row_idx, 2, w.country, cell)
+        ws_sheet.write(row_idx, 3, w.group_name or "", cell)
+        ws_sheet.write(row_idx, 4, w.zone_name or "", cell)
+        ws_sheet.write(row_idx, 5, "Yes" if w.has_boundary else "No", cell)
+        ws_sheet.write(row_idx, 6, str(w.rep_latitude) if w.rep_latitude else "", cell)
+        ws_sheet.write(row_idx, 7, str(w.rep_longitude) if w.rep_longitude else "", cell)
+        ws_sheet.write(row_idx, 8, "ACTIVE" if w.is_active else "INACTIVE", cell)
+        if is_admin:
+            ws_sheet.write(
+                row_idx, 9, str(w.budget_amount) if w.budget_amount is not None else "", cell
+            )
+
+    # Sheet 2: Job_Items
+    ji_sheet = workbook.add_worksheet("Job_Items")
+    ji_headers = [
+        "Job Number",
+        "Worksite Name",
+        "Sub Item Code",
+        "Staff Grade Description",
+        "Planned Grade Code",
+        "Start Date",
+        "End Date",
+        "Frequency Unit",
+        "Occurrences Per Period",
+        "Period Interval",
+        "Required Staff",
+        "Hours Per Occurrence",
+        "Deployment Type",
+        "Break Override (min)",
+        "Status",
+    ]
+    for i, h in enumerate(ji_headers):
+        ji_sheet.write(0, i, h, hdr)
+        ji_sheet.set_column(i, i, max(len(h) + 4, 15))
+
+    ws_map = {w.id: w for w in worksites}
+    ws_ids = list(ws_map.keys())
+    ji_row_idx = 1
+    if ws_ids:
+        ji_stmt = (
+            select(JobItem)
+            .where(JobItem.worksite_id.in_(ws_ids))
+            .order_by(JobItem.worksite_id, JobItem.sub_item_code)
+        )
+        ji_rows = (await session.execute(ji_stmt)).scalars().all()
+        for item in ji_rows:
+            parent_ws = ws_map.get(item.worksite_id)
+            if not parent_ws:
+                continue
+            ji_sheet.write(ji_row_idx, 0, parent_ws.job_number, cell)
+            ji_sheet.write(ji_row_idx, 1, parent_ws.job_name, cell)
+            ji_sheet.write(ji_row_idx, 2, item.sub_item_code, cell)
+            ji_sheet.write(ji_row_idx, 3, item.staff_grade_description, cell)
+            ji_sheet.write(ji_row_idx, 4, item.planned_grade_code, cell)
+            ji_sheet.write(ji_row_idx, 5, str(item.start_date) if item.start_date else "", cell)
+            ji_sheet.write(ji_row_idx, 6, str(item.end_date) if item.end_date else "", cell)
+            ji_sheet.write(ji_row_idx, 7, item.frequency_unit, cell)
+            ji_sheet.write(ji_row_idx, 8, float(item.occurrences_per_period), cell)
+            ji_sheet.write(ji_row_idx, 9, item.period_interval, cell)
+            ji_sheet.write(ji_row_idx, 10, item.required_staff_count, cell)
+            ji_sheet.write(ji_row_idx, 11, float(item.hours_per_occurrence_per_staff), cell)
+            ji_sheet.write(ji_row_idx, 12, item.deployment_type, cell)
+            ji_sheet.write(
+                ji_row_idx,
+                13,
+                item.break_override_minutes if item.break_override_minutes is not None else "",
+                cell,
+            )
+            ji_sheet.write(ji_row_idx, 14, "ACTIVE" if item.is_active else "INACTIVE", cell)
+            ji_row_idx += 1
 
     workbook.close()
     filename = f"Worksites_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.xlsx"
@@ -161,7 +240,64 @@ async def get_worksite_detail(
         if not detail.is_active:
             raise AppError(code="NOT_FOUND", message="Worksite not found.", status_code=404)
         detail.items = [it for it in detail.items if it.is_active]
+        detail.budget_amount = None
     return detail
+
+
+@router.get("/worksites/{worksite_id}/supervisors", response_model=list[WorksiteSupervisorRead])
+async def list_worksite_supervisors(
+    worksite_id: UUID,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> list[WorksiteSupervisorRead]:
+    """List supervisors assigned to a worksite."""
+    return await JobsService.list_worksite_supervisors(session, worksite_id)
+
+
+@router.post(
+    "/worksites/{worksite_id}/supervisors",
+    response_model=WorksiteSupervisorRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def assign_worksite_supervisor(
+    worksite_id: UUID,
+    payload: WorksiteSupervisorAssign,
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    session: AsyncSession = Depends(get_db),
+) -> WorksiteSupervisorRead:
+    """Assign a supervisor to a worksite (Admin & Engineer only)."""
+    return await JobsService.assign_worksite_supervisor(
+        session=session,
+        worksite_id=worksite_id,
+        supervisor_id=payload.supervisor_id,
+        actor_user_id=current_user.id,
+        actor_role=current_user.role,
+    )
+
+
+@router.delete(
+    "/worksites/{worksite_id}/supervisors/{supervisor_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def remove_worksite_supervisor(
+    worksite_id: UUID,
+    supervisor_id: UUID,
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    session: AsyncSession = Depends(get_db),
+) -> Response:
+    """Unassign a supervisor from a worksite (Admin & Engineer only)."""
+    removed = await JobsService.remove_worksite_supervisor(
+        session=session,
+        worksite_id=worksite_id,
+        supervisor_id=supervisor_id,
+        actor_user_id=current_user.id,
+        actor_role=current_user.role,
+    )
+    if not removed:
+        raise AppError(
+            "SUPERVISOR_NOT_ASSIGNED", "Supervisor is not assigned to worksite", status_code=404
+        )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/worksites/{worksite_id}/deactivation-impact")

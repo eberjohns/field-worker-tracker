@@ -1912,6 +1912,12 @@ class ImportService:
             if r.action in ("NEW", "UPDATED", "REACTIVATED"):
                 rev_code = str(r.normalized.get("revision_code") or "").strip()
                 grade_code = str(r.normalized.get("grade_code") or "").strip()
+                if (
+                    rev_code
+                    and not grade_code.endswith(f"-{rev_code}")
+                    and rev_code not in grade_code
+                ):
+                    grade_code = f"{grade_code}-{rev_code}"
                 rev_id = rev_id_map.get(rev_code)
                 if not rev_id or not grade_code:
                     continue

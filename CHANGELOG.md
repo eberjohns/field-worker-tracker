@@ -1,6 +1,41 @@
 # Changelog
 All notable changes. Format: Keep a Changelog. Mobile-contract changes are also logged in `docs/09-mobile-sync-contract.md`.
 
+## [1.8.0] - 2026-11-20
+### Added
+- Operational Enhancements & Access Control Hardening (Batch 6):
+  - Access Control & Financial Privacy (DEC-47, DEC-51):
+    - Excel workbook imports and exports (`/worksites/export`, `/employees/export`, `/imports/*`) strictly restricted to `ADMIN` and `ENGINEER`.
+    - Worksite budget amounts, planned labor costs, and pricing figures strictly restricted to `ADMIN`; masked as `null` for all other roles.
+    - Salary structures table and salary history APIs restricted to `ADMIN` only (403 for non-admins).
+  - Multi-Supervisor Worksite Scoping (DEC-57, ADR-026):
+    - Migration `0020_worksite_supervisors.py`: Created `worksite_supervisors` table enabling multiple field supervisor assignments per worksite.
+    - Added supervisor assignment management endpoints: `GET`, `POST /api/v1/worksites/{id}/supervisors`, and `DELETE /api/v1/worksites/{id}/supervisors/{supervisor_id}`.
+    - Operational scoping: Field supervisors now see only their assigned worksites and workers assigned to their worksite's job items.
+    - Web UI: Added "Assigned Field Supervisors" management card in `WorksiteDetail.tsx`.
+  - Employee Profile Governance & Attribute History:
+    - Migration `0021_employee_attribute_history.py`: Created `employee_attribute_history` table for immutable change auditing of designation, grade code, and driver status.
+    - Added `PATCH /api/v1/employees/{id}/profile-details` and `GET /api/v1/employees/{id}/attribute-history`.
+    - Controlled dropdowns for `staff_grade_description` and `grade_code` across employee creation and edit modals.
+    - Role-locked designations for `SUPERVISOR`, `SUPERINTENDENT`, and `ENGINEER`.
+    - Added confirmation prompt before modifying employee hierarchy reporting lines.
+    - Added optional initial salary structure configuration inline during employee creation.
+  - Salary Structures DEC-39 Cost Breakdown & Future Revision Governance:
+    - Added column sorting across all headers in `SalaryStructures.tsx`.
+    - Added full on-screen DEC-39 cost breakdown: Basic Salary, Allowances, Total Salary Portion, Gratuity `((Basic/365)*30)`, Leave Salary `(Basic/12)`, Monthly Provisions (sum of company settings provisions + Gratuity + Leave Salary), Total Staff Cost, HR Overhead (5%), and Final Cost.
+    - Implemented `PATCH` and `DELETE /api/v1/employees/{id}/salary/{salary_id}` for editing and deleting future-dated salary revisions prior to activation (strictly guarded by `effective_from > site_today(country)` per DEC-06).
+    - Revision grade line suffixing: revision lines append `"-{rev_code}"` with fallback base grade code matching in side-by-side diffs and template exports.
+  - Worksite & Accommodation UX:
+    - Worksite Excel export includes secondary `Job_Items` sheet tab.
+    - Dynamic Group & Zone creation (`+ Add New...` / "__NEW__").
+    - GPS "My Location" centering button on Polygon map editor.
+    - PlaceSearch autocomplete integration on Accommodation boundary drawing.
+    - Inline job items creation within the Add Worksite modal.
+    - Accommodation Edit and Activate/Deactivate actions.
+  - Documentation & ADRs:
+    - Created `ADR-026` (`docs/decisions/026-worksite-scoping-salary-cost-transparency.md`).
+    - Updated `docs/decisions/decision-register.md` (DEC-47, DEC-51, DEC-57) and `docs/07-data-model.md`.
+
 ## [1.7.3] - 2026-11-19
 ### Fixed
 - Hotfix: Worksite Page Errors & Job Item Creation Validation:

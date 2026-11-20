@@ -30,6 +30,7 @@ import {
   Eye,
   EyeOff,
   Loader2,
+  Shield,
 } from "lucide-react";
 import { MapContainer, PolygonEditor, PlaceSearch } from "../features/map";
 import { Map as MapLibreMap } from "maplibre-gl";
@@ -80,6 +81,15 @@ interface Occurrence {
   needs_review?: boolean;
 }
 
+interface WorksiteSupervisorItem {
+  id: string;
+  worksite_id: string;
+  supervisor_id: string;
+  supervisor_name: string;
+  supervisor_tally_id: string;
+  assigned_at: string;
+}
+
 export const WorksiteDetail: React.FC = () => {
   const { worksiteId } = useParams({ strict: false }) as { worksiteId: string };
   const { token, user } = useAuth();
@@ -97,6 +107,12 @@ export const WorksiteDetail: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Assigned supervisors state
+  const [supervisors, setSupervisors] = useState<WorksiteSupervisorItem[]>([]);
+  const [availableSupervisors, setAvailableSupervisors] = useState<any[]>([]);
+  const [selectedSupervisorId, setSelectedSupervisorId] = useState("");
+  const [assigningSupervisor, setAssigningSupervisor] = useState(false);
 
   // Occurrences View and Filter States
   const [occViewMode, setOccViewMode] = useState<"calendar" | "table">("calendar");
@@ -316,10 +332,73 @@ export const WorksiteDetail: React.FC = () => {
           });
         }
       }
+
+      // Fetch assigned supervisors
+      fetch(`/api/v1/worksites/${worksiteId}/supervisors`, { headers })
+        .then((r) => (r.ok ? r.json() : []))
+        .then((sups) => setSupervisors(sups))
+        .catch((err) => console.error("Failed to fetch worksite supervisors", err));
+
+      // Fetch all supervisors for assignment dropdown
+      fetch("/api/v1/employees?role=SUPERVISOR&limit=200", { headers })
+        .then((r) => (r.ok ? r.json() : []))
+        .then((emps) => setAvailableSupervisors(emps))
+        .catch((err) => console.error("Failed to fetch supervisors list", err));
     } catch (err: any) {
       setErrorMessage(err.message || "An error occurred.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAssignSupervisor = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedSupervisorId) return;
+    setAssigningSupervisor(true);
+    setStatusMessage(null);
+    setErrorMessage(null);
+    try {
+      const res = await fetch(`/api/v1/worksites/${worksiteId}/supervisors`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ supervisor_id: selectedSupervisorId }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to assign supervisor.");
+      }
+      setSelectedSupervisorId("");
+      setStatusMessage("Supervisor assigned successfully.");
+      const reqHeaders: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+      const updated = await (await fetch(`/api/v1/worksites/${worksiteId}/supervisors`, { headers: reqHeaders })).json();
+      setSupervisors(updated || []);
+    } catch (err: any) {
+      setErrorMessage(err.message || "Failed to assign supervisor.");
+    } finally {
+      setAssigningSupervisor(false);
+    }
+  };
+
+  const handleRemoveSupervisor = async (supervisorId: string, supervisorName: string) => {
+    if (!window.confirm(`Unassign supervisor ${supervisorName} from this worksite?`)) return;
+    try {
+      const res = await fetch(`/api/v1/worksites/${worksiteId}/supervisors/${supervisorId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to unassign supervisor.");
+      }
+      setStatusMessage("Supervisor unassigned successfully.");
+      const reqHeaders: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+      const updated = await (await fetch(`/api/v1/worksites/${worksiteId}/supervisors`, { headers: reqHeaders })).json();
+      setSupervisors(updated || []);
+    } catch (err: any) {
+      setErrorMessage(err.message || "Failed to unassign supervisor.");
     }
   };
 
@@ -732,18 +811,20 @@ export const WorksiteDetail: React.FC = () => {
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">
-                      Annual Operating Budget (AED / year)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={editBudget}
-                      onChange={(e) => setEditBudget(e.target.value)}
-                      className="w-full px-3 py-1.5 border border-slate-300 rounded focus:ring-1 focus:ring-indigo-500"
-                    />
-                  </div>
+                  {user?.role === "ADMIN" ? (
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        Annual Operating Budget (AED / year)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={editBudget}
+                        onChange={(e) => setEditBudget(e.target.value)}
+                        className="w-full px-3 py-1.5 border border-slate-300 rounded focus:ring-1 focus:ring-indigo-500"
+                      />
+                    </div>
+                  ) : <div />}
                   <div>
                     <label className="block font-semibold text-slate-700 mb-1">
                       Salary Revision
@@ -786,14 +867,16 @@ export const WorksiteDetail: React.FC = () => {
                     {worksite.start_date || "Start N/A"} – {worksite.end_date || "Ongoing"}
                   </span>
                 </div>
-                <div>
-                  <span className="text-slate-400 block mb-0.5">Annual Operating Budget</span>
-                  <span className="font-semibold text-slate-800">
-                    {worksite.budget_amount != null
-                      ? `${Number(worksite.budget_amount).toLocaleString()} AED / year`
-                      : "Not Specified"}
-                  </span>
-                </div>
+                {user?.role === "ADMIN" && (
+                  <div>
+                    <span className="text-slate-400 block mb-0.5">Annual Operating Budget</span>
+                    <span className="font-semibold text-slate-800">
+                      {worksite.budget_amount != null
+                        ? `${Number(worksite.budget_amount).toLocaleString()} AED / year`
+                        : "Not Specified"}
+                    </span>
+                  </div>
+                )}
                 <div>
                   <span className="text-slate-400 block mb-0.5">Customer Group</span>
                   <span className="font-semibold text-slate-800">
@@ -841,6 +924,78 @@ export const WorksiteDetail: React.FC = () => {
                   <span className="font-mono text-slate-600">v{worksite.version}</span>
                 </div>
               </div>
+            )}
+          </div>
+
+          {/* Assigned Field Supervisors Card */}
+          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-indigo-600" />
+                <h3 className="text-sm font-bold text-slate-900">
+                  Assigned Field Supervisors ({supervisors.length})
+                </h3>
+              </div>
+            </div>
+            <p className="text-xs text-slate-500">
+              Supervisors assigned here have operational visibility over this worksite and all workers scheduled on its job items.
+            </p>
+
+            {supervisors.length === 0 ? (
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-500 text-center">
+                No supervisors assigned yet. Assign a field supervisor to oversee this worksite.
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {supervisors.map((s) => (
+                  <div
+                    key={s.id}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-50 border border-indigo-200 rounded-lg text-xs"
+                  >
+                    <div>
+                      <span className="font-semibold text-indigo-950">{s.supervisor_name}</span>
+                      <span className="font-mono text-[10px] text-indigo-600 ml-1">({s.supervisor_tally_id})</span>
+                    </div>
+                    {(user?.role === "ADMIN" || user?.role === "ENGINEER") && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSupervisor(s.supervisor_id, s.supervisor_name)}
+                        className="text-indigo-400 hover:text-rose-600 p-0.5 rounded transition"
+                        title="Unassign supervisor"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {(user?.role === "ADMIN" || user?.role === "ENGINEER") && (
+              <form onSubmit={handleAssignSupervisor} className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                <select
+                  value={selectedSupervisorId}
+                  onChange={(e) => setSelectedSupervisorId(e.target.value)}
+                  className="flex-1 px-3 py-1.5 border border-slate-300 rounded text-xs bg-white focus:ring-1 focus:ring-indigo-500"
+                >
+                  <option value="">Select a supervisor to assign...</option>
+                  {availableSupervisors
+                    .filter((s) => !supervisors.some((as) => as.supervisor_id === s.id))
+                    .map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} ({s.tally_id})
+                      </option>
+                    ))}
+                </select>
+                <button
+                  type="submit"
+                  disabled={!selectedSupervisorId || assigningSupervisor}
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-semibold shadow-xs disabled:opacity-50 transition flex items-center gap-1"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  {assigningSupervisor ? "Assigning..." : "Assign"}
+                </button>
+              </form>
             )}
           </div>
 

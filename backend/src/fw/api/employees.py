@@ -26,11 +26,13 @@ from fw.modules.identity import (
 from fw.modules.org import (
     DeactivateRequest,
     Employee,
+    EmployeeAttributeHistoryRead,
     EmployeeBulkUpdateRequest,
     EmployeeCreate,
     EmployeeDeactivationImpactResponse,
     EmployeeDocumentCreate,
     EmployeeDocumentRead,
+    EmployeeProfileDetailsUpdate,
     EmployeeRead,
     EmployeeUpdate,
     EntityLifecycleResponse,
@@ -71,6 +73,28 @@ async def list_employees(
     session: AsyncSession = Depends(get_db),
 ) -> list[EmployeeRead]:
     scoped_ids = await ScopeService.get_scoped_employee_ids(session, current_user)
+    if current_user.role == "SUPERVISOR" and current_user.employee_id:
+        from fw.modules.jobs import JobItem, WorksiteSupervisor
+        from fw.modules.scheduling.models import ScheduledWork, StandingAssignment
+
+        ws_stmt = select(WorksiteSupervisor.worksite_id).where(
+            WorksiteSupervisor.supervisor_id == current_user.employee_id,
+            WorksiteSupervisor.is_active == True,  # noqa: E712
+        )
+        ws_ids = list((await session.execute(ws_stmt)).scalars().all())
+        if ws_ids:
+            extra_ids: set[UUID] = set()
+            sa_stmt = (
+                select(StandingAssignment.employee_id)
+                .join(JobItem, StandingAssignment.job_item_id == JobItem.id)
+                .where(JobItem.worksite_id.in_(ws_ids), StandingAssignment.is_active == True)  # noqa: E712
+            )
+            extra_ids.update((await session.execute(sa_stmt)).scalars().all())
+            sw_stmt = select(ScheduledWork.employee_id).where(ScheduledWork.worksite_id.in_(ws_ids))
+            extra_ids.update((await session.execute(sw_stmt)).scalars().all())
+            if scoped_ids is not None:
+                scoped_ids = scoped_ids | extra_ids
+
     effective_is_active = is_active if current_user.role == "ADMIN" else True
     employees = await OrgService.list_employees(
         session=session,
@@ -95,11 +119,33 @@ async def export_employees_directory(
     role: str | None = None,
     country: str | None = None,
     is_active: bool | None = None,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
     session: AsyncSession = Depends(get_db),
 ):
     """Export filtered employee directory as an Excel spreadsheet."""
     scoped_ids = await ScopeService.get_scoped_employee_ids(session, current_user)
+    if current_user.role == "SUPERVISOR" and current_user.employee_id:
+        from fw.modules.jobs import JobItem, WorksiteSupervisor
+        from fw.modules.scheduling.models import ScheduledWork, StandingAssignment
+
+        ws_stmt = select(WorksiteSupervisor.worksite_id).where(
+            WorksiteSupervisor.supervisor_id == current_user.employee_id,
+            WorksiteSupervisor.is_active == True,  # noqa: E712
+        )
+        ws_ids = list((await session.execute(ws_stmt)).scalars().all())
+        if ws_ids:
+            extra_ids: set[UUID] = set()
+            sa_stmt = (
+                select(StandingAssignment.employee_id)
+                .join(JobItem, StandingAssignment.job_item_id == JobItem.id)
+                .where(JobItem.worksite_id.in_(ws_ids), StandingAssignment.is_active == True)  # noqa: E712
+            )
+            extra_ids.update((await session.execute(sa_stmt)).scalars().all())
+            sw_stmt = select(ScheduledWork.employee_id).where(ScheduledWork.worksite_id.in_(ws_ids))
+            extra_ids.update((await session.execute(sw_stmt)).scalars().all())
+            if scoped_ids is not None:
+                scoped_ids = scoped_ids | extra_ids
+
     effective_is_active = is_active if current_user.role == "ADMIN" else True
     employees = await OrgService.list_employees(
         session=session,
@@ -727,6 +773,40 @@ async def change_employee_grade(
         actor_role=current_user.role,
     )
     return EmployeeRead.model_validate(employee)
+
+
+@router.patch("/{employee_id}/profile-details", response_model=EmployeeRead)
+async def update_employee_profile_details(
+    employee_id: UUID,
+    request: EmployeeProfileDetailsUpdate,
+    current_user: User = Depends(require_role("ADMIN")),
+    session: AsyncSession = Depends(get_db),
+) -> EmployeeRead:
+    """Update employee trade designation, grade code, or driver status with immutable audit history."""
+    employee = await OrgService.update_profile_details(
+        session=session,
+        employee_id=employee_id,
+        request=request,
+        actor_user_id=current_user.id,
+        actor_role=current_user.role,
+    )
+    return EmployeeRead.model_validate(employee)
+
+
+@router.get(
+    "/{employee_id}/attribute-history",
+    response_model=list[EmployeeAttributeHistoryRead],
+)
+async def list_employee_attribute_history(
+    employee_id: UUID,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> list[EmployeeAttributeHistoryRead]:
+    """List immutable attribute history records (grade, designation, driver) for an employee."""
+    scoped_ids = await ScopeService.get_scoped_employee_ids(session, current_user)
+    if scoped_ids is not None and employee_id not in scoped_ids:
+        raise AppError(code="OUT_OF_SCOPE", message="Employee is out of scope.", status_code=403)
+    return await OrgService.list_attribute_history(session, employee_id)
 
 
 @router.get("/{employee_id}/reporting-lines", response_model=list[ReportingLineRead])

@@ -72,6 +72,11 @@ class Worksite(ModelBase):
         lazy="selectin",
         order_by="JobItem.sub_item_code",
     )
+    supervisors: Mapped[list["WorksiteSupervisor"]] = relationship(
+        "WorksiteSupervisor",
+        back_populates="worksite",
+        lazy="selectin",
+    )
 
 
 class JobItem(ModelBase):
@@ -174,3 +179,34 @@ class JobOccurrence(Base):
 
     # Relationships
     job_item: Mapped[JobItem] = relationship("JobItem", back_populates="occurrences")
+
+
+class WorksiteSupervisor(ModelBase):
+    """Many-to-many relationship linking a Worksite to assigned Supervisors."""
+
+    __tablename__ = "worksite_supervisors"
+    __table_args__ = (
+        UniqueConstraint("worksite_id", "supervisor_id", name="uq_worksite_supervisor"),
+        Index("ix_worksite_supervisors_worksite", "worksite_id"),
+        Index("ix_worksite_supervisors_supervisor", "supervisor_id"),
+        Index("ix_worksite_supervisors_is_active", "is_active"),
+    )
+
+    worksite_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("worksites.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    supervisor_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("employees.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    created_by_user_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    # Relationships
+    worksite: Mapped[Worksite] = relationship("Worksite", back_populates="supervisors")

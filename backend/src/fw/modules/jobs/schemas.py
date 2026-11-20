@@ -196,10 +196,27 @@ class JobItemResponse(BaseModel):
     created_at: datetime
 
 
+class WorksiteSupervisorRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    worksite_id: UUID
+    supervisor_id: UUID
+    supervisor_name: str | None = None
+    supervisor_tally_id: str | None = None
+    is_active: bool
+    created_at: datetime
+
+
+class WorksiteSupervisorAssign(BaseModel):
+    supervisor_id: UUID
+
+
 class WorksiteDetailResponse(WorksiteResponse):
     boundary_geojson: dict[str, Any] | None = None
     items: list[JobItemResponse] = []
     job_items: list[JobItemResponse] = []
+    supervisors: list[WorksiteSupervisorRead] = []
 
 
 class BoundaryUpdateRequest(BaseModel):

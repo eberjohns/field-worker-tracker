@@ -42,6 +42,18 @@ class EmployeeSalaryCreate(BaseModel):
     change_source: str | None = None
 
 
+class EmployeeSalaryUpdate(BaseModel):
+    effective_from: date | None = None
+    standard_hours: Decimal | None = Field(default=None, ge=Decimal("1.0"), le=Decimal("24.0"))
+    basic_salary: Decimal | None = Field(default=None, ge=Decimal("0.00"))
+    special_allowance: Decimal | None = Field(default=None, ge=Decimal("0.00"))
+    fixed_ot_amount: Decimal | None = Field(default=None, ge=Decimal("0.00"))
+    break_minutes: int | None = None
+    bonus: Decimal | None = Field(default=None, ge=Decimal("0.00"))
+    telephone_allowance: Decimal | None = Field(default=None, ge=Decimal("0.00"))
+    housing_transport_allowance: Decimal | None = Field(default=None, ge=Decimal("0.00"))
+
+
 class EmployeeSalaryHistoryResponse(BaseModel):
     employee_id: UUID
     tally_id: str
@@ -61,6 +73,17 @@ class SalaryStructureListItem(BaseModel):
     standard_hours: Decimal
     salary_portion: Decimal
     basic_salary: Decimal
+    special_allowance: Decimal = Decimal("0.00")
+    fixed_ot_amount: Decimal = Decimal("0.00")
+    bonus: Decimal = Decimal("0.00")
+    telephone_allowance: Decimal = Decimal("0.00")
+    housing_transport_allowance: Decimal = Decimal("0.00")
+    gratuity: Decimal = Decimal("0.00")
+    leave_salary: Decimal = Decimal("0.00")
+    per_month_provision: Decimal = Decimal("0.00")
+    total_staff_cost: Decimal = Decimal("0.00")
+    hr_oh: Decimal = Decimal("0.00")
+    final_cost: Decimal = Decimal("0.00")
     break_minutes: int | None = None
     effective_from: date
     last_change_date: date | None = None
