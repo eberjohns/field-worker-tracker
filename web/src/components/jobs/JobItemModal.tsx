@@ -39,6 +39,8 @@ import {
 } from "./jobItemUtils";
 import { useGrades } from "../../features/grades/useGrades";
 import { gradeOptions } from "../../features/grades/gradeOptions";
+import { useBudgetPreview } from "../../features/budget/useBudgetPreview";
+import { fmtHours, fmtMoney } from "../../features/budget/budgetFormat";
 
 export { CONTROLLED_STAFF_GRADE_DESCRIPTIONS, formatApiError, buildJobItemPayload };
 
@@ -75,7 +77,8 @@ export const JobItemModal: React.FC<JobItemModalProps> = ({
   initialData,
   onSuccess,
 }) => {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const isAdmin = user?.role === "ADMIN";
   const apiGrades = useGrades(token, isOpen);
   const [subItemCode, setSubItemCode] = useState("");
   const [sgd, setSgd] = useState("");
@@ -151,6 +154,32 @@ export const JobItemModal: React.FC<JobItemModalProps> = ({
     setErrorMsg("");
 
   }, [initialData, isOpen, worksiteStartDate, salaryRevisionCode, token]);
+
+  // Live budget from the server (DEC-59): same rule as the saved figures, period-aware.
+  const previewHours = parseFloat(String(hoursPerOccurrence)) || 0;
+  const previewPayload =
+    isOpen && subItemCode.trim() && sgd.trim() && plannedGrade.trim() && startDate.trim() &&
+    previewHours > 0 && occurrencesPerPeriod > 0
+      ? {
+          sub_item_code: subItemCode.trim(),
+          staff_grade_description: sgd.trim(),
+          planned_grade_code: plannedGrade.trim(),
+          start_date: startDate.trim(),
+          end_date: endDate.trim() || null,
+          frequency_unit: frequencyUnit,
+          occurrences_per_period: occurrencesPerPeriod,
+          period_interval: periodInterval > 0 ? periodInterval : 1,
+          weekday_pattern: selectedWeekdays.length > 0 ? selectedWeekdays : null,
+          required_staff_count: requiredStaff || 1,
+          hours_per_occurrence_per_staff: previewHours,
+          deployment_type: deploymentType,
+        }
+      : null;
+  const { budget: preview, error: previewError, loading: previewLoading } = useBudgetPreview(
+    token,
+    worksiteId,
+    previewPayload,
+  );
 
   if (!isOpen) return null;
 
@@ -519,7 +548,7 @@ export const JobItemModal: React.FC<JobItemModalProps> = ({
                 </span>
               </div>
               <div className="bg-white p-2.5 rounded border border-indigo-100">
-                <span className="text-slate-500 block text-[10px]">Expected Annual Hours</span>
+                <span className="text-slate-500 block text-[10px]">Hours / full year</span>
                 <span className="font-bold text-indigo-700 text-sm">
                   {calculatedAnnualHours.toLocaleString(undefined, { maximumFractionDigits: 1 })} h
                 </span>
@@ -531,6 +560,46 @@ export const JobItemModal: React.FC<JobItemModalProps> = ({
                 </span>
               </div>
             </div>
+
+            {/* Server budget for the current contract year (DEC-59) */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-1" data-testid="budget-preview">
+              <div className="bg-white p-2.5 rounded border border-indigo-100">
+                <span className="text-slate-500 block text-[10px]">
+                  Man-hours this contract year
+                  {preview ? ` (${preview.period_from} – ${preview.period_to})` : ""}
+                </span>
+                <span className="font-bold text-indigo-700 text-sm">
+                  {previewLoading && !preview ? "…" : fmtHours(preview?.annual_hours)}
+                </span>
+              </div>
+              {isAdmin && (
+                <div className="bg-white p-2.5 rounded border border-indigo-100">
+                  <span className="text-slate-500 block text-[10px]">
+                    Annual cost{preview?.revision_code ? ` (${preview.revision_code})` : ""}
+                  </span>
+                  <span className="font-bold text-slate-900 text-sm">
+                    {fmtMoney(preview?.annual_cost)}
+                  </span>
+                  {preview?.hourly_rate != null && (
+                    <span className="text-slate-500 block text-[10px]">
+                      {fmtMoney(preview.hourly_rate)} / h
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+            {previewError && (
+              <div className="flex items-start gap-1.5 text-[11px] text-rose-700 pt-1">
+                <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                <span>{previewError}</span>
+              </div>
+            )}
+            {preview?.warnings.map((w, i) => (
+              <div key={`${w.code}-${i}`} className="flex items-start gap-1.5 text-[11px] text-amber-800 pt-1">
+                <AlertCircle className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5" />
+                <span>{w.message}</span>
+              </div>
+            ))}
 
             {isMultiDay && (
               <div className="flex items-start gap-1.5 text-[11px] text-indigo-800 pt-1">

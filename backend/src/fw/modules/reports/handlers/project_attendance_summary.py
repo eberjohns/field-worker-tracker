@@ -4,10 +4,10 @@ from collections import defaultdict
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from fw.modules.attendance.models import SiteVisit
+from fw.modules.attendance.models import AttendanceCalculation, AttendanceRecord, SiteVisit
 from fw.modules.jobs.models import Worksite
 from fw.modules.org.models import Group, Zone
 from fw.modules.reports.schemas import ReportFilterParams
@@ -81,6 +81,33 @@ async def fetch_project_attendance_summary(
     visit_res = await session.execute(visit_stmt)
     visits = visit_res.scalars().all()
 
+    # Actual man-hours count only approved days (payroll's rule: APPROVED, or not REJECTED with
+    # no review reasons), the same hours the job budget uses (DEC-59).
+    approved_days: set[tuple[UUID, Any]] = set()
+    if visits:
+        emp_ids = {v.employee_id for v in visits}
+        d_lo = min(v.work_date for v in visits)
+        d_hi = max(v.work_date for v in visits)
+        calc = AttendanceCalculation
+        appr_stmt = (
+            select(AttendanceRecord.employee_id, AttendanceRecord.work_date)
+            .outerjoin(calc, calc.id == AttendanceRecord.current_calculation_id)
+            .where(
+                AttendanceRecord.employee_id.in_(emp_ids),
+                AttendanceRecord.work_date >= d_lo,
+                AttendanceRecord.work_date <= d_hi,
+                or_(
+                    AttendanceRecord.review_status == "APPROVED",
+                    and_(
+                        AttendanceRecord.review_status != "REJECTED",
+                        calc.id.is_not(None),
+                        func.coalesce(func.cardinality(calc.review_reasons), 0) == 0,
+                    ),
+                ),
+            )
+        )
+        approved_days = {(r[0], r[1]) for r in (await session.execute(appr_stmt)).all()}
+
     sched_by_ws = defaultdict(list)
     for s in scheduled_items:
         sched_by_ws[s.worksite_id].append(s)
@@ -95,13 +122,22 @@ async def fetch_project_attendance_summary(
         w_visits = visits_by_ws.get(ws_id, [])
 
         sched_worker_days = len(w_sched)
-        sched_man_hours = round(sum(float(s.assigned_hours or 8.0) for s in w_sched), 1)
+        # assigned_hours is required (> 0); never assume 8 hours.
+        sched_man_hours = round(sum(float(s.assigned_hours) for s in w_sched), 1)
 
         deployed_worker_ids = {v.employee_id for v in w_visits}
         deployed_worker_days = len(
             {(v.employee_id, v.work_date) for v in w_visits if v.counts_as_completed}
         )
-        actual_man_hours = round(sum(v.duration_minutes for v in w_visits) / 60.0, 1)
+        actual_man_hours = round(
+            sum(
+                v.duration_minutes
+                for v in w_visits
+                if (v.employee_id, v.work_date) in approved_days
+            )
+            / 60.0,
+            1,
+        )
 
         pres_count = deployed_worker_days
         abs_count = max(0, sched_worker_days - pres_count)

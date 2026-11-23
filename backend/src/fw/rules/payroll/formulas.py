@@ -144,19 +144,3 @@ def calculate_final_total_staff_cost(
     """Final total staff cost = total_staff_cost + hr_oh."""
     final_cost = Decimal(str(total_staff_cost)) + Decimal(str(hr_oh))
     return round_money(final_cost)
-
-
-def calculate_revision_planned_hourly_cost(
-    revision_salary_portion: Decimal | int | float | str,
-    revision_provisions_sum: Decimal | int | float | str,
-    hr_oh_rate: Decimal = DEFAULT_HR_OH_RATE,
-    divisor: Decimal = DEFAULT_OT_DIVISOR,
-) -> Decimal:
-    """Calculate planned hourly labor cost for job budget from a salary revision line.
-
-    planned_hourly_cost = (revision_salary_portion + revision_provisions) * (1 + HR_OH) / 208
-    """
-    total_base = Decimal(str(revision_salary_portion)) + Decimal(str(revision_provisions_sum))
-    with_overhead = total_base * (Decimal("1.00") + hr_oh_rate)
-    hourly = with_overhead / divisor
-    return round_money(hourly)

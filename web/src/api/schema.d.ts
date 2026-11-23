@@ -12,13 +12,13 @@ export interface paths {
             cookie?: never;
         };
         /** Liveness check alias */
-        get: operations["health_health_liveness_head"];
+        get: operations["health_health_liveness_get"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         /** Liveness check alias */
-        head: operations["health_health_liveness_head"];
+        head: operations["health_health_liveness_get"];
         patch?: never;
         trace?: never;
     };
@@ -30,13 +30,13 @@ export interface paths {
             cookie?: never;
         };
         /** Liveness check */
-        get: operations["health_health_head"];
+        get: operations["health_health_get"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         /** Liveness check */
-        head: operations["health_health_head"];
+        head: operations["health_health_get"];
         patch?: never;
         trace?: never;
     };
@@ -48,13 +48,13 @@ export interface paths {
             cookie?: never;
         };
         /** Readiness check alias */
-        get: operations["health_ready_health_readiness_head"];
+        get: operations["health_ready_health_readiness_get"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         /** Readiness check alias */
-        head: operations["health_ready_health_readiness_head"];
+        head: operations["health_ready_health_readiness_get"];
         patch?: never;
         trace?: never;
     };
@@ -66,13 +66,13 @@ export interface paths {
             cookie?: never;
         };
         /** Readiness check */
-        get: operations["health_ready_health_ready_head"];
+        get: operations["health_ready_health_ready_get"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         /** Readiness check */
-        head: operations["health_ready_health_ready_head"];
+        head: operations["health_ready_health_ready_get"];
         patch?: never;
         trace?: never;
     };
@@ -1742,26 +1742,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/payroll/budget-vs-actual": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Budget Vs Actual
-         * @description Calculate dynamic contract budget from assigned revision lines and items vs actual allocated cost.
-         */
-        get: operations["get_budget_vs_actual_api_v1_payroll_budget_vs_actual_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/payroll/worksites/{worksite_id}/revision": {
         parameters: {
             query?: never;
@@ -1796,6 +1776,90 @@ export interface paths {
          * @description Check for completed previous calendar months past delay days and auto-generate draft.
          */
         post: operations["trigger_auto_draft_check_api_v1_payroll_auto_run_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payroll/budget-vs-actual": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Budget Vs Actual
+         * @description Planned vs actual hours and cost for all active worksites.
+         *
+         *     Default range: each worksite's current contract year. ``as_of`` alone: the contract year up
+         *     to that date. Planned cost is pro-rated by day; actual cost is approved payroll allocations.
+         */
+        get: operations["get_budget_vs_actual_api_v1_payroll_budget_vs_actual_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/worksites/{worksite_id}/planned-vs-actual": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Worksite Planned Vs Actual
+         * @description Planned vs actual for one worksite, per job item and month. Hours for every role that
+         *     can see the worksite (DEC-57); money only for Admin.
+         */
+        get: operations["get_worksite_planned_vs_actual_api_v1_worksites__worksite_id__planned_vs_actual_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/worksites/{worksite_id}/job-items/budget-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Job Item Budget
+         * @description Man-hours (and, for Admin, cost) of an unsaved job item on a worksite. Saves nothing.
+         */
+        post: operations["preview_job_item_budget_api_v1_worksites__worksite_id__job_items_budget_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/job-items/budget-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview New Worksite Item Budget
+         * @description Same, for a job item of a worksite that is not saved yet (Add Worksite form).
+         */
+        post: operations["preview_new_worksite_item_budget_api_v1_job_items_budget_preview_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2187,7 +2251,7 @@ export interface paths {
         put?: never;
         /**
          * Create Job Item
-         * @description Create a job item under a worksite.
+         * @description Create a job item under a worksite. The response includes its planned man-hours.
          */
         post: operations["create_job_item_api_v1_worksites__worksite_id__job_items_post"];
         delete?: never;
@@ -2211,7 +2275,7 @@ export interface paths {
         head?: never;
         /**
          * Update Job Item
-         * @description Update a job item with optimistic locking.
+         * @description Update a job item with optimistic locking. The response includes its planned man-hours.
          */
         patch: operations["update_job_item_api_v1_job_items__job_item_id__patch"];
         trace?: never;
@@ -4874,7 +4938,10 @@ export interface components {
                 [key: string]: unknown;
             };
         };
-        /** BudgetWarning */
+        /**
+         * BudgetWarning
+         * @description MISSING_GRADE_RATE, PROVISIONS_DIFFER_FROM_PAYROLL or SETTING_MISSING.
+         */
         BudgetWarning: {
             /** Code */
             code: string;
@@ -4891,6 +4958,10 @@ export interface components {
             annual_hours: string;
             /** Message */
             message: string;
+            /** Plan Provisions */
+            plan_provisions?: string | null;
+            /** Payroll Provisions */
+            payroll_provisions?: string | null;
         };
         /** CandidateRecommendationRead */
         CandidateRecommendationRead: {
@@ -6017,6 +6088,43 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /**
+         * JobItemBudget
+         * @description Planned man-hours and cost of one job item for a period (default: current contract year).
+         */
+        JobItemBudget: {
+            /**
+             * Period From
+             * Format: date
+             */
+            period_from: string;
+            /**
+             * Period To
+             * Format: date
+             */
+            period_to: string;
+            /** Activities Per Year */
+            activities_per_year: string;
+            /** Full Year Hours */
+            full_year_hours: string;
+            /** Active Days */
+            active_days: number;
+            /** Annual Hours */
+            annual_hours: string;
+            /** Hourly Rate */
+            hourly_rate?: string | null;
+            /** Annual Cost */
+            annual_cost?: string | null;
+            /**
+             * Is Budget Only
+             * @default false
+             */
+            is_budget_only: boolean;
+            /** Revision Code */
+            revision_code?: string | null;
+            /** Warnings */
+            warnings?: components["schemas"]["BudgetWarning"][];
+        };
         /** JobItemCreate */
         JobItemCreate: {
             /** Sub Item Code */
@@ -6152,6 +6260,7 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            budget?: components["schemas"]["JobItemBudget"] | null;
         };
         /** JobItemUpdate */
         JobItemUpdate: {
@@ -6853,6 +6962,21 @@ export interface components {
         MobileRefreshRequest: {
             /** Refresh Token */
             refresh_token: string;
+        };
+        /**
+         * NewWorksiteBudgetPreview
+         * @description Budget preview for a job item of a worksite that is not saved yet (Add Worksite form).
+         */
+        NewWorksiteBudgetPreview: {
+            /** Country */
+            country: string;
+            /** Salary Revision Code */
+            salary_revision_code?: string | null;
+            /** Contract Start */
+            contract_start?: string | null;
+            /** Contract End */
+            contract_end?: string | null;
+            item: components["schemas"]["JobItemCreate"];
         };
         /** OperationalCellWorker */
         OperationalCellWorker: {
@@ -7599,6 +7723,102 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** PlannedActualItem */
+        PlannedActualItem: {
+            /**
+             * Planned Hours
+             * @default 0
+             */
+            planned_hours: string;
+            /**
+             * Actual Hours
+             * @default 0
+             */
+            actual_hours: string;
+            /**
+             * Hours Diff
+             * @default 0
+             */
+            hours_diff: string;
+            /** Hours Diff Pct */
+            hours_diff_pct?: string | null;
+            /** Planned Cost */
+            planned_cost?: string | null;
+            /** Actual Cost */
+            actual_cost?: string | null;
+            /** Cost Diff */
+            cost_diff?: string | null;
+            /** Cost Diff Pct */
+            cost_diff_pct?: string | null;
+            /**
+             * Job Item Id
+             * Format: uuid
+             */
+            job_item_id: string;
+            /** Sub Item Code */
+            sub_item_code: string;
+            /** Staff Grade Description */
+            staff_grade_description: string;
+            /** Grade Code */
+            grade_code: string;
+            /**
+             * Is Budget Only
+             * @default false
+             */
+            is_budget_only: boolean;
+            /**
+             * Is Active
+             * @default true
+             */
+            is_active: boolean;
+            /**
+             * Excluded From Totals
+             * @default false
+             */
+            excluded_from_totals: boolean;
+            /** Hourly Rate */
+            hourly_rate?: string | null;
+            /** Months */
+            months?: components["schemas"]["PlannedActualMonth"][];
+        };
+        /** PlannedActualMonth */
+        PlannedActualMonth: {
+            /**
+             * Planned Hours
+             * @default 0
+             */
+            planned_hours: string;
+            /**
+             * Actual Hours
+             * @default 0
+             */
+            actual_hours: string;
+            /**
+             * Hours Diff
+             * @default 0
+             */
+            hours_diff: string;
+            /** Hours Diff Pct */
+            hours_diff_pct?: string | null;
+            /** Planned Cost */
+            planned_cost?: string | null;
+            /** Actual Cost */
+            actual_cost?: string | null;
+            /** Cost Diff */
+            cost_diff?: string | null;
+            /** Cost Diff Pct */
+            cost_diff_pct?: string | null;
+            /**
+             * Month From
+             * Format: date
+             */
+            month_from: string;
+            /**
+             * Month To
+             * Format: date
+             */
+            month_to: string;
         };
         /**
          * PlatformEnum
@@ -8352,6 +8572,16 @@ export interface components {
              * @default 0.00
              */
             transportation_provision: number | string | null;
+            /**
+             * Telephone Allowance
+             * @default 0.00
+             */
+            telephone_allowance: number | string;
+            /**
+             * Housing Transport Allowance
+             * @default 0.00
+             */
+            housing_transport_allowance: number | string;
         };
         /** SalaryRevisionLineCreate */
         "SalaryRevisionLineCreate-Output": {
@@ -8411,6 +8641,16 @@ export interface components {
              * @default 0.00
              */
             transportation_provision: string | null;
+            /**
+             * Telephone Allowance
+             * @default 0.00
+             */
+            telephone_allowance: string;
+            /**
+             * Housing Transport Allowance
+             * @default 0.00
+             */
+            housing_transport_allowance: string;
         };
         /** SalaryRevisionLineDiff */
         SalaryRevisionLineDiff: {
@@ -8458,6 +8698,16 @@ export interface components {
             accommodation_provision: string;
             /** Transportation Provision */
             transportation_provision?: string | null;
+            /**
+             * Telephone Allowance
+             * @default 0.00
+             */
+            telephone_allowance: string;
+            /**
+             * Housing Transport Allowance
+             * @default 0.00
+             */
+            housing_transport_allowance: string;
             /**
              * Total Provisions
              * @default 0.00
@@ -9452,8 +9702,65 @@ export interface components {
             /** Approved At */
             approved_at?: string | null;
         };
-        /** WorksiteBudgetVsActualItem */
+        /** WorksiteBudgetTotals */
+        WorksiteBudgetTotals: {
+            /**
+             * Period From
+             * Format: date
+             */
+            period_from: string;
+            /**
+             * Period To
+             * Format: date
+             */
+            period_to: string;
+            /** Revision Code */
+            revision_code?: string | null;
+            /** Total Hours */
+            total_hours: string;
+            /**
+             * Missing Rate Hours
+             * @default 0.0
+             */
+            missing_rate_hours: string;
+            /** Total Cost */
+            total_cost?: string | null;
+            /** Warnings */
+            warnings?: components["schemas"]["BudgetWarning"][];
+        };
+        /**
+         * WorksiteBudgetVsActualItem
+         * @description One worksite: planned vs actual for a period, per item and per month.
+         *
+         *     The fields after ``months`` keep the shape the Payroll Budget tab and the Job Costing report
+         *     already read; ``prorated_budget`` is now the planned cost for the period (no days / 365 cap).
+         */
         WorksiteBudgetVsActualItem: {
+            /**
+             * Planned Hours
+             * @default 0
+             */
+            planned_hours: string;
+            /**
+             * Actual Hours
+             * @default 0
+             */
+            actual_hours: string;
+            /**
+             * Hours Diff
+             * @default 0
+             */
+            hours_diff: string;
+            /** Hours Diff Pct */
+            hours_diff_pct?: string | null;
+            /** Planned Cost */
+            planned_cost?: string | null;
+            /** Actual Cost */
+            actual_cost?: string | null;
+            /** Cost Diff */
+            cost_diff?: string | null;
+            /** Cost Diff Pct */
+            cost_diff_pct?: string | null;
             /**
              * Worksite Id
              * Format: uuid
@@ -9465,38 +9772,65 @@ export interface components {
             job_name: string;
             /** Country */
             country: string;
+            /**
+             * Period From
+             * Format: date
+             */
+            period_from: string;
+            /**
+             * Period To
+             * Format: date
+             */
+            period_to: string;
+            /** Revision Code */
+            revision_code?: string | null;
+            /**
+             * Unplanned Hours
+             * @default 0
+             */
+            unplanned_hours: string;
+            /** Unallocated Actual Cost */
+            unallocated_actual_cost?: string | null;
+            /** Items */
+            items?: components["schemas"]["PlannedActualItem"][];
+            /** Months */
+            months?: components["schemas"]["PlannedActualMonth"][];
+            /** Warnings */
+            warnings?: components["schemas"]["BudgetWarning"][];
+            /**
+             * Missing Rate Hours
+             * @default 0
+             */
+            missing_rate_hours: string;
             /** Salary Revision Code */
             salary_revision_code?: string | null;
             /** Assigned Revision Code */
             assigned_revision_code?: string | null;
-            /** Annual Planned Man Hours */
+            /**
+             * Annual Planned Man Hours
+             * @default 0
+             */
             annual_planned_man_hours: string;
             /** Annual Labor Budget */
-            annual_labor_budget: string;
+            annual_labor_budget?: string | null;
             /** Prorated Budget */
-            prorated_budget: string;
+            prorated_budget?: string | null;
             /** Pro Rated Budget */
             pro_rated_budget?: string | null;
             /** Actual Cost Allocated */
-            actual_cost_allocated: string;
+            actual_cost_allocated?: string | null;
             /** Actual Allocated Cost */
             actual_allocated_cost?: string | null;
             /** Variance */
-            variance: string;
+            variance?: string | null;
             /** Variance Amount */
             variance_amount?: string | null;
-            /**
-             * Variance Percent
-             * @default 0.0
-             */
-            variance_percent: string;
+            /** Variance Percent */
+            variance_percent?: string | null;
             /** Is Over Budget */
-            is_over_budget: boolean;
-            /**
-             * Is Under Budget
-             * @default false
-             */
-            is_under_budget: boolean;
+            is_over_budget?: boolean | null;
+            /** Is Under Budget */
+            is_under_budget?: boolean | null;
             /** Manual Budget Override */
             manual_budget_override?: string | null;
             /**
@@ -9504,13 +9838,6 @@ export interface components {
              * @default false
              */
             is_custom_budget_override: boolean;
-            /**
-             * Missing Rate Hours
-             * @default 0.0
-             */
-            missing_rate_hours: string;
-            /** Warnings */
-            warnings?: components["schemas"]["BudgetWarning"][];
         };
         /** WorksiteCreate */
         WorksiteCreate: {
@@ -9632,6 +9959,7 @@ export interface components {
              * @default []
              */
             supervisors: components["schemas"]["WorksiteSupervisorRead"][];
+            budget_totals?: components["schemas"]["WorksiteBudgetTotals"] | null;
         };
         /** WorksiteResponse */
         WorksiteResponse: {
@@ -9854,7 +10182,7 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    health_health_liveness_head: {
+    health_health_liveness_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -9874,7 +10202,7 @@ export interface operations {
             };
         };
     };
-    health_health_liveness_head: {
+    health_health_liveness_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -9894,7 +10222,7 @@ export interface operations {
             };
         };
     };
-    health_health_head: {
+    health_health_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -9914,7 +10242,7 @@ export interface operations {
             };
         };
     };
-    health_health_head: {
+    health_health_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -9934,7 +10262,7 @@ export interface operations {
             };
         };
     };
-    health_ready_health_readiness_head: {
+    health_ready_health_readiness_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -9961,7 +10289,7 @@ export interface operations {
             };
         };
     };
-    health_ready_health_readiness_head: {
+    health_ready_health_readiness_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -9988,7 +10316,7 @@ export interface operations {
             };
         };
     };
-    health_ready_health_ready_head: {
+    health_ready_health_ready_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -10015,7 +10343,7 @@ export interface operations {
             };
         };
     };
-    health_ready_health_ready_head: {
+    health_ready_health_ready_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -13644,40 +13972,6 @@ export interface operations {
             };
         };
     };
-    get_budget_vs_actual_api_v1_payroll_budget_vs_actual_get: {
-        parameters: {
-            query?: {
-                country?: string | null;
-                as_of?: string | null;
-            };
-            header?: {
-                authorization?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorksiteBudgetVsActualItem"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     update_worksite_revision_api_v1_payroll_worksites__worksite_id__revision_put: {
         parameters: {
             query?: {
@@ -13734,6 +14028,150 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PayrollRunRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_budget_vs_actual_api_v1_payroll_budget_vs_actual_get: {
+        parameters: {
+            query?: {
+                country?: string | null;
+                from?: string | null;
+                to?: string | null;
+                as_of?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorksiteBudgetVsActualItem"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_worksite_planned_vs_actual_api_v1_worksites__worksite_id__planned_vs_actual_get: {
+        parameters: {
+            query?: {
+                from?: string | null;
+                to?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                worksite_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorksiteBudgetVsActualItem"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_job_item_budget_api_v1_worksites__worksite_id__job_items_budget_preview_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                worksite_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JobItemCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobItemBudget"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_new_worksite_item_budget_api_v1_job_items_budget_preview_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewWorksiteBudgetPreview"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobItemBudget"];
                 };
             };
             /** @description Validation Error */

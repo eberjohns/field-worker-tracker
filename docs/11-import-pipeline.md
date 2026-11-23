@@ -51,7 +51,7 @@ One registry in code (`modules/imports/registry.py`) defines sheets, columns, ty
 | Worksite_Supervisors | job_number + supervisor_tally_id |
 | Leave | tally_id + from_date |
 | Public_Holidays | holiday_date + country |
-| Salary_Revisions / Salary_Revision_Lines | revision_code / revision_code + grade_code |
+| Salary_Revisions / Salary_Revision_Lines | revision_code / revision_code + grade_code (Salary_Revision_Lines has optional `telephone_allowance` and `housing_transport_allowance` after `notes`, blank = 0; DEC-59) |
 | Company_Settings | setting_key + country + effective_from |
 | Time_Rules | rule_name + scope_type + scope_id + start_date |
 

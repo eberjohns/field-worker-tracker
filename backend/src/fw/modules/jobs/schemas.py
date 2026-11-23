@@ -9,6 +9,48 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from fw.rules.imports.normalizer import CONTROLLED_SGDS
 
+# --- Job budget and man-hours (DEC-59, ADR-029) ---------------------------------------------
+# Filled in by the budget module. Money fields are Admin only (DEC-47): null for other roles.
+
+
+class BudgetWarning(BaseModel):
+    """MISSING_GRADE_RATE, PROVISIONS_DIFFER_FROM_PAYROLL or SETTING_MISSING."""
+
+    code: str
+    job_item_id: UUID | None = None
+    sub_item_code: str | None = None
+    grade_code: str | None = None
+    annual_hours: Decimal = Decimal("0.0")
+    message: str
+    plan_provisions: Decimal | None = None
+    payroll_provisions: Decimal | None = None
+
+
+class JobItemBudget(BaseModel):
+    """Planned man-hours and cost of one job item for a period (default: current contract year)."""
+
+    period_from: date
+    period_to: date
+    activities_per_year: Decimal
+    full_year_hours: Decimal
+    active_days: int
+    annual_hours: Decimal
+    hourly_rate: Decimal | None = None
+    annual_cost: Decimal | None = None
+    is_budget_only: bool = False
+    revision_code: str | None = None
+    warnings: list[BudgetWarning] = Field(default_factory=list)
+
+
+class WorksiteBudgetTotals(BaseModel):
+    period_from: date
+    period_to: date
+    revision_code: str | None = None
+    total_hours: Decimal
+    missing_rate_hours: Decimal = Decimal("0.0")
+    total_cost: Decimal | None = None
+    warnings: list[BudgetWarning] = Field(default_factory=list)
+
 
 class WorksiteBase(BaseModel):
     job_number: str = Field(
@@ -194,6 +236,7 @@ class JobItemResponse(BaseModel):
     days_per_occurrence: int
     job_unit_day_split: list[Decimal]
     created_at: datetime
+    budget: JobItemBudget | None = None
 
 
 class WorksiteSupervisorRead(BaseModel):
@@ -263,6 +306,7 @@ class WorksiteDetailResponse(WorksiteResponse):
     items: list[JobItemResponse] = []
     job_items: list[JobItemResponse] = []
     supervisors: list[WorksiteSupervisorRead] = []
+    budget_totals: WorksiteBudgetTotals | None = None
 
 
 class BoundaryUpdateRequest(BaseModel):

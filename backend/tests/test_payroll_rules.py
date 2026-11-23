@@ -21,7 +21,6 @@ from fw.rules.payroll import (
     calculate_missed_hours_deduction,
     calculate_per_month_provision,
     calculate_provisions,
-    calculate_revision_planned_hourly_cost,
     calculate_salary_portion,
     calculate_total_staff_cost,
 )
@@ -142,14 +141,15 @@ def test_missed_hours_deduction():
 
 
 def test_revision_planned_hourly_cost_for_job_budget():
-    """Verify job budget planned hourly cost formula from revision line."""
-    # (salary_portion + line_provisions) * 1.05 / 208
-    rev_salary_portion = Decimal("1500.00")
-    rev_provisions = Decimal("500.00")
-    # Base = 2000.00. With 5% HR OH = 2100.00.
-    # 2100 / 208 = 10.09615... -> 10.10
-    hourly_cost = calculate_revision_planned_hourly_cost(
-        revision_salary_portion=rev_salary_portion,
-        revision_provisions_sum=rev_provisions,
+    """Job budget hourly rate (DEC-59): the same monthly cost as payroll (salary portion +
+    line provisions + gratuity + leave salary, plus HR overhead) / divisor. No defaults."""
+    from fw.rules.jobs import GradeLine, grade_hourly_rate
+
+    line = GradeLine(
+        basic_salary=Decimal("1000.00"),
+        special_allowance=Decimal("500.00"),
+        visa_provision=Decimal("500.00"),
     )
-    assert hourly_cost == Decimal("10.10")
+    # portion 1500 + provisions 500 + gratuity 82.19 + leave 83.33 = 2165.52
+    # + 5% overhead 108.28 = 2273.80; / 208 = 10.9317...
+    assert grade_hourly_rate(line, Decimal("0.05"), Decimal("208")) == Decimal("10.9317")

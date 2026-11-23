@@ -29,7 +29,6 @@ from fw.modules.payroll.schemas import (
     SalaryRevisionRead,
     SalaryStructureListItem,
     WorkerMobilePayrollSlip,
-    WorksiteBudgetVsActualItem,
 )
 from fw.modules.payroll.service import PayrollSalaryService, PayrollService
 
@@ -61,6 +60,5 @@ __all__ = [
     "SalaryRevisionRead",
     "SalaryStructureListItem",
     "WorkerMobilePayrollSlip",
-    "WorksiteBudgetVsActualItem",
     "payroll_router",
 ]

@@ -169,6 +169,13 @@ class SalaryRevisionLine(Base):
     transportation_provision: Mapped[Decimal | None] = mapped_column(
         Numeric(14, 2), default=Decimal("0.00"), nullable=True
     )
+    # Part of the salary portion, as on employee_salary (0023; the client sheet has none -> 0).
+    telephone_allowance: Mapped[Decimal] = mapped_column(
+        Numeric(14, 2), default=Decimal("0.00"), server_default="0.00", nullable=False
+    )
+    housing_transport_allowance: Mapped[Decimal] = mapped_column(
+        Numeric(14, 2), default=Decimal("0.00"), server_default="0.00", nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),

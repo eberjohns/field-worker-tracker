@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { diffClass, fmtDiff, fmtHours, fmtMoney, fmtPct } from "../features/budget/budgetFormat";
 import {
   DollarSign,
   Calendar,
@@ -7,8 +8,6 @@ import {
   Lock,
   RefreshCw,
   FileText,
-  TrendingUp,
-  TrendingDown,
   Info,
   Download,
   Upload,
@@ -159,6 +158,18 @@ interface BudgetVsActualItem {
     annual_hours?: number;
     message: string;
   }>;
+  // DEC-59: planned vs actual for the period
+  period_from?: string;
+  period_to?: string;
+  planned_hours?: number | string;
+  actual_hours?: number | string;
+  hours_diff?: number | string;
+  hours_diff_pct?: number | string | null;
+  planned_cost?: number | string | null;
+  actual_cost?: number | string | null;
+  cost_diff?: number | string | null;
+  cost_diff_pct?: number | string | null;
+  unplanned_hours?: number | string;
 }
 
 export const Payroll: React.FC = () => {
@@ -219,6 +230,9 @@ export const Payroll: React.FC = () => {
   const [budgetItems, setBudgetItems] = useState<BudgetVsActualItem[]>([]);
   const [budgetLoading, setBudgetLoading] = useState(false);
   const [countryBudgetFilter, setCountryBudgetFilter] = useState("AE");
+  // Empty = each worksite's current contract year (DEC-59)
+  const [budgetFrom, setBudgetFrom] = useState("");
+  const [budgetTo, setBudgetTo] = useState("");
   const [updatingWorksiteRevId, setUpdatingWorksiteRevId] = useState<string | null>(null);
 
   // --- Fetch Runs ---
@@ -313,9 +327,13 @@ export const Payroll: React.FC = () => {
     if (!token) return;
     setBudgetLoading(true);
     try {
-      const url = countryBudgetFilter
-        ? `/api/v1/payroll/budget-vs-actual?country=${countryBudgetFilter}`
-        : "/api/v1/payroll/budget-vs-actual";
+      const params = new URLSearchParams();
+      if (countryBudgetFilter) params.set("country", countryBudgetFilter);
+      if (budgetFrom && budgetTo) {
+        params.set("from", budgetFrom);
+        params.set("to", budgetTo);
+      }
+      const url = `/api/v1/payroll/budget-vs-actual?${params.toString()}`;
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -355,7 +373,7 @@ export const Payroll: React.FC = () => {
     if (activeTab === "BUDGET") {
       fetchBudgetVsActual();
     }
-  }, [activeTab, countryBudgetFilter]);
+  }, [activeTab, countryBudgetFilter, budgetFrom, budgetTo]);
 
   // Actions
   const handleGenerateDraft = async () => {
@@ -1253,6 +1271,32 @@ export const Payroll: React.FC = () => {
                 <option value="SA">Saudi Arabia (SA)</option>
                 <option value="QA">Qatar (QA)</option>
               </select>
+              <label className="text-3xs uppercase font-bold text-slate-400 ml-2">From:</label>
+              <input
+                type="date"
+                value={budgetFrom}
+                onChange={(e) => setBudgetFrom(e.target.value)}
+                className="px-2 py-1 text-xs bg-slate-50 border border-slate-200 rounded-lg"
+              />
+              <label className="text-3xs uppercase font-bold text-slate-400">To:</label>
+              <input
+                type="date"
+                value={budgetTo}
+                onChange={(e) => setBudgetTo(e.target.value)}
+                className="px-2 py-1 text-xs bg-slate-50 border border-slate-200 rounded-lg"
+              />
+              {(budgetFrom || budgetTo) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBudgetFrom("");
+                    setBudgetTo("");
+                  }}
+                  className="text-3xs text-indigo-600 hover:underline"
+                >
+                  Contract years
+                </button>
+              )}
             </div>
 
             <button
@@ -1264,13 +1308,16 @@ export const Payroll: React.FC = () => {
             </button>
           </div>
 
-          {/* Worksites Budget Table */}
+          {/* Worksites Budget Table (DEC-59: planned vs actual for the period) */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
             <div className="p-4 border-b border-slate-100 flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-bold text-slate-900">Worksite Labor Budget vs Actual Variance</h3>
+                <h3 className="text-sm font-bold text-slate-900">Worksite planned vs actual (hours and cost)</h3>
                 <p className="text-3xs text-slate-500">
-                  Switch the assigned revision code dropdown to dynamically reprice contract budget upon renewal.
+                  Planned: job items pro-rated by day inside the item and contract dates, priced with the
+                  revision line (salary, revision provisions, gratuity, leave salary, HR overhead). Actual:
+                  approved attendance hours and approved payroll allocations. Default period: each
+                  worksite's current contract year. Open a worksite for the per-item and monthly view.
                 </p>
               </div>
             </div>
@@ -1280,33 +1327,42 @@ export const Payroll: React.FC = () => {
                 <thead>
                   <tr className="bg-slate-50/70 border-b border-slate-200 text-3xs font-bold uppercase text-slate-500">
                     <th className="py-2.5 px-4">Worksite</th>
-                    <th className="py-2.5 px-3">Assigned Revision Code</th>
-                    <th className="py-2.5 px-3">Annual Planned Hours</th>
-                    <th className="py-2.5 px-3">Annual Labor Budget</th>
-                    <th className="py-2.5 px-3">Pro-Rated Budget (YTD)</th>
-                    <th className="py-2.5 px-3">Actual Allocated Cost</th>
-                    <th className="py-2.5 px-4">Variance ($ / %)</th>
+                    <th className="py-2.5 px-3">Revision</th>
+                    <th className="py-2.5 px-3">Period</th>
+                    <th className="py-2.5 px-3 text-right">Planned h</th>
+                    <th className="py-2.5 px-3 text-right">Actual h</th>
+                    <th className="py-2.5 px-3 text-right">Diff h</th>
+                    <th className="py-2.5 px-3 text-right">Planned cost</th>
+                    <th className="py-2.5 px-3 text-right">Actual cost</th>
+                    <th className="py-2.5 px-4 text-right">Diff cost</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {budgetItems.map((item) => (
-                    <tr key={item.worksite_id} className="hover:bg-slate-50/60 transition">
+                    <tr key={item.worksite_id} className="hover:bg-slate-50/60 transition align-top">
                       <td className="py-2.5 px-4">
                         <span className="font-bold text-slate-900 block">{item.job_name}</span>
                         <span className="text-3xs font-mono text-slate-500">{item.job_number}</span>
                         {item.is_custom_budget_override && (
                           <span className="inline-block mt-0.5 px-1.5 py-0.2 bg-amber-100 text-amber-800 rounded text-3xs font-semibold">
-                            Manual Override
+                            Manual annual budget {fmtMoney(item.manual_budget_override)}
                           </span>
                         )}
                         {(item.warnings || []).map((w, i) => (
                           <span
-                            key={`${w.code}-${w.sub_item_code ?? i}`}
+                            key={`${w.code}-${w.sub_item_code ?? w.grade_code ?? i}`}
                             title={w.message}
-                            className="block mt-0.5 px-1.5 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 rounded text-3xs font-semibold"
+                            className={`block mt-0.5 px-1.5 py-0.5 rounded text-3xs font-semibold border ${
+                              w.code === "MISSING_GRADE_RATE"
+                                ? "bg-rose-50 text-rose-700 border-rose-200"
+                                : "bg-amber-50 text-amber-800 border-amber-200"
+                            }`}
                           >
-                            Item {w.sub_item_code || "?"}: no rate for grade {w.grade_code || "(blank)"}
-                            {w.annual_hours ? ` (${Number(w.annual_hours).toLocaleString()} h/yr not in budget)` : ""}
+                            {w.code === "MISSING_GRADE_RATE"
+                              ? `Item ${w.sub_item_code || "?"}: no rate for grade ${w.grade_code || "(blank)"}${
+                                  w.annual_hours ? ` (${fmtHours(w.annual_hours)} not in budget)` : ""
+                                }`
+                              : w.message}
                           </span>
                         ))}
                       </td>
@@ -1334,51 +1390,32 @@ export const Payroll: React.FC = () => {
                         )}
                       </td>
 
-                      <td className="py-2.5 px-3 font-mono font-semibold text-slate-800">
-                        {Number(item.annual_planned_man_hours).toLocaleString()}h
+                      <td className="py-2.5 px-3 text-3xs text-slate-600 whitespace-nowrap">
+                        {item.period_from} – {item.period_to}
                       </td>
-
-                      <td className="py-2.5 px-3 font-mono font-bold text-slate-900">
-                        ${Number(item.annual_labor_budget).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      <td className="py-2.5 px-3 text-right font-mono">{fmtHours(item.planned_hours)}</td>
+                      <td className="py-2.5 px-3 text-right font-mono">
+                        {fmtHours(item.actual_hours)}
+                        {Number(item.unplanned_hours || 0) > 0 && (
+                          <span className="block text-3xs text-slate-400">
+                            incl. {fmtHours(item.unplanned_hours)} unscheduled
+                          </span>
+                        )}
                       </td>
-
-                      {(() => {
-                        const proRated = Number(item.pro_rated_budget ?? item.prorated_budget ?? 0);
-                        const actualCost = Number(item.actual_allocated_cost ?? item.actual_cost_allocated ?? 0);
-                        const varianceAmt = Number(item.variance_amount ?? item.variance ?? (actualCost - proRated));
-                        const variancePct = Number(
-                          item.variance_percent ?? (proRated > 0 ? (varianceAmt / proRated) * 100 : 0)
-                        );
-                        const isUnder = item.is_under_budget ?? (varianceAmt < 0);
-
-                        return (
-                          <>
-                            <td className="py-2.5 px-3 font-mono text-slate-700">
-                              ${proRated.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                            </td>
-
-                            <td className="py-2.5 px-3 font-mono font-bold text-indigo-700">
-                              ${actualCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                            </td>
-
-                            <td className="py-2.5 px-4">
-                              <div className="flex items-center gap-1.5">
-                                {isUnder ? (
-                                  <span className="px-2 py-0.5 rounded-full text-3xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
-                                    <TrendingDown className="w-3 h-3" />
-                                    Under: ${Math.abs(varianceAmt).toFixed(2)} ({Math.abs(variancePct).toFixed(1)}%)
-                                  </span>
-                                ) : (
-                                  <span className="px-2 py-0.5 rounded-full text-3xs font-bold bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1">
-                                    <TrendingUp className="w-3 h-3" />
-                                    Over: ${Math.abs(varianceAmt).toFixed(2)} ({Math.abs(variancePct).toFixed(1)}%)
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                          </>
-                        );
-                      })()}
+                      <td className={`py-2.5 px-3 text-right font-mono ${diffClass(item.hours_diff)}`}>
+                        {fmtDiff(item.hours_diff, (n) => n.toLocaleString(undefined, { maximumFractionDigits: 1 }))}
+                        <span className="block text-3xs">{fmtPct(item.hours_diff_pct)}</span>
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono">{fmtMoney(item.planned_cost)}</td>
+                      <td className="py-2.5 px-3 text-right font-mono font-bold text-indigo-700">
+                        {fmtMoney(item.actual_cost)}
+                      </td>
+                      <td className={`py-2.5 px-4 text-right font-mono ${diffClass(item.cost_diff)}`}>
+                        {fmtDiff(item.cost_diff, (n) =>
+                          n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+                        )}
+                        <span className="block text-3xs">{fmtPct(item.cost_diff_pct)}</span>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

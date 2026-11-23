@@ -25,7 +25,6 @@ from fw.modules.payroll.schemas import (
     SalaryRevisionLineCreate,
     SalaryRevisionRead,
     WorkerMobilePayrollSlip,
-    WorksiteBudgetVsActualItem,
 )
 from fw.modules.payroll.service import PayrollService
 
@@ -321,24 +320,6 @@ async def preview_salary_revision_file(
         filename=filename,
         target_revision_code=target_code,
         base_revision_code=base_code,
-    )
-
-
-# --- Job Budget vs Actual ---
-
-
-@router.get("/payroll/budget-vs-actual", response_model=list[WorksiteBudgetVsActualItem])
-async def get_budget_vs_actual(
-    country: str | None = None,
-    as_of: date | None = None,
-    current_user: User = Depends(require_role("ADMIN")),
-    session: AsyncSession = Depends(get_db),
-) -> list[WorksiteBudgetVsActualItem]:
-    """Calculate dynamic contract budget from assigned revision lines and items vs actual allocated cost."""
-    return await PayrollService.get_budget_vs_actual(
-        session=session,
-        country=country,
-        as_of_date=as_of,
     )
 
 

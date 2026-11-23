@@ -29,7 +29,6 @@ from fw.modules.payroll.models import (
 )
 from fw.modules.payroll.repository import PayrollRepository
 from fw.modules.payroll.schemas import (
-    BudgetWarning,
     EmployeeSalaryCreate,
     EmployeeSalaryHistoryResponse,
     EmployeeSalaryRead,
@@ -49,7 +48,6 @@ from fw.modules.payroll.schemas import (
     SalaryRevisionRead,
     SalaryStructureListItem,
     WorkerMobilePayrollSlip,
-    WorksiteBudgetVsActualItem,
 )
 from fw.modules.settings.service import SettingsService
 from fw.rules.grades import (
@@ -58,8 +56,8 @@ from fw.rules.grades import (
     display_grade_code,
     grade_sort_key,
     is_base_grade_code,
-    try_base_grade_code,
 )
+from fw.rules.jobs import GradeLine, grade_hourly_rate, grade_monthly_cost
 from fw.rules.payroll import (
     calculate_final_total_staff_cost,
     calculate_gratuity,
@@ -70,7 +68,6 @@ from fw.rules.payroll import (
     calculate_missed_hours_deduction,
     calculate_per_month_provision,
     calculate_provisions,
-    calculate_revision_planned_hourly_cost,
     calculate_salary_difference,
     calculate_salary_portion,
     calculate_total_staff_cost,
@@ -1711,6 +1708,8 @@ class PayrollService:
                     medical_provision=line_in.medical_provision,
                     accommodation_provision=line_in.accommodation_provision,
                     transportation_provision=line_in.transportation_provision,
+                    telephone_allowance=line_in.telephone_allowance,
+                    housing_transport_allowance=line_in.housing_transport_allowance,
                 )
             )
 
@@ -1742,23 +1741,32 @@ class PayrollService:
                 status_code=404,
             )
 
+        # Planned hourly cost uses the same rule as the job budget (DEC-59): the line's own
+        # salary portion and provisions, gratuity, leave salary and HR overhead from settings.
+        as_of = site_today(rev.country)
+        hr_oh = await _required_decimal_setting(session, "hr_overhead_rate", rev.country, as_of)
+        divisor = await _required_decimal_setting(
+            session, "standard_ot_divisor_hours", rev.country, as_of
+        )
         lines_read: list[SalaryRevisionLineRead] = []
         for line in rev.lines:
-            salary_portion = (
-                line.basic_salary + line.special_allowance + line.fixed_ot_amount + line.bonus
+            g_line = GradeLine(
+                basic_salary=line.basic_salary,
+                special_allowance=line.special_allowance,
+                fixed_ot_amount=line.fixed_ot_amount,
+                bonus=line.bonus,
+                telephone_allowance=line.telephone_allowance,
+                housing_transport_allowance=line.housing_transport_allowance,
+                visa_provision=line.visa_provision,
+                air_ticket_provision=line.air_ticket_provision,
+                uniform_provision=line.uniform_provision,
+                medical_provision=line.medical_provision,
+                accommodation_provision=line.accommodation_provision,
+                transportation_provision=line.transportation_provision or Decimal("0.00"),
             )
-            provisions_sum = (
-                line.visa_provision
-                + line.air_ticket_provision
-                + line.uniform_provision
-                + line.medical_provision
-                + line.accommodation_provision
-                + (line.transportation_provision or Decimal("0.00"))
-            )
-            hourly_cost = calculate_revision_planned_hourly_cost(
-                revision_salary_portion=salary_portion,
-                revision_provisions_sum=provisions_sum,
-            )
+            salary_portion = grade_monthly_cost(g_line, hr_oh).salary_portion
+            provisions_sum = g_line.provisions_total
+            hourly_cost = grade_hourly_rate(g_line, hr_oh, divisor)
 
             lines_read.append(
                 SalaryRevisionLineRead(
@@ -1775,6 +1783,8 @@ class PayrollService:
                     medical_provision=line.medical_provision,
                     accommodation_provision=line.accommodation_provision,
                     transportation_provision=line.transportation_provision,
+                    telephone_allowance=line.telephone_allowance,
+                    housing_transport_allowance=line.housing_transport_allowance,
                     total_provisions=provisions_sum,
                     total_salary_portion=salary_portion,
                     planned_hourly_cost=hourly_cost,
@@ -1866,6 +1876,8 @@ class PayrollService:
             ("medical_provision", "Medical Provision"),
             ("accommodation_provision", "Accommodation Provision"),
             ("transportation_provision", "Transportation Provision"),
+            ("telephone_allowance", "Telephone Allowance"),
+            ("housing_transport_allowance", "Housing/Transport Allowance"),
         ]
 
         for inc in incoming_lines:
@@ -1951,6 +1963,8 @@ class PayrollService:
             ("medical_provision", "Medical Provision"),
             ("accommodation_provision", "Accommodation Provision"),
             ("transportation_provision", "Transportation Provision"),
+            ("telephone_allowance", "Telephone Allowance"),
+            ("housing_transport_allowance", "Housing/Transport Allowance"),
         ]
 
         header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
@@ -1991,6 +2005,8 @@ class PayrollService:
                     float(line.medical_provision),
                     float(line.accommodation_provision),
                     float(line.transportation_provision or 0.0),
+                    float(line.telephone_allowance or 0.0),
+                    float(line.housing_transport_allowance or 0.0),
                 ]
                 for col_idx, val in enumerate(row_data, start=1):
                     cell = ws.cell(row=row_idx, column=col_idx, value=val)
@@ -2224,6 +2240,10 @@ class PayrollService:
                     transportation_provision=to_dec(
                         find_field(d, "transportation_provision", "transportation")
                     ),
+                    telephone_allowance=to_dec(find_field(d, "telephone_allowance", "telephone")),
+                    housing_transport_allowance=to_dec(
+                        find_field(d, "housing_transport_allowance", "housing_transport", "housing")
+                    ),
                 )
             )
 
@@ -2251,182 +2271,6 @@ class PayrollService:
             base_revision_code=base_revision_code,
             incoming_lines=lines,
         )
-
-    @staticmethod
-    async def get_budget_vs_actual(
-        session: AsyncSession,
-        country: str | None = None,
-        as_of_date: date | None = None,
-    ) -> list[WorksiteBudgetVsActualItem]:
-        """Calculate dynamic contract budget from assigned revision lines and items vs actual allocated cost."""
-        worksites = await PayrollRepository.get_worksites_and_items(session, country=country)
-
-        items: list[WorksiteBudgetVsActualItem] = []
-
-        for ws in worksites:
-            target_date = as_of_date or site_today(ws.country)
-            warnings: list[BudgetWarning] = []
-            missing_rate_hours = Decimal("0.0")
-            # 1. Resolve assigned or latest active revision
-            rev = await PayrollRepository.get_active_revision_for_worksite(
-                session, ws.country, ws.salary_revision_code
-            )
-
-            # Map grade_code to planned hourly cost from revision
-            grade_hourly_rates: dict[str, Decimal] = {}
-            if rev:
-                for line in rev.lines:
-                    portion = (
-                        line.basic_salary
-                        + line.special_allowance
-                        + line.fixed_ot_amount
-                        + line.bonus
-                    )
-                    prov = (
-                        line.visa_provision
-                        + line.air_ticket_provision
-                        + line.uniform_provision
-                        + line.medical_provision
-                        + line.accommodation_provision
-                        + (line.transportation_provision or Decimal("0.00"))
-                    )
-                    grade_hourly_rates[line.grade_code] = calculate_revision_planned_hourly_cost(
-                        portion, prov
-                    )
-
-            # 2. Compute annual planned man-hours and labor budget from job items
-            annual_man_hours = Decimal("0.0")
-            annual_labor_budget = Decimal("0.00")
-            budget_only_annual_cost = Decimal("0.00")
-
-            # Load budget-only staff types for this country
-            raw_budget_types = await SettingsService.get_setting(
-                session, "budget_only_staff_types", country=ws.country, default=[]
-            )
-            budget_only_types: set[str] = set()
-            if isinstance(raw_budget_types, list):
-                budget_only_types = {str(x).strip().lower() for x in raw_budget_types}
-
-            for item in ws.items:
-                if not item.is_active:
-                    continue
-                # Expected annual occurrences
-                unit = item.frequency_unit
-                freq_count = Decimal(str(item.occurrences_per_period or 1))
-                if unit == "WEEK":
-                    annual_occurrences = freq_count * Decimal("52")
-                elif unit == "MONTH":
-                    annual_occurrences = freq_count * Decimal("12")
-                elif unit == "QUARTER":
-                    annual_occurrences = freq_count * Decimal("4")
-                else:  # YEAR
-                    annual_occurrences = freq_count
-
-                staff_cnt = Decimal(str(item.required_staff_count or 1))
-                hrs_per_occ = Decimal(str(item.hours_per_occurrence_per_staff or 8.0))
-                item_annual_hours = annual_occurrences * staff_cnt * hrs_per_occ
-                annual_man_hours += item_annual_hours
-
-                # Lookup grade rate by base code (DEC-58). No fallback rate: a grade with no
-                # line in the revision is reported and left out of the totals.
-                grade = try_base_grade_code(item.planned_grade_code)
-                rate = grade_hourly_rates.get(grade) if grade else None
-                if rate is None:
-                    missing_rate_hours += item_annual_hours
-                    annual_man_hours -= item_annual_hours
-                    warnings.append(
-                        BudgetWarning(
-                            code="MISSING_GRADE_RATE",
-                            job_item_id=item.id,
-                            sub_item_code=item.sub_item_code,
-                            grade_code=item.planned_grade_code,
-                            annual_hours=item_annual_hours,
-                            message=(
-                                f"Grade '{item.planned_grade_code or '(blank)'}' has no line in "
-                                f"revision {rev.code if rev else '(none)'}; item left out of the budget."
-                            ),
-                        )
-                    )
-                    continue
-                item_annual_cost = round_money(item_annual_hours * rate)
-                annual_labor_budget += item_annual_cost
-
-                # If staff grade is budget-only, track its planned cost so actual cost
-                # can be credited equally (since no field attendance is tracked for it)
-                if (item.staff_grade_description or "").strip().lower() in budget_only_types:
-                    budget_only_annual_cost += item_annual_cost
-
-            # Manual override wins if set on the worksite
-            if ws.budget_amount and ws.budget_amount > Decimal("0.00"):
-                contract_annual_budget = ws.budget_amount
-            else:
-                contract_annual_budget = annual_labor_budget
-
-            # 3. Calculate pro-rated budget
-            start = ws.start_date or date(target_date.year, 1, 1)
-            elapsed_days = (target_date - start).days
-            if elapsed_days < 0:
-                elapsed_days = 0
-            fraction = min(Decimal("1.0"), Decimal(str(elapsed_days)) / Decimal("365.0"))
-            prorated_budget = round_money(contract_annual_budget * fraction)
-            budget_only_prorated_cost = round_money(budget_only_annual_cost * fraction)
-
-            # 4. Compute cumulative actual cost allocated from job_cost_allocations
-            from sqlalchemy import func, select
-
-            act_stmt = (
-                select(func.sum(JobCostAllocation.allocated_amount))
-                .join(PayrollRecord, JobCostAllocation.payroll_record_id == PayrollRecord.id)
-                .join(PayrollRun, PayrollRecord.payroll_run_id == PayrollRun.id)
-                .where(
-                    JobCostAllocation.worksite_id == ws.id,
-                    PayrollRun.status == "APPROVED",
-                )
-            )
-            act_res = await session.execute(act_stmt)
-            raw_field_actual = Decimal(str(act_res.scalar() or "0.00"))
-            # For budget-only staff positions, actual cost equals planned cost
-            # so overall job costing preserves pure operational variance without false skew
-            actual_cost = raw_field_actual + budget_only_prorated_cost
-
-            variance = actual_cost - prorated_budget
-            variance_pct = (
-                round_money((variance / prorated_budget) * Decimal("100.0"))
-                if prorated_budget > Decimal("0.00")
-                else Decimal("0.0")
-            )
-            is_over = variance > Decimal("0.00")
-            is_under = variance < Decimal("0.00")
-
-            items.append(
-                WorksiteBudgetVsActualItem(
-                    worksite_id=ws.id,
-                    job_number=ws.job_number,
-                    job_name=ws.job_name,
-                    country=ws.country,
-                    salary_revision_code=ws.salary_revision_code or (rev.code if rev else None),
-                    assigned_revision_code=ws.salary_revision_code or (rev.code if rev else None),
-                    annual_planned_man_hours=annual_man_hours,
-                    annual_labor_budget=contract_annual_budget,
-                    prorated_budget=prorated_budget,
-                    pro_rated_budget=prorated_budget,
-                    actual_cost_allocated=actual_cost,
-                    actual_allocated_cost=actual_cost,
-                    variance=variance,
-                    variance_amount=variance,
-                    variance_percent=variance_pct,
-                    is_over_budget=is_over,
-                    is_under_budget=is_under,
-                    manual_budget_override=ws.budget_amount,
-                    is_custom_budget_override=bool(
-                        ws.budget_amount and ws.budget_amount > Decimal("0.00")
-                    ),
-                    missing_rate_hours=missing_rate_hours,
-                    warnings=warnings,
-                )
-            )
-
-        return items
 
     @staticmethod
     async def check_auto_draft_runs(

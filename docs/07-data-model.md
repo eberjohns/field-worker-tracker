@@ -165,7 +165,7 @@ Fixed crew hierarchy links: `employee_id` FK, `manager_id` FK employees, `relati
 
 ### job_items
 `worksite_id` FK, `sub_item_code` text, `staff_grade_description` (required), `planned_grade_code` (required; base code per DEC-58, e.g. `G3C`; used for the budget and grade-group suggestions), `frequency_unit`, `occurrences_per_period` numeric(6,2), `period_interval` int default 1, `weekday_pattern` text[] nullable, `required_staff_count` int, `hours_per_occurrence_per_staff` numeric(8,3), `declared_activities_per_year` numeric nullable, `declared_total_hours_per_year` numeric nullable, `start_date`, `end_date` nullable, `deployment_type` (PERMANENT/REMOTE, required), `break_override_minutes` nullable, `is_active`, `version`.
-Unique (worksite_id, sub_item_code). Derived values (`days_per_occurrence`, expected annual figures) are computed, not stored.
+Unique (worksite_id, sub_item_code). Derived values (`days_per_occurrence`, expected annual figures) are computed, not stored. The job budget (DEC-59, ADR-029) is also computed, never stored: activities/year (with `period_interval`), man-hours pro-rated by day inside the period, the item's dates and the worksite contract dates (contract year = anniversary of `worksites.start_date`), and cost at the grade's hourly rate from the worksite's revision.
 
 ### job_occurrences
 `job_item_id`, `window_start` date, `window_end` date, `slot_index` int, `due_date` nullable, `status`, `source` (GENERATED/MANUAL), `required_staff_count`, `required_hours_per_staff` (snapshots), `needs_review` bool.
@@ -291,7 +291,7 @@ Never updated after insert.
 `code` unique, `name`, `country`, `effective_from`, `effective_to` nullable, `status`, `notes`, `suffix_label` text nullable (display suffix for grade lines, default the year of `effective_from`; `G3C` is shown as `G3C-2026`, DEC-58). A revision may contain only the grades that changed.
 
 ### salary_revision_lines (job budget only)
-`revision_id`, `grade_code` (base code per DEC-58; never stored with a suffix), `grade_group_title`, `basic_salary`, `special_allowance`, `fixed_ot_amount`, `bonus`, `visa_provision`, `air_ticket_provision`, `uniform_provision`, `medical_provision`, `accommodation_provision`, `transportation_provision` (nullable), `break_minutes` int nullable. Unique (revision_id, grade_code). Used only to price job items in the budget.
+`revision_id`, `grade_code` (base code per DEC-58; never stored with a suffix), `grade_group_title`, `basic_salary`, `special_allowance`, `fixed_ot_amount`, `bonus`, `visa_provision`, `air_ticket_provision`, `uniform_provision`, `medical_provision`, `accommodation_provision`, `transportation_provision` (nullable), `telephone_allowance` and `housing_transport_allowance` (numeric, default 0; migration 0023), `break_minutes` int nullable. Unique (revision_id, grade_code). Used only to price job items in the budget: hourly rate = (basic + special + fixed OT + bonus + telephone + housing/transport + the line's six provisions + gratuity basic/365x30 + leave salary basic/12) x (1 + `hr_overhead_rate`) / `standard_ot_divisor_hours` (DEC-59). Payroll's actual cost uses the settings provisions instead.
 
 ### payroll_runs
 `period_start`, `period_end`, `country`, `status` (DRAFT | APPROVED), `run_no` (re-runs of the same period), `created_by` (system or user), `scheduled_for`, `approved_by_user_id`, `approved_at`, `calculation_version`. Only one APPROVED run per (period, country); DRAFT runs are replaced by re-runs (history kept).

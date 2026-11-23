@@ -1,7 +1,7 @@
 # Payroll Module (`fw.modules.payroll`)
 
 ## 1. Purpose
-The `payroll` module handles month-end payroll processing, draft generation, issue detection (unapproved overtime, missing salary structures), draft re-runs, administrator approvals, immutable snapshot creation, employee attendance locking, salary revisions with side-by-side diff previews, worker mobile pay slips, and dynamic job budget vs actual cost allocation.
+The `payroll` module handles month-end payroll processing, draft generation, issue detection (unapproved overtime, missing salary structures), draft re-runs, administrator approvals, immutable snapshot creation, employee attendance locking, salary revisions with side-by-side diff previews, worker mobile pay slips, and job cost allocation. The job budget and planned vs actual moved to the `budget` module in Batch 5.4 (ADR-029).
 
 ## 2. Architecture & Layering
 - **Pure Rules**: `fw.rules.payroll.formulas`

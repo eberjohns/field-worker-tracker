@@ -1,6 +1,22 @@
 # Changelog
 All notable changes. Format: Keep a Changelog. Mobile-contract changes are also logged in `docs/09-mobile-sync-contract.md`.
 
+## [1.12.0] - 2026-11-23
+### Added
+- **Batch 5.4: job budget and man-hours (DEC-59, ADR-029).** One pure rule (`fw.rules.jobs.budget`) gives activities/year, man-hours and cost per job item; the new `budget` module loads everything in bulk.
+  - Job item responses carry `budget` (activities/year, hours and, for Admin, rate and cost in the current contract year); worksite detail carries `budget_totals`.
+  - `POST /worksites/{id}/job-items/budget-preview` and `POST /job-items/budget-preview`: live figures for an unsaved item (nothing saved). The job item form and the Add Worksite rows show them while typing.
+  - `GET /worksites/{id}/planned-vs-actual`: per item and per month, hours for every role that can see the worksite, money for Admin. The worksite page has a Planned vs actual section with a date range; the job items table has activities/year, annual hours, annual cost (Admin) and a totals row.
+  - `salary_revision_lines.telephone_allowance` and `housing_transport_allowance` (migration 0023, default 0), with optional import columns after `notes`.
+### Changed
+- **Planned figures change.** Fortnightly items were counted twice (the budget ignored `period_interval`); items now count only inside their own dates and the worksite contract dates; hours are pro-rated by day instead of "days since start / 365, capped at 1".
+- **Hourly rate** = (salary portion + the revision line's own provisions + gratuity + leave salary) x (1 + `hr_overhead_rate`) / `standard_ot_divisor_hours`, built with payroll's formulas; no hard-coded 1.05 or 208 (`SETTING_MISSING`). Revision detail `planned_hourly_cost` uses the same rule. Where a grade's revision provisions differ from the payroll settings, planned vs actual says so (`PROVISIONS_DIFFER_FROM_PAYROLL`).
+- `GET /payroll/budget-vs-actual` moved to the budget module (same path, Admin only); it takes `from`/`to` (default: each worksite's contract year), returns items and months, and `prorated_budget` is now the planned cost for the period. Actual hours: site visits on approved days; actual cost: approved payroll allocations split over items by approved hours; budget-only staff: actual = planned. The Payroll Budget tab and the Job Costing report use it.
+### Fixed
+- Project Attendance Summary counts actual man-hours only on approved days, and no longer assumes 8 hours for a scheduled entry.
+### Removed
+- `calculate_revision_planned_hourly_cost` (with its 1.05/208 defaults) and the old budget loop in `PayrollService`.
+
 ## [1.11.0] - 2026-11-23
 ### Changed
 - **Batch 5.3b: grade codes are stored as the base code everywhere (DEC-58, ADR-028).** Revision lines, job items and employees hold `G3C`; revisions show `G3C-2026` through the new `salary_revisions.suffix_label` (default: year). Input accepts `-YYYY`, `-R<n>` and `G5-C`; anything else (e.g. `G3C26`) is rejected with `INVALID_GRADE_CODE` instead of being guessed. Migration 0022 strips existing suffixes (stops on duplicates).

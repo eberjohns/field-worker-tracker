@@ -12,7 +12,7 @@
           "Health"
         ],
         "summary": "Liveness check alias",
-        "operationId": "health_health_liveness_head",
+        "operationId": "health_health_liveness_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -31,7 +31,7 @@
           "Health"
         ],
         "summary": "Liveness check alias",
-        "operationId": "health_health_liveness_head",
+        "operationId": "health_health_liveness_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -52,7 +52,7 @@
           "Health"
         ],
         "summary": "Liveness check",
-        "operationId": "health_health_head",
+        "operationId": "health_health_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -71,7 +71,7 @@
           "Health"
         ],
         "summary": "Liveness check",
-        "operationId": "health_health_head",
+        "operationId": "health_health_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -92,7 +92,7 @@
           "Health"
         ],
         "summary": "Readiness check alias",
-        "operationId": "health_ready_health_readiness_head",
+        "operationId": "health_ready_health_readiness_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -114,7 +114,7 @@
           "Health"
         ],
         "summary": "Readiness check alias",
-        "operationId": "health_ready_health_readiness_head",
+        "operationId": "health_ready_health_readiness_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -138,7 +138,7 @@
           "Health"
         ],
         "summary": "Readiness check",
-        "operationId": "health_ready_health_ready_head",
+        "operationId": "health_ready_health_ready_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -160,7 +160,7 @@
           "Health"
         ],
         "summary": "Readiness check",
-        "operationId": "health_ready_health_ready_head",
+        "operationId": "health_ready_health_ready_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -7244,93 +7244,6 @@
         }
       }
     },
-    "/api/v1/payroll/budget-vs-actual": {
-      "get": {
-        "tags": [
-          "payroll"
-        ],
-        "summary": "Get Budget Vs Actual",
-        "description": "Calculate dynamic contract budget from assigned revision lines and items vs actual allocated cost.",
-        "operationId": "get_budget_vs_actual_api_v1_payroll_budget_vs_actual_get",
-        "parameters": [
-          {
-            "name": "country",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Country"
-            }
-          },
-          {
-            "name": "as_of",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "date"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "As Of"
-            }
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/WorksiteBudgetVsActualItem"
-                  },
-                  "title": "Response Get Budget Vs Actual Api V1 Payroll Budget Vs Actual Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/payroll/worksites/{worksite_id}/revision": {
       "put": {
         "tags": [
@@ -7461,6 +7374,351 @@
                     "$ref": "#/components/schemas/PayrollRunRead"
                   },
                   "title": "Response Trigger Auto Draft Check Api V1 Payroll Auto Run Check Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/payroll/budget-vs-actual": {
+      "get": {
+        "tags": [
+          "budget"
+        ],
+        "summary": "Get Budget Vs Actual",
+        "description": "Planned vs actual hours and cost for all active worksites.\n\nDefault range: each worksite's current contract year. ``as_of`` alone: the contract year up\nto that date. Planned cost is pro-rated by day; actual cost is approved payroll allocations.",
+        "operationId": "get_budget_vs_actual_api_v1_payroll_budget_vs_actual_get",
+        "parameters": [
+          {
+            "name": "country",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Country"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WorksiteBudgetVsActualItem"
+                  },
+                  "title": "Response Get Budget Vs Actual Api V1 Payroll Budget Vs Actual Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/worksites/{worksite_id}/planned-vs-actual": {
+      "get": {
+        "tags": [
+          "budget"
+        ],
+        "summary": "Get Worksite Planned Vs Actual",
+        "description": "Planned vs actual for one worksite, per job item and month. Hours for every role that\ncan see the worksite (DEC-57); money only for Admin.",
+        "operationId": "get_worksite_planned_vs_actual_api_v1_worksites__worksite_id__planned_vs_actual_get",
+        "parameters": [
+          {
+            "name": "worksite_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Worksite Id"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorksiteBudgetVsActualItem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/worksites/{worksite_id}/job-items/budget-preview": {
+      "post": {
+        "tags": [
+          "budget"
+        ],
+        "summary": "Preview Job Item Budget",
+        "description": "Man-hours (and, for Admin, cost) of an unsaved job item on a worksite. Saves nothing.",
+        "operationId": "preview_job_item_budget_api_v1_worksites__worksite_id__job_items_budget_preview_post",
+        "parameters": [
+          {
+            "name": "worksite_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Worksite Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobItemCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobItemBudget"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/job-items/budget-preview": {
+      "post": {
+        "tags": [
+          "budget"
+        ],
+        "summary": "Preview New Worksite Item Budget",
+        "description": "Same, for a job item of a worksite that is not saved yet (Add Worksite form).",
+        "operationId": "preview_new_worksite_item_budget_api_v1_job_items_budget_preview_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewWorksiteBudgetPreview"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobItemBudget"
                 }
               }
             }
@@ -9064,7 +9322,7 @@
           "jobs"
         ],
         "summary": "Create Job Item",
-        "description": "Create a job item under a worksite.",
+        "description": "Create a job item under a worksite. The response includes its planned man-hours.",
         "operationId": "create_job_item_api_v1_worksites__worksite_id__job_items_post",
         "parameters": [
           {
@@ -9134,7 +9392,7 @@
           "jobs"
         ],
         "summary": "Update Job Item",
-        "description": "Update a job item with optimistic locking.",
+        "description": "Update a job item with optimistic locking. The response includes its planned man-hours.",
         "operationId": "update_job_item_api_v1_job_items__job_item_id__patch",
         "parameters": [
           {
@@ -18352,6 +18610,28 @@
           "message": {
             "type": "string",
             "title": "Message"
+          },
+          "plan_provisions": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan Provisions"
+          },
+          "payroll_provisions": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payroll Provisions"
           }
         },
         "type": "object",
@@ -18359,7 +18639,8 @@
           "code",
           "message"
         ],
-        "title": "BudgetWarning"
+        "title": "BudgetWarning",
+        "description": "MISSING_GRADE_RATE, PROVISIONS_DIFFER_FROM_PAYROLL or SETTING_MISSING."
       },
       "CandidateRecommendationRead": {
         "properties": {
@@ -21401,6 +21682,92 @@
         ],
         "title": "ImportRowRead"
       },
+      "JobItemBudget": {
+        "properties": {
+          "period_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Period From"
+          },
+          "period_to": {
+            "type": "string",
+            "format": "date",
+            "title": "Period To"
+          },
+          "activities_per_year": {
+            "type": "string",
+            "title": "Activities Per Year"
+          },
+          "full_year_hours": {
+            "type": "string",
+            "title": "Full Year Hours"
+          },
+          "active_days": {
+            "type": "integer",
+            "title": "Active Days"
+          },
+          "annual_hours": {
+            "type": "string",
+            "title": "Annual Hours"
+          },
+          "hourly_rate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hourly Rate"
+          },
+          "annual_cost": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annual Cost"
+          },
+          "is_budget_only": {
+            "type": "boolean",
+            "title": "Is Budget Only",
+            "default": false
+          },
+          "revision_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision Code"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/BudgetWarning"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "period_from",
+          "period_to",
+          "activities_per_year",
+          "full_year_hours",
+          "active_days",
+          "annual_hours"
+        ],
+        "title": "JobItemBudget",
+        "description": "Planned man-hours and cost of one job item for a period (default: current contract year)."
+      },
       "JobItemCreate": {
         "properties": {
           "sub_item_code": {
@@ -21737,6 +22104,16 @@
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "budget": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobItemBudget"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -23694,6 +24071,60 @@
         ],
         "title": "MobileRefreshRequest"
       },
+      "NewWorksiteBudgetPreview": {
+        "properties": {
+          "country": {
+            "type": "string",
+            "pattern": "^(AE|SA)$",
+            "title": "Country"
+          },
+          "salary_revision_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Salary Revision Code"
+          },
+          "contract_start": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Start"
+          },
+          "contract_end": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract End"
+          },
+          "item": {
+            "$ref": "#/components/schemas/JobItemCreate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "country",
+          "item"
+        ],
+        "title": "NewWorksiteBudgetPreview",
+        "description": "Budget preview for a job item of a worksite that is not saved yet (Add Worksite form)."
+      },
       "OperationalCellWorker": {
         "properties": {
           "employee_id": {
@@ -25558,6 +25989,228 @@
         ],
         "title": "PendingVisitResponse"
       },
+      "PlannedActualItem": {
+        "properties": {
+          "planned_hours": {
+            "type": "string",
+            "title": "Planned Hours",
+            "default": "0"
+          },
+          "actual_hours": {
+            "type": "string",
+            "title": "Actual Hours",
+            "default": "0"
+          },
+          "hours_diff": {
+            "type": "string",
+            "title": "Hours Diff",
+            "default": "0"
+          },
+          "hours_diff_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hours Diff Pct"
+          },
+          "planned_cost": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned Cost"
+          },
+          "actual_cost": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Cost"
+          },
+          "cost_diff": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Diff"
+          },
+          "cost_diff_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Diff Pct"
+          },
+          "job_item_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Job Item Id"
+          },
+          "sub_item_code": {
+            "type": "string",
+            "title": "Sub Item Code"
+          },
+          "staff_grade_description": {
+            "type": "string",
+            "title": "Staff Grade Description"
+          },
+          "grade_code": {
+            "type": "string",
+            "title": "Grade Code"
+          },
+          "is_budget_only": {
+            "type": "boolean",
+            "title": "Is Budget Only",
+            "default": false
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active",
+            "default": true
+          },
+          "excluded_from_totals": {
+            "type": "boolean",
+            "title": "Excluded From Totals",
+            "default": false
+          },
+          "hourly_rate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hourly Rate"
+          },
+          "months": {
+            "items": {
+              "$ref": "#/components/schemas/PlannedActualMonth"
+            },
+            "type": "array",
+            "title": "Months"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_item_id",
+          "sub_item_code",
+          "staff_grade_description",
+          "grade_code"
+        ],
+        "title": "PlannedActualItem"
+      },
+      "PlannedActualMonth": {
+        "properties": {
+          "planned_hours": {
+            "type": "string",
+            "title": "Planned Hours",
+            "default": "0"
+          },
+          "actual_hours": {
+            "type": "string",
+            "title": "Actual Hours",
+            "default": "0"
+          },
+          "hours_diff": {
+            "type": "string",
+            "title": "Hours Diff",
+            "default": "0"
+          },
+          "hours_diff_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hours Diff Pct"
+          },
+          "planned_cost": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned Cost"
+          },
+          "actual_cost": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Cost"
+          },
+          "cost_diff": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Diff"
+          },
+          "cost_diff_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Diff Pct"
+          },
+          "month_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Month From"
+          },
+          "month_to": {
+            "type": "string",
+            "format": "date",
+            "title": "Month To"
+          }
+        },
+        "type": "object",
+        "required": [
+          "month_from",
+          "month_to"
+        ],
+        "title": "PlannedActualMonth"
+      },
       "PlatformEnum": {
         "type": "string",
         "enum": [
@@ -27415,6 +28068,32 @@
             ],
             "title": "Transportation Provision",
             "default": "0.00"
+          },
+          "telephone_allowance": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Telephone Allowance",
+            "default": "0.00"
+          },
+          "housing_transport_allowance": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Housing Transport Allowance",
+            "default": "0.00"
           }
         },
         "type": "object",
@@ -27506,6 +28185,16 @@
               }
             ],
             "title": "Transportation Provision",
+            "default": "0.00"
+          },
+          "telephone_allowance": {
+            "type": "string",
+            "title": "Telephone Allowance",
+            "default": "0.00"
+          },
+          "housing_transport_allowance": {
+            "type": "string",
+            "title": "Housing Transport Allowance",
             "default": "0.00"
           }
         },
@@ -27641,6 +28330,16 @@
               }
             ],
             "title": "Transportation Provision"
+          },
+          "telephone_allowance": {
+            "type": "string",
+            "title": "Telephone Allowance",
+            "default": "0.00"
+          },
+          "housing_transport_allowance": {
+            "type": "string",
+            "title": "Housing Transport Allowance",
+            "default": "0.00"
           },
           "total_provisions": {
             "type": "string",
@@ -30230,8 +30929,137 @@
         ],
         "title": "WorkerMobilePayrollSlip"
       },
+      "WorksiteBudgetTotals": {
+        "properties": {
+          "period_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Period From"
+          },
+          "period_to": {
+            "type": "string",
+            "format": "date",
+            "title": "Period To"
+          },
+          "revision_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision Code"
+          },
+          "total_hours": {
+            "type": "string",
+            "title": "Total Hours"
+          },
+          "missing_rate_hours": {
+            "type": "string",
+            "title": "Missing Rate Hours",
+            "default": "0.0"
+          },
+          "total_cost": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Cost"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/BudgetWarning"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "period_from",
+          "period_to",
+          "total_hours"
+        ],
+        "title": "WorksiteBudgetTotals"
+      },
       "WorksiteBudgetVsActualItem": {
         "properties": {
+          "planned_hours": {
+            "type": "string",
+            "title": "Planned Hours",
+            "default": "0"
+          },
+          "actual_hours": {
+            "type": "string",
+            "title": "Actual Hours",
+            "default": "0"
+          },
+          "hours_diff": {
+            "type": "string",
+            "title": "Hours Diff",
+            "default": "0"
+          },
+          "hours_diff_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hours Diff Pct"
+          },
+          "planned_cost": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned Cost"
+          },
+          "actual_cost": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Cost"
+          },
+          "cost_diff": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Diff"
+          },
+          "cost_diff_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Diff Pct"
+          },
           "worksite_id": {
             "type": "string",
             "format": "uuid",
@@ -30248,6 +31076,69 @@
           "country": {
             "type": "string",
             "title": "Country"
+          },
+          "period_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Period From"
+          },
+          "period_to": {
+            "type": "string",
+            "format": "date",
+            "title": "Period To"
+          },
+          "revision_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision Code"
+          },
+          "unplanned_hours": {
+            "type": "string",
+            "title": "Unplanned Hours",
+            "default": "0"
+          },
+          "unallocated_actual_cost": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unallocated Actual Cost"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PlannedActualItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "months": {
+            "items": {
+              "$ref": "#/components/schemas/PlannedActualMonth"
+            },
+            "type": "array",
+            "title": "Months"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/BudgetWarning"
+            },
+            "type": "array",
+            "title": "Warnings"
+          },
+          "missing_rate_hours": {
+            "type": "string",
+            "title": "Missing Rate Hours",
+            "default": "0"
           },
           "salary_revision_code": {
             "anyOf": [
@@ -30273,14 +31164,29 @@
           },
           "annual_planned_man_hours": {
             "type": "string",
-            "title": "Annual Planned Man Hours"
+            "title": "Annual Planned Man Hours",
+            "default": "0"
           },
           "annual_labor_budget": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Annual Labor Budget"
           },
           "prorated_budget": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Prorated Budget"
           },
           "pro_rated_budget": {
@@ -30295,7 +31201,14 @@
             "title": "Pro Rated Budget"
           },
           "actual_cost_allocated": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Actual Cost Allocated"
           },
           "actual_allocated_cost": {
@@ -30310,7 +31223,14 @@
             "title": "Actual Allocated Cost"
           },
           "variance": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Variance"
           },
           "variance_amount": {
@@ -30325,18 +31245,37 @@
             "title": "Variance Amount"
           },
           "variance_percent": {
-            "type": "string",
-            "title": "Variance Percent",
-            "default": "0.0"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Variance Percent"
           },
           "is_over_budget": {
-            "type": "boolean",
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Is Over Budget"
           },
           "is_under_budget": {
-            "type": "boolean",
-            "title": "Is Under Budget",
-            "default": false
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Under Budget"
           },
           "manual_budget_override": {
             "anyOf": [
@@ -30353,18 +31292,6 @@
             "type": "boolean",
             "title": "Is Custom Budget Override",
             "default": false
-          },
-          "missing_rate_hours": {
-            "type": "string",
-            "title": "Missing Rate Hours",
-            "default": "0.0"
-          },
-          "warnings": {
-            "items": {
-              "$ref": "#/components/schemas/BudgetWarning"
-            },
-            "type": "array",
-            "title": "Warnings"
           }
         },
         "type": "object",
@@ -30373,14 +31300,11 @@
           "job_number",
           "job_name",
           "country",
-          "annual_planned_man_hours",
-          "annual_labor_budget",
-          "prorated_budget",
-          "actual_cost_allocated",
-          "variance",
-          "is_over_budget"
+          "period_from",
+          "period_to"
         ],
-        "title": "WorksiteBudgetVsActualItem"
+        "title": "WorksiteBudgetVsActualItem",
+        "description": "One worksite: planned vs actual for a period, per item and per month.\n\nThe fields after ``months`` keep the shape the Payroll Budget tab and the Job Costing report\nalready read; ``prorated_budget`` is now the planned cost for the period (no days / 365 cap)."
       },
       "WorksiteCreate": {
         "properties": {
@@ -30725,6 +31649,16 @@
             "type": "array",
             "title": "Supervisors",
             "default": []
+          },
+          "budget_totals": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorksiteBudgetTotals"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
