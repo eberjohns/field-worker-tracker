@@ -47,6 +47,7 @@ from fw.rules.payroll import (
     calculate_salary_portion,
     calculate_total_staff_cost,
 )
+from tests.ids import unique_job_number
 from tests.test_batch6_features import db_required, get_admin_user_and_token
 from tests.test_dec57_scope import _person
 
@@ -291,7 +292,7 @@ async def _worksite(
     rev.lines.append(SalaryRevisionLine(grade_code="G1A", basic_salary=Decimal("1500.00"), **prov))
     session.add(rev)
     ws = Worksite(
-        job_number=f"26A{uuid4().int % 100000:05d}",
+        job_number=unique_job_number("26A"),
         job_name=f"Budget 5.4 {uuid4().hex[:4]}",
         group_id=grp.id,
         zone_id=zn.id,

@@ -28,7 +28,7 @@ from fw.modules.payroll.schemas import (
     WorkerMobilePayrollSlip,
 )
 from fw.modules.payroll.service import PayrollService
-from fw.rules.lookups import GRADE_CODE, sort_values, value_key
+from fw.rules.lookups import GRADE_CODE
 
 router = APIRouter(tags=["payroll"])
 
@@ -191,17 +191,11 @@ async def list_grade_codes(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> list[str]:
-    """Grade codes for dropdowns: the managed list plus codes in use (DEC-58, DEC-60).
+    """Grade codes for dropdowns: base codes with a line in an active revision (DEC-58, DEC-60).
 
     Deprecated: use ``GET /lookups/grade_code``.
     """
-    in_use = await PayrollService.list_grade_codes(session=session)
-    rows = await LookupService.list_values(session, GRADE_CODE, include_inactive=True)
-    known = {r.value_key for r in rows}
-    values = [r.value for r in rows if r.is_active] + [
-        c for c in in_use if value_key(c) not in known
-    ]
-    return sort_values(GRADE_CODE, values)
+    return await LookupService.active_values(session, GRADE_CODE)
 
 
 # --- Salary Revisions ---

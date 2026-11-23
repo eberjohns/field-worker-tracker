@@ -1,4 +1,8 @@
-"""Batch 5.1 C: managed lists for staff types and grade codes (DEC-60, ADR-030)."""
+"""Batch 5.1 C: managed lists for staff types and grade codes (DEC-60, ADR-030).
+
+Owner decision 23 Nov 2026: Admin alone adds staff types (Settings); grade codes exist only as
+lines of an ACTIVE salary revision.
+"""
 
 import io
 from datetime import date
@@ -16,6 +20,7 @@ from fw.modules.imports import ImportRow, ImportService, generate_import_templat
 from fw.modules.jobs.models import JobItem, Worksite
 from fw.modules.lookups import LookupService, LookupValue
 from fw.modules.org.models import Employee, Group, Zone
+from fw.modules.payroll import PayrollService, SalaryRevision
 from fw.rules.grades import InvalidGradeCodeError
 from fw.rules.lookups import (
     GRADE_CODE,
@@ -27,6 +32,7 @@ from fw.rules.lookups import (
     sort_values,
     value_key,
 )
+from tests.ids import unique_job_number
 from tests.test_batch6_features import db_required, get_admin_user_and_token
 from tests.test_dec57_scope import _person
 
@@ -92,10 +98,12 @@ async def test_add_value_duplicates_near_matches_and_roles() -> None:
         assert r.status_code == 200
         assert "Gardener Helper" in [v["value"] for v in r.json()]
 
+        # Only Admin adds staff types (Settings > Managed Lists).
         assert (await c.post(url, headers=sup, json={"value": new_type})).status_code == 403
+        assert (await c.post(url, headers=eng, json={"value": new_type})).status_code == 403
 
-        # Engineer adds; spaces are collapsed.
-        r = await c.post(url, headers=eng, json={"value": f"  {new_type.replace(' ', '   ')} "})
+        # Spaces are collapsed.
+        r = await c.post(url, headers=admin, json={"value": f"  {new_type.replace(' ', '   ')} "})
         assert r.status_code == 201, r.text
         added = r.json()
         assert added["value"] == new_type and added["source"] == "SCREEN"
@@ -139,37 +147,104 @@ async def test_add_value_duplicates_near_matches_and_roles() -> None:
         assert {"LOOKUP_VALUE_ADDED", "LOOKUP_VALUE_DEACTIVATED"} <= set(actions)
 
 
+async def _unused_grade() -> str:
+    async with async_session_factory() as session:
+        taken = {
+            v.value
+            for v in await LookupService.list_values(session, GRADE_CODE, include_inactive=True)
+        }
+    return next(f"G{n}{b}" for n in range(30, 100) for b in "ABC" if f"G{n}{b}" not in taken)
+
+
+async def _archive_revision(code: str) -> None:
+    """Take a test revision out of the active ones, and its grades out of the list."""
+    async with async_session_factory() as session:
+        rev = (
+            await session.execute(select(SalaryRevision).where(SalaryRevision.code == code))
+        ).scalar_one()
+        rev.status = "ARCHIVED"
+        await PayrollService.refresh_grade_list(session)
+        await session.commit()
+
+
 @db_required
 @pytest.mark.asyncio
-async def test_grade_codes_format_and_revision_warning() -> None:
+async def test_grade_list_follows_active_revisions() -> None:
     async with async_session_factory() as session:
         _, admin_token = await get_admin_user_and_token(session)
         await session.commit()
     admin = {"Authorization": f"Bearer {admin_token}"}
     url = "/api/v1/lookups/grade_code"
+    code = await _unused_grade()
+    rev_code = f"T51C-{uuid4().hex[:6]}"
+    emp = {
+        "tally_id": f"T{uuid4().hex[:7]}",
+        "name": "Grade Worker",
+        "role": "WORKER",
+        "grade_code": code,
+        "staff_grade_description": "Gardener Helper",
+        "country": "AE",
+    }
     async with AsyncClient(transport=ASGITransport(app=create_app()), base_url="http://t") as c:
-        r = await c.post(url, headers=admin, json={"value": "G3C26"})
-        assert r.status_code == 422 and r.json()["code"] == "INVALID_GRADE_CODE"
-        # Grade suffixes are stripped (DEC-58); G3C is already listed.
-        r = await c.post(url, headers=admin, json={"value": "G3C-2026"})
-        assert r.status_code == 409 and r.json()["existing"] == "G3C"
-        # A brand-new grade is added; no active revision has a line for it yet.
-        async with async_session_factory() as session:
-            taken = {
-                v.value
-                for v in await LookupService.list_values(session, GRADE_CODE, include_inactive=True)
-            }
-        code = next(f"G{n}{b}" for n in range(30, 100) for b in "ABC" if f"G{n}{b}" not in taken)
-        r = await c.post(url, headers=admin, json={"value": code.lower(), "country": "AE"})
+        # Grades cannot be added or deactivated as list values.
+        r = await c.post(url, headers=admin, json={"value": code})
+        assert r.status_code == 422 and r.json()["code"] == "GRADE_FROM_REVISION_ONLY"
+        listed = (await c.get(url, headers=admin)).json()
+        r = await c.patch(
+            f"{url}/{listed[0]['id']}", headers=admin, json={"is_active": False, "version": 1}
+        )
+        assert r.status_code == 422 and r.json()["code"] == "GRADE_FROM_REVISION_ONLY"
+
+        # Not in an active revision -> refused on screen, with the reason.
+        r = await c.post("/api/v1/employees", headers=admin, json=emp)
+        assert r.status_code == 422 and r.json()["code"] == "UNKNOWN_GRADE_CODE"
+        assert "no line in an active salary revision" in r.json()["detail"]
+
+        # A revision line brings the grade into the list.
+        r = await c.post(
+            "/api/v1/salary-revisions",
+            headers=admin,
+            json={
+                "code": rev_code,
+                "name": "Grade list test",
+                "country": "ZZ",
+                "effective_from": "2000-01-01",
+                "lines": [{"grade_code": f"{code}-2026", "basic_salary": "1000"}],
+            },
+        )
         assert r.status_code == 201, r.text
-        body = r.json()
-        assert body["value"] == code
-        if body["warnings"]:
-            assert body["warnings"][0]["code"] == "NO_REVISION_LINE"
+        values = {v["value"]: v for v in (await c.get(url, headers=admin)).json()}
+        assert values[code]["source"] == "REVISION"
         grades = (await c.get("/api/v1/grades", headers=admin)).json()
         assert code in grades and grades == sort_values(GRADE_CODE, grades)
-        # Clean-up: deactivate, so the test grade leaves the dropdowns.
-        await c.patch(f"{url}/{body['id']}", headers=admin, json={"is_active": False, "version": 1})
+        r = await c.post("/api/v1/employees", headers=admin, json=emp)
+        assert r.status_code in (200, 201), r.text
+
+    # The revision is no longer active -> the grade leaves the list; records keep it.
+    await _archive_revision(rev_code)
+    async with AsyncClient(transport=ASGITransport(app=create_app()), base_url="http://t") as c:
+        assert code not in [v["value"] for v in (await c.get(url, headers=admin)).json()]
+        r = await c.post(
+            "/api/v1/employees",
+            headers=admin,
+            json={**emp, "tally_id": f"T{uuid4().hex[:7]}"},
+        )
+        assert r.status_code == 422 and r.json()["code"] == "UNKNOWN_GRADE_CODE"
+    async with async_session_factory() as session:
+        saved = (
+            await session.execute(select(Employee).where(Employee.tally_id == emp["tally_id"]))
+        ).scalar_one()
+        assert saved.grade_code == code
+        synced = (
+            (
+                await session.execute(
+                    select(AuditLog.diff).where(AuditLog.action == "GRADE_LIST_SYNCED")
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert any(code in (d or {}).get("deactivated", []) for d in synced)
 
 
 # --- Screens validate against the list -------------------------------------------------------
@@ -185,7 +260,7 @@ async def test_job_items_and_employees_use_the_lists() -> None:
         session.add_all([grp, zn])
         await session.flush()
         ws = Worksite(
-            job_number=f"12A{uuid4().int % 100000:05d}",
+            job_number=unique_job_number("12A"),
             job_name="Lookup site",
             group_id=grp.id,
             zone_id=zn.id,
@@ -292,21 +367,27 @@ async def test_job_items_and_employees_use_the_lists() -> None:
 # --- Imports ----------------------------------------------------------------------------------
 
 
-def _employees_workbook(rows: list[dict[str, str]]) -> bytes:
+def _workbook(sheets: dict[str, list[dict[str, str]]]) -> bytes:
+    """The template with the example rows dropped and ``sheets`` filled in."""
     wb = openpyxl.load_workbook(io.BytesIO(generate_import_template_bytes()))
-    ws = wb["Employees"]
-    headers = {ws.cell(4, c).value: c for c in range(2, ws.max_column + 1)}
-    for r in range(5, ws.max_row + 1):
-        ws.cell(r, 1, value="#")  # drop example rows
-    for i, values in enumerate(rows):
-        row = 5 + i
-        for col in range(1, ws.max_column + 1):
-            ws.cell(row, col).value = None  # cell(value=None) leaves a cell as it is
-        for key, val in values.items():
-            ws.cell(row, headers[key], value=val)
+    for name, rows in sheets.items():
+        ws = wb[name]
+        headers = {ws.cell(4, c).value: c for c in range(2, ws.max_column + 1)}
+        for r in range(5, ws.max_row + 1):
+            ws.cell(r, 1, value="#")  # drop example rows
+        for i, values in enumerate(rows):
+            row = 5 + i
+            for col in range(1, ws.max_column + 1):
+                ws.cell(row, col).value = None  # cell(value=None) leaves a cell as it is
+            for key, val in values.items():
+                ws.cell(row, headers[key], value=val)
     out = io.BytesIO()
     wb.save(out)
     return out.getvalue()
+
+
+def _employees_workbook(rows: list[dict[str, str]]) -> bytes:
+    return _workbook({"Employees": rows})
 
 
 @db_required
@@ -318,12 +399,8 @@ async def test_import_reads_the_lists() -> None:
         await LookupService.add_value(
             session, STAFF_GRADE_DESCRIPTION, new_type, False, admin_user.id, "ADMIN"
         )
-        taken = {
-            v.value
-            for v in await LookupService.list_values(session, GRADE_CODE, include_inactive=True)
-        }
         await session.commit()
-    new_grade = next(f"G{n}{b}" for n in range(30, 100) for b in "ABC" if f"G{n}{b}" not in taken)
+    new_grade = await _unused_grade()
     base = {"name": "Imp Worker", "role": "WORKER", "country": "AE", "grade_code": "G1A"}
     tallies = [f"T{uuid4().hex[:7].upper()}" for _ in range(3)]
     content = _employees_workbook(
@@ -354,9 +431,55 @@ async def test_import_reads_the_lists() -> None:
         assert by_tally[tallies[0]].normalized["staff_grade_description"] == new_type
         assert "SGD_ALIAS_APPLIED" in by_tally[tallies[1]].codes
         assert by_tally[tallies[1]].normalized["staff_grade_description"] == "Gardener Helper"
-        # A new grade is a warning and joins the list on commit.
-        assert "GRADE_ADDED_TO_LIST" in by_tally[tallies[2]].codes
-        assert by_tally[tallies[2]].normalized["grade_code"] == new_grade
+        # A grade with no line in an active revision is an ERROR, never added to a list.
+        assert by_tally[tallies[2]].status == "ERROR"
+        assert "UNKNOWN_GRADE_CODE" in by_tally[tallies[2]].codes
+        msg = next(
+            m["message"] for m in by_tally[tallies[2]].messages if m["field"] == "grade_code"
+        )
+        assert "Salary_Revision_Lines" in msg
+
+    # The same grade with its revision line in the same file is accepted, and joins the list
+    # on commit through the revision.
+    rev_code = f"T51C-{uuid4().hex[:6]}"
+    line = {
+        "revision_code": rev_code,
+        "grade_code": new_grade,
+        "grade_group_title": "Test",
+        "basic_salary": "1000",
+        "visa_provision": "0",
+        "air_ticket_provision": "0",
+        "uniform_provision": "0",
+        "medical_provision": "0",
+        "accommodation_provision": "0",
+    }
+    revision = {
+        "revision_code": rev_code,
+        "revision_name": "Import grade test",
+        "country": "AE",
+        "effective_from": "2099-01-01",
+        "status": "ACTIVE",
+    }
+    worker = {**base, "tally_id": tallies[2], "staff_grade_description": "Team Leader"}
+    content = _workbook(
+        {
+            "Employees": [{**worker, "grade_code": f"{new_grade}-2026"}],
+            "Salary_Revisions": [revision],
+            "Salary_Revision_Lines": [line],
+        }
+    )
+    sheets = ["Employees", "Salary_Revisions", "Salary_Revision_Lines"]
+    async with async_session_factory() as session:
+        prev = await ImportService.parse_and_preview(
+            session, content, "e.xlsx", admin_user.id, selected_sheets=sheets
+        )
+        await session.commit()
+        rows = (
+            (await session.execute(select(ImportRow).where(ImportRow.batch_id == prev.batch_id)))
+            .scalars()
+            .all()
+        )
+        assert all(r.status != "ERROR" for r in rows), [r.messages for r in rows]
         await ImportService.commit_batch(session, prev.batch_id, admin_user.id, "ADMIN")
         await session.commit()
         listed = (
@@ -366,9 +489,8 @@ async def test_import_reads_the_lists() -> None:
                 )
             )
         ).scalar_one()
-        assert listed.source == "IMPORT"
-        listed.is_active = False  # leave the dropdowns as they were
-        await session.commit()
+        assert listed.source == "REVISION" and listed.is_active
+    await _archive_revision(rev_code)  # leave the AE revisions as they were
 
     # An unknown staff type is an ERROR with a hint; values are added on screen, not by import.
     content = _employees_workbook(

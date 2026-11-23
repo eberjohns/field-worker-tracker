@@ -18,6 +18,7 @@ from fw.core.clock import site_today
 from fw.core.errors import AppError
 from fw.core.events import PayrollRunApproved, PayrollRunCreated, event_bus
 from fw.modules.audit import AuditService
+from fw.modules.lookups import LookupService
 from fw.modules.org import Employee
 from fw.modules.payroll.models import (
     EmployeeSalary,
@@ -1725,6 +1726,7 @@ class PayrollService:
             diff={"code": rev.code, "lines_count": len(rev.lines)},
             reason="Salary revision created",
         )
+        await PayrollService.refresh_grade_list(session, actor_user_id=user_id)
 
         return await PayrollService.get_revision_detail(session, rev.code)
 
@@ -1809,11 +1811,24 @@ class PayrollService:
         )
 
     @staticmethod
-    async def active_revisions_without_grade(
-        session: AsyncSession, grade_code: str, country: str | None = None
-    ) -> list[str]:
-        """ACTIVE revision codes with no line for ``grade_code`` (codes only, no money; DEC-60)."""
-        return await PayrollRepository.active_revisions_without_grade(session, grade_code, country)
+    async def refresh_grade_list(
+        session: AsyncSession,
+        actor_user_id: UUID | None = None,
+        actor_role: str | None = None,
+    ) -> dict[str, list[str]]:
+        """Make the grade list (DEC-60) the base codes with a line in an ACTIVE revision.
+
+        Call after every change to salary revisions or their lines. Owner decision 23 Nov 2026:
+        a grade code exists only by being in a salary revision.
+        """
+        await session.flush()
+        codes = await PayrollRepository.active_revision_grade_codes(session)
+        return await LookupService.sync_grades(
+            session,
+            {c for c in codes if is_base_grade_code(c)},
+            actor_user_id=actor_user_id,
+            actor_role=actor_role,
+        )
 
     @staticmethod
     async def list_grade_codes(session: AsyncSession) -> list[str]:

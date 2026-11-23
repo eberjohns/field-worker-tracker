@@ -24,6 +24,8 @@ from fw.core.db import async_session_factory, engine
 from fw.main import app
 from fw.modules.identity import AuthService, User, get_current_user
 from fw.modules.imports import generate_import_template_bytes
+from fw.modules.org.models import Group
+from fw.rules.groups import next_group_code
 from fw.rules.payroll import compute_next_payroll_month_start
 
 
@@ -138,8 +140,9 @@ async def test_upload_sample_template_and_idempotency(admin_client):
     client, _, _ = admin_client
     wb = openpyxl.load_workbook(io.BytesIO(generate_import_template_bytes()))
 
-    # Add real rows for Groups, Zones, Accommodations, Employees
-    g_code = f"G{str(uuid4())[:4]}"
+    # Add real rows for Groups, Zones, Accommodations, Employees. New groups get 3-digit codes.
+    async with async_session_factory() as session:
+        g_code = next_group_code((await session.execute(select(Group.code))).scalars()) or "999"
     z_code = f"Z{str(uuid4())[:4]}"
     acc_code = f"ACC{str(uuid4())[:4]}"
     t_id = f"WRK{str(uuid4())[:5]}"

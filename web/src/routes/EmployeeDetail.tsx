@@ -2283,7 +2283,6 @@ export const EmployeeDetail: React.FC = () => {
                   listKey="grade_code"
                   value={detailGrade}
                   onChange={setDetailGrade}
-                  country={employee.country}
                   placeholder="None / Unassigned"
                   inputClassName="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
                 />

@@ -4,6 +4,7 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.core.clock import site_today
@@ -48,12 +49,22 @@ from fw.modules.org.schemas import (
     ZoneUpdate,
 )
 from fw.modules.settings import SettingsService
+from fw.rules.groups import (
+    DUPLICATE_CODE,
+    DUPLICATE_NAME,
+    INVALID_GROUP_CODE,
+    NEAR_MATCH,
+    NO_FREE_GROUP_CODE,
+    is_group_code,
+    next_group_code,
+)
 from fw.rules.hierarchy import (
     HierarchyRuleViolation,
     compute_transitive_scope,
     validate_reporting_link,
 )
-from fw.rules.lookups import GRADE_CODE, STAFF_GRADE_DESCRIPTION, value_key
+from fw.rules.imports import normalize_text
+from fw.rules.lookups import GRADE_CODE, STAFF_GRADE_DESCRIPTION, close_names, value_key
 
 
 class ScopeService:
@@ -1230,9 +1241,33 @@ class OrgService:
     async def create_group(
         session: AsyncSession, data: GroupCreate, actor_user_id: UUID, actor_role: str
     ) -> Group:
-        group = Group(code=data.code, name=data.name)
-        session.add(group)
-        await session.flush()
+        """Add a group ("Other – add new…" or API): name checks, then a 3-digit code.
+
+        Without a code the next free 3-digit code is generated; on a clash with a group added at
+        the same moment it is generated once more.
+        """
+        groups = list((await session.execute(select(Group))).scalars().all())
+        name = _checked_new_name(
+            "group",
+            data.name,
+            [(g.name, g.code, g.is_active, g.id) for g in groups],
+            data.confirm_near_match,
+        )
+        if data.code is not None and data.code.strip():
+            code = data.code.strip()
+            if not is_group_code(code):
+                raise AppError(
+                    code=INVALID_GROUP_CODE,
+                    message=f"Group code '{code}' must be 3 digits, for example 152.",
+                    status_code=422,
+                    extra={"field": "code"},
+                )
+            _refuse_taken_code("group", code, [(g.code, g.name, g.is_active) for g in groups])
+            group = Group(code=code, name=name)
+            session.add(group)
+            await session.flush()
+        else:
+            group = await _add_group_with_generated_code(session, name, groups)
         await AuditService.log_action(
             session=session,
             action="CREATE_GROUP",
@@ -1289,7 +1324,24 @@ class OrgService:
     async def create_zone(
         session: AsyncSession, data: ZoneCreate, actor_user_id: UUID, actor_role: str
     ) -> Zone:
-        zone = Zone(code=data.code, name=data.name)
+        """Add a zone ("Other – add new…" or API): code and name, checked like the Zones sheet."""
+        zones = list((await session.execute(select(Zone))).scalars().all())
+        name = _checked_new_name(
+            "zone",
+            data.name,
+            [(z.name, z.code, z.is_active, z.id) for z in zones],
+            data.confirm_near_match,
+        )
+        code = (normalize_text(data.code) or "").strip()
+        if not code:
+            raise AppError(
+                code="VALUE_REQUIRED",
+                message="Enter a zone code.",
+                status_code=422,
+                extra={"field": "code"},
+            )
+        _refuse_taken_code("zone", code, [(z.code, z.name, z.is_active) for z in zones])
+        zone = Zone(code=code, name=name)
         session.add(zone)
         await session.flush()
         await AuditService.log_action(
@@ -1634,3 +1686,88 @@ class OrgService:
         )
         emp_grades = set((await session.execute(stmt)).scalars().all())
         return sorted([g.strip() for g in emp_grades if g and g.strip()])
+
+
+# --- Groups and zones added on screen (DEC-60 amendment) ---------------------------------------
+
+
+def _checked_new_name(
+    kind: str,
+    raw: str,
+    existing: list[tuple[str, str, bool, UUID]],
+    confirm_near_match: bool,
+) -> str:
+    """Clean a new group or zone name; refuse duplicates; near names need confirmation."""
+    name = normalize_text(raw)
+    if not name:
+        raise AppError(
+            code="VALUE_REQUIRED",
+            message=f"Enter a {kind} name.",
+            status_code=422,
+            extra={"field": "name"},
+        )
+    for other_name, other_code, active, other_id in existing:
+        if value_key(other_name) == value_key(name):
+            state = "" if active else " (deactivated: ask an Admin to reactivate it)"
+            raise AppError(
+                code=DUPLICATE_NAME,
+                message=f"{kind.title()} '{other_name}' ({other_code}) already exists{state}.",
+                status_code=409,
+                extra={
+                    "field": "name",
+                    "existing": other_name,
+                    "existing_id": str(other_id),
+                    "existing_code": other_code,
+                    "is_active": active,
+                },
+            )
+    if not confirm_near_match:
+        hints = close_names(name, [n for n, _, active, _ in existing if active])
+        if hints:
+            raise AppError(
+                code=NEAR_MATCH,
+                message=f"Did you mean {hints[0]}? Choose it, or add '{name}' anyway.",
+                status_code=422,
+                extra={"field": "name", "value": name, "suggestions": hints},
+            )
+    return name
+
+
+def _refuse_taken_code(kind: str, code: str, existing: list[tuple[str, str, bool]]) -> None:
+    for other_code, other_name, active in existing:
+        if other_code.strip().lower() == code.lower():
+            state = "" if active else ", deactivated"
+            raise AppError(
+                code=DUPLICATE_CODE,
+                message=f"{kind.title()} code {code} is already used by '{other_name}'{state}.",
+                status_code=409,
+                extra={"field": "code", "existing": other_name, "is_active": active},
+            )
+
+
+async def _add_group_with_generated_code(
+    session: AsyncSession, name: str, groups: list[Group]
+) -> Group:
+    codes = [g.code for g in groups]
+    for _attempt in range(2):
+        code = next_group_code(codes)
+        if code is None:
+            raise AppError(
+                code=NO_FREE_GROUP_CODE,
+                message="Every 3-digit group code is in use.",
+                status_code=409,
+            )
+        group = Group(code=code, name=name)
+        try:
+            async with session.begin_nested():
+                session.add(group)
+                await session.flush()
+            return group
+        except IntegrityError:
+            # Someone added a group with this code at the same moment: take the next one.
+            codes = list((await session.execute(select(Group.code))).scalars().all())
+    raise AppError(
+        code=DUPLICATE_CODE,
+        message="Another group was added at the same moment. Try again.",
+        status_code=409,
+    )

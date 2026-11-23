@@ -27,6 +27,7 @@ from fw.modules.identity.service import AuthService, hash_password
 from fw.modules.jobs.models import JobItem, Worksite, WorksiteSupervisor
 from fw.modules.org.models import Employee, EmployeeReportingLine, Group, Zone
 from fw.modules.scheduling.models import ScheduledWork, StandingAssignment
+from tests.ids import unique_job_number
 from tests.test_batch6_features import db_required, get_admin_user_and_token
 
 pytestmark = [db_required, pytest.mark.asyncio]
@@ -86,7 +87,7 @@ async def _site(session, name: str) -> tuple[Worksite, JobItem]:
     session.add_all([grp, zn])
     await session.flush()
     ws = Worksite(
-        job_number=f"26A{uuid4().int % 100000:05d}",
+        job_number=unique_job_number("26A"),
         job_name=name,
         group_id=grp.id,
         zone_id=zn.id,

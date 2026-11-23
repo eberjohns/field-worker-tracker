@@ -36,22 +36,15 @@ class PayrollRepository:
         return codes
 
     @staticmethod
-    async def active_revisions_without_grade(
-        session: AsyncSession, grade_code: str, country: str | None = None
-    ) -> list[str]:
-        """Codes of ACTIVE revisions (optionally for one country) with no line for the grade."""
-        has_line = (
-            select(SalaryRevisionLine.id)
-            .where(
-                SalaryRevisionLine.revision_id == SalaryRevision.id,
-                SalaryRevisionLine.grade_code == grade_code,
-            )
-            .exists()
+    async def active_revision_grade_codes(session: AsyncSession) -> list[str]:
+        """Distinct grade codes of the lines of ACTIVE revisions (any country)."""
+        stmt = (
+            select(SalaryRevisionLine.grade_code)
+            .join(SalaryRevision, SalaryRevision.id == SalaryRevisionLine.revision_id)
+            .where(SalaryRevision.status == "ACTIVE")
+            .distinct()
         )
-        stmt = select(SalaryRevision.code).where(SalaryRevision.status == "ACTIVE", ~has_line)
-        if country:
-            stmt = stmt.where(SalaryRevision.country == country)
-        return sorted((await session.execute(stmt)).scalars().all())
+        return list((await session.execute(stmt)).scalars().all())
 
     @staticmethod
     async def get_revision_by_code(

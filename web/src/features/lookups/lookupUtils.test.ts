@@ -2,10 +2,10 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   addOutcome,
-  canAddLookup,
+  canManageLists,
   displayGrade,
-  filterOptions,
   optionsWithCurrent,
+  selectOptions,
   sortValues,
   valueKey,
 } from "./lookupUtils.ts";
@@ -35,30 +35,36 @@ describe("managed list helpers (DEC-60)", () => {
     );
   });
 
-  it("filters by typed text ignoring case and spaces", () => {
-    const opts = ["Gardener Helper", "Gardener Expert", "Team Leader"];
-    assert.deepEqual(filterOptions(opts, "gardenerh"), ["Gardener Helper"]);
-    assert.deepEqual(filterOptions(opts, ""), opts);
+  it("marks a current value that left the list, once the list has loaded", () => {
+    assert.deepEqual(selectOptions("grade_code", ["G2A", "G1A"], "G20A", true), [
+      { value: "G1A", label: "G1A" },
+      { value: "G2A", label: "G2A" },
+      { value: "G20A", label: "G20A (not in list)" },
+    ]);
+    // While loading, nothing is marked.
+    assert.deepEqual(selectOptions("grade_code", [], "G20A", false), [{ value: "G20A", label: "G20A" }]);
   });
 
-  it("only Admin and Engineer can add values", () => {
-    assert.ok(canAddLookup("ADMIN") && canAddLookup("ENGINEER"));
-    assert.ok(!canAddLookup("SUPERVISOR") && !canAddLookup(undefined));
+  it("only Admin manages the staff type list", () => {
+    assert.ok(canManageLists("ADMIN"));
+    assert.ok(!canManageLists("ENGINEER") && !canManageLists("SUPERVISOR") && !canManageLists(undefined));
   });
 
   it("reads add responses: added, duplicate, near match, error", () => {
-    assert.deepEqual(addOutcome(201, { value: "G26A", warnings: [{ code: "NO_REVISION_LINE", message: "No line" }] }), {
-      kind: "added",
-      value: "G26A",
-      warnings: ["No line"],
-    });
+    const added = addOutcome(201, { value: "Fountain Technician", id: "1" });
+    assert.ok(added.kind === "added" && added.value === "Fountain Technician");
+    const group = addOutcome(201, { id: "g1", code: "152", name: "Marina Parks" });
+    assert.ok(group.kind === "added" && group.value === "Marina Parks" && group.body.code === "152");
     const dup = addOutcome(409, { code: "LOOKUP_DUPLICATE", existing: "Gardener Helper", is_active: true, detail: "x" });
     assert.equal(dup.kind, "exists");
+    const dupGroup = addOutcome(409, { code: "DUPLICATE_NAME", existing: "Emaar", existing_id: "g2", is_active: true });
+    assert.ok(dupGroup.kind === "exists" && dupGroup.existingId === "g2");
     const near = addOutcome(422, { code: "LOOKUP_NEAR_MATCH", value: "Gardner Helper", suggestions: ["Gardener Helper"] });
     assert.ok(near.kind === "near" && near.suggestions[0] === "Gardener Helper");
-    assert.deepEqual(addOutcome(422, { code: "INVALID_GRADE_CODE", detail: "Invalid grade code" }), {
+    assert.equal(addOutcome(422, { code: "NEAR_MATCH", suggestions: ["Emaar"] }).kind, "near");
+    assert.deepEqual(addOutcome(409, { code: "DUPLICATE_CODE", detail: "Zone code 2 is already used" }), {
       kind: "error",
-      message: "Invalid grade code",
+      message: "Zone code 2 is already used",
     });
   });
 

@@ -38,6 +38,8 @@ import { JobItemModal } from "../components/jobs/JobItemModal";
 import { JobItemValidationModal } from "../components/jobs/JobItemValidationModal";
 import { CopyBoundaryModal } from "../components/jobs/CopyBoundaryModal";
 import { PlannedVsActualPanel } from "../components/jobs/PlannedVsActualPanel";
+import { GroupZoneSelect } from "../components/org/GroupZoneSelect";
+import type { OrgUnit } from "../features/org/groupZoneUtils";
 import { fmtHours, fmtMoney } from "../features/budget/budgetFormat";
 import type { WorksiteBudgetTotals } from "../features/budget/budgetFormat";
 
@@ -275,6 +277,10 @@ export const WorksiteDetail: React.FC = () => {
   const [isEditingMetadata, setIsEditingMetadata] = useState(false);
   const [editName, setEditName] = useState("");
   const [editCustomerType, setEditCustomerType] = useState("");
+  const [editGroupId, setEditGroupId] = useState("");
+  const [editZoneId, setEditZoneId] = useState("");
+  const [groups, setGroups] = useState<OrgUnit[]>([]);
+  const [zones, setZones] = useState<OrgUnit[]>([]);
   const [editRenewalRef, setEditRenewalRef] = useState("");
   const [editBudget, setEditBudget] = useState("");
   const [editSalaryRevisionCode, setEditSalaryRevisionCode] = useState("");
@@ -298,11 +304,21 @@ export const WorksiteDetail: React.FC = () => {
 
       setEditName(data.job_name);
       setEditCustomerType(data.customer_type || "");
+      setEditGroupId(data.group_id || "");
+      setEditZoneId(data.zone_id || "");
       setEditRenewalRef(data.renewal_reference || "");
       setEditBudget(data.budget_amount != null ? String(data.budget_amount) : "");
       setEditSalaryRevisionCode(data.salary_revision_code || "");
       setEditStartDate(data.start_date || "");
       setEditEndDate(data.end_date || "");
+
+      // Groups and zones for the edit form
+      Promise.all([fetch("/api/v1/groups", { headers }), fetch("/api/v1/zones", { headers })])
+        .then(async ([g, z]) => {
+          if (g.ok) setGroups(await g.json());
+          if (z.ok) setZones(await z.json());
+        })
+        .catch((err) => console.error("Failed to fetch groups and zones", err));
 
       // Fetch revisions
       fetch("/api/v1/salary-revisions", { headers })
@@ -431,6 +447,8 @@ export const WorksiteDetail: React.FC = () => {
         },
         body: JSON.stringify({
           job_name: editName.trim(),
+          group_id: editGroupId || null,
+          zone_id: editZoneId || null,
           customer_type: editCustomerType.trim() || null,
           renewal_reference: editRenewalRef.trim() || null,
           salary_revision_code: editSalaryRevisionCode.trim() || null,
@@ -771,6 +789,32 @@ export const WorksiteDetail: React.FC = () => {
                     onChange={(e) => setEditName(e.target.value)}
                     className="w-full px-3 py-1.5 border border-slate-300 rounded focus:ring-1 focus:ring-indigo-500"
                   />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Customer Group</label>
+                    <GroupZoneSelect
+                      kind="group"
+                      required
+                      value={editGroupId}
+                      onChange={setEditGroupId}
+                      items={groups}
+                      onCreated={(u) => setGroups((prev) => [...prev, u])}
+                      selectClassName="w-full px-3 py-1.5 border border-slate-300 rounded focus:ring-1 focus:ring-indigo-500 bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Zone</label>
+                    <GroupZoneSelect
+                      kind="zone"
+                      required
+                      value={editZoneId}
+                      onChange={setEditZoneId}
+                      items={zones}
+                      onCreated={(u) => setZones((prev) => [...prev, u])}
+                      selectClassName="w-full px-3 py-1.5 border border-slate-300 rounded focus:ring-1 focus:ring-indigo-500 bg-white"
+                    />
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>

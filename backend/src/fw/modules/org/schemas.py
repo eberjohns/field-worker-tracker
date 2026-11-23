@@ -7,8 +7,15 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class GroupCreate(BaseModel):
-    code: str
-    name: str
+    """A new group. On screen only the name is sent and the next free 3-digit code is generated."""
+
+    name: str = Field(..., min_length=1, max_length=100)
+    code: str | None = Field(
+        None, max_length=50, description="3 digits; left out, the next free code is used."
+    )
+    confirm_near_match: bool = Field(
+        False, description="Add even though a group with a near name exists ('Add anyway')."
+    )
 
 
 class GroupUpdate(BaseModel):
@@ -28,8 +35,11 @@ class GroupRead(BaseModel):
 
 
 class ZoneCreate(BaseModel):
-    code: str
-    name: str
+    code: str = Field(..., min_length=1, max_length=50)
+    name: str = Field(..., min_length=1, max_length=100)
+    confirm_near_match: bool = Field(
+        False, description="Add even though a zone with a near name exists ('Add anyway')."
+    )
 
 
 class ZoneUpdate(BaseModel):

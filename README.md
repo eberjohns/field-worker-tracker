@@ -94,6 +94,10 @@ uv run lint-imports
 uv run pytest
 ```
 
+Tests never use the working database (`fw_db`). `tests/conftest.py` points the app at a separate
+database whose name must end in `_test` (default `fw_test`, or set `FW_TEST_DATABASE`), and drops,
+recreates and migrates it at the start of every run. It refuses to run against any other database.
+
 ### Frontend Checks
 
 ```bash

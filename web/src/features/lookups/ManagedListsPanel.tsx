@@ -1,21 +1,25 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { ListChecks } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
-import { AddLookupValueForm } from "../../components/lookups/LookupSelect";
+import { AddLookupValueForm } from "../../components/lookups/AddLookupValueForm";
 import { refreshLookup } from "./useLookup";
-import { LIST_LABELS, canAddLookup, type ListKey, type LookupValue } from "./lookupUtils";
+import { LIST_LABELS, canManageLists, type ListKey, type LookupValue } from "./lookupUtils";
 
 const SOURCE_LABEL: Record<string, string> = {
   SEED: "Seed / existing data",
-  SCREEN: "Added on screen",
-  IMPORT: "Added by import",
+  SCREEN: "Added in Settings",
+  IMPORT: "Added by import (before 23 Nov 2026)",
+  REVISION: "Active salary revision",
   IN_USE: "In use, not in list",
 };
 
-/** Settings → Managed lists (DEC-60): view both lists, add (Admin, Engineer), deactivate (Admin). */
+/**
+ * Settings → Managed lists (DEC-60, owner decision 23 Nov 2026). Staff types: Admin adds,
+ * deactivates and reactivates; others read. Grade codes: read-only, they follow the active salary
+ * revisions.
+ */
 export const ManagedListsPanel: React.FC = () => {
   const { token, user } = useAuth();
-  const isAdmin = user?.role === "ADMIN";
   const [listKey, setListKey] = useState<ListKey>("staff_grade_description");
   const [rows, setRows] = useState<LookupValue[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +38,8 @@ export const ManagedListsPanel: React.FC = () => {
       setError("Could not load the list.");
     }
   }, [listKey, token]);
+
+  const canEdit = canManageLists(user?.role) && listKey === "staff_grade_description";
 
   useEffect(() => {
     void load();
@@ -70,11 +76,10 @@ export const ManagedListsPanel: React.FC = () => {
             <ListChecks className="w-4 h-4 text-indigo-600" /> Managed lists
           </h3>
           <p className="text-xs text-slate-500 max-w-2xl">
-            Values offered in every Staff Grade Description and Grade Code dropdown (DEC-60). Admin and
-            Engineer can add values here or with "Other – add new…" in a form. Admin can deactivate a
-            value: it leaves the dropdowns, records that already use it keep it. Values are never
-            deleted. Imports never add staff types; new grade codes in an import are added when it is
-            committed.
+            Values offered in every Staff Grade Description and Grade Code dropdown (DEC-60).
+            {listKey === "staff_grade_description"
+              ? " Only an Admin adds staff types, here. Deactivating one takes it out of the dropdowns; records that already use it keep it. Values are never deleted, and imports never add one."
+              : " Grade codes come from salary revisions: the list is every grade with a line in an active revision. To add a grade, add a line for it to a revision."}
           </p>
         </div>
         <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs font-medium">
@@ -94,13 +99,13 @@ export const ManagedListsPanel: React.FC = () => {
         </div>
       </div>
 
-      {canAddLookup(user?.role) && (
+      {canEdit && (
         <div className="max-w-md">
           <AddLookupValueForm
             key={listKey}
             listKey={listKey}
-            onAdded={(value, warnings, existed) => {
-              setNotice(existed ? warnings.join(" ") : `Added ${value}.${warnings.length ? " " + warnings.join(" ") : ""}`);
+            onAdded={(value, existed) => {
+              setNotice(existed ? `'${value}' is already in the list.` : `Added ${value}.`);
               void load();
             }}
           />
@@ -116,7 +121,7 @@ export const ManagedListsPanel: React.FC = () => {
               <th className="px-3 py-2 text-left">Value</th>
               <th className="px-3 py-2 text-left">Source</th>
               <th className="px-3 py-2 text-left">Status</th>
-              {isAdmin && <th className="px-3 py-2 text-right">Action</th>}
+              {canEdit && <th className="px-3 py-2 text-right">Action</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -125,7 +130,7 @@ export const ManagedListsPanel: React.FC = () => {
                 <td className={`px-3 py-2 ${listKey === "grade_code" ? "font-mono" : ""}`}>{r.value}</td>
                 <td className="px-3 py-2">{SOURCE_LABEL[r.source] ?? r.source}</td>
                 <td className="px-3 py-2">{r.is_active ? "Active" : "Deactivated"}</td>
-                {isAdmin && (
+                {canEdit && (
                   <td className="px-3 py-2 text-right">
                     {r.id && (
                       <button
@@ -143,7 +148,7 @@ export const ManagedListsPanel: React.FC = () => {
             ))}
             {rows.length === 0 && !error && (
               <tr>
-                <td colSpan={isAdmin ? 4 : 3} className="px-3 py-6 text-center text-slate-400">
+                <td colSpan={canEdit ? 4 : 3} className="px-3 py-6 text-center text-slate-400">
                   No values yet.
                 </td>
               </tr>

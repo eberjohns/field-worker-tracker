@@ -49,12 +49,14 @@ from fw.modules.org import (
 from fw.modules.payroll import (
     EmployeeSalary,
     PayrollSalaryService,
+    PayrollService,
     SalaryRevision,
     SalaryRevisionLine,
 )
 from fw.modules.payroll.schemas import EmployeeSalaryCreate
 from fw.modules.settings import CompanySettingValue, PublicHoliday, SettingsService, TimeRule
-from fw.rules.grades import INVALID_GRADE_CODE, InvalidGradeCodeError
+from fw.rules.grades import INVALID_GRADE_CODE, InvalidGradeCodeError, try_base_grade_code
+from fw.rules.groups import INVALID_GROUP_CODE, is_group_code
 from fw.rules.hierarchy import HierarchyRuleViolation, validate_reporting_link
 from fw.rules.imports import (
     ADMIN_ONLY_SETTING_KEYS,
@@ -73,10 +75,10 @@ from fw.rules.imports import (
 )
 from fw.rules.jobs import is_job_outdoor
 from fw.rules.lookups import (
-    GRADE_ADDED_TO_LIST,
     GRADE_CODE,
     LOOKUP_VALUE_INACTIVE,
     STAFF_GRADE_DESCRIPTION,
+    UNKNOWN_GRADE_CODE,
     did_you_mean,
     near_matches,
     value_key,
@@ -379,6 +381,46 @@ class ImportService:
                 if val is not None and str(val).strip() != "":
                     file_revisions.add(str(val).strip())
 
+        # Grade codes this file puts in an ACTIVE salary revision. A grade code exists only by
+        # being in a revision (DEC-60, owner decision 23 Nov 2026); Engineers' imports skip the
+        # salary sheets, so only an Admin's file can bring new grades.
+        file_revision_grades: set[str] = set()
+        if is_admin and _sheet_enabled("Salary_Revision_Lines"):
+
+            def _cell_text(sheet: Any, r_idx: int, col_name: str, sheet_name: str) -> str:
+                cols = [c.name for c in SHEET_REGISTRY[sheet_name].columns]
+                v = sheet.cell(r_idx, cols.index(col_name) + 2).value
+                return str(v).strip() if v is not None else ""
+
+            revision_status = {code: rev.status for code, rev in existing_revisions.items()}
+            if _sheet_enabled("Salary_Revisions"):
+                ws_sr = wb["Salary_Revisions"]
+                for r_idx in range(5, ws_sr.max_row + 1):
+                    if str(ws_sr.cell(r_idx, 1).value or "").strip():
+                        continue
+                    code = _cell_text(ws_sr, r_idx, "revision_code", "Salary_Revisions")
+                    if code:
+                        raw_status = (
+                            _cell_text(ws_sr, r_idx, "status", "Salary_Revisions") or "ACTIVE"
+                        ).upper()
+                        revision_status[code] = (
+                            "ACTIVE" if raw_status in ("APPROVED", "ACTIVE") else raw_status
+                        )
+            ws_srl = wb["Salary_Revision_Lines"]
+            for r_idx in range(5, ws_srl.max_row + 1):
+                if str(ws_srl.cell(r_idx, 1).value or "").strip():
+                    continue
+                rev_code = _cell_text(ws_srl, r_idx, "revision_code", "Salary_Revision_Lines")
+                grade = try_base_grade_code(
+                    _cell_text(ws_srl, r_idx, "grade_code", "Salary_Revision_Lines")
+                )
+                if grade and revision_status.get(rev_code) == "ACTIVE":
+                    file_revision_grades.add(value_key(grade))
+
+        def _grade_in_a_revision(code: str) -> bool:
+            row = grade_rows.get(value_key(code))
+            return (row is not None and row.is_active) or value_key(code) in file_revision_grades
+
         # Process each sheet defined in registry
         for sheet_name, sheet_def in SHEET_REGISTRY.items():
             if selected_set is not None and sheet_name not in selected_set:
@@ -614,8 +656,8 @@ class ImportService:
                                     "code": "SGD_UNKNOWN",
                                     "message": (
                                         f"Staff Grade Description '{raw_val}' is not in the list."
-                                        f"{did_you_mean(hints)} Add it on screen first "
-                                        "(Other – add new…), then import again."
+                                        f"{did_you_mean(hints)} An Admin can add it under "
+                                        "Settings > Managed Lists; then import again."
                                     ),
                                 }
                             )
@@ -633,21 +675,20 @@ class ImportService:
                             )
                             row_status = "ERROR"
                         else:
-                            if parsed_val and value_key(parsed_val) not in grade_rows:
-                                # Grades arriving by import join the list on commit (DEC-60).
-                                row_codes.append(GRADE_ADDED_TO_LIST)
+                            if parsed_val and not _grade_in_a_revision(parsed_val):
+                                row_codes.append(UNKNOWN_GRADE_CODE)
                                 row_messages.append(
                                     {
                                         "field": col.name,
-                                        "code": GRADE_ADDED_TO_LIST,
+                                        "code": UNKNOWN_GRADE_CODE,
                                         "message": (
-                                            f"Grade {parsed_val} is not in the grade list yet; it "
-                                            "is added when this import is committed."
+                                            f"Grade {parsed_val} has no line in an active salary "
+                                            "revision. Add it to Salary_Revision_Lines (in this "
+                                            "file or an earlier import) first."
                                         ),
                                     }
                                 )
-                                if row_status != "ERROR":
-                                    row_status = "WARNING"
+                                row_status = "ERROR"
 
                     normalized_dict[col.name] = {
                         "value": parsed_val,
@@ -678,6 +719,19 @@ class ImportService:
                             row_diff["group_name"] = {"old": g.name, "new": name_val}
                         elif row_action != "REACTIVATED":
                             row_action = "UNCHANGED"
+                    elif code and not is_group_code(str(code)):
+                        # New groups get 3-digit codes, as on screen (DEC-60 amendment).
+                        row_codes.append(INVALID_GROUP_CODE)
+                        row_messages.append(
+                            {
+                                "field": "group_code",
+                                "code": INVALID_GROUP_CODE,
+                                "message": (
+                                    f"New group code '{code}' must be 3 digits, for example 152."
+                                ),
+                            }
+                        )
+                        row_status = "ERROR"
 
                 # Zones
                 elif sheet_name == "Zones":
@@ -1501,19 +1555,6 @@ class ImportService:
         for r in all_rows:
             sheet_to_rows[r.sheet].append(r)
 
-        # Grade codes new to the managed list join it now (DEC-60); skipped rows add nothing.
-        new_grades = {
-            str(r.normalized.get(field))
-            for r in all_rows
-            if GRADE_ADDED_TO_LIST in (r.codes or []) and r.action != "SKIPPED"
-            for field in ("grade_code", "planned_grade_code")
-            if r.normalized.get(field)
-        }
-        if new_grades:
-            await LookupService.add_imported_grades(
-                session, new_grades, actor_user_id=user_id, actor_role=actor_role
-            )
-
         # Order of execution: Groups, Zones, Accommodations, Employees, Reporting, Salary, Holidays, Settings, TimeRules
         # 1. Groups
         for r in sheet_to_rows.get("Groups", []):
@@ -2296,6 +2337,11 @@ class ImportService:
             reason="Supervisor no longer eligible after import",
         )
         await session.flush()
+
+        # The grade list follows the active salary revisions (DEC-60).
+        await PayrollService.refresh_grade_list(
+            session, actor_user_id=user_id, actor_role=actor_role
+        )
 
         # Update batch status
         commit_now = datetime.now(UTC)
