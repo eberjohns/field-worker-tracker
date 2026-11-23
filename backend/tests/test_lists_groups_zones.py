@@ -16,6 +16,7 @@ from fw.main import create_app
 from fw.modules.imports import ImportRow, ImportService
 from fw.modules.org.models import Group, Zone
 from fw.rules.groups import is_group_code, next_group_code
+from tests.ids import unique_job_number
 from tests.test_batch6_features import db_required, get_admin_user_and_token
 from tests.test_batch51c_lookups import _workbook
 from tests.test_dec57_scope import _person
@@ -201,7 +202,7 @@ async def test_worksite_edit_changes_group_and_zone() -> None:
         session.add_all([old_g, new_g, off_g, zn])
         await session.flush()
         ws = Worksite(
-            job_number=f"12A{uuid4().int % 100000:05d}",
+            job_number=unique_job_number("12A"),
             job_name="Edit site",
             group_id=old_g.id,
             zone_id=zn.id,

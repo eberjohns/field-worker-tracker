@@ -32,6 +32,7 @@ from fw.rules.lookups import (
     sort_values,
     value_key,
 )
+from tests.ids import unique_job_number
 from tests.test_batch6_features import db_required, get_admin_user_and_token
 from tests.test_dec57_scope import _person
 
@@ -259,7 +260,7 @@ async def test_job_items_and_employees_use_the_lists() -> None:
         session.add_all([grp, zn])
         await session.flush()
         ws = Worksite(
-            job_number=f"12A{uuid4().int % 100000:05d}",
+            job_number=unique_job_number("12A"),
             job_name="Lookup site",
             group_id=grp.id,
             zone_id=zn.id,

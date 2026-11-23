@@ -1,9 +1,9 @@
 {
-  "version": "1.14.0",
+  "version": "1.14.1",
   "major": 1,
   "minor": 14,
-  "patch": 0,
+  "patch": 1,
   "last_branch": "fix/test-db-isolation-and-lists",
-  "last_commit": "bc4d239",
-  "updated_at": "2026-11-23T15:08:16.343892+00:00"
+  "last_commit": "7020315",
+  "updated_at": "2026-11-23T15:14:37.681392+00:00"
 }
