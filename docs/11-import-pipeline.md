@@ -21,8 +21,8 @@ flowchart LR
   PV -->|Admin confirms| C[Commit in one transaction]
   C --> S[Summary + downloadable result]
 ```
-1. Upload (`POST /imports`): Admin only. File hashed, batch created, template version detected.
-2. Parse and normalize. Grade codes (DEC-58): `G5-C`, `G5C`, `G5C-2026` and `G5C-R2` all become `G5C`; anything that cannot be parsed for certain (for example `G5C26`) is an `INVALID_GRADE_CODE` error, never guessed. For Engineers, the salary sheets, money settings and `default_password` are skipped (`SHEET_ADMIN_ONLY`, `SETTING_ADMIN_ONLY`) and their values are not stored (DEC-47).
+1. Upload (`POST /imports`): Admin only, like every `/imports` route (template, list, preview, commit, rollback, error export; DEC-61, 23 Nov 2026; other roles get 403). File hashed, batch created, template version detected.
+2. Parse and normalize. Grade codes (DEC-58): `G5-C`, `G5C`, `G5C-2026` and `G5C-R2` all become `G5C`; anything that cannot be parsed for certain (for example `G5C26`) is an `INVALID_GRADE_CODE` error, never guessed. *(Superseded by DEC-61: Engineers used to import with the salary sheets, money settings and `default_password` skipped (`SHEET_ADMIN_ONLY`, `SETTING_ADMIN_ONLY`); since the import is Admin only, those paths and that template variant are removed.)*
 3. **Compare with the database by primary key** and classify every row:
    - **NEW**: key not in the database -> will be created.
    - **UPDATED**: key exists and values differ -> the preview shows **old value -> new value per field**.

@@ -26,11 +26,14 @@ from fw.modules.jobs import (
     BoundaryUpdateRequest,
     GenerateOccurrencesRequest,
     JobItem,
+    JobItemChecks,
+    JobItemChecksRequest,
     JobItemCreate,
     JobItemDestination,
     JobItemResponse,
     JobItemUpdate,
     JobItemValidationResponse,
+    JobNumberCheck,
     JobOccurrenceResponse,
     JobOccurrenceUpdate,
     JobsService,
@@ -53,6 +56,22 @@ from fw.modules.scheduling import (
 )
 
 router = APIRouter(tags=["jobs"])
+
+
+async def _worksite_in_scope_or_404(session: AsyncSession, user: User, worksite_id: UUID) -> None:
+    """DEC-57: non-Admins change only worksites in their scope (404 otherwise, as on detail)."""
+    if user.role == "ADMIN":
+        return
+    scope = await AccessScope.resolve(session, user)
+    if not scope.can_view_worksite(worksite_id):
+        raise AppError(code="NOT_FOUND", message="Worksite not found.", status_code=404)
+
+
+async def _job_item_in_scope_or_404(session: AsyncSession, user: User, job_item_id: UUID) -> None:
+    item = await session.get(JobItem, job_item_id)
+    if item is None:
+        raise AppError("JOB_ITEM_NOT_FOUND", "Job item not found.", status_code=404)
+    await _worksite_in_scope_or_404(session, user, item.worksite_id)
 
 
 async def _with_budget(
@@ -129,6 +148,26 @@ async def list_worksite_supervisor_proposals(
 ) -> list[WorksiteSupervisorProposal]:
     """Propose supervisors from current crews for each worksite (Admin reviews; DEC-57)."""
     return await WorksiteSupervisorProposalService.propose(session)
+
+
+@router.get("/worksites/job-number-check", response_model=JobNumberCheck)
+async def check_job_number(
+    job_number: str = Query(..., min_length=1, max_length=20),
+    current_user: User = Depends(require_role("ADMIN")),
+    session: AsyncSession = Depends(get_db),
+) -> JobNumberCheck:
+    """Live format and uniqueness check for the Add Worksite wizard (Admin, DEC-61)."""
+    return await JobsService.check_job_number(session, job_number)
+
+
+@router.post("/job-items/validation-preview", response_model=JobItemChecks)
+async def preview_job_item_checks(
+    payload: JobItemChecksRequest,
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    session: AsyncSession = Depends(get_db),
+) -> JobItemChecks:
+    """Validation panel for a job item that is not saved yet (wizard rows). Saves nothing."""
+    return await JobsService.check_new_job_item(session, payload)
 
 
 @router.post(
@@ -295,7 +334,10 @@ async def create_worksite(
     current_user: User = Depends(require_role("ADMIN")),
     session: AsyncSession = Depends(get_db),
 ) -> WorksiteResponse:
-    """Create a worksite record (Admin only)."""
+    """Create a worksite, with its job items and supervisors if given, in one transaction.
+
+    Admin only (DEC-61). A failing item or supervisor saves nothing; the error names the row.
+    """
     return await JobsService.create_worksite(
         session=session,
         payload=payload,
@@ -347,7 +389,8 @@ async def assign_worksite_supervisor(
     current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
     session: AsyncSession = Depends(get_db),
 ) -> WorksiteSupervisorRead:
-    """Assign a supervisor to a worksite (Admin & Engineer only)."""
+    """Assign a supervisor to a worksite (Admin; Engineer on worksites in scope)."""
+    await _worksite_in_scope_or_404(session, current_user, worksite_id)
     return await JobsService.assign_worksite_supervisor(
         session=session,
         worksite_id=worksite_id,
@@ -367,7 +410,8 @@ async def remove_worksite_supervisor(
     current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
     session: AsyncSession = Depends(get_db),
 ) -> Response:
-    """Unassign a supervisor from a worksite (Admin & Engineer only)."""
+    """Unassign a supervisor from a worksite (Admin; Engineer on worksites in scope)."""
+    await _worksite_in_scope_or_404(session, current_user, worksite_id)
     removed = await JobsService.remove_worksite_supervisor(
         session=session,
         worksite_id=worksite_id,
@@ -683,10 +727,10 @@ async def export_boundaries(
 @router.post("/boundaries/import", response_model=BoundaryImportResponse)
 async def import_boundaries(
     payload: BoundaryImportRequest,
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    current_user: User = Depends(require_role("ADMIN")),
     session: AsyncSession = Depends(get_db),
 ) -> BoundaryImportResponse:
-    """Bulk import boundaries with row-level validation and skip reporting."""
+    """Bulk import boundaries with row-level validation and skip reporting (Admin, DEC-61)."""
     return await JobsService.import_boundaries(
         session=session,
         items=payload.items,
@@ -776,6 +820,7 @@ async def create_job_item(
     session: AsyncSession = Depends(get_db),
 ) -> JobItemResponse:
     """Create a job item under a worksite. The response includes its planned man-hours."""
+    await _worksite_in_scope_or_404(session, current_user, worksite_id)
     item = await JobsService.create_job_item(
         session=session,
         worksite_id=worksite_id,
@@ -794,6 +839,14 @@ async def update_job_item(
     session: AsyncSession = Depends(get_db),
 ) -> JobItemResponse:
     """Update a job item with optimistic locking. The response includes its planned man-hours."""
+    await _job_item_in_scope_or_404(session, current_user, job_item_id)
+    if payload.is_active is not None and current_user.role != "ADMIN":
+        # Every deactivation and reactivation is Admin-only (DEC-61).
+        raise AppError(
+            code="FORBIDDEN",
+            message="Only an Admin can deactivate or reactivate a job item.",
+            status_code=403,
+        )
     item = await JobsService.update_job_item(
         session=session,
         job_item_id=job_item_id,
@@ -814,6 +867,7 @@ async def generate_occurrences(
     session: AsyncSession = Depends(get_db),
 ) -> list[JobOccurrenceResponse]:
     """Trigger occurrence generation for a job item across rolling horizon."""
+    await _job_item_in_scope_or_404(session, current_user, job_item_id)
     return await JobsService.generate_job_occurrences(
         session=session,
         job_item_id=job_item_id,

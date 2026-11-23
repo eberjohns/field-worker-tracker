@@ -93,3 +93,96 @@ describe("JobItemModal Validation and Error Display", () => {
     assert.equal(payload.break_override_minutes, 30);
   });
 });
+
+import {
+  draftProblem,
+  draftReady,
+  draftToPayload,
+  duplicateCodes,
+  duplicateDraft,
+  emptyDraft,
+  nextSubItemCode,
+  rowError,
+} from "./jobItemUtils.ts";
+
+describe("Job item drafts (Batch 5.1 B wizard)", () => {
+  it("numbers sub-items A, B … Z, AA and fills gaps first", () => {
+    assert.equal(nextSubItemCode([]), "A");
+    assert.equal(nextSubItemCode(["A", "b"]), "C");
+    assert.equal(nextSubItemCode(["A", "C"]), "B");
+    assert.equal(nextSubItemCode(["01", "A"]), "B");
+    const all = Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i));
+    assert.equal(nextSubItemCode(all), "AA");
+    assert.equal(nextSubItemCode([...all, "AA"]), "AB");
+  });
+
+  it("starts empty for staff type and grade, with the contract dates", () => {
+    const d = emptyDraft("A", "2026-01-01", "2026-12-31");
+    assert.equal(d.staff_grade_description, "");
+    assert.equal(d.planned_grade_code, "");
+    assert.equal(d.start_date, "2026-01-01");
+    assert.equal(d.end_date, "2026-12-31");
+    assert.equal(draftReady(d), false);
+    assert.equal(draftProblem(d), "a staff type");
+  });
+
+  it("duplicates a row under a new code without sharing the weekday list", () => {
+    const a = { ...emptyDraft("A", "2026-01-01"), staff_grade_description: "Gardener Helper" };
+    const b = duplicateDraft(a, "B");
+    b.weekday_pattern.push("SUN");
+    assert.equal(b.sub_item_code, "B");
+    assert.equal(b.staff_grade_description, "Gardener Helper");
+    assert.equal(a.weekday_pattern.includes("SUN"), false);
+  });
+
+  it("builds the API body; weekdays only for weekly items", () => {
+    const d = {
+      ...emptyDraft(" C ", "2026-01-01"),
+      staff_grade_description: "Gardener Helper",
+      planned_grade_code: "G1A",
+      hours_per_occurrence_per_staff: "8.5",
+    };
+    assert.equal(draftReady(d), true);
+    const p = draftToPayload(d);
+    assert.equal(p.sub_item_code, "C");
+    assert.equal(p.hours_per_occurrence_per_staff, 8.5);
+    assert.deepEqual(p.weekday_pattern, ["MON", "TUE", "WED", "THU", "FRI", "SAT"]);
+    assert.equal(p.end_date, null);
+    assert.equal(p.break_override_minutes, null);
+    assert.equal(draftToPayload({ ...d, frequency_unit: "MONTH" }).weekday_pattern, null);
+    assert.equal(draftProblem({ ...d, end_date: "2025-12-31" }), "an end date after the start");
+  });
+
+  it("finds repeated sub-item codes ignoring case and spaces", () => {
+    const rows = ["A", " a", "B"].map((c) => emptyDraft(c, "2026-01-01"));
+    assert.deepEqual(duplicateCodes(rows), ["A"]);
+  });
+
+  it("points create errors at the wizard step, row and field", () => {
+    assert.deepEqual(
+      rowError({
+        code: "UNKNOWN_GRADE_CODE",
+        detail: "Job item 2 (B): Grade code 'G99Z' has no line in an active salary revision.",
+        field: "job_items[1].planned_grade_code",
+        row: 1,
+      }),
+      {
+        step: 2,
+        row: 1,
+        field: "planned_grade_code",
+        message: "Job item 2 (B): Grade code 'G99Z' has no line in an active salary revision.",
+      },
+    );
+    const schema = rowError({
+      code: "VALIDATION_ERROR",
+      detail: "Request validation failed.",
+      invalid_params: [{ field: "body.job_items.2.required_staff_count", reason: "too small" }],
+    });
+    assert.equal(schema.step, 2);
+    assert.equal(schema.row, 2);
+    assert.equal(schema.field, "required_staff_count");
+    const ws = rowError({ code: "DUPLICATE_JOB_NUMBER", detail: "exists", field: "job_number" });
+    assert.deepEqual([ws.step, ws.row, ws.field], [1, null, "job_number"]);
+    assert.equal(rowError({ detail: "Supervisor: not a supervisor", field: "supervisor_ids" }).step, 1);
+  });
+});

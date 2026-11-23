@@ -20,7 +20,6 @@ from fw.modules.imports import (
     ImportRow,
     ImportRowRead,
     ImportService,
-    admin_only_rows_clause,
     generate_import_template_bytes,
 )
 from fw.modules.lookups import LookupService
@@ -31,15 +30,14 @@ router = APIRouter(prefix="/imports", tags=["imports"])
 
 @router.get("/template")
 async def download_import_template(
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    current_user: User = Depends(require_role("ADMIN")),
     session: AsyncSession = Depends(get_db),
 ) -> Response:
-    """Download the import template. Engineers get it without the salary sheets (DEC-47).
+    """Download the import template (Admin only, DEC-61).
 
     The Lists sheet carries the current staff type and grade lists (DEC-60).
     """
     content = generate_import_template_bytes(
-        include_admin_only=current_user.role == "ADMIN",
         staff_types=await LookupService.active_values(session, STAFF_GRADE_DESCRIPTION),
         grade_codes=await LookupService.active_values(session, GRADE_CODE),
     )
@@ -59,7 +57,7 @@ async def upload_workbook(
         None,
         description="Optional comma-separated list of sheet names to import (e.g. Worksites,Job_Items).",
     ),
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    current_user: User = Depends(require_role("ADMIN")),
     session: AsyncSession = Depends(get_db),
 ) -> ImportPreviewResponse:
     """Upload workbook (multipart or raw bytes) and return safe preview with field-level diffs without committing."""
@@ -141,7 +139,7 @@ async def get_import_preview(
     action: str | None = None,
     limit: int = 200,
     offset: int = 0,
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    current_user: User = Depends(require_role("ADMIN")),
     session: AsyncSession = Depends(get_db),
 ) -> ImportPreviewResponse:
     """Get preview details, counts, and filtered rows for an import batch."""
@@ -154,8 +152,6 @@ async def get_import_preview(
         )
 
     stmt = select(ImportRow).where(ImportRow.batch_id == batch_id)
-    if current_user.role != "ADMIN":
-        stmt = stmt.where(~admin_only_rows_clause())  # DEC-47
     if sheet:
         stmt = stmt.where(ImportRow.sheet == sheet)
     if row_status:
@@ -187,7 +183,7 @@ async def get_import_preview(
 @router.post("/{batch_id}/commit", response_model=ImportCommitResponse)
 async def commit_import_batch(
     batch_id: UUID,
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    current_user: User = Depends(require_role("ADMIN")),
     session: AsyncSession = Depends(get_db),
 ) -> ImportCommitResponse:
     """Commit an uploaded and previewed import batch in a single atomic transaction."""
@@ -209,7 +205,7 @@ async def commit_import_batch(
 @router.post("/{batch_id}/rollback", response_model=ImportRollbackResponse)
 async def rollback_import_batch(
     batch_id: UUID,
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    current_user: User = Depends(require_role("ADMIN")),
     session: AsyncSession = Depends(get_db),
 ) -> ImportRollbackResponse:
     """Rollback a committed import batch if safe."""
@@ -231,7 +227,7 @@ async def rollback_import_batch(
 @router.get("/{batch_id}/errors.xlsx")
 async def download_error_report(
     batch_id: UUID,
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    current_user: User = Depends(require_role("ADMIN")),
     session: AsyncSession = Depends(get_db),
 ) -> Response:
     """Download an Excel report of errors and warnings for a batch."""
@@ -243,7 +239,7 @@ async def download_error_report(
             detail={"code": "NOT_FOUND", "message": f"Import batch {batch_id} not found."},
         )
 
-    content = await ImportService.export_errors_xlsx(session, batch_id, current_user.role)
+    content = await ImportService.export_errors_xlsx(session, batch_id)
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -255,7 +251,7 @@ async def download_error_report(
 async def list_import_batches(
     limit: int = 50,
     offset: int = 0,
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    current_user: User = Depends(require_role("ADMIN")),
     session: AsyncSession = Depends(get_db),
 ) -> list[ImportBatchRead]:
     """List history of past import batches."""

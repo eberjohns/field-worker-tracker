@@ -100,7 +100,7 @@ Staff types (Staff Grade Description, "Designation") and grade codes are managed
 - `budget_only_staff_types` is chosen from the staff type list.
 - Reset database clears both lists and re-seeds the staff types; the grade list comes back with the next salary revision.
 
-**Groups and zones** are not managed lists, but the worksite forms (Add Worksite, worksite edit) offer "Other – add new…" in their dropdowns to Admin and Engineer: a group needs only its name (the next free 3-digit code is given), a zone its code and name, with the same duplicate and "Did you mean …?" checks.
+**Groups and zones** are not managed lists, but the worksite forms (Add Worksite, worksite edit) offer "Other – add new…" in their dropdowns to Admin only (DEC-61; Admin and Engineer in v1.14): a group needs only its name (the next free 3-digit code is given), a zone its code and name, with the same duplicate and "Did you mean …?" checks.
 
 ## 4. Editing and Overriding Company Settings
 

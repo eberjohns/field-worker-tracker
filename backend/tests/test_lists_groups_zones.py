@@ -74,12 +74,14 @@ async def test_add_group_and_zone_on_screen() -> None:
     name = _name("Marina Parks")
 
     async with AsyncClient(transport=ASGITransport(app=create_app()), base_url="http://t") as c:
+        # Adding a group or zone is Admin-only (DEC-61).
         assert (await c.post("/api/v1/groups", headers=sup, json={"name": name})).status_code == 403
+        assert (await c.post("/api/v1/groups", headers=eng, json={"name": name})).status_code == 403
 
         # Only the name: the next free 3-digit code is generated.
         async with async_session_factory() as session:
             expected = next_group_code((await session.execute(select(Group.code))).scalars())
-        r = await c.post("/api/v1/groups", headers=eng, json={"name": f"  {name}  "})
+        r = await c.post("/api/v1/groups", headers=admin, json={"name": f"  {name}  "})
         assert r.status_code == 201, r.text
         assert r.json()["name"] == name and r.json()["code"] == expected
 
@@ -110,6 +112,10 @@ async def test_add_group_and_zone_on_screen() -> None:
         zone_name = _name("Jebel Ali")
         zone_code = f"Z{uuid4().hex[:5].upper()}"
         r = await c.post("/api/v1/zones", headers=eng, json={"code": zone_code, "name": zone_name})
+        assert r.status_code == 403
+        r = await c.post(
+            "/api/v1/zones", headers=admin, json={"code": zone_code, "name": zone_name}
+        )
         assert r.status_code == 201, r.text
         r = await c.post(
             "/api/v1/zones",

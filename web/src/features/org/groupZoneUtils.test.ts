@@ -34,8 +34,8 @@ describe("group and zone dropdowns (DEC-60 amendment)", () => {
     });
   });
 
-  it("lets Admin and Engineer add", () => {
-    assert.ok(canAddUnit("ADMIN") && canAddUnit("ENGINEER"));
-    assert.ok(!canAddUnit("SUPERVISOR") && !canAddUnit(null));
+  it("lets only Admin add (DEC-61)", () => {
+    assert.ok(canAddUnit("ADMIN"));
+    assert.ok(!canAddUnit("ENGINEER") && !canAddUnit("SUPERVISOR") && !canAddUnit(null));
   });
 });

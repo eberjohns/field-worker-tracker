@@ -1,6 +1,23 @@
 # Changelog
 All notable changes. Format: Keep a Changelog. Mobile-contract changes are also logged in `docs/09-mobile-sync-contract.md`.
 
+## [1.15.0] - 2026-11-23
+### Added
+- **Batch 5.1 B: Add Worksite wizard** (handover 6.1 B; regression 5). Three steps: worksite, job items, review. Nothing is saved until "Create worksite", which sends one `POST /worksites` with `job_items[]` (0-50) and `supervisor_ids[]`; the worksite, its supervisors and its items (with occurrences and audit entries) are saved in one transaction or not at all.
+  - Step 1: job number checked live (`GET /worksites/job-number-check`: format, duplicate, Outdoor/Indoor/Water feature), name, group and zone, customer type, country, contract dates, renewal reference, salary revision of that country, manual budget and an optional pick of active supervisors.
+  - Step 2: one row per item with Add, Duplicate and Remove (codes A, B, … Z, AA), the same fields as the job item form and a checks panel per row: activities and hours per year, expected occurrences and eligible employees (red at 0) from `POST /job-items/validation-preview`, and man-hours and cost (Admin) from the budget preview. The break is shown as "from time rules".
+  - Step 3: review with the contract labour budget (sum of the rows) next to the manual budget, and warnings (no boundary, no supervisor, 0 eligible employees, budget warnings).
+  - A failed create returns to the step and row at fault: row errors carry `field: "job_items[N].<field>"` and `row`, schema errors `body.job_items.N.<field>`, a bad supervisor `field: "supervisor_ids"`.
+  - After create the worksite page shows "Worksite created" with **Draw boundary now**.
+- `JobItemFields` and `JobItemChecksPanel` are shared by the wizard rows and the job item modal, which now shows the server checks (eligible employees, expected occurrences) and suggests the next free sub-item code.
+### Changed
+- **Admin-only actions (DEC-61, owner decision 23 Nov 2026).** Only Admin creates worksites and employees, runs the Master Data Import (every `/imports` route, template included) and the boundary file import (`POST /boundaries/import`), adds groups and zones, and deactivates or reactivates anything: `is_active` on `PATCH /job-items/{id}` and `PATCH /accommodations/{id}` is now refused for other roles (403). The web hides the menu item, Import links (Worksites, Employees, Planner, Operational Planner), Add Worksite, Add Employee, the accommodation Activate/Deactivate button, the boundary file import button and group/zone "Other – add new…" from Engineers; the Imports page says "Admin only".
+- Engineers edit and add job items, generate occurrences and assign or remove supervisors only on worksites in their DEC-57 scope (404 outside it); the role alone was checked before.
+- `POST /worksites` with a malformed job number returns 422 `INVALID_JOB_NUMBER` instead of a 500.
+### Removed
+- The Engineer import paths: skipped salary sheets and money settings (`SHEET_ADMIN_ONLY`, `SETTING_ADMIN_ONLY`), the Engineer template, the preview filter and the commit/rollback role checks; `fw/rules/imports/access.py` is deleted. A test keeps the salary sheets Admin only by role.
+- The Add Worksite form's inline job items, which were posted one by one after the worksite and whose failures were ignored.
+
 ## [1.14.0] - 2026-11-23
 ### Changed
 - **Tests use their own database.** Tests ran against `fw_db`, the working database, which is how test rows got into local data and how the reset-database test wiped settings. `tests/conftest.py` now points the app and every test session at `fw_test` (or `FW_TEST_DATABASE`, which must end in `_test`), drops, recreates and migrates it at the start of every run, and refuses to run against any other database. CI's backend job now has a PostGIS service and runs the database tests it used to skip.

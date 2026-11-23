@@ -746,14 +746,16 @@ export const Employees: React.FC = () => {
                 {exporting ? "Exporting..." : "Export"}
               </button>
 
-              <Link
-                to="/imports"
-                className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 bg-white text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 transition shadow-xs"
-                title="Import Employees from Excel"
-              >
-                <Upload className="h-4 w-4 text-slate-500" />
-                Import
-              </Link>
+              {user?.role === "ADMIN" && (
+                <Link
+                  to="/imports"
+                  className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 bg-white text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 transition shadow-xs"
+                  title="Import Employees from Excel (Admin)"
+                >
+                  <Upload className="h-4 w-4 text-slate-500" />
+                  Import
+                </Link>
+              )}
             </>
           )}
 
@@ -766,7 +768,7 @@ export const Employees: React.FC = () => {
             </button>
           )}
 
-          {(user?.role === "ADMIN" || !user?.role) && (
+          {user?.role === "ADMIN" && (
             <button
               onClick={() => {
                 setCreateError(null);
