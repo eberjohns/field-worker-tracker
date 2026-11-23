@@ -3,37 +3,20 @@
 Per docs/11-import-pipeline.md:
 - Trim whitespace, collapse internal spaces, normalize non-breaking spaces.
 - Grade code normalization (DEC-58): G5-C, G5C-2026, G5C-R2 -> G5C; unparseable -> INVALID_GRADE_CODE.
-- SGD normalization: SGD_Aliases lookup, SGD_ALIAS_APPLIED (info), SGD_UNKNOWN (warning).
+- SGD normalization against the managed list (DEC-60): SGD_Aliases lookup,
+  SGD_ALIAS_APPLIED (info), SGD_UNKNOWN (error).
 - Cell rules: blank keeps, `_` clears (CLEAR_ON_REQUIRED on required fields).
 """
 
 import json
 import re
+from collections.abc import Iterable
 from datetime import date, datetime, time
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from fw.rules.grades import base_grade_code
 from fw.rules.payroll.salary import round_money
-
-CONTROLLED_SGDS = {
-    "Gardener Helper",
-    "Gardener Expert",
-    "Gardener - Hand Watering",
-    "Team Leader",
-    "Supervisor",
-    "Superintendent",
-    "Irrigation Technician",
-    "Palm Tree Technician",
-    "Foreman With DL",
-    "Foreman Without DL",
-    "Admin",
-    "Irrigation Engineer",
-    "Landscaping Engineer",
-    "Commercial - QS",
-    "HSE Engineer",
-    "Project Manager",
-}
 
 SGD_ALIASES: dict[str, str] = {
     "gardner helper": "Gardener Helper",
@@ -68,30 +51,28 @@ def normalize_grade_code(raw: str | None) -> str | None:
     return base_grade_code(cleaned)
 
 
-def normalize_sgd(raw: str | None) -> tuple[str | None, str | None]:
-    """Normalize Staff Grade Description.
+def normalize_sgd(raw: str | None, allowed: Iterable[str]) -> tuple[str | None, str | None]:
+    """Normalize a Staff Grade Description against the managed list (DEC-60).
 
-    Returns:
-    - (normalized_value, None) if exact match with controlled list
-    - (aliased_value, "SGD_ALIAS_APPLIED") if alias was resolved
-    - (original_value, "SGD_UNKNOWN") if unknown value (allowed but flagged with warning)
-    - (None, None) if raw is empty
+    ``allowed`` is the active staff type list (``lookup_values``). Returns:
+    - (list_value, None) for a case/space-insensitive match;
+    - (list_value, "SGD_ALIAS_APPLIED") when a known alias resolves to a listed value;
+    - (cleaned, "SGD_UNKNOWN") otherwise (an import ERROR; values are added on screen);
+    - (None, None) when blank.
     """
     cleaned = normalize_text(raw)
     if not cleaned:
         return (None, None)
-
-    # Check exact match in controlled list
-    for standard in CONTROLLED_SGDS:
-        if standard.lower() == cleaned.lower():
+    pool = list(allowed)
+    key = re.sub(r"\s+", "", cleaned).lower()
+    for standard in pool:
+        if re.sub(r"\s+", "", standard).lower() == key:
             return (standard, None)
-
-    # Check alias
-    lower_val = cleaned.lower()
-    if lower_val in SGD_ALIASES:
-        return (SGD_ALIASES[lower_val], "SGD_ALIAS_APPLIED")
-
-    # Unknown
+    target = SGD_ALIASES.get(cleaned.lower())
+    if target:
+        for standard in pool:
+            if standard.lower() == target.lower():
+                return (standard, "SGD_ALIAS_APPLIED")
     return (cleaned, "SGD_UNKNOWN")
 
 

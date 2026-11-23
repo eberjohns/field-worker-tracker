@@ -33,6 +33,7 @@ One decision per file, numbered. Use the `write-adr` skill. Status: Proposed, Ac
 | 027 | [Worksite-based operational scope](027-worksite-based-operational-scope.md) | Accepted |
 | 028 | [Base grade codes, budget warnings, Admin-only salary data](028-base-grade-codes-and-admin-only-salary.md) | Accepted |
 | 029 | [Job budget, man-hours and planned vs actual](029-job-budget-and-man-hours.md) | Accepted |
+| 030 | [Managed lists for staff types and grade codes](030-managed-lists.md) | Accepted |
 
 See also [decision-register.md](decision-register.md) for business decisions awaiting client confirmation.
 

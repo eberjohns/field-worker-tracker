@@ -36,6 +36,24 @@ class PayrollRepository:
         return codes
 
     @staticmethod
+    async def active_revisions_without_grade(
+        session: AsyncSession, grade_code: str, country: str | None = None
+    ) -> list[str]:
+        """Codes of ACTIVE revisions (optionally for one country) with no line for the grade."""
+        has_line = (
+            select(SalaryRevisionLine.id)
+            .where(
+                SalaryRevisionLine.revision_id == SalaryRevision.id,
+                SalaryRevisionLine.grade_code == grade_code,
+            )
+            .exists()
+        )
+        stmt = select(SalaryRevision.code).where(SalaryRevision.status == "ACTIVE", ~has_line)
+        if country:
+            stmt = stmt.where(SalaryRevision.country == country)
+        return sorted((await session.execute(stmt)).scalars().all())
+
+    @staticmethod
     async def get_revision_by_code(
         session: AsyncSession,
         code: str,

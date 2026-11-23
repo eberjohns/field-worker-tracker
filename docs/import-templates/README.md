@@ -9,3 +9,5 @@ Cell rules (also on the workbook README and the import preview): a **blank cell 
 - The importer contract is `docs/11-import-pipeline.md`; the screens are in `docs/design/D6-import-and-setup.md`.
 - In the final system the template is **generated from the importer's sheet registry** so they cannot drift; use the `import-column` skill when changing columns, and bump the file name version.
 - Do not commit the client's original files (names, salaries). Examples use values taken from their files for realism; replace with fictional data for seed files.
+
+**Staff types and grade codes (DEC-60).** The Lists sheet of a downloaded template carries the current managed lists (`staff_grade_description`, `grade_code`). An unknown staff type is an import error: add it on screen first (Settings → Managed Lists, or "Other – add new…"). A new grade code is a warning and is added to the list when the import is committed.

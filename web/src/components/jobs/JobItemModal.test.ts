@@ -1,11 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  CONTROLLED_STAFF_GRADE_DESCRIPTIONS,
-  formatApiError,
-  buildJobItemPayload,
-} from "./jobItemUtils.ts";
+import { formatApiError, buildJobItemPayload } from "./jobItemUtils.ts";
 
 describe("JobItemModal Validation and Error Display", () => {
   it("formats FastAPI 422 invalid_params into readable <field>: <message> output", () => {
@@ -65,15 +61,6 @@ describe("JobItemModal Validation and Error Display", () => {
 
     const genericErr = { message: "Network connection lost." };
     assert.equal(formatApiError(genericErr), "Network connection lost.");
-  });
-
-  it("provides strictly controlled staff grade descriptions without 'GARDENER'", () => {
-    assert.equal(CONTROLLED_STAFF_GRADE_DESCRIPTIONS.length, 16);
-    assert.ok(!CONTROLLED_STAFF_GRADE_DESCRIPTIONS.includes("GARDENER"));
-    assert.ok(CONTROLLED_STAFF_GRADE_DESCRIPTIONS.includes("Gardener Helper"));
-    assert.ok(CONTROLLED_STAFF_GRADE_DESCRIPTIONS.includes("Gardener Expert"));
-    assert.ok(CONTROLLED_STAFF_GRADE_DESCRIPTIONS.includes("Team Leader"));
-    assert.ok(CONTROLLED_STAFF_GRADE_DESCRIPTIONS.includes("Supervisor"));
   });
 
   it("buildJobItemPayload formats all required fields cleanly for API submission", () => {

@@ -18,7 +18,6 @@ from fw.rules.hierarchy import (
     validate_reporting_link,
 )
 from fw.rules.imports import (
-    CONTROLLED_SGDS,
     SGD_ALIASES,
     check_date_range,
     detect_file_key_clashes,
@@ -79,7 +78,6 @@ from fw.rules.time_rules import (
 )
 
 __all__ = [
-    "CONTROLLED_SGDS",
     "CountryRulePack",
     "HierarchyRuleViolation",
     "MatchedRuleExplanation",

@@ -10,8 +10,6 @@ Per docs/11-import-pipeline.md:
 from dataclasses import dataclass, field
 from typing import Any
 
-from fw.rules.imports.normalizer import CONTROLLED_SGDS
-
 
 @dataclass
 class ColumnDef:
@@ -207,8 +205,7 @@ SHEET_REGISTRY: dict[str, SheetDef] = {
                 "text",
                 False,
                 "Conditional",
-                enum_values=list(CONTROLLED_SGDS),
-                description="Required for WORKER role.",
+                description="Required for WORKER role. A value from the staff type list (DEC-60).",
                 example="Gardener Helper",
             ),
             ColumnDef(
@@ -614,7 +611,7 @@ SHEET_REGISTRY: dict[str, SheetDef] = {
                 "text",
                 True,
                 "Required",
-                description="Controlled SGD.",
+                description="A value from the staff type list (DEC-60).",
                 example="Gardener - Hand Watering",
             ),
             ColumnDef(

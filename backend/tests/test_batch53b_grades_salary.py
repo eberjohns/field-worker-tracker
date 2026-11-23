@@ -569,6 +569,15 @@ async def test_reset_database_reseeds_default_settings() -> None:
         keys = {(r.setting_key, r.country) for r in rows}
         assert {(k, c) for k, c, _, _ in DEFAULT_COMPANY_SETTINGS} <= keys
         assert ("default_password", None) in keys
+        # Managed lists (DEC-60): staff types back to the seed; grades return with the next import.
+        from fw.modules.lookups import LookupValue
+        from fw.rules.lookups import SEED_STAFF_TYPES
+
+        lookups = (await session.execute(select(LookupValue))).scalars().all()
+        assert {v.value for v in lookups if v.list_key == "staff_grade_description"} == set(
+            SEED_STAFF_TYPES
+        )
+        assert not [v for v in lookups if v.list_key == "grade_code"]
         # Every payroll money setting resolves again, without reimporting Company_Settings.
         today = site_today("AE")
         provisions = Decimal("0")

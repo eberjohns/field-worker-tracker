@@ -61,7 +61,8 @@ One registry in code (`modules/imports/registry.py`) defines sheets, columns, ty
 
 ## 4. Normalization rules
 - Trim whitespace, collapse internal spaces, normalize non-breaking spaces. IDs stay text.
-- **Staff Grade Description**: case-insensitive match to the controlled list, else the `SGD_Aliases` table (`Gardner Helper` -> `Gardener Helper`, `Irrigation Technitian` -> `Irrigation Technician`, `Forman With DL` -> `Foreman With DL`, `Superintent` -> `Superintendent`...). Alias use -> `SGD_ALIAS_APPLIED` (info). Unknown value -> `SGD_UNKNOWN` (warning; stored, flagged for review).
+- **Staff Grade Description** (DEC-60): match to the managed staff type list ignoring case and spaces, else the `SGD_Aliases` table (`Gardner Helper` -> `Gardener Helper`, `Irrigation Technitian` -> `Irrigation Technician`, `Forman With DL` -> `Foreman With DL`, `Superintent` -> `Superintendent`...), on every sheet. Alias use -> `SGD_ALIAS_APPLIED` (info). Unknown value -> `SGD_UNKNOWN` (**error**, with "Did you mean …?"): staff types are added on screen (Settings → Managed Lists or "Other – add new…"), never by import. A deactivated value -> `LOOKUP_VALUE_INACTIVE` (warning; kept).
+- **Grade codes** (DEC-60): a valid base code that is not in the grade list -> `GRADE_ADDED_TO_LIST` (warning); it is added to the list when the batch is committed (rows skipped for Engineers add nothing).
 - **Booleans** `Y/N`. **Dates** `YYYY-MM-DD` (Excel date cells accepted). **Times** `HH:MM`. Decimals accept `.` only.
 - **Frequency** is structured in the template. For the legacy converter, free text is parsed:
 
@@ -98,7 +99,9 @@ Stable codes shown in the preview and error report.
 | ENGINEER_MISSING | warning | worker has no engineer |
 | HIERARCHY_ROLE_MISMATCH | warning | referenced supervisor/superintendent/engineer has a different role |
 | SGD_ALIAS_APPLIED | info | alias normalized |
-| SGD_UNKNOWN | warning | SGD not in the controlled list |
+| SGD_UNKNOWN | error | staff type not in the managed list (DEC-60); add it on screen first |
+| GRADE_ADDED_TO_LIST | warning | grade code not in the grade list yet; added on commit (DEC-60) |
+| LOOKUP_VALUE_INACTIVE | warning | staff type was deactivated; kept on the record |
 | ACTIVITIES_MISMATCH / ANNUAL_HOURS_MISMATCH | info | declared figures differ from the calculated ones (the calculated value is used) |
 | GRADE_CODE_NOT_IN_REVISION | warning | employee grade code has no salary line in the active revision |
 | RECONCILIATION_MISMATCH | warning | derived salary values differ from `client_*` by more than 0.01 |

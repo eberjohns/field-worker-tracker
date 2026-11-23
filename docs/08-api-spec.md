@@ -139,12 +139,16 @@ Roles: A = Admin, E = Engineer, S = Superintendent, V = Supervisor. "scope" = li
 | Method | Path | Roles | Purpose |
 |---|---|---|---|
 | GET/POST | /salary-revisions | A (write), E (read: codes, names, dates only) | list & create a salary revision with lines; `suffix_label` optional (default: year of `effective_from`); grade codes stored as base codes (DEC-58; `INVALID_GRADE_CODE`, `DUPLICATE_GRADE_LINE`) |
-| GET | /grades | any signed-in role | base grade codes in use (revision lines, employees, job items), naturally sorted; codes only, for dropdowns (DEC-58) |
+| GET | /lookups/{list_key}?include_inactive= | any signed-in role | managed list (`staff_grade_description` or `grade_code`, DEC-60): `[{id, value, is_active, source, version}]`, sorted (grades naturally); values in use that are missing from the list are appended with `id` null and source `IN_USE` |
+| POST | /lookups/{list_key} | A, E | add a value `{value, confirm_near_match?, country?}` -> 201 `{..., warnings[]}` (`NO_REVISION_LINE` for a grade with no line in an active revision); 409 `LOOKUP_DUPLICATE` (`existing`, `is_active`); 422 `LOOKUP_NEAR_MATCH` (`suggestions`) until `confirm_near_match`; 422 `INVALID_GRADE_CODE`. Audited |
+| PATCH | /lookups/{list_key}/{id} | A | deactivate or reactivate `{is_active, version}`; never deleted; records keep their value. Audited |
+| GET | /grades | any signed-in role | deprecated: the grade list (managed list plus codes in use), naturally sorted (DEC-58, DEC-60) |
 | GET | /salary-revisions/{code} | A | revision detail with grade lines, planned hourly cost and `display_grade_code` (e.g. `G3C-2026`); also `GET /salary-revisions/{code}/export-template` (A) |
 | POST | /salary-revisions/diff | A | side-by-side diff comparing incoming revision lines against base revision |
 | GET | /settings?country=&as_of= | A (write), E (read) | settings resolved for a date (default today) |
 | PUT | /settings/{key} | A | adds a new effective-dated value `{ value, country?, effective_from }` (never edits in place) |
 | GET | /settings/{key}/history | A E | all values with their effective ranges |
+| GET | /settings/staff-grades | any signed-in role | deprecated: the staff type list (managed list plus values in use), used by the budget-only checklist (DEC-60) |
 | GET/POST/PATCH | /time-rules | A (all), E (their scope), others read | planned times, break, standard-hours change, season, scope (company / team / drivers / employee), applies to all/outdoor/indoor; `GET /time-rules/resolve?employee_id=&date=` shows the effective plan and which rule won |
 | GET/POST | /consent-policies | A | publish location consent notice versions (per language) |
 | GET/POST/DELETE | /public-holidays | A | per country |
@@ -245,3 +249,5 @@ POST /api/v1/payroll/runs   { "period_start": "2026-10-01", "period_end": "2026-
 - Controllers stay thin (see `.agents/skills/add-endpoint`). Business rules come from `rules/`.
 - Generate the TypeScript client for the dashboard from the OpenAPI file (`openapi-typescript`).
 - Export the mobile contract with `tools/export_openapi.py --tag mobile > openapi-mobile.json` in CI.
+
+**Managed lists (DEC-60).** Job item create/update, employee create/update, grade change and `PATCH /employees/{id}/profile-details` validate staff type and grade against the active lists: 422 `INVALID_STAFF_GRADE_DESCRIPTION` or `UNKNOWN_GRADE_CODE` (with `suggestions` and "Did you mean …?"), 422 `LOOKUP_VALUE_INACTIVE` when switching to a deactivated value. The record's current value is always accepted.

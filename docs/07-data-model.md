@@ -115,6 +115,9 @@ Fixed crew hierarchy links: `employee_id` FK, `manager_id` FK employees, `relati
 ### employee_grade_history
 `employee_id`, `old_grade_code`, `new_grade_code`, `effective_from` date, `changed_by_user_id`, `reason`.
 
+### lookup_values (managed lists, DEC-60)
+`id` uuid PK, `list_key` text CHECK in (`staff_grade_description`, `grade_code`), `value` text, `value_key` text (lower case, spaces removed; unique with `list_key`), `source` text CHECK in (`SEED`, `SCREEN`, `IMPORT`), `is_active` bool, `created_by_user_id` FK users nullable (SET NULL), `deactivated_at` timestamptz nullable, `deactivated_by_user_id` FK users nullable (SET NULL), `version`, timestamps. Index (`list_key`, `is_active`). Values every staff type and grade dropdown offers; screens validate against the active values, records keep a value that was deactivated later. Never deleted (Reset database clears it and re-seeds the staff types). Grade codes are stored as base codes (DEC-58).
+
 ### employee_attribute_history
 `id` uuid PK, `employee_id` uuid FK employees, `attribute_name` text (`STAFF_GRADE_DESCRIPTION`, `GRADE_CODE`, `IS_DRIVER`), `old_value` text nullable, `new_value` text, `effective_from` date, `reason` text, `changed_by_user_id` uuid FK users, `actor_role` text nullable (added in migration 0022; stored since Batch 5.3b), `created_at` timestamptz. Indexes: (`employee_id`, `created_at`), (`attribute_name`). Immutable audit trail of designation, grade code, and driver status changes (ADR-026).
 

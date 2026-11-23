@@ -74,6 +74,7 @@ docs/  .agents/  infra/
 | settings | effective-dated settings, time rules, public holidays, consent-policy versions |
 | audit | audit log writing and querying |
 | org | employees, reporting lines, groups, zones, accommodations, documents |
+| lookups | managed lists: staff types and grade codes (DEC-60) |
 | jobs | worksites, boundaries, job items, occurrences |
 | scheduling | scheduled work, leave, reassignment, gaps, recommendations |
 | events | event ingestion, enrichment (PostGIS verdicts) |
@@ -95,8 +96,9 @@ docs/  .agents/  infra/
 6  scheduling | events
 7  jobs
 8  org
-9  settings | identity | audit
-10 core
+9  lookups
+10 settings | identity | audit
+11 core
 ```
 `rules/` and `adapters/` follow their own contracts: `rules` imports nothing from `modules` or `adapters`; modules use adapters only through ports.
 

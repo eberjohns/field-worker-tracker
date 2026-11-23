@@ -91,7 +91,17 @@ When resolving a setting for a worker, worksite, or process:
 
 ---
 
-## 3. Editing and Overriding Company Settings
+## 3. Managed lists (DEC-60)
+
+Staff types (Staff Grade Description, "Designation") and grade codes are managed lists, not settings, but they are kept under **Settings → Managed Lists**:
+- Every staff type and grade dropdown offers the active values; the last option "Other – add new…" lets Admin and Engineer add one, available to everyone at once.
+- Duplicates (ignoring case and spaces) are refused; a near spelling or known alias asks "Did you mean …?" and needs "Add anyway". Grade codes must be base codes (`G3C`; a `-2026` suffix is removed); a new grade with no line in an active salary revision is added with a warning.
+- Admin can deactivate a value: it leaves the dropdowns, records that use it keep it. Values are never deleted. Changes are audited.
+- Imports never add staff types (an unknown one is an error); new grade codes in an import are added when it is committed. The template's Lists sheet carries the current lists.
+- `budget_only_staff_types` is chosen from the staff type list.
+- Reset database clears both lists and re-seeds the staff types.
+
+## 4. Editing and Overriding Company Settings
 
 Settings can be managed and reviewed via two mechanisms:
 1. **Settings Screen in Web Dashboard**: Navigate to `/settings` to inspect active values, audit changes, and update keys.

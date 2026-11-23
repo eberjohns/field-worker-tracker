@@ -1,6 +1,21 @@
 # Changelog
 All notable changes. Format: Keep a Changelog. Mobile-contract changes are also logged in `docs/09-mobile-sync-contract.md`.
 
+## [1.13.0] - 2026-11-23
+### Added
+- **Batch 5.1 C: managed lists for staff types and grade codes (DEC-60, ADR-030).** Client meeting 19 Nov, item 2.
+  - Table `lookup_values` (migration 0024), seeded from the former controlled list and the values already on employees, job items and revision lines.
+  - `GET/POST /lookups/{list_key}` and `PATCH /lookups/{list_key}/{id}`: Admin and Engineer add values (duplicates refused ignoring case and spaces; near matches and aliases ask "Did you mean …?" and need "Add anyway"; grades must be base codes, with a warning when no active revision has a line); Admin deactivates; nothing is deleted; all audited.
+  - `<LookupSelect>`: a searchable dropdown with "Other – add new…", used for staff type and grade in the job item form, Add Worksite rows, employee create and the employee profile edit. Settings has a Managed Lists tab; the budget-only checklist reads the staff type list.
+### Changed
+- Job items, employee create/update, grade change and profile details validate staff type and grade against the active lists (`INVALID_STAFF_GRADE_DESCRIPTION`, `UNKNOWN_GRADE_CODE`, `LOOKUP_VALUE_INACTIVE`, with hints). Employee create used to accept any staff type.
+- Imports: an unknown staff type is now an **error** with a hint (Job_Items used to warn and save it); aliases now also resolve on the Employees sheet (they failed as `INVALID_ENUM`); a new valid grade code is a warning (`GRADE_ADDED_TO_LIST`) and joins the list on commit. The downloaded template's Lists sheet carries the current lists.
+- "Reset database" clears the lists and re-seeds the staff types.
+- `GET /grades` and `GET /settings/staff-grades` return the managed lists (deprecated).
+- The employee page shows an Engineer's staff type read-only, like Supervisor and Superintendent (the server already refused the change).
+### Removed
+- The hard-coded staff type list (`CONTROLLED_SGDS`, `CONTROLLED_STAFF_GRADE_DESCRIPTIONS`); it is only the seed now (`SEED_STAFF_TYPES`).
+
 ## [1.12.0] - 2026-11-23
 ### Added
 - **Batch 5.4: job budget and man-hours (DEC-59, ADR-029).** One pure rule (`fw.rules.jobs.budget`) gives activities/year, man-hours and cost per job item; the new `budget` module loads everything in bulk.

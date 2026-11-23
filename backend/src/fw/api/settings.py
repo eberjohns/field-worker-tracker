@@ -16,6 +16,7 @@ from fw.modules.identity import (
     require_role,
     verify_password,
 )
+from fw.modules.lookups import LookupService
 from fw.modules.org import OrgService, ScopeService
 from fw.modules.settings import (
     CompanySettingRead,
@@ -32,6 +33,7 @@ from fw.modules.settings import (
     TimeRuleUpdate,
     WinningFieldSourceRead,
 )
+from fw.rules.lookups import STAFF_GRADE_DESCRIPTION
 from fw.rules.time_rules import WorkerContext
 
 router = APIRouter(tags=["settings"])
@@ -58,18 +60,13 @@ async def list_staff_grades(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> list[str]:
-    """Return deduplicated union of distinct staff grade descriptions across active employees and job items."""
-    from fw.modules.jobs import JobsService
-    from fw.modules.org import OrgService
+    """Staff types for the budget-only checklist: the managed list (DEC-60).
 
-    emp_grades = await OrgService.get_unique_staff_grades(session)
-    job_grades = await JobsService.get_unique_staff_grades(session)
-    canonical: dict[str, str] = {}
-    for g in emp_grades + job_grades:
-        key = g.strip().lower()
-        if key and key not in canonical:
-            canonical[key] = g.strip()
-    return sorted(canonical.values(), key=str.lower)
+    Deprecated: use ``GET /lookups/staff_grade_description``.
+    """
+    from fw.api.lookups import lookup_options
+
+    return await lookup_options(session, STAFF_GRADE_DESCRIPTION)
 
 
 @router.put("/settings/{key}", response_model=CompanySettingRead)
@@ -503,6 +500,7 @@ async def reset_database(
         "accommodations",
         "groups",
         "zones",
+        "lookup_values",
     ]
     for table in tables:
         await session.execute(text(f"DELETE FROM {table};"))
@@ -528,6 +526,8 @@ async def reset_database(
     # Re-seed the default company settings (migration 0003 values) so payroll works
     # straight after a reset; money settings have no hard-coded fallbacks (DEC-58).
     await SettingsService.seed_default_settings(session)
+    # Managed lists (DEC-60): staff types back to the seed; grades return with the next import.
+    await LookupService.reseed(session)
     await SettingsService.set_setting(
         session,
         key="default_password",

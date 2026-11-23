@@ -4,6 +4,7 @@ Generates FieldWorkerTracker_Import_Template_v1.0.xlsx matching docs/import-temp
 """
 
 import io
+from collections.abc import Iterable
 
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -11,17 +12,23 @@ from openpyxl.utils import get_column_letter
 
 from fw.modules.imports.registry import (
     ALL_SHEET_NAMES,
-    CONTROLLED_SGDS,
     SHEET_REGISTRY,
 )
 from fw.rules.imports import ADMIN_ONLY_SHEETS, is_admin_only_row
+from fw.rules.lookups import GRADE_CODE, SEED_STAFF_TYPES, STAFF_GRADE_DESCRIPTION, sort_values
 
 
-def generate_import_template_bytes(include_admin_only: bool = True) -> bytes:
+def generate_import_template_bytes(
+    include_admin_only: bool = True,
+    staff_types: Iterable[str] | None = None,
+    grade_codes: Iterable[str] | None = None,
+) -> bytes:
     """Generate the XLSX import template as bytes.
 
     ``include_admin_only=False`` (Engineers, DEC-47) leaves out the salary sheets and the
-    money/rate example rows of Company_Settings.
+    money/rate example rows of Company_Settings. ``staff_types`` and ``grade_codes`` fill the
+    Lists sheet from the managed lists (DEC-60); without them the seed staff types are used and
+    the grade column is left out.
     """
     sheet_names = [s for s in ALL_SHEET_NAMES if include_admin_only or s not in ADMIN_ONLY_SHEETS]
     wb = openpyxl.Workbook()
@@ -198,8 +205,12 @@ def generate_import_template_bytes(include_admin_only: bool = True) -> bytes:
         "revision_status": ["DRAFT", "ACTIVE", "ARCHIVED"],
         "band": ["A", "B", "C"],
         "setting_status": ["GIVEN_BY_CLIENT", "PROPOSED_DEFAULT"],
-        "staff_grade_description": sorted(CONTROLLED_SGDS),
+        "staff_grade_description": sort_values(
+            STAFF_GRADE_DESCRIPTION, staff_types if staff_types is not None else SEED_STAFF_TYPES
+        ),
     }
+    if grade_codes is not None:
+        lists_data["grade_code"] = sort_values(GRADE_CODE, grade_codes)
 
     for col_idx, (header, items) in enumerate(lists_data.items(), start=1):
         col_letter = get_column_letter(col_idx)

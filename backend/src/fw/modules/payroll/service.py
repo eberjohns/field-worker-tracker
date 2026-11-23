@@ -1809,6 +1809,13 @@ class PayrollService:
         )
 
     @staticmethod
+    async def active_revisions_without_grade(
+        session: AsyncSession, grade_code: str, country: str | None = None
+    ) -> list[str]:
+        """ACTIVE revision codes with no line for ``grade_code`` (codes only, no money; DEC-60)."""
+        return await PayrollRepository.active_revisions_without_grade(session, grade_code, country)
+
+    @staticmethod
     async def list_grade_codes(session: AsyncSession) -> list[str]:
         """Base grade codes in use (DEC-58), naturally sorted, for dropdowns. Codes only, no money."""
         codes = await PayrollRepository.list_distinct_grade_codes(session)

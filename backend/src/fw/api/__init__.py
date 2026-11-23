@@ -11,6 +11,7 @@ from fw.api.employees import router as employees_router
 from fw.api.imports import router as imports_router
 from fw.api.jobs import router as jobs_router
 from fw.api.live import router as live_router
+from fw.api.lookups import router as lookups_router
 from fw.api.org_entities import router as org_entities_router
 from fw.api.pending_visits import router as pending_visits_router
 from fw.api.salary import router as salary_router
@@ -33,6 +34,7 @@ api_v1_router.include_router(devices_router)
 api_v1_router.include_router(mobile_router)
 api_v1_router.include_router(audit_router)
 api_v1_router.include_router(settings_router)
+api_v1_router.include_router(lookups_router)
 api_v1_router.include_router(imports_router)
 api_v1_router.include_router(salary_router)
 api_v1_router.include_router(payroll_router)
