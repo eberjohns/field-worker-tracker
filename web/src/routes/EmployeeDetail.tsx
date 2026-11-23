@@ -30,8 +30,9 @@ import {
 } from "lucide-react";
 import {
   CONTROLLED_STAFF_GRADE_DESCRIPTIONS,
-  DEFAULT_GRADE_CODES,
 } from "../components/jobs/jobItemUtils";
+import { useGrades } from "../features/grades/useGrades";
+import { gradeOptions } from "../features/grades/gradeOptions";
 
 interface AttributeHistoryItem {
   id: string;
@@ -49,6 +50,7 @@ interface AttributeHistoryItem {
 export const EmployeeDetail: React.FC = () => {
   const { employeeId } = useParams({ strict: false }) as { employeeId: string };
   const { token, user } = useAuth();
+  const apiGrades = useGrades(token);
 
   const [employee, setEmployee] = useState<any>(null);
   const [accommodations, setAccommodations] = useState<any[]>([]);
@@ -2296,7 +2298,7 @@ export const EmployeeDetail: React.FC = () => {
                   className="w-full border border-slate-300 rounded-lg p-2 text-xs font-mono bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   <option value="">None / Unassigned</option>
-                  {DEFAULT_GRADE_CODES.map((g) => (
+                  {gradeOptions(apiGrades, detailGrade).map((g) => (
                     <option key={g} value={g}>
                       {g}
                     </option>

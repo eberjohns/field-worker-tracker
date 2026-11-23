@@ -47,6 +47,7 @@ from fw.modules.jobs.schemas import (
 )
 from fw.modules.org import Accommodation, Employee, Group, Zone
 from fw.modules.settings import SettingsService
+from fw.rules.grades import InvalidGradeCodeError, base_grade_code
 from fw.rules.jobs import (
     calculate_days_per_occurrence,
     calculate_expected_activities_per_year,
@@ -58,6 +59,16 @@ from fw.rules.jobs import (
 )
 
 logger = structlog.get_logger(__name__)
+
+
+def _grade_or_422(raw: str | None) -> str | None:
+    """Base grade code (DEC-58); blank -> None; unparseable -> 422 INVALID_GRADE_CODE."""
+    if raw is None or not str(raw).strip():
+        return None
+    try:
+        return base_grade_code(str(raw))
+    except InvalidGradeCodeError as exc:
+        raise AppError(code=exc.code, message=str(exc), status_code=422) from exc
 
 
 class JobsService:
@@ -1290,7 +1301,7 @@ class JobsService:
             worksite_id=worksite_id,
             sub_item_code=sub_code,
             staff_grade_description=payload.staff_grade_description.strip(),
-            planned_grade_code=payload.planned_grade_code.strip(),
+            planned_grade_code=_grade_or_422(payload.planned_grade_code) or "",
             frequency_unit=payload.frequency_unit.strip().upper(),
             occurrences_per_period=payload.occurrences_per_period,
             period_interval=payload.period_interval,
@@ -1393,8 +1404,9 @@ class JobsService:
             item.staff_grade_description = payload.staff_grade_description.strip()
             regen_needed = True
         if payload.planned_grade_code is not None:
-            diff["planned_grade_code"] = payload.planned_grade_code
-            item.planned_grade_code = payload.planned_grade_code.strip()
+            new_grade = _grade_or_422(payload.planned_grade_code) or ""
+            diff["planned_grade_code"] = new_grade
+            item.planned_grade_code = new_grade
         if payload.frequency_unit is not None:
             diff["frequency_unit"] = payload.frequency_unit
             item.frequency_unit = payload.frequency_unit.strip().upper()

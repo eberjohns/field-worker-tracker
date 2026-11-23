@@ -1,6 +1,25 @@
 # Changelog
 All notable changes. Format: Keep a Changelog. Mobile-contract changes are also logged in `docs/09-mobile-sync-contract.md`.
 
+## [1.11.0] - 2026-11-23
+### Changed
+- **Batch 5.3b: grade codes are stored as the base code everywhere (DEC-58, ADR-028).** Revision lines, job items and employees hold `G3C`; revisions show `G3C-2026` through the new `salary_revisions.suffix_label` (default: year). Input accepts `-YYYY`, `-R<n>` and `G5-C`; anything else (e.g. `G3C26`) is rejected with `INVALID_GRADE_CODE` instead of being guessed. Migration 0022 strips existing suffixes (stops on duplicates).
+- **Payroll provisions now follow settings.** Payroll runs and salary structures read the seeded setting names (`provision_*`, `standard_ot_divisor_hours`) instead of names that never existed, so provisions are 842 (132+65+30+550+65) instead of the hard-coded 550. **Existing draft runs will change when recalculated.** Approved runs are unchanged. No money setting has a fallback any more: a missing one stops with 422 `SETTING_MISSING`.
+- **Admin only (DEC-47):** payroll runs, run detail, issues and records, salary revision detail and its template export. The worker's own payslip (`/mobile/me/payroll`, `/payroll/my-records`) is unchanged.
+- Engineers' imports skip the salary sheets (`SHEET_ADMIN_ONLY`) and money/rate settings and `default_password` in Company_Settings (`SETTING_ADMIN_ONLY`) without storing their values; their template leaves them out; they cannot commit or roll back a batch that writes such data.
+- Site-local dates for the budget, salary structures and salary/revision defaults.
+- "Reset database" now re-seeds the default company settings (the migration 0003 values), so payroll works straight after a reset without reimporting Company_Settings.
+### Fixed
+- Budget no longer prices unknown grades at 10.00/hour: such job items are left out of the totals and listed as `MISSING_GRADE_RATE` warnings (shown on the Budget tab).
+- Editing or deleting a future salary row re-copies the amounts of later CREW_BREAK rows; CREW_BREAK rows cannot be edited or deleted directly (`CREW_BREAK_ROW_LOCKED`); the audit keeps the full row. Past and current rows stay locked.
+- profile-details: grade validated; Staff Grade Description must be on the controlled list and is locked for Supervisors, Superintendents and Engineers (meeting 19 Nov); a future `effective_from` is rejected (`FUTURE_PROFILE_CHANGE_NOT_SUPPORTED`); `actor_role` is stored.
+- Grade dropdowns (job items, employees, employee detail, Add Worksite) now list every grade in use (G8–G25 included) from `GET /grades`; the Add Worksite form no longer pre-fills "Gardener Helper"/`G3C`.
+### Added
+- `GET /grades`, `employee_attribute_history.actor_role`, budget `warnings[]`/`missing_rate_hours`, revision `display_grade_code`.
+- Tests: grade parsing, budget warnings, CREW_BREAK resync and locks, Admin-only salary data and payroll, Engineer import skipping, profile-details, `SETTING_MISSING`, worker mobile payslip still available.
+### Removed
+- `tools/demo_data/antigravity-demo-data-generator-prompt.md` (replaced by `demo-data-generator-prompt.md`).
+
 ## [1.10.0] - 2026-11-20
 ### Fixed
 - **Batch 5.3a: dashboard cards always showed 0.** The web read field names `/dashboard/summary` does not return. A typed mapper (`web/src/features/dashboard/summary.ts`, with tests) now reads the API's fields; no API field was renamed.

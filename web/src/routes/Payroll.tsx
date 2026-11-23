@@ -107,6 +107,7 @@ interface RunIssuesData {
 
 interface RevisionLineItem {
   grade_code: string;
+  display_grade_code?: string | null;
   grade_group_title?: string;
   basic_salary: number;
   special_allowance: number;
@@ -150,13 +151,21 @@ interface BudgetVsActualItem {
   is_under_budget?: boolean;
   manual_budget_override?: number | null;
   is_custom_budget_override?: boolean;
+  missing_rate_hours?: number;
+  warnings?: Array<{
+    code: string;
+    sub_item_code?: string | null;
+    grade_code?: string | null;
+    annual_hours?: number;
+    message: string;
+  }>;
 }
 
 export const Payroll: React.FC = () => {
   const { token, user } = useAuth();
   const isAdmin = user?.role === "ADMIN";
-  const isEngineer = user?.role === "ENGINEER";
-  const canAccess = isAdmin || isEngineer;
+  // DEC-47: payroll runs, records, revision lines and budgets are Admin only (Batch 5.3b).
+  const canAccess = isAdmin;
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<"RUNS" | "REVISIONS" | "BUDGET">("RUNS");
@@ -1183,7 +1192,7 @@ export const Payroll: React.FC = () => {
                     return (
                       <tr key={line.grade_code} className="hover:bg-slate-50/60 transition">
                         <td className="py-2.5 px-4 font-mono font-bold text-slate-900">
-                          {line.grade_code}
+                          {line.display_grade_code || line.grade_code}
                         </td>
                         <td className="py-2.5 px-3 text-slate-700">
                           {line.grade_group_title || "--"}
@@ -1290,6 +1299,16 @@ export const Payroll: React.FC = () => {
                             Manual Override
                           </span>
                         )}
+                        {(item.warnings || []).map((w, i) => (
+                          <span
+                            key={`${w.code}-${w.sub_item_code ?? i}`}
+                            title={w.message}
+                            className="block mt-0.5 px-1.5 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 rounded text-3xs font-semibold"
+                          >
+                            Item {w.sub_item_code || "?"}: no rate for grade {w.grade_code || "(blank)"}
+                            {w.annual_hours ? ` (${Number(w.annual_hours).toLocaleString()} h/yr not in budget)` : ""}
+                          </span>
+                        ))}
                       </td>
 
                       {/* Revision Code Binding Dropdown */}

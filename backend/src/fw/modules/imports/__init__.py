@@ -10,7 +10,7 @@ from fw.modules.imports.schemas import (
     ImportRollbackResponse,
     ImportRowRead,
 )
-from fw.modules.imports.service import ImportService
+from fw.modules.imports.service import ImportService, admin_only_rows_clause
 
 __all__ = [
     "ALL_SHEET_NAMES",
@@ -24,5 +24,6 @@ __all__ = [
     "ImportRowRead",
     "ImportService",
     "SHEET_REGISTRY",
+    "admin_only_rows_clause",
     "generate_import_template_bytes",
 ]

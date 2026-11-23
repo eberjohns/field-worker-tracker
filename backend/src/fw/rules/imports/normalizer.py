@@ -2,7 +2,7 @@
 
 Per docs/11-import-pipeline.md:
 - Trim whitespace, collapse internal spaces, normalize non-breaking spaces.
-- Grade code normalization: G5-C, G5C, G5C26 -> G5C (base code with year suffix stripped).
+- Grade code normalization (DEC-58): G5-C, G5C-2026, G5C-R2 -> G5C; unparseable -> INVALID_GRADE_CODE.
 - SGD normalization: SGD_Aliases lookup, SGD_ALIAS_APPLIED (info), SGD_UNKNOWN (warning).
 - Cell rules: blank keeps, `_` clears (CLEAR_ON_REQUIRED on required fields).
 """
@@ -13,6 +13,7 @@ from datetime import date, datetime, time
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from fw.rules.grades import base_grade_code
 from fw.rules.payroll.salary import round_money
 
 CONTROLLED_SGDS = {
@@ -56,23 +57,15 @@ def normalize_text(val: Any) -> str | None:
 
 
 def normalize_grade_code(raw: str | None) -> str | None:
-    """Normalize grade code by removing hyphens and stripping trailing 2-digit year suffix.
+    """Normalize a grade code to its base form (DEC-58, ``fw.rules.grades.base_grade_code``).
 
-    Examples:
-    'G5-C' -> 'G5C'
-    'G5C26' -> 'G5C'
-    'G2B26' -> 'G2B'
-    'G1C' -> 'G1C'
+    Blank -> None. Raises ``InvalidGradeCodeError`` for codes that cannot be parsed for certain
+    (no guessing on forms like ``G3C26``).
     """
     cleaned = normalize_text(raw)
     if not cleaned:
         return None
-    s = cleaned.replace("-", "").upper()
-    # If ends with 2 digits (e.g. 26 for year 2026), strip the year suffix
-    match = re.match(r"^(G\d+[A-Z])(\d{2})$", s)
-    if match:
-        return match.group(1)
-    return s
+    return base_grade_code(cleaned)
 
 
 def normalize_sgd(raw: str | None) -> tuple[str | None, str | None]:

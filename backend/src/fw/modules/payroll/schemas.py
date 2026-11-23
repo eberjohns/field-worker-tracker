@@ -129,6 +129,8 @@ class SalaryRevisionLineRead(BaseModel):
     total_provisions: Decimal = Decimal("0.00")
     total_salary_portion: Decimal = Decimal("0.00")
     planned_hourly_cost: Decimal = Decimal("0.00")
+    # Display form (DEC-58): base grade_code + the revision's suffix_label, e.g. "G3C-2026".
+    display_grade_code: str | None = None
 
 
 class SalaryRevisionCreate(BaseModel):
@@ -138,6 +140,8 @@ class SalaryRevisionCreate(BaseModel):
     effective_from: date
     effective_to: date | None = None
     notes: str | None = None
+    # Display suffix for grade lines (DEC-58); defaults to the year of effective_from.
+    suffix_label: str | None = Field(default=None, max_length=20)
     lines: list[SalaryRevisionLineCreate] = Field(default_factory=list)
 
 
@@ -152,6 +156,7 @@ class SalaryRevisionRead(BaseModel):
     effective_to: date | None = None
     status: str
     notes: str | None = None
+    suffix_label: str | None = None
     line_count: int = 0
     created_at: datetime
     updated_at: datetime
@@ -326,6 +331,15 @@ class WorkerMobilePayrollSlip(BaseModel):
     approved_at: datetime | None = None
 
 
+class BudgetWarning(BaseModel):
+    code: str  # MISSING_GRADE_RATE
+    job_item_id: UUID | None = None
+    sub_item_code: str | None = None
+    grade_code: str | None = None
+    annual_hours: Decimal = Decimal("0.0")
+    message: str
+
+
 class WorksiteBudgetVsActualItem(BaseModel):
     worksite_id: UUID
     job_number: str
@@ -346,3 +360,6 @@ class WorksiteBudgetVsActualItem(BaseModel):
     is_under_budget: bool = False
     manual_budget_override: Decimal | None = None
     is_custom_budget_override: bool = False
+    # DEC-58: job items whose grade has no line in the revision are left out of the totals.
+    missing_rate_hours: Decimal = Decimal("0.0")
+    warnings: list[BudgetWarning] = Field(default_factory=list)

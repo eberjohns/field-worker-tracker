@@ -3,6 +3,15 @@
 from fw.rules.country.ae import UAECountryPack
 from fw.rules.country.base import CountryRulePack
 from fw.rules.country.sa import SaudiCountryPack
+from fw.rules.grades import (
+    INVALID_GRADE_CODE,
+    InvalidGradeCodeError,
+    base_grade_code,
+    display_grade_code,
+    grade_sort_key,
+    is_base_grade_code,
+    try_base_grade_code,
+)
 from fw.rules.hierarchy import (
     HierarchyRuleViolation,
     compute_transitive_scope,
@@ -93,6 +102,13 @@ __all__ = [
     "detect_reporting_issues",
     "is_default_password_expired",
     "normalize_grade_code",
+    "INVALID_GRADE_CODE",
+    "InvalidGradeCodeError",
+    "base_grade_code",
+    "display_grade_code",
+    "grade_sort_key",
+    "is_base_grade_code",
+    "try_base_grade_code",
     "normalize_sgd",
     "normalize_text",
     "parse_cell_value",

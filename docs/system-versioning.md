@@ -49,3 +49,4 @@ Field Worker Tracker follows semantic versioning `v<MAJOR>.<MINOR>.<PATCH>`:
 | **v1.9.0** | 2026-11-20 | `fix/batch5.2-dec57-scope` | `2bf319c` | New branch 'fix/batch5.2-dec57-scope' |
 | **v1.9.1** | 2026-11-20 | `docs/handover-update` | `94dc9a5` | Commit on 'docs/handover-update' |
 | **v1.10.0** | 2026-11-20 | `fix/batch5.3a` | `647c05a` | New branch 'fix/batch5.3a' |
+| **v1.11.0** | 2026-11-23 | `fix/batch5.3b` | `99cd3dd` | New branch 'fix/batch5.3b' |

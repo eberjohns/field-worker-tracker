@@ -4,6 +4,24 @@
  */
 
 export interface paths {
+    "/health/liveness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Liveness check alias */
+        get: operations["health_health_liveness_head"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        /** Liveness check alias */
+        head: operations["health_health_liveness_head"];
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -19,6 +37,24 @@ export interface paths {
         options?: never;
         /** Liveness check */
         head: operations["health_health_head"];
+        patch?: never;
+        trace?: never;
+    };
+    "/health/readiness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Readiness check alias */
+        get: operations["health_ready_health_readiness_head"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        /** Readiness check alias */
+        head: operations["health_ready_health_readiness_head"];
         patch?: never;
         trace?: never;
     };
@@ -203,6 +239,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/employees/{employee_id}/reset-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset Employee Password
+         * @description Admin resets an employee's user/device password to company default.
+         *     Auto-provisions the user account if not yet created.
+         */
+        post: operations["reset_employee_password_api_v1_employees__employee_id__reset_password_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/employees/hierarchy": {
         parameters: {
             query?: never;
@@ -237,6 +294,106 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/employees/hierarchy-violations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Hierarchy Violations
+         * @description Admin-only audit endpoint listing reporting lines that violate the fixed crew structure.
+         */
+        get: operations["get_hierarchy_violations_api_v1_employees_hierarchy_violations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/employees/hierarchy-violations/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Hierarchy Violations
+         * @description Admin-only export of hierarchy violations to Excel (.xlsx).
+         */
+        get: operations["export_hierarchy_violations_api_v1_employees_hierarchy_violations_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/employees/hierarchy-violations/{line_id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Deactivate Hierarchy Violation Line
+         * @description Deactivate a non-conforming reporting line.
+         */
+        post: operations["deactivate_hierarchy_violation_line_api_v1_employees_hierarchy_violations__line_id__deactivate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/employees/hierarchy-violations/{line_id}/move-to-supervisor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move Hierarchy Violation To Supervisor
+         * @description Move a worker's direct supt/eng link to their supervisor, then deactivate the worker link.
+         */
+        post: operations["move_hierarchy_violation_to_supervisor_api_v1_employees_hierarchy_violations__line_id__move_to_supervisor_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/employees/check-tally-id": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Check Tally Id
+         * @description Check whether a Tally ID is available and whether it was previously held by another employee.
+         */
+        get: operations["check_tally_id_api_v1_employees_check_tally_id_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/employees/{employee_id}": {
         parameters: {
             query?: never;
@@ -255,6 +412,86 @@ export interface paths {
         patch: operations["update_employee_api_v1_employees__employee_id__patch"];
         trace?: never;
     };
+    "/api/v1/employees/{employee_id}/change-tally-id": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change Employee Tally Id
+         * @description Admin updates an employee's Tally ID (e.g. temporary probation ID -> permanent ID) and login username.
+         */
+        post: operations["change_employee_tally_id_api_v1_employees__employee_id__change_tally_id_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/employees/{employee_id}/deactivation-impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Employee Deactivation Impact
+         * @description Preview scheduling and reporting-line impact before deactivating an employee (Admin only).
+         */
+        get: operations["get_employee_deactivation_impact_api_v1_employees__employee_id__deactivation_impact_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/employees/{employee_id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Deactivate Employee
+         * @description Admin-only deactivation with DEACTIVATE confirmation + admin password + cascading schedule cleanup.
+         */
+        post: operations["deactivate_employee_api_v1_employees__employee_id__deactivate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/employees/{employee_id}/reactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reactivate Employee
+         * @description Admin-only clean reactivation (Option A): re-enables account & visibility without restoring old schedules.
+         */
+        post: operations["reactivate_employee_api_v1_employees__employee_id__reactivate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/employees/{employee_id}/grade-change": {
         parameters: {
             query?: never;
@@ -266,6 +503,46 @@ export interface paths {
         put?: never;
         /** Change Employee Grade */
         post: operations["change_employee_grade_api_v1_employees__employee_id__grade_change_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/employees/{employee_id}/profile-details": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Employee Profile Details
+         * @description Update employee trade designation, grade code, or driver status with immutable audit history.
+         */
+        patch: operations["update_employee_profile_details_api_v1_employees__employee_id__profile_details_patch"];
+        trace?: never;
+    };
+    "/api/v1/employees/{employee_id}/attribute-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Employee Attribute History
+         * @description List immutable attribute history records (grade, designation, driver) for an employee.
+         */
+        get: operations["list_employee_attribute_history_api_v1_employees__employee_id__attribute_history_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -828,7 +1105,7 @@ export interface paths {
         };
         /**
          * List Staff Grades
-         * @description Return distinct staff grade descriptions across employees and settings.
+         * @description Return deduplicated union of distinct staff grade descriptions across active employees and job items.
          */
         get: operations["list_staff_grades_api_v1_settings_staff_grades_get"];
         put?: never;
@@ -1011,7 +1288,7 @@ export interface paths {
         };
         /**
          * Download Import Template
-         * @description Download the generated master data import template workbook.
+         * @description Download the import template. Engineers get it without the salary sheets (DEC-47).
          */
         get: operations["download_import_template_api_v1_imports_template_get"];
         put?: never;
@@ -1150,6 +1427,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/employees/{employee_id}/salary/{salary_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Future Salary Revision
+         * @description Delete a future-dated salary revision (DEC-06). Rejects current/past rows.
+         */
+        delete: operations["delete_future_salary_revision_api_v1_employees__employee_id__salary__salary_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Future Salary Revision
+         * @description Update a future-dated salary revision (DEC-06). Rejects current/past rows.
+         */
+        patch: operations["update_future_salary_revision_api_v1_employees__employee_id__salary__salary_id__patch"];
+        trace?: never;
+    };
     "/api/v1/salary-structures": {
         parameters: {
             query?: never;
@@ -1263,9 +1564,32 @@ export interface paths {
         };
         /**
          * List Payroll Records
-         * @description List payroll records for a run, scoped to user.
+         * @description List payroll records for a run (Admin only).
          */
         get: operations["list_payroll_records_api_v1_payroll_records_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mobile/me/payroll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Mobile Payroll
+         * @description Worker's own approved monthly payroll records (employer provisions stripped).
+         *
+         *     If period=YYYY-MM is provided, returns that specific month's approved slip (or 404).
+         *     If period is omitted, returns the list of all approved slips.
+         */
+        get: operations["get_mobile_payroll_api_v1_mobile_me_payroll_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1283,7 +1607,7 @@ export interface paths {
         };
         /**
          * Get My Payroll Records
-         * @description Worker's own approved monthly payroll records (employer provisions stripped).
+         * @description Worker's own approved monthly payroll records for web view.
          */
         get: operations["get_my_payroll_records_api_v1_payroll_my_records_get"];
         put?: never;
@@ -1294,7 +1618,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/mobile/me/payroll": {
+    "/api/v1/grades": {
         parameters: {
             query?: never;
             header?: never;
@@ -1302,10 +1626,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get My Payroll Records
-         * @description Worker's own approved monthly payroll records (employer provisions stripped).
+         * List Grade Codes
+         * @description Base grade codes in use (revision lines, employees, job items) for dropdowns (DEC-58).
          */
-        get: operations["get_my_payroll_records_api_v1_mobile_me_payroll_get"];
+        get: operations["list_grade_codes_api_v1_grades_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1487,7 +1811,9 @@ export interface paths {
         };
         /**
          * List Worksites
-         * @description List worksites with optional filtering.
+         * @description List worksites in the caller's scope (DEC-57).
+         *
+         *     Deactivated worksites are visible to Admin only; budget is hidden for non-admins.
          */
         get: operations["list_worksites_api_v1_worksites_get"];
         put?: never;
@@ -1496,6 +1822,66 @@ export interface paths {
          * @description Create a worksite record (Admin only).
          */
         post: operations["create_worksite_api_v1_worksites_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/worksites/supervisor-proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Worksite Supervisor Proposals
+         * @description Propose supervisors from current crews for each worksite (Admin reviews; DEC-57).
+         */
+        get: operations["list_worksite_supervisor_proposals_api_v1_worksites_supervisor_proposals_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/worksites/supervisors/bulk-assign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk Assign Worksite Supervisors
+         * @description Assign the worksite/supervisor pairs Admin confirmed (all or nothing, audited).
+         */
+        post: operations["bulk_assign_worksite_supervisors_api_v1_worksites_supervisors_bulk_assign_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/job-items/destinations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Job Item Destinations
+         * @description All active job items, for reassignment request destinations (not scoped; no costs).
+         */
+        get: operations["list_job_item_destinations_api_v1_job_items_destinations_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1511,7 +1897,7 @@ export interface paths {
         };
         /**
          * Export Worksites Excel
-         * @description Export worksites list to an Excel spreadsheet.
+         * @description Export worksites list with a dedicated Job_Items worksheet (Admin & Engineer only).
          */
         get: operations["export_worksites_excel_api_v1_worksites_export_get"];
         put?: never;
@@ -1531,7 +1917,7 @@ export interface paths {
         };
         /**
          * Get Worksite Detail
-         * @description Get full details of a worksite including items and boundary GeoJSON.
+         * @description Get full details of a worksite in the caller's scope (DEC-57).
          */
         get: operations["get_worksite_detail_api_v1_worksites__worksite_id__get"];
         put?: never;
@@ -1544,6 +1930,110 @@ export interface paths {
          * @description Update worksite metadata with optimistic locking (Admin only).
          */
         patch: operations["update_worksite_api_v1_worksites__worksite_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/worksites/{worksite_id}/supervisors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Worksite Supervisors
+         * @description List supervisors assigned to a worksite in the caller's scope.
+         */
+        get: operations["list_worksite_supervisors_api_v1_worksites__worksite_id__supervisors_get"];
+        put?: never;
+        /**
+         * Assign Worksite Supervisor
+         * @description Assign a supervisor to a worksite (Admin & Engineer only).
+         */
+        post: operations["assign_worksite_supervisor_api_v1_worksites__worksite_id__supervisors_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/worksites/{worksite_id}/supervisors/{supervisor_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Worksite Supervisor
+         * @description Unassign a supervisor from a worksite (Admin & Engineer only).
+         */
+        delete: operations["remove_worksite_supervisor_api_v1_worksites__worksite_id__supervisors__supervisor_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/worksites/{worksite_id}/deactivation-impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Worksite Deactivation Impact
+         * @description Preview scheduling impact of deactivating a worksite (Admin only).
+         */
+        get: operations["get_worksite_deactivation_impact_api_v1_worksites__worksite_id__deactivation_impact_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/worksites/{worksite_id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Deactivate Worksite
+         * @description Admin-only worksite deactivation with DEACTIVATE confirmation + admin password + worker schedule release.
+         */
+        post: operations["deactivate_worksite_api_v1_worksites__worksite_id__deactivate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/worksites/{worksite_id}/reactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reactivate Worksite
+         * @description Admin-only clean reactivation (Option A): sets worksite active without restoring old schedules.
+         */
+        post: operations["reactivate_worksite_api_v1_worksites__worksite_id__reactivate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/boundary-queue": {
@@ -1740,6 +2230,66 @@ export interface paths {
          * @description Trigger occurrence generation for a job item across rolling horizon.
          */
         post: operations["generate_occurrences_api_v1_job_items__job_item_id__generate_occurrences_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/job-items/{job_item_id}/deactivation-impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Job Item Deactivation Impact
+         * @description Preview scheduling impact of deactivating a single job item (Admin only).
+         */
+        get: operations["get_job_item_deactivation_impact_api_v1_job_items__job_item_id__deactivation_impact_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/job-items/{job_item_id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Deactivate Job Item
+         * @description Admin-only job item deactivation with DEACTIVATE confirmation + admin password + schedule release.
+         */
+        post: operations["deactivate_job_item_api_v1_job_items__job_item_id__deactivate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/job-items/{job_item_id}/reactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reactivate Job Item
+         * @description Admin-only clean reactivation (Option A) of a job item (parent worksite must be active).
+         */
+        post: operations["reactivate_job_item_api_v1_job_items__job_item_id__reactivate_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2105,7 +2655,7 @@ export interface paths {
         put?: never;
         /**
          * Save Base Template
-         * @description Create or update active Base Roster Template for a job item.
+         * @description Create or update active Base Roster Template for a job item (Admin, Engineer, Superintendent).
          */
         post: operations["save_base_template_api_v1_base_planner_templates_post"];
         delete?: never;
@@ -2165,7 +2715,7 @@ export interface paths {
         put?: never;
         /**
          * Create Operational Shift
-         * @description Create a single-day operational shift or cover replacement.
+         * @description Create a single-day operational shift or cover replacement (Admin, Engineer, Superintendent).
          */
         post: operations["create_operational_shift_api_v1_operational_planner_shifts_post"];
         delete?: never;
@@ -2186,7 +2736,7 @@ export interface paths {
         post?: never;
         /**
          * Delete Operational Shift
-         * @description Cancel an operational shift.
+         * @description Cancel an operational shift (Admin, Engineer, Superintendent).
          */
         delete: operations["delete_operational_shift_api_v1_operational_planner_shifts__shift_id__delete"];
         options?: never;
@@ -2309,7 +2859,7 @@ export interface paths {
         put?: never;
         /**
          * Approve Leave Request
-         * @description Approve a leave request (Engineer or Admin).
+         * @description Approve a leave request (Admin, Engineer, or Superintendent).
          */
         post: operations["approve_leave_request_api_v1_leave_requests__leave_id__approve_post"];
         delete?: never;
@@ -2332,6 +2882,26 @@ export interface paths {
          * @description Reject a leave request with mandatory reason.
          */
         post: operations["reject_leave_request_api_v1_leave_requests__leave_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/leave-requests/{leave_id}/bulk-cover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk Cover Leave Request
+         * @description Assign one cover worker to every remaining TO_BE_COVERED slot of an approved leave.
+         */
+        post: operations["bulk_cover_leave_request_api_v1_leave_requests__leave_id__bulk_cover_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2422,6 +2992,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reassignment-requests/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Reassignment Batch
+         * @description Submit multiple temporary reassignment proposals together as one grouped approval batch.
+         */
+        post: operations["create_reassignment_batch_api_v1_reassignment_requests_batch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reassignment-batches/{batch_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Reassignment Batch
+         * @description Approve all pending reassignment items in a batch (Admin, Engineer, or Superintendent).
+         */
+        post: operations["approve_reassignment_batch_api_v1_reassignment_batches__batch_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reassignment-batches/{batch_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject Reassignment Batch
+         * @description Reject all pending reassignment items in a batch with mandatory reason.
+         */
+        post: operations["reject_reassignment_batch_api_v1_reassignment_batches__batch_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/reassignment-requests/{request_id}/approve": {
         parameters: {
             query?: never;
@@ -2433,7 +3063,7 @@ export interface paths {
         put?: never;
         /**
          * Approve Reassignment Request
-         * @description Approve a reassignment request (Engineer or Admin).
+         * @description Approve a reassignment request (Admin, Engineer, or Superintendent).
          */
         post: operations["approve_reassignment_request_api_v1_reassignment_requests__request_id__approve_post"];
         delete?: never;
@@ -2691,7 +3321,10 @@ export interface paths {
         };
         /**
          * List Events
-         * @description Query verified raw event logs in scope (read-only audit).
+         * @description Query verified raw event logs (read-only audit).
+         *
+         *     Non-admins must name one employee and one date, and may see it only when that
+         *     employee-day is in their operational scope (site-day rule, DEC-57).
          */
         get: operations["list_events_api_v1_events_get"];
         put?: never;
@@ -3782,6 +4415,11 @@ export interface components {
              */
             id: string;
             /**
+             * Read Only
+             * @default false
+             */
+            read_only: boolean;
+            /**
              * Employee Id
              * Format: uuid
              */
@@ -4236,6 +4874,24 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** BudgetWarning */
+        BudgetWarning: {
+            /** Code */
+            code: string;
+            /** Job Item Id */
+            job_item_id?: string | null;
+            /** Sub Item Code */
+            sub_item_code?: string | null;
+            /** Grade Code */
+            grade_code?: string | null;
+            /**
+             * Annual Hours
+             * @default 0.0
+             */
+            annual_hours: string;
+            /** Message */
+            message: string;
+        };
         /** CandidateRecommendationRead */
         CandidateRecommendationRead: {
             /**
@@ -4475,6 +5131,11 @@ export interface components {
             live_workers: components["schemas"]["LiveWorkersSummaryItem"];
             /** Pending Visits Count */
             pending_visits_count: number;
+            /**
+             * Pending Visits Escalated Count
+             * @default 0
+             */
+            pending_visits_escalated_count: number;
             /** Late Arrivals Count */
             late_arrivals_count: number;
             /** Overtime Hours Today */
@@ -4485,6 +5146,19 @@ export interface components {
             expiring_documents_count: number;
             /** Pending Approvals Count */
             pending_approvals_count: number;
+            /** Unassigned Worksites Count */
+            unassigned_worksites_count?: number | null;
+        };
+        /** DeactivateRequest */
+        DeactivateRequest: {
+            /** Confirmation Text */
+            confirmation_text: string;
+            /** Admin Password */
+            admin_password: string;
+            /** Effective Date */
+            effective_date?: string | null;
+            /** Reason */
+            reason: string;
         };
         /** DeviceStatusRead */
         DeviceStatusRead: {
@@ -4525,12 +5199,52 @@ export interface components {
             /** Revoked At */
             revoked_at?: string | null;
         };
+        /** EmployeeAttributeHistoryRead */
+        EmployeeAttributeHistoryRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Employee Id
+             * Format: uuid
+             */
+            employee_id: string;
+            /** Attribute Name */
+            attribute_name: string;
+            /** Old Value */
+            old_value?: string | null;
+            /** New Value */
+            new_value?: string | null;
+            /**
+             * Effective From
+             * Format: date
+             */
+            effective_from: string;
+            /**
+             * Changed By User Id
+             * Format: uuid
+             */
+            changed_by_user_id: string;
+            /** Reason */
+            reason: string;
+            /** Actor Role */
+            actor_role?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** EmployeeBulkUpdateItem */
         EmployeeBulkUpdateItem: {
             /** Accommodation Id */
             accommodation_id?: string | null;
             /** Break Override Minutes */
             break_override_minutes?: number | null;
+            /** Effective From */
+            effective_from?: string | null;
             /** Weekly Off Day */
             weekly_off_day?: string | null;
         };
@@ -4539,6 +5253,8 @@ export interface components {
             /** Employee Ids */
             employee_ids: string[];
             changes: components["schemas"]["EmployeeBulkUpdateItem"];
+            /** Effective From */
+            effective_from?: string | null;
         };
         /** EmployeeCreate */
         EmployeeCreate: {
@@ -4576,6 +5292,42 @@ export interface components {
             join_date?: string | null;
             /** Employment End Date */
             employment_end_date?: string | null;
+            /**
+             * Confirm Reuse
+             * @default false
+             */
+            confirm_reuse: boolean;
+        };
+        /** EmployeeDeactivationImpactResponse */
+        EmployeeDeactivationImpactResponse: {
+            /**
+             * Employee Id
+             * Format: uuid
+             */
+            employee_id: string;
+            /** Employee Name */
+            employee_name: string;
+            /** Tally Id */
+            tally_id: string;
+            /** Role */
+            role: string;
+            /**
+             * Effective Date
+             * Format: date
+             */
+            effective_date: string;
+            /** Future Active Shifts */
+            future_active_shifts: number;
+            /** Base Roster Slots */
+            base_roster_slots: number;
+            /** Active Standing Assignments */
+            active_standing_assignments: number;
+            /** Pending Leave Requests */
+            pending_leave_requests: number;
+            /** Pending Reassignment Requests */
+            pending_reassignment_requests: number;
+            /** Active Direct Reports */
+            active_direct_reports: number;
         };
         /** EmployeeDocumentCreate */
         EmployeeDocumentCreate: {
@@ -4612,6 +5364,19 @@ export interface components {
             start_date?: string | null;
             /** Is Active */
             is_active: boolean;
+        };
+        /** EmployeeProfileDetailsUpdate */
+        EmployeeProfileDetailsUpdate: {
+            /** Staff Grade Description */
+            staff_grade_description?: string | null;
+            /** Grade Code */
+            grade_code?: string | null;
+            /** Is Driver */
+            is_driver?: boolean | null;
+            /** Effective From */
+            effective_from?: string | null;
+            /** Reason */
+            reason: string;
         };
         /** EmployeeRead */
         EmployeeRead: {
@@ -4662,6 +5427,12 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /**
+             * Read Only
+             * @description True when the caller sees this employee only through a worksite (DEC-57): view and comment only
+             * @default false
+             */
+            read_only: boolean;
         };
         /** EmployeeSalaryCreate */
         EmployeeSalaryCreate: {
@@ -4684,6 +5455,8 @@ export interface components {
              * @default 0.00
              */
             fixed_ot_amount: number | string;
+            /** Break Minutes */
+            break_minutes?: number | null;
             /**
              * Bonus
              * @default 0.00
@@ -4699,6 +5472,8 @@ export interface components {
              * @default 0.00
              */
             housing_transport_allowance: number | string;
+            /** Change Source */
+            change_source?: string | null;
         };
         /** EmployeeSalaryHistoryResponse */
         EmployeeSalaryHistoryResponse: {
@@ -4748,12 +5523,16 @@ export interface components {
             special_allowance: string;
             /** Fixed Ot Amount */
             fixed_ot_amount: string;
+            /** Break Minutes */
+            break_minutes?: number | null;
             /** Bonus */
             bonus: string;
             /** Telephone Allowance */
             telephone_allowance: string;
             /** Housing Transport Allowance */
             housing_transport_allowance: string;
+            /** Change Source */
+            change_source?: string | null;
             /** Salary Portion */
             salary_portion: string;
             /**
@@ -4766,6 +5545,27 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** EmployeeSalaryUpdate */
+        EmployeeSalaryUpdate: {
+            /** Effective From */
+            effective_from?: string | null;
+            /** Standard Hours */
+            standard_hours?: number | string | null;
+            /** Basic Salary */
+            basic_salary?: number | string | null;
+            /** Special Allowance */
+            special_allowance?: number | string | null;
+            /** Fixed Ot Amount */
+            fixed_ot_amount?: number | string | null;
+            /** Break Minutes */
+            break_minutes?: number | null;
+            /** Bonus */
+            bonus?: number | string | null;
+            /** Telephone Allowance */
+            telephone_allowance?: number | string | null;
+            /** Housing Transport Allowance */
+            housing_transport_allowance?: number | string | null;
         };
         /** EmployeeUpdate */
         EmployeeUpdate: {
@@ -4791,6 +5591,8 @@ export interface components {
             country?: string | null;
             /** Break Override Minutes */
             break_override_minutes?: number | null;
+            /** Effective From */
+            effective_from?: string | null;
             /** Join Date */
             join_date?: string | null;
             /** Employment End Date */
@@ -4799,6 +5601,26 @@ export interface components {
             is_active?: boolean | null;
             /** Version */
             version: number;
+        };
+        /** EntityLifecycleResponse */
+        EntityLifecycleResponse: {
+            /** Status */
+            status: string;
+            /**
+             * Entity Id
+             * Format: uuid
+             */
+            entity_id: string;
+            /** Is Active */
+            is_active: boolean;
+            /** Effective Date */
+            effective_date?: string | null;
+            /** Summary */
+            summary?: {
+                [key: string]: unknown;
+            };
+            /** Message */
+            message: string;
         };
         /** EventBatchRequest */
         EventBatchRequest: {
@@ -5015,6 +5837,58 @@ export interface components {
             /** Subordinates */
             subordinates?: unknown[];
         };
+        /** HierarchyViolationItem */
+        HierarchyViolationItem: {
+            /**
+             * Reporting Line Id
+             * Format: uuid
+             */
+            reporting_line_id: string;
+            /**
+             * Employee Id
+             * Format: uuid
+             */
+            employee_id: string;
+            /** Employee Tally Id */
+            employee_tally_id: string;
+            /** Employee Name */
+            employee_name: string;
+            /** Employee Role */
+            employee_role: string;
+            /**
+             * Manager Id
+             * Format: uuid
+             */
+            manager_id: string;
+            /** Manager Tally Id */
+            manager_tally_id: string;
+            /** Manager Name */
+            manager_name: string;
+            /** Manager Role */
+            manager_role: string;
+            /** Relationship */
+            relationship: string;
+            /** Violation Code */
+            violation_code: string;
+            /** Violation Message */
+            violation_message: string;
+            /** Supervisor Id */
+            supervisor_id?: string | null;
+            /** Supervisor Tally Id */
+            supervisor_tally_id?: string | null;
+            /** Supervisor Name */
+            supervisor_name?: string | null;
+            /**
+             * Supervisor Already Has Manager
+             * @default false
+             */
+            supervisor_already_has_manager: boolean;
+            /**
+             * Can Move To Supervisor
+             * @default false
+             */
+            can_move_to_supervisor: boolean;
+        };
         /** ImportBatchRead */
         ImportBatchRead: {
             /**
@@ -5089,6 +5963,8 @@ export interface components {
             };
             /** Rows */
             rows?: components["schemas"]["ImportRowRead"][];
+            /** Filtered Total */
+            filtered_total?: number | null;
         };
         /** ImportRollbackResponse */
         ImportRollbackResponse: {
@@ -5185,6 +6061,34 @@ export interface components {
             deployment_type: string;
             /** Break Override Minutes */
             break_override_minutes?: number | null;
+        };
+        /**
+         * JobItemDestination
+         * @description Reassignment destination: names and codes only, no budget or cost figures.
+         */
+        JobItemDestination: {
+            /**
+             * Job Item Id
+             * Format: uuid
+             */
+            job_item_id: string;
+            /**
+             * Worksite Id
+             * Format: uuid
+             */
+            worksite_id: string;
+            /** Job Number */
+            job_number: string;
+            /** Job Name */
+            job_name: string;
+            /** Country */
+            country: string;
+            /** Sub Item Code */
+            sub_item_code: string;
+            /** Staff Grade Description */
+            staff_grade_description: string;
+            /** Deployment Type */
+            deployment_type: string;
         };
         /** JobItemResponse */
         JobItemResponse: {
@@ -5375,6 +6279,39 @@ export interface components {
             status?: string | null;
         };
         /**
+         * LeaveBulkCoverRequest
+         * @description Assign one cover worker to all uncovered TO_BE_COVERED slots of an approved leave.
+         */
+        LeaveBulkCoverRequest: {
+            /**
+             * Cover Employee Id
+             * Format: uuid
+             */
+            cover_employee_id: string;
+        };
+        /**
+         * LeaveBulkCoverResponse
+         * @description Result of bulk-covering all uncovered slots for an approved leave.
+         */
+        LeaveBulkCoverResponse: {
+            /**
+             * Leave Id
+             * Format: uuid
+             */
+            leave_id: string;
+            /**
+             * Cover Employee Id
+             * Format: uuid
+             */
+            cover_employee_id: string;
+            /** Cover Employee Name */
+            cover_employee_name?: string | null;
+            /** Covered Count */
+            covered_count: number;
+            /** Weekly Off Cover Dates */
+            weekly_off_cover_dates?: string[];
+        };
+        /**
          * LeaveDecisionRequest
          * @description Payload to approve or reject a leave request.
          */
@@ -5392,6 +6329,8 @@ export interface components {
              * Format: uuid
              */
             employee_id: string;
+            /** Cover Employee Id */
+            cover_employee_id?: string | null;
             /**
              * Leave Type
              * @description ANNUAL | SICK | UNPAID | EMERGENCY | OTHER
@@ -5409,6 +6348,12 @@ export interface components {
             to_date: string;
             /** Reason */
             reason: string;
+            /**
+             * Bypass Notice
+             * @description Whether to bypass the 3-day notice rule (Admin confirmation only).
+             * @default false
+             */
+            bypass_notice: boolean;
         };
         /**
          * LeaveRequestResponse
@@ -5421,6 +6366,11 @@ export interface components {
              */
             id: string;
             /**
+             * Read Only
+             * @default false
+             */
+            read_only: boolean;
+            /**
              * Employee Id
              * Format: uuid
              */
@@ -5429,6 +6379,21 @@ export interface components {
             employee_name?: string | null;
             /** Tally Id */
             tally_id?: string | null;
+            /** Employee Weekly Off Day */
+            employee_weekly_off_day?: string | null;
+            /** Cover Employee Id */
+            cover_employee_id?: string | null;
+            /** Cover Employee Name */
+            cover_employee_name?: string | null;
+            /** Cover Employee Tally Id */
+            cover_employee_tally_id?: string | null;
+            /** Cover Weekly Off Day */
+            cover_weekly_off_day?: string | null;
+            /**
+             * Weekly Off Mismatch
+             * @default false
+             */
+            weekly_off_mismatch: boolean;
             /** Leave Type */
             leave_type: string;
             /**
@@ -6312,6 +7277,11 @@ export interface components {
             country: string;
             /** Notes */
             notes?: string | null;
+            /**
+             * Treat Leaves As Paid
+             * @default false
+             */
+            treat_leaves_as_paid: boolean;
         };
         /** PayrollRunDetailRead */
         PayrollRunDetailRead: {
@@ -6505,6 +7475,11 @@ export interface components {
              * @default 0.00
              */
             final_total_staff_cost_total: string;
+            /**
+             * Treat Leaves As Paid
+             * @default false
+             */
+            treat_leaves_as_paid: boolean;
         };
         /** PendingVisitCloseRequest */
         PendingVisitCloseRequest: {
@@ -6664,6 +7639,20 @@ export interface components {
              */
             created_at: string;
         };
+        /** ReactivateRequest */
+        ReactivateRequest: {
+            /** Confirmation Text */
+            confirmation_text: string;
+            /** Admin Password */
+            admin_password: string;
+            /** Reason */
+            reason: string;
+            /**
+             * Reactivate Items
+             * @default true
+             */
+            reactivate_items: boolean;
+        };
         /** ReadinessResponse */
         ReadinessResponse: {
             /** Status */
@@ -6672,8 +7661,78 @@ export interface components {
             database: string;
         };
         /**
+         * ReassignmentBatchCreate
+         * @description Payload to submit multiple temporary reassignment items together as one approval batch.
+         */
+        ReassignmentBatchCreate: {
+            /**
+             * Reason Category
+             * @description LEAVE_COVER | CAPACITY | WEATHER | PRIORITY | OTHER
+             * @default CAPACITY
+             */
+            reason_category: string;
+            /** Reason */
+            reason?: string | null;
+            /** Batch Note */
+            batch_note?: string | null;
+            /** Items */
+            items: components["schemas"]["ReassignmentBatchItemCreate"][];
+        };
+        /**
+         * ReassignmentBatchItemCreate
+         * @description One proposed reassignment line inside a Supervisor draft batch.
+         */
+        ReassignmentBatchItemCreate: {
+            /**
+             * Reassignment Type
+             * @description REPLACE | MOVE | ADD | CANCEL
+             */
+            reassignment_type: string;
+            /**
+             * Date From
+             * Format: date
+             */
+            date_from: string;
+            /**
+             * Date To
+             * Format: date
+             */
+            date_to: string;
+            /** Original Employee Id */
+            original_employee_id?: string | null;
+            /** New Employee Id */
+            new_employee_id?: string | null;
+            /** Original Scheduled Work Id */
+            original_scheduled_work_id?: string | null;
+            /** Standing Assignment Id */
+            standing_assignment_id?: string | null;
+            /** Target Job Item Id */
+            target_job_item_id?: string | null;
+            /** Hours Per Day */
+            hours_per_day?: number | string | null;
+            /** Reason Category */
+            reason_category?: string | null;
+            /** Reason */
+            reason?: string | null;
+        };
+        /**
+         * ReassignmentBatchResponse
+         * @description Response for creating or deciding a reassignment batch.
+         */
+        ReassignmentBatchResponse: {
+            /**
+             * Batch Id
+             * Format: uuid
+             */
+            batch_id: string;
+            /** Count */
+            count: number;
+            /** Items */
+            items?: components["schemas"]["ReassignmentResponse"][];
+        };
+        /**
          * ReassignmentDecisionRequest
-         * @description Payload to approve or reject a reassignment request.
+         * @description Payload to approve or reject a reassignment request or batch.
          */
         ReassignmentDecisionRequest: {
             /** Decision Note */
@@ -6793,6 +7852,15 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /**
+             * Read Only
+             * @default false
+             */
+            read_only: boolean;
+            /** Batch Id */
+            batch_id?: string | null;
+            /** Batch Note */
+            batch_note?: string | null;
             /** Reassignment Type */
             reassignment_type: string;
             /**
@@ -7073,12 +8141,24 @@ export interface components {
              */
             created_at: string;
             /**
+             * Is Active
+             * @default true
+             */
+            is_active: boolean;
+            /**
              * Is Direct
              * @default true
              */
             is_direct: boolean;
             /** Via Name */
             via_name?: string | null;
+        };
+        /** ResetDatabaseRequest */
+        ResetDatabaseRequest: {
+            /** Confirmation Text */
+            confirmation_text: string;
+            /** Admin Password */
+            admin_password: string;
         };
         /** ResetPasswordResponse */
         ResetPasswordResponse: {
@@ -7118,6 +8198,11 @@ export interface components {
             /** Notification Logs Purged */
             notification_logs_purged: number;
             /**
+             * Stream Tickets Purged
+             * @default 0
+             */
+            stream_tickets_purged: number;
+            /**
              * Completed At
              * Format: date-time
              */
@@ -7143,6 +8228,8 @@ export interface components {
             effective_to?: string | null;
             /** Notes */
             notes?: string | null;
+            /** Suffix Label */
+            suffix_label?: string | null;
             /** Lines */
             lines?: components["schemas"]["SalaryRevisionLineCreate-Input"][];
         };
@@ -7170,6 +8257,8 @@ export interface components {
             status: string;
             /** Notes */
             notes?: string | null;
+            /** Suffix Label */
+            suffix_label?: string | null;
             /**
              * Line Count
              * @default 0
@@ -7226,6 +8315,8 @@ export interface components {
              * @default 0.00
              */
             fixed_ot_amount: number | string;
+            /** Break Minutes */
+            break_minutes?: number | null;
             /**
              * Bonus
              * @default 0.00
@@ -7283,6 +8374,8 @@ export interface components {
              * @default 0.00
              */
             fixed_ot_amount: string;
+            /** Break Minutes */
+            break_minutes?: number | null;
             /**
              * Bonus
              * @default 0.00
@@ -7349,6 +8442,8 @@ export interface components {
             special_allowance: string;
             /** Fixed Ot Amount */
             fixed_ot_amount: string;
+            /** Break Minutes */
+            break_minutes?: number | null;
             /** Bonus */
             bonus: string;
             /** Visa Provision */
@@ -7378,6 +8473,8 @@ export interface components {
              * @default 0.00
              */
             planned_hourly_cost: string;
+            /** Display Grade Code */
+            display_grade_code?: string | null;
         };
         /** SalaryRevisionRead */
         SalaryRevisionRead: {
@@ -7403,6 +8500,8 @@ export interface components {
             status: string;
             /** Notes */
             notes?: string | null;
+            /** Suffix Label */
+            suffix_label?: string | null;
             /**
              * Line Count
              * @default 0
@@ -7440,6 +8539,63 @@ export interface components {
             salary_portion: string;
             /** Basic Salary */
             basic_salary: string;
+            /**
+             * Special Allowance
+             * @default 0.00
+             */
+            special_allowance: string;
+            /**
+             * Fixed Ot Amount
+             * @default 0.00
+             */
+            fixed_ot_amount: string;
+            /**
+             * Bonus
+             * @default 0.00
+             */
+            bonus: string;
+            /**
+             * Telephone Allowance
+             * @default 0.00
+             */
+            telephone_allowance: string;
+            /**
+             * Housing Transport Allowance
+             * @default 0.00
+             */
+            housing_transport_allowance: string;
+            /**
+             * Gratuity
+             * @default 0.00
+             */
+            gratuity: string;
+            /**
+             * Leave Salary
+             * @default 0.00
+             */
+            leave_salary: string;
+            /**
+             * Per Month Provision
+             * @default 0.00
+             */
+            per_month_provision: string;
+            /**
+             * Total Staff Cost
+             * @default 0.00
+             */
+            total_staff_cost: string;
+            /**
+             * Hr Oh
+             * @default 0.00
+             */
+            hr_oh: string;
+            /**
+             * Final Cost
+             * @default 0.00
+             */
+            final_cost: string;
+            /** Break Minutes */
+            break_minutes?: number | null;
             /**
              * Effective From
              * Format: date
@@ -7559,6 +8715,11 @@ export interface components {
             status: string;
             /** Source */
             source: string;
+            /**
+             * Is Weekly Off Cover
+             * @default false
+             */
+            is_weekly_off_cover: boolean;
             /** Version */
             version: number;
             /**
@@ -7676,6 +8837,8 @@ export interface components {
              * @default LEAVE
              */
             gap_type: string;
+            /** Leave Id */
+            leave_id?: string | null;
             /** Days To Go */
             days_to_go: number;
         };
@@ -7782,6 +8945,26 @@ export interface components {
              */
             expires_in_seconds: number;
         };
+        /**
+         * SupervisorProposal
+         * @description A supervisor whose crew works on a worksite but who is not assigned to it yet.
+         */
+        SupervisorProposal: {
+            /**
+             * Supervisor Id
+             * Format: uuid
+             */
+            supervisor_id: string;
+            /** Supervisor Name */
+            supervisor_name: string;
+            /** Supervisor Tally Id */
+            supervisor_tally_id: string;
+            /**
+             * Crew Members On Site
+             * @description Crew members with active standing assignments here
+             */
+            crew_members_on_site: number;
+        };
         /** SyncAckRequest */
         SyncAckRequest: {
             /** Cursor */
@@ -7859,6 +9042,47 @@ export interface components {
             };
             /** Entities */
             entities: components["schemas"]["SnapshotEntity"][];
+        };
+        /** TallyIdChangeRequest */
+        TallyIdChangeRequest: {
+            /** New Tally Id */
+            new_tally_id: string;
+            /** Reason */
+            reason: string;
+            /**
+             * Confirm Reuse
+             * @default false
+             */
+            confirm_reuse: boolean;
+        };
+        /** TallyIdCheckResponse */
+        TallyIdCheckResponse: {
+            /** Tally Id */
+            tally_id: string;
+            /** Available */
+            available: boolean;
+            /** In Use By Employee Id */
+            in_use_by_employee_id?: string | null;
+            /** In Use By Name */
+            in_use_by_name?: string | null;
+            /**
+             * Previously Used
+             * @default false
+             */
+            previously_used: boolean;
+            /** Previous Uses */
+            previous_uses?: components["schemas"]["TallyIdPreviousUse"][];
+        };
+        /** TallyIdPreviousUse */
+        TallyIdPreviousUse: {
+            /** Employee Id */
+            employee_id: string;
+            /** Employee Name */
+            employee_name?: string | null;
+            /** New Tally Id */
+            new_tally_id?: string | null;
+            /** Changed At */
+            changed_at?: string | null;
         };
         /** TimeRuleCreate */
         TimeRuleCreate: {
@@ -8048,11 +9272,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
-            /**
-             * Employee Id
-             * Format: uuid
-             */
-            employee_id: string;
+            /** Employee Id */
+            employee_id?: string | null;
             /** Username */
             username: string;
             /** Role */
@@ -8181,6 +9402,8 @@ export interface components {
             payroll_run_id: string;
             /** Month Label */
             month_label: string;
+            /** Period */
+            period?: string | null;
             /**
              * Period Start
              * Format: date
@@ -8193,6 +9416,15 @@ export interface components {
             period_end: string;
             /** Status */
             status: string;
+            /** Employee Tally Id */
+            employee_tally_id?: string | null;
+            /** Employee Name */
+            employee_name?: string | null;
+            /**
+             * Currency
+             * @default AED
+             */
+            currency: string | null;
             /** Standard Hours */
             standard_hours: string;
             /** Worked Hours */
@@ -8272,6 +9504,13 @@ export interface components {
              * @default false
              */
             is_custom_budget_override: boolean;
+            /**
+             * Missing Rate Hours
+             * @default 0.0
+             */
+            missing_rate_hours: string;
+            /** Warnings */
+            warnings?: components["schemas"]["BudgetWarning"][];
         };
         /** WorksiteCreate */
         WorksiteCreate: {
@@ -8302,6 +9541,8 @@ export interface components {
             country: string;
             /** Contract Group Ref */
             contract_group_ref?: string | null;
+            /** Salary Revision Code */
+            salary_revision_code?: string | null;
             /** Start Date */
             start_date?: string | null;
             /** End Date */
@@ -8344,6 +9585,8 @@ export interface components {
             country: string;
             /** Contract Group Ref */
             contract_group_ref?: string | null;
+            /** Salary Revision Code */
+            salary_revision_code?: string | null;
             /** Start Date */
             start_date?: string | null;
             /** End Date */
@@ -8384,6 +9627,11 @@ export interface components {
              * @default []
              */
             job_items: components["schemas"]["JobItemResponse"][];
+            /**
+             * Supervisors
+             * @default []
+             */
+            supervisors: components["schemas"]["WorksiteSupervisorRead"][];
         };
         /** WorksiteResponse */
         WorksiteResponse: {
@@ -8420,6 +9668,8 @@ export interface components {
             country: string;
             /** Contract Group Ref */
             contract_group_ref?: string | null;
+            /** Salary Revision Code */
+            salary_revision_code?: string | null;
             /** Start Date */
             start_date?: string | null;
             /** End Date */
@@ -8447,6 +9697,90 @@ export interface components {
              */
             updated_at: string;
         };
+        /** WorksiteSupervisorAssign */
+        WorksiteSupervisorAssign: {
+            /**
+             * Supervisor Id
+             * Format: uuid
+             */
+            supervisor_id: string;
+        };
+        /** WorksiteSupervisorBulkAssign */
+        WorksiteSupervisorBulkAssign: {
+            /** Assignments */
+            assignments: components["schemas"]["WorksiteSupervisorPair"][];
+        };
+        /** WorksiteSupervisorBulkAssignResult */
+        WorksiteSupervisorBulkAssignResult: {
+            /** Assigned */
+            assigned: number;
+            /** Already Assigned */
+            already_assigned: number;
+        };
+        /** WorksiteSupervisorPair */
+        WorksiteSupervisorPair: {
+            /**
+             * Worksite Id
+             * Format: uuid
+             */
+            worksite_id: string;
+            /**
+             * Supervisor Id
+             * Format: uuid
+             */
+            supervisor_id: string;
+        };
+        /** WorksiteSupervisorProposal */
+        WorksiteSupervisorProposal: {
+            /**
+             * Worksite Id
+             * Format: uuid
+             */
+            worksite_id: string;
+            /** Job Number */
+            job_number: string;
+            /** Job Name */
+            job_name: string;
+            /**
+             * Assigned Supervisor Ids
+             * @default []
+             */
+            assigned_supervisor_ids: string[];
+            /**
+             * Proposals
+             * @default []
+             */
+            proposals: components["schemas"]["SupervisorProposal"][];
+        };
+        /** WorksiteSupervisorRead */
+        WorksiteSupervisorRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Worksite Id
+             * Format: uuid
+             */
+            worksite_id: string;
+            /**
+             * Supervisor Id
+             * Format: uuid
+             */
+            supervisor_id: string;
+            /** Supervisor Name */
+            supervisor_name?: string | null;
+            /** Supervisor Tally Id */
+            supervisor_tally_id?: string | null;
+            /** Is Active */
+            is_active: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** WorksiteUpdate */
         WorksiteUpdate: {
             /** Job Name */
@@ -8463,6 +9797,8 @@ export interface components {
             is_outdoor?: boolean | null;
             /** Contract Group Ref */
             contract_group_ref?: string | null;
+            /** Salary Revision Code */
+            salary_revision_code?: string | null;
             /** Start Date */
             start_date?: string | null;
             /** End Date */
@@ -8518,6 +9854,46 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    health_health_liveness_head: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
+    health_health_liveness_head: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
     health_health_head: {
         parameters: {
             query?: never;
@@ -8555,6 +9931,60 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
                 };
+            };
+        };
+    };
+    health_ready_health_readiness_head: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadinessResponse"];
+                };
+            };
+            /** @description Service not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    health_ready_health_readiness_head: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadinessResponse"];
+                };
+            };
+            /** @description Service not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -8962,6 +10392,39 @@ export interface operations {
             };
         };
     };
+    reset_employee_password_api_v1_employees__employee_id__reset_password_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                employee_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_hierarchy_api_v1_employees_hierarchy_get: {
         parameters: {
             query?: never;
@@ -9017,6 +10480,172 @@ export interface operations {
                     "application/json": {
                         [key: string]: number;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_hierarchy_violations_api_v1_employees_hierarchy_violations_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HierarchyViolationItem"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_hierarchy_violations_api_v1_employees_hierarchy_violations_export_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deactivate_hierarchy_violation_line_api_v1_employees_hierarchy_violations__line_id__deactivate_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                line_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    move_hierarchy_violation_to_supervisor_api_v1_employees_hierarchy_violations__line_id__move_to_supervisor_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                line_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    check_tally_id_api_v1_employees_check_tally_id_get: {
+        parameters: {
+            query: {
+                tally_id: string;
+                exclude_employee_id?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TallyIdCheckResponse"];
                 };
             };
             /** @description Validation Error */
@@ -9100,6 +10729,152 @@ export interface operations {
             };
         };
     };
+    change_employee_tally_id_api_v1_employees__employee_id__change_tally_id_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                employee_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TallyIdChangeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_employee_deactivation_impact_api_v1_employees__employee_id__deactivation_impact_get: {
+        parameters: {
+            query?: {
+                effective_date?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                employee_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeDeactivationImpactResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deactivate_employee_api_v1_employees__employee_id__deactivate_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                employee_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeactivateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityLifecycleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reactivate_employee_api_v1_employees__employee_id__reactivate_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                employee_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReactivateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityLifecycleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     change_employee_grade_api_v1_employees__employee_id__grade_change_post: {
         parameters: {
             query?: never;
@@ -9124,6 +10899,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EmployeeRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_employee_profile_details_api_v1_employees__employee_id__profile_details_patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                employee_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmployeeProfileDetailsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_employee_attribute_history_api_v1_employees__employee_id__attribute_history_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                employee_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeAttributeHistoryRead"][];
                 };
             };
             /** @description Validation Error */
@@ -9660,7 +11505,9 @@ export interface operations {
     };
     list_accommodations_api_v1_accommodations_get: {
         parameters: {
-            query?: never;
+            query?: {
+                is_active?: boolean | null;
+            };
             header?: {
                 authorization?: string | null;
             };
@@ -10852,7 +12699,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResetDatabaseRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -10943,7 +12794,10 @@ export interface operations {
     };
     upload_workbook_api_v1_imports_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Optional comma-separated list of sheet names to import (e.g. Worksites,Job_Items). */
+                sheets?: string | null;
+            };
             header?: {
                 authorization?: string | null;
             };
@@ -11162,6 +13016,76 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeSalaryRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_future_salary_revision_api_v1_employees__employee_id__salary__salary_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                employee_id: string;
+                salary_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_future_salary_revision_api_v1_employees__employee_id__salary__salary_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                employee_id: string;
+                salary_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmployeeSalaryUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -11417,6 +13341,39 @@ export interface operations {
             };
         };
     };
+    get_mobile_payroll_api_v1_mobile_me_payroll_get: {
+        parameters: {
+            query?: {
+                period?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerMobilePayrollSlip"] | components["schemas"]["WorkerMobilePayrollSlip"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_my_payroll_records_api_v1_payroll_my_records_get: {
         parameters: {
             query?: never;
@@ -11448,7 +13405,7 @@ export interface operations {
             };
         };
     };
-    get_my_payroll_records_api_v1_mobile_me_payroll_get: {
+    list_grade_codes_api_v1_grades_get: {
         parameters: {
             query?: never;
             header?: {
@@ -11465,7 +13422,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WorkerMobilePayrollSlip"][];
+                    "application/json": string[];
                 };
             };
             /** @description Validation Error */
@@ -11802,6 +13759,8 @@ export interface operations {
                 is_active?: boolean | null;
                 limit?: number;
                 offset?: number;
+                /** @description Only worksites with no active supervisor */
+                unassigned?: boolean;
             };
             header?: {
                 authorization?: string | null;
@@ -11853,6 +13812,103 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorksiteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_worksite_supervisor_proposals_api_v1_worksites_supervisor_proposals_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorksiteSupervisorProposal"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    bulk_assign_worksite_supervisors_api_v1_worksites_supervisors_bulk_assign_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorksiteSupervisorBulkAssign"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorksiteSupervisorBulkAssignResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_job_item_destinations_api_v1_job_items_destinations_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobItemDestination"][];
                 };
             };
             /** @description Validation Error */
@@ -11958,6 +14014,219 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorksiteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_worksite_supervisors_api_v1_worksites__worksite_id__supervisors_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                worksite_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorksiteSupervisorRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assign_worksite_supervisor_api_v1_worksites__worksite_id__supervisors_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                worksite_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorksiteSupervisorAssign"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorksiteSupervisorRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_worksite_supervisor_api_v1_worksites__worksite_id__supervisors__supervisor_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                worksite_id: string;
+                supervisor_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_worksite_deactivation_impact_api_v1_worksites__worksite_id__deactivation_impact_get: {
+        parameters: {
+            query?: {
+                effective_date?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                worksite_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deactivate_worksite_api_v1_worksites__worksite_id__deactivate_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                worksite_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeactivateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityLifecycleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reactivate_worksite_api_v1_worksites__worksite_id__reactivate_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                worksite_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReactivateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityLifecycleResponse"];
                 };
             };
             /** @description Validation Error */
@@ -12334,6 +14603,117 @@ export interface operations {
             };
         };
     };
+    get_job_item_deactivation_impact_api_v1_job_items__job_item_id__deactivation_impact_get: {
+        parameters: {
+            query?: {
+                effective_date?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                job_item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deactivate_job_item_api_v1_job_items__job_item_id__deactivate_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                job_item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeactivateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityLifecycleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reactivate_job_item_api_v1_job_items__job_item_id__reactivate_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                job_item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReactivateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityLifecycleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_job_item_validation_api_v1_job_items__job_item_id__validation_get: {
         parameters: {
             query?: never;
@@ -12561,6 +14941,7 @@ export interface operations {
             query?: {
                 date?: string | null;
                 weekday?: string | null;
+                all_roles?: boolean;
             };
             header?: {
                 authorization?: string | null;
@@ -12597,6 +14978,7 @@ export interface operations {
             query?: {
                 date?: string | null;
                 weekday?: string | null;
+                all_roles?: boolean;
             };
             header?: {
                 authorization?: string | null;
@@ -13452,6 +15834,43 @@ export interface operations {
             };
         };
     };
+    bulk_cover_leave_request_api_v1_leave_requests__leave_id__bulk_cover_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                leave_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LeaveBulkCoverRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeaveBulkCoverResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     cancel_leave_request_api_v1_leave_requests__leave_id__cancel_post: {
         parameters: {
             query?: never;
@@ -13610,6 +16029,115 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReassignmentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_reassignment_batch_api_v1_reassignment_requests_batch_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReassignmentBatchCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReassignmentBatchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_reassignment_batch_api_v1_reassignment_batches__batch_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                batch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ReassignmentDecisionRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReassignmentBatchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_reassignment_batch_api_v1_reassignment_batches__batch_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                batch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReassignmentDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReassignmentBatchResponse"];
                 };
             };
             /** @description Validation Error */

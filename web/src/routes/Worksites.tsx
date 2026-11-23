@@ -24,9 +24,10 @@ import { MapContainer, PolygonEditor, PlaceSearch } from "../features/map";
 import { Map as MapLibreMap } from "maplibre-gl";
 import {
   CONTROLLED_STAFF_GRADE_DESCRIPTIONS,
-  DEFAULT_GRADE_CODES,
 } from "../components/jobs/jobItemUtils";
 import SupervisorProposalsModal from "../components/jobs/SupervisorProposalsModal";
+import { useGrades } from "../features/grades/useGrades";
+import { gradeOptions } from "../features/grades/gradeOptions";
 
 interface Worksite {
   id: string;
@@ -93,6 +94,7 @@ interface InitialJobItem {
 export const Worksites: React.FC = () => {
   const navigate = useNavigate();
   const { token, user } = useAuth();
+  const apiGrades = useGrades(token);
   const [activeTab, setActiveTab] = useState<"worksites" | "accommodations">("worksites");
   const [worksites, setWorksites] = useState<Worksite[]>([]);
   const [accommodations, setAccommodations] = useState<AccommodationItem[]>([]);
@@ -268,6 +270,17 @@ export const Worksites: React.FC = () => {
     if (!/^\d{2}[ABC]\d{5}$/.test(cleanedNumber)) {
       setErrorMsg(
         "Job number format must be 2 digits + letter (A outdoor, B indoor, C water feature) + 5 digits (e.g. 12A14301)."
+      );
+      return;
+    }
+
+    // No pre-filled defaults (handover 6.1 A): every inline job item needs both fields.
+    const incomplete = initialJobItems.find(
+      (it) => it.sub_item_code.trim() && (!it.staff_grade_description || !it.planned_grade_code)
+    );
+    if (incomplete) {
+      setErrorMsg(
+        `Job item ${incomplete.sub_item_code}: choose a Staff Designation and a Planned Grade.`
       );
       return;
     }
@@ -1240,8 +1253,8 @@ export const Worksites: React.FC = () => {
                         ...prev,
                         {
                           sub_item_code: nextNum,
-                          staff_grade_description: CONTROLLED_STAFF_GRADE_DESCRIPTIONS[6] || "Gardener Helper",
-                          planned_grade_code: DEFAULT_GRADE_CODES[8] || "G3C",
+                          staff_grade_description: "",
+                          planned_grade_code: "",
                           start_date: new Date().toISOString().slice(0, 10),
                           end_date: "",
                           required_staff_count: 1,
@@ -1296,6 +1309,7 @@ export const Worksites: React.FC = () => {
                           }}
                           className="w-full p-1 border rounded bg-white text-xs"
                         >
+                          <option value="">Select…</option>
                           {CONTROLLED_STAFF_GRADE_DESCRIPTIONS.map((d) => (
                             <option key={d} value={d}>{d}</option>
                           ))}
@@ -1311,7 +1325,8 @@ export const Worksites: React.FC = () => {
                           }}
                           className="w-full p-1 border rounded bg-white text-xs font-mono"
                         >
-                          {DEFAULT_GRADE_CODES.map((g) => (
+                          <option value="">Select…</option>
+                          {gradeOptions(apiGrades, item.planned_grade_code).map((g) => (
                             <option key={g} value={g}>{g}</option>
                           ))}
                         </select>

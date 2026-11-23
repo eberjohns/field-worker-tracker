@@ -6,6 +6,7 @@ from sqlalchemy import extract, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.core.errors import AppError
+from fw.modules.settings.defaults import DEFAULT_COMPANY_SETTINGS, DEFAULTS_EFFECTIVE_FROM
 from fw.modules.settings.models import CompanySettingValue, ConsentPolicy, PublicHoliday, TimeRule
 from fw.modules.settings.schemas import (
     ConsentPolicyCreate,
@@ -65,6 +66,26 @@ class SettingsService:
         if setting:
             return setting.value
         return default
+
+    @staticmethod
+    async def seed_default_settings(session: AsyncSession) -> int:
+        """Insert the default company settings (migration 0003 values, effective 1 Jan 2026).
+
+        Called after "Reset database", which deletes every setting row, so payroll and the
+        other modules work straight away without reimporting Company_Settings.
+        """
+        for key, country, value, unit in DEFAULT_COMPANY_SETTINGS:
+            session.add(
+                CompanySettingValue(
+                    setting_key=key,
+                    country=country,
+                    value=value,
+                    unit=unit,
+                    effective_from=DEFAULTS_EFFECTIVE_FROM,
+                )
+            )
+        await session.flush()
+        return len(DEFAULT_COMPANY_SETTINGS)
 
     @staticmethod
     async def set_setting(

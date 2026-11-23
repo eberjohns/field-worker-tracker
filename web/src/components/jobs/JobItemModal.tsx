@@ -34,17 +34,13 @@ export interface JobItemModalProps {
 
 import {
   CONTROLLED_STAFF_GRADE_DESCRIPTIONS,
-  DEFAULT_GRADE_CODES,
   formatApiError,
   buildJobItemPayload,
 } from "./jobItemUtils";
+import { useGrades } from "../../features/grades/useGrades";
+import { gradeOptions } from "../../features/grades/gradeOptions";
 
-export {
-  CONTROLLED_STAFF_GRADE_DESCRIPTIONS,
-  DEFAULT_GRADE_CODES,
-  formatApiError,
-  buildJobItemPayload,
-};
+export { CONTROLLED_STAFF_GRADE_DESCRIPTIONS, formatApiError, buildJobItemPayload };
 
 const WEEKDAYS = [
   { code: "MON", label: "Mon" },
@@ -80,12 +76,12 @@ export const JobItemModal: React.FC<JobItemModalProps> = ({
   onSuccess,
 }) => {
   const { token } = useAuth();
+  const apiGrades = useGrades(token, isOpen);
   const [subItemCode, setSubItemCode] = useState("");
   const [sgd, setSgd] = useState("");
   const [plannedGrade, setPlannedGrade] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [availableGrades, setAvailableGrades] = useState<string[]>(DEFAULT_GRADE_CODES);
   const [frequencyUnit, setFrequencyUnit] = useState<"WEEK" | "MONTH" | "QUARTER" | "YEAR">("WEEK");
   const [occurrencesPerPeriod, setOccurrencesPerPeriod] = useState<number>(6);
   const [periodInterval, setPeriodInterval] = useState<number>(1);
@@ -154,41 +150,6 @@ export const JobItemModal: React.FC<JobItemModalProps> = ({
     }
     setErrorMsg("");
 
-    // Load available grade codes from active salary revision
-    const loadGrades = async () => {
-      try {
-        const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-        let targetCode = salaryRevisionCode;
-        if (!targetCode) {
-          const revListRes = await fetch("/api/v1/salary-revisions", { headers });
-          if (revListRes.ok) {
-            const revList = await revListRes.json();
-            const active = revList.find((r: any) => r.status === "ACTIVE") || revList[0];
-            if (active) targetCode = active.code;
-          }
-        }
-        if (targetCode) {
-          const detailRes = await fetch(`/api/v1/salary-revisions/${targetCode}`, { headers });
-          if (detailRes.ok) {
-            const detail = await detailRes.json();
-            if (detail.lines && detail.lines.length > 0) {
-              const codes: string[] = Array.from<string>(
-                new Set(detail.lines.map((l: any) => String(l.grade_code)))
-              ).sort();
-              if (codes.length > 0) {
-                setAvailableGrades(codes);
-              }
-            }
-          }
-        }
-      } catch (err) {
-        console.error("Failed to load salary revision grade codes", err);
-      }
-    };
-
-    if (isOpen) {
-      loadGrades();
-    }
   }, [initialData, isOpen, worksiteStartDate, salaryRevisionCode, token]);
 
   if (!isOpen) return null;
@@ -370,7 +331,7 @@ export const JobItemModal: React.FC<JobItemModalProps> = ({
                 className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white"
               >
                 <option value="">Select Grade Code *</option>
-                {availableGrades.map((opt) => (
+                {gradeOptions(apiGrades, plannedGrade).map((opt) => (
                   <option key={opt} value={opt}>
                     {opt}
                   </option>

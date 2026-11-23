@@ -20,6 +20,7 @@ from fw.modules.imports import (
     ImportRow,
     ImportRowRead,
     ImportService,
+    admin_only_rows_clause,
     generate_import_template_bytes,
 )
 
@@ -30,8 +31,8 @@ router = APIRouter(prefix="/imports", tags=["imports"])
 async def download_import_template(
     current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
 ) -> Response:
-    """Download the generated master data import template workbook."""
-    content = generate_import_template_bytes()
+    """Download the import template. Engineers get it without the salary sheets (DEC-47)."""
+    content = generate_import_template_bytes(include_admin_only=current_user.role == "ADMIN")
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -117,6 +118,7 @@ async def upload_workbook(
         filename=filename,
         user_id=current_user.id,
         selected_sheets=selected_sheets,
+        actor_role=current_user.role,
     )
     return preview
 
@@ -142,6 +144,8 @@ async def get_import_preview(
         )
 
     stmt = select(ImportRow).where(ImportRow.batch_id == batch_id)
+    if current_user.role != "ADMIN":
+        stmt = stmt.where(~admin_only_rows_clause())  # DEC-47
     if sheet:
         stmt = stmt.where(ImportRow.sheet == sheet)
     if row_status:
@@ -229,7 +233,7 @@ async def download_error_report(
             detail={"code": "NOT_FOUND", "message": f"Import batch {batch_id} not found."},
         )
 
-    content = await ImportService.export_errors_xlsx(session, batch_id)
+    content = await ImportService.export_errors_xlsx(session, batch_id, current_user.role)
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

@@ -25,8 +25,9 @@ import {
 } from "lucide-react";
 import {
   CONTROLLED_STAFF_GRADE_DESCRIPTIONS,
-  DEFAULT_GRADE_CODES,
 } from "../components/jobs/jobItemUtils";
+import { useGrades } from "../features/grades/useGrades";
+import { gradeOptions } from "../features/grades/gradeOptions";
 
 interface Employee {
   id: string;
@@ -65,6 +66,7 @@ interface HierarchyNode {
 
 export const Employees: React.FC = () => {
   const { token, user } = useAuth();
+  const apiGrades = useGrades(token);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -1890,7 +1892,7 @@ export const Employees: React.FC = () => {
                     className="w-full border border-slate-300 rounded-lg p-2 text-xs font-mono bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   >
                     <option value="">None / Unassigned</option>
-                    {DEFAULT_GRADE_CODES.map((g) => (
+                    {gradeOptions(apiGrades, createFormData.grade_code).map((g) => (
                       <option key={g} value={g}>
                         {g}
                       </option>

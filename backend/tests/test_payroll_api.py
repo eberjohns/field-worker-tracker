@@ -153,7 +153,7 @@ async def _setup_group_zone_worksite(
         worksite_id=ws.id,
         sub_item_code="A",
         staff_grade_description="Gardener Expert",
-        planned_grade_code="GE",
+        planned_grade_code="G2A",
         frequency_unit="MONTH",
         occurrences_per_period=Decimal("4.0"),
         period_interval=1,
@@ -406,7 +406,7 @@ async def test_approved_run_immutability(db_session: AsyncSession):
 
 @pytest.mark.asyncio
 async def test_role_based_scoping(db_session: AsyncSession):
-    """Verify Engineer sees only scoped workers read-only; Supervisor gets 403."""
+    """Payroll runs and records are Admin only (DEC-47): Engineer and Supervisor get 403."""
     await _cleanup_period(db_session, date(2026, 8, 1), date(2026, 8, 31))
     await _create_test_employee(db_session, f"W1_{uuid4().hex[:6]}", "Worker One")
     await _create_test_employee(db_session, f"W2_{uuid4().hex[:6]}", "Worker Two")
@@ -449,12 +449,22 @@ async def test_role_based_scoping(db_session: AsyncSession):
         )
         assert sup_appr.status_code == 403
 
-        # 2. Engineer can view runs read-only
-        eng_view = await client.get(
+        # 2. Engineer cannot read payroll runs, run detail, issues or records (Batch 5.3b)
+        for path in (
+            "/api/v1/payroll/runs",
             f"/api/v1/payroll/runs/{run_id}",
-            headers={"Authorization": f"Bearer {eng_token}"},
+            f"/api/v1/payroll/runs/{run_id}/issues",
+            f"/api/v1/payroll/records?run_id={run_id}",
+        ):
+            eng_view = await client.get(path, headers={"Authorization": f"Bearer {eng_token}"})
+            assert eng_view.status_code == 403, path
+
+        # Admin still can
+        adm_view = await client.get(
+            f"/api/v1/payroll/runs/{run_id}",
+            headers={"Authorization": f"Bearer {admin_token}"},
         )
-        assert eng_view.status_code == 200
+        assert adm_view.status_code == 200
 
         # 3. Engineer cannot approve -> 403
         eng_appr = await client.post(
@@ -524,6 +534,19 @@ async def test_worker_mobile_own_approved_payroll(db_session: AsyncSession):
         assert "per_month_provision" not in slip
         assert "final_total_staff_cost" not in slip
 
+        # Mobile contract: the worker's own payslip endpoint keeps working while payroll
+        # runs/records became Admin only (Batch 5.3b, DEC-47).
+        m_resp = await client.get(
+            "/api/v1/mobile/me/payroll",
+            headers={"Authorization": f"Bearer {worker_token}"},
+        )
+        assert m_resp.status_code == 200
+        assert any(s["status"] == "APPROVED" for s in m_resp.json())
+        runs_resp = await client.get(
+            "/api/v1/payroll/runs", headers={"Authorization": f"Bearer {worker_token}"}
+        )
+        assert runs_resp.status_code == 403
+
 
 @pytest.mark.asyncio
 async def test_salary_revisions_and_side_by_side_diff(db_session: AsyncSession):
@@ -546,7 +569,7 @@ async def test_salary_revisions_and_side_by_side_diff(db_session: AsyncSession):
                 "effective_from": "2026-01-01",
                 "lines": [
                     {
-                        "grade_code": "GE",
+                        "grade_code": "G2A",
                         "grade_group_title": "Gardener",
                         "basic_salary": "1200.00",
                         "special_allowance": "200.00",
@@ -559,7 +582,7 @@ async def test_salary_revisions_and_side_by_side_diff(db_session: AsyncSession):
                         "accommodation_provision": "300.00",
                     },
                     {
-                        "grade_code": "GH",
+                        "grade_code": "G3A",
                         "grade_group_title": "Helper",
                         "basic_salary": "1000.00",
                         "special_allowance": "100.00",
@@ -580,7 +603,7 @@ async def test_salary_revisions_and_side_by_side_diff(db_session: AsyncSession):
         assert len(data["lines"]) == 2
 
         # Check planned hourly cost calculated
-        ge_line = next(line for line in data["lines"] if line["grade_code"].startswith("GE"))
+        ge_line = next(line for line in data["lines"] if line["grade_code"].startswith("G2A"))
         # Salary portion: 1200 + 200 + 100 = 1500. Provisions: 550. Base = 2050.
         # With 5% HR OH = 2152.5. Divisor 208 = 10.348... -> 10.35
         assert Decimal(str(ge_line["planned_hourly_cost"])) == Decimal("10.35")
@@ -592,7 +615,7 @@ async def test_salary_revisions_and_side_by_side_diff(db_session: AsyncSession):
             params={"target_revision_code": f"{rev_code}-v2", "base_revision_code": rev_code},
             json=[
                 {
-                    "grade_code": "GE",
+                    "grade_code": "G2A",
                     "basic_salary": "1300.00",  # changed from 1200
                     "special_allowance": "200.00",
                     "fixed_ot_amount": "100.00",
@@ -604,7 +627,7 @@ async def test_salary_revisions_and_side_by_side_diff(db_session: AsyncSession):
                     "accommodation_provision": "300.00",
                 },
                 {
-                    "grade_code": "NEW_GRADE",  # newly added
+                    "grade_code": "G9A",  # newly added
                     "basic_salary": "2000.00",
                 },
             ],
@@ -614,7 +637,7 @@ async def test_salary_revisions_and_side_by_side_diff(db_session: AsyncSession):
         assert diff_data["new_grades_count"] == 1
         assert diff_data["updated_grades_count"] == 1
         assert any(
-            d["grade_code"] == "GE" and d["field_name"] == "Basic Salary" and d["is_changed"]
+            d["grade_code"] == "G2A" and d["field_name"] == "Basic Salary" and d["is_changed"]
             for d in diff_data["diffs"]
         )
 
@@ -687,7 +710,7 @@ async def test_salary_revision_template_export_and_preview_file(db_session: Asyn
                 "effective_from": "2026-01-01",
                 "lines": [
                     {
-                        "grade_code": "GE",
+                        "grade_code": "G2A",
                         "grade_group_title": "General Helpers",
                         "basic_salary": "1200.00",
                         "special_allowance": "150.00",
@@ -722,12 +745,12 @@ async def test_salary_revision_template_export_and_preview_file(db_session: Asyn
         ws = wb.active
         assert ws is not None
         assert ws.cell(row=1, column=1).value == "Grade Code"
-        assert ws.cell(row=2, column=1).value == "GE"
+        assert ws.cell(row=2, column=1).value == "G2A"
 
         # Modify values in the spreadsheet to simulate user edit
         ws.cell(row=2, column=3, value=1400.0)  # Change basic salary from 1200 to 1400
         # Add a new grade line
-        ws.cell(row=3, column=1, value="S1")
+        ws.cell(row=3, column=1, value="G9B")
         ws.cell(row=3, column=2, value="Senior Tech")
         ws.cell(row=3, column=3, value=2200.0)
 
@@ -752,15 +775,15 @@ async def test_salary_revision_template_export_and_preview_file(db_session: Asyn
         diff_data = p_resp.json()
         assert diff_data["target_revision_code"] == f"{rev_code}-V2"
         assert diff_data["base_revision_code"] == rev_code
-        assert diff_data["new_grades_count"] == 1  # S1
-        assert diff_data["updated_grades_count"] == 1  # GE
+        assert diff_data["new_grades_count"] == 1  # G9B
+        assert diff_data["updated_grades_count"] == 1  # G2A
         assert len(diff_data["preview_lines"]) == 2
         # Check field diff
         ge_basic_diff = next(
             (
                 d
                 for d in diff_data["diffs"]
-                if d["grade_code"] == "GE" and d["field_name"] == "Basic Salary"
+                if d["grade_code"] == "G2A" and d["field_name"] == "Basic Salary"
             ),
             None,
         )
