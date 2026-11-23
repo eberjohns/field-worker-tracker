@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 
 import {
   CONTROLLED_STAFF_GRADE_DESCRIPTIONS,
-  DEFAULT_GRADE_CODES,
   formatApiError,
   buildJobItemPayload,
 } from "./jobItemUtils.ts";
@@ -75,12 +74,6 @@ describe("JobItemModal Validation and Error Display", () => {
     assert.ok(CONTROLLED_STAFF_GRADE_DESCRIPTIONS.includes("Gardener Expert"));
     assert.ok(CONTROLLED_STAFF_GRADE_DESCRIPTIONS.includes("Team Leader"));
     assert.ok(CONTROLLED_STAFF_GRADE_DESCRIPTIONS.includes("Supervisor"));
-  });
-
-  it("provides valid active grade codes (G1A..G7C)", () => {
-    assert.ok(DEFAULT_GRADE_CODES.includes("G1A"));
-    assert.ok(DEFAULT_GRADE_CODES.includes("G7C"));
-    assert.ok(DEFAULT_GRADE_CODES.length >= 21);
   });
 
   it("buildJobItemPayload formats all required fields cleanly for API submission", () => {

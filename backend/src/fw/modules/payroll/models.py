@@ -98,6 +98,8 @@ class SalaryRevision(Base):
     effective_to: Mapped[date | None] = mapped_column(Date, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="ACTIVE", nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Display suffix for grade lines (DEC-58): G3C + "2026" -> "G3C-2026". Defaults to the year.
+    suffix_label: Mapped[str | None] = mapped_column(String(20), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),

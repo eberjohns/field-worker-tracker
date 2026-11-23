@@ -40,6 +40,7 @@ Roles: A = Admin, E = Engineer, S = Superintendent, V = Supervisor. "scope" = li
 | PATCH | /employees/{id} | A (all), E (weekly_off_day, accommodation_id, break_override_minutes) | update with `version` |
 | POST | /employees/bulk-update | A, E (scope) | set accommodation / break / weekly off for many; body `{ employee_ids, changes }` |
 | POST | /employees/{id}/grade-change | A | change Grade Code with reason and effective date |
+| PATCH | /employees/{id}/profile-details | A | change `staff_grade_description` (controlled list; locked for Supervisor/Superintendent/Engineer: `STAFF_GRADE_DESCRIPTION_LOCKED`), `grade_code` (base code, `INVALID_GRADE_CODE`) or `is_driver`; `effective_from` today or past only (`FUTURE_PROFILE_CHANGE_NOT_SUPPORTED`); history stores `actor_role` |
 | POST | /employees/{id}/deactivate, /reactivate | A | |
 | DELETE | /employees/{id} | A | only if unreferenced |
 | GET | /employees/hierarchy | scope | tree grouped by supervisor |
@@ -137,8 +138,9 @@ Roles: A = Admin, E = Engineer, S = Superintendent, V = Supervisor. "scope" = li
 ### Salary, settings, payroll
 | Method | Path | Roles | Purpose |
 |---|---|---|---|
-| GET/POST | /salary-revisions | A (write), E (read) | list & create salary revision header with lines |
-| GET | /salary-revisions/{code} | A, E | get salary revision detail with grade lines & planned hourly cost |
+| GET/POST | /salary-revisions | A (write), E (read: codes, names, dates only) | list & create a salary revision with lines; `suffix_label` optional (default: year of `effective_from`); grade codes stored as base codes (DEC-58; `INVALID_GRADE_CODE`, `DUPLICATE_GRADE_LINE`) |
+| GET | /grades | any signed-in role | base grade codes in use (revision lines, employees, job items), naturally sorted; codes only, for dropdowns (DEC-58) |
+| GET | /salary-revisions/{code} | A | revision detail with grade lines, planned hourly cost and `display_grade_code` (e.g. `G3C-2026`); also `GET /salary-revisions/{code}/export-template` (A) |
 | POST | /salary-revisions/diff | A | side-by-side diff comparing incoming revision lines against base revision |
 | GET | /settings?country=&as_of= | A (write), E (read) | settings resolved for a date (default today) |
 | PUT | /settings/{key} | A | adds a new effective-dated value `{ value, country?, effective_from }` (never edits in place) |
@@ -147,16 +149,17 @@ Roles: A = Admin, E = Engineer, S = Superintendent, V = Supervisor. "scope" = li
 | GET/POST | /consent-policies | A | publish location consent notice versions (per language) |
 | GET/POST/DELETE | /public-holidays | A | per country |
 | POST | /payroll/runs | A | create or **re-run** a DRAFT for a month (increments `run_no`; auto-created `payroll_auto_run_delay_days` after month-end) |
-| GET | /payroll/runs, /payroll/runs/{id} | A, E (scope) | list and inspect monthly payroll runs |
-| GET | /payroll/runs/{id}/issues | A, E | inspect blocking issues (unapproved overtime, missing salary structures) |
+| GET | /payroll/runs, /payroll/runs/{id} | A | list and inspect monthly payroll runs (Admin only since Batch 5.3b, DEC-47) |
+| GET | /payroll/runs/{id}/issues | A | inspect blocking issues (unapproved overtime, missing salary structures) |
 | POST | /payroll/runs/{id}/approve | A | approves the draft: freezes immutable records, locks attendance, stores final snapshots |
-| GET | /payroll/records?employee_id=&period= | A, E (scope) | inspect immutable snapshots |
+| GET | /payroll/records?employee_id=&period= | A | inspect immutable snapshots. Payroll needs every money setting (`provision_*`, `standard_ot_divisor_hours`, `ot1_multiplier`, `ot2_multiplier`, `hr_overhead_rate`); a missing one gives 422 `SETTING_MISSING` |
 | GET | /payroll/my-records | Self (Worker) | worker's own approved monthly payslips (employee components only, no provisions) |
-| GET | /payroll/budget-vs-actual | A, E | dynamic contract labor budget vs actual cost allocation and variance |
+| GET | /payroll/budget-vs-actual | A | contract labour budget vs actual cost and variance; `warnings[]` (`MISSING_GRADE_RATE`: job item grade has no line in the revision; item left out of totals) and `missing_rate_hours`; as-of date is the site-local today |
 | PUT | /payroll/worksites/{id}/revision | A | bind or update dynamic salary revision code on a worksite |
 | POST | /payroll/auto-run-check | A | trigger check for completed months past auto-run delay days |
 | GET | /employees/{id}/salary | A, E (scope), self | salary history, last change date and difference |
 | POST | /employees/{id}/salary | A | record a new salary structure revision for an employee |
+| PATCH/DELETE | /employees/{id}/salary/{salary_id} | A | edit or delete a **future** row only (after the site-local today); audit keeps the full row; later CREW_BREAK rows re-copy their amounts; CREW_BREAK rows themselves give 422 `CREW_BREAK_ROW_LOCKED` |
 | GET | /salary-structures | A, E (scope) | list workers with current salary structure, standard hours, last change date and delta |
 | GET | /generated-reports?kind=&report_key=&period=&country=&status= | by role | **Generated reports** history: every month-end and on-demand file with its name; role-filtered (salary/cost reports ADMIN only) |
 | GET | /generated-reports/{id}/download | by role | re-download an archived generated report file |
@@ -175,12 +178,12 @@ Roles: A = Admin, E = Engineer, S = Superintendent, V = Supervisor. "scope" = li
 | GET | /live/stream?ticket= | A E S V scope | Server-Sent Events: `position` and `state` updates for the user's scope; heartbeat every 20 s; client falls back to polling `/live/positions` every 30 s |
 | GET | /live/trail/{employee_id} | A E S V scope | Chronological GPS breadcrumb trail of mobile event logs for day route playback |
 | POST | /documents/check-alerts | A | Evaluates document expiry lead days and creates DOC_EXPIRY alerts |
-| POST | /imports | A | upload workbook (multipart) -> batch |
-| GET | /imports/{id}/preview | A | per-sheet counts, row-level errors/warnings |
-| POST | /imports/{id}/commit | A | commit in one transaction -> job |
+| POST | /imports | A, E | upload workbook (multipart) -> batch. For Engineers the salary sheets (`SHEET_ADMIN_ONLY`) and money settings in Company_Settings (`SETTING_ADMIN_ONLY`) are skipped and their values not stored (DEC-47) |
+| GET | /imports/{id}/preview | A, E | per-sheet counts, row-level errors/warnings; Engineers never see salary or money-setting rows; `INVALID_GRADE_CODE` for unparseable grades |
+| POST | /imports/{id}/commit | A, E | commit in one transaction -> job; a non-Admin cannot commit (or roll back) a batch that writes salary or cost data (422) |
 | GET | /imports/{id}/errors.xlsx | A | downloadable error report |
 | POST | /imports/{id}/rollback | A | rollback a committed batch (if safe) |
-| GET | /imports/template | A | download the template workbook |
+| GET | /imports/template | A, E | download the template workbook; Engineers get it without the salary sheets and money-setting examples |
 | GET | /documents/expiring?within_days= | A E S V scope | document-expiry list |
 | GET | /audit-logs | A | filters `actor, entity_type, entity_id, from, to` |
 | GET | /health, /health/ready | public | liveness / readiness |

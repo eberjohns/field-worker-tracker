@@ -90,7 +90,7 @@ erDiagram
 | name | text | not null |
 | phone, email | text | nullable; email required for web roles |
 | role | text | operational role enum (`WORKER`, `SUPERVISOR`, `SUPERINTENDENT`, `ENGINEER`), not null — `ADMIN` is forbidden in `employees` (ADR-023) |
-| grade_code | text | salary label, e.g. G2B26 |
+| grade_code | text | base grade code, e.g. G2B (DEC-58; suffixes `-YYYY`/`-R<n>` are removed on input) |
 | staff_grade_description | text | matching label; controlled list |
 | accommodation_id | uuid FK accommodations | nullable |
 | weekly_off_day | text | weekday, nullable (company default) |
@@ -116,7 +116,7 @@ Fixed crew hierarchy links: `employee_id` FK, `manager_id` FK employees, `relati
 `employee_id`, `old_grade_code`, `new_grade_code`, `effective_from` date, `changed_by_user_id`, `reason`.
 
 ### employee_attribute_history
-`id` uuid PK, `employee_id` uuid FK employees, `attribute_name` text (`STAFF_GRADE_DESCRIPTION`, `GRADE_CODE`, `IS_DRIVER`), `old_value` text nullable, `new_value` text, `effective_from` date, `reason` text, `changed_by_user_id` uuid FK users, `actor_role` text, `created_at` timestamptz. Indexes: (`employee_id`, `created_at`), (`attribute_name`). Immutable audit trail of designation, grade code, and driver status changes (ADR-026).
+`id` uuid PK, `employee_id` uuid FK employees, `attribute_name` text (`STAFF_GRADE_DESCRIPTION`, `GRADE_CODE`, `IS_DRIVER`), `old_value` text nullable, `new_value` text, `effective_from` date, `reason` text, `changed_by_user_id` uuid FK users, `actor_role` text nullable (added in migration 0022; stored since Batch 5.3b), `created_at` timestamptz. Indexes: (`employee_id`, `created_at`), (`attribute_name`). Immutable audit trail of designation, grade code, and driver status changes (ADR-026).
 
 ### users
 `employee_id` FK (unique, **nullable exclusively for `role = 'ADMIN'`**), `username` (`ADMIN001` for standalone admin; employee `tally_id` for operational users, unique), `credential_hash` (Argon2id), `role`, `is_active`, `must_change_password` bool, `password_changed_at`, `failed_attempts`, `locked_until`, `last_login_at`. Constraints (ADR-023): `CHECK ((role = 'ADMIN' AND employee_id IS NULL) OR (role <> 'ADMIN' AND employee_id IS NOT NULL))` and partial unique index `uq_users_single_admin ON users ((true)) WHERE role = 'ADMIN'` guaranteeing a single standalone System Admin. Every operational user starts with the company default password and must change it at first login; an account that still has the default after `default_password_max_days` is locked. Only Admin resets a user (back to the default).
@@ -164,7 +164,7 @@ Fixed crew hierarchy links: `employee_id` FK, `manager_id` FK employees, `relati
 `id uuid PK`, `worksite_id uuid FK worksites ON DELETE CASCADE`, `supervisor_id uuid FK employees ON DELETE RESTRICT` (must have role SUPERVISOR), `created_by_user_id uuid FK users ON DELETE SET NULL`, `is_active bool`, `version int`, `created_at`, `updated_at`. Unique (`worksite_id`, `supervisor_id`); indexes on `worksite_id`, `supervisor_id`, `is_active`. Ending an assignment sets `is_active = false` (never deleted); assigning again reactivates the row. Rows end automatically when the supervisor is deactivated or stops being a SUPERVISOR. Drives worksite scope (DEC-57, ADR-026, ADR-027). Imported from the `Worksite_Supervisors` sheet.
 
 ### job_items
-`worksite_id` FK, `sub_item_code` text, `staff_grade_description` (required), `planned_grade_code` (required; base code, year suffix stripped; used for the budget and grade-group suggestions), `frequency_unit`, `occurrences_per_period` numeric(6,2), `period_interval` int default 1, `weekday_pattern` text[] nullable, `required_staff_count` int, `hours_per_occurrence_per_staff` numeric(8,3), `declared_activities_per_year` numeric nullable, `declared_total_hours_per_year` numeric nullable, `start_date`, `end_date` nullable, `deployment_type` (PERMANENT/REMOTE, required), `break_override_minutes` nullable, `is_active`, `version`.
+`worksite_id` FK, `sub_item_code` text, `staff_grade_description` (required), `planned_grade_code` (required; base code per DEC-58, e.g. `G3C`; used for the budget and grade-group suggestions), `frequency_unit`, `occurrences_per_period` numeric(6,2), `period_interval` int default 1, `weekday_pattern` text[] nullable, `required_staff_count` int, `hours_per_occurrence_per_staff` numeric(8,3), `declared_activities_per_year` numeric nullable, `declared_total_hours_per_year` numeric nullable, `start_date`, `end_date` nullable, `deployment_type` (PERMANENT/REMOTE, required), `break_override_minutes` nullable, `is_active`, `version`.
 Unique (worksite_id, sub_item_code). Derived values (`days_per_occurrence`, expected annual figures) are computed, not stored.
 
 ### job_occurrences
@@ -288,10 +288,10 @@ Never updated after insert.
 `employee_id`, `effective_from` date, `standard_hours` numeric(4,1), `basic_salary`, `special_allowance`, `fixed_ot_amount`, `bonus`, `telephone_allowance`, `housing_transport_allowance` (numeric(14,2)), `break_minutes` int nullable (default daily unpaid break duration for explainability in attendance calculation), `change_source` varchar(50) nullable (e.g. `'CREW_BREAK'` when propagated from supervisor), `import_batch_id`, `created_by_user_id`. Unique (employee_id, effective_from). History is kept; the last change date and difference are computed from the last two rows. Gratuity, leave salary, provisions and totals are **not stored** (calculated; snapshotted at payroll approval).
 
 ### salary_revisions (job budget only)
-`code` unique, `name`, `country`, `effective_from`, `effective_to` nullable, `status`, `notes`. A revision may contain only the grades that changed.
+`code` unique, `name`, `country`, `effective_from`, `effective_to` nullable, `status`, `notes`, `suffix_label` text nullable (display suffix for grade lines, default the year of `effective_from`; `G3C` is shown as `G3C-2026`, DEC-58). A revision may contain only the grades that changed.
 
 ### salary_revision_lines (job budget only)
-`revision_id`, `grade_code` (base code, year suffix stripped), `grade_group_title`, `basic_salary`, `special_allowance`, `fixed_ot_amount`, `bonus`, `visa_provision`, `air_ticket_provision`, `uniform_provision`, `medical_provision`, `accommodation_provision`, `transportation_provision` (nullable), `break_minutes` int nullable. Unique (revision_id, grade_code). Used only to price job items in the budget.
+`revision_id`, `grade_code` (base code per DEC-58; never stored with a suffix), `grade_group_title`, `basic_salary`, `special_allowance`, `fixed_ot_amount`, `bonus`, `visa_provision`, `air_ticket_provision`, `uniform_provision`, `medical_provision`, `accommodation_provision`, `transportation_provision` (nullable), `break_minutes` int nullable. Unique (revision_id, grade_code). Used only to price job items in the budget.
 
 ### payroll_runs
 `period_start`, `period_end`, `country`, `status` (DRAFT | APPROVED), `run_no` (re-runs of the same period), `created_by` (system or user), `scheduled_for`, `approved_by_user_id`, `approved_at`, `calculation_version`. Only one APPROVED run per (period, country); DRAFT runs are replaced by re-runs (history kept).

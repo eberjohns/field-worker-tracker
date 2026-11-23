@@ -1,9 +1,9 @@
 {
-  "version": "1.10.0",
+  "version": "1.11.0",
   "major": 1,
-  "minor": 10,
+  "minor": 11,
   "patch": 0,
-  "last_branch": "fix/batch5.3a",
-  "last_commit": "647c05a",
-  "updated_at": "2026-11-20T12:41:40.103128+00:00"
+  "last_branch": "fix/batch5.3b",
+  "last_commit": "99cd3dd",
+  "updated_at": "2026-11-23T10:02:49.938421+00:00"
 }

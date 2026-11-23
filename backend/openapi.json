@@ -12,7 +12,7 @@
           "Health"
         ],
         "summary": "Liveness check alias",
-        "operationId": "health_health_liveness_get",
+        "operationId": "health_health_liveness_head",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -31,7 +31,7 @@
           "Health"
         ],
         "summary": "Liveness check alias",
-        "operationId": "health_health_liveness_get",
+        "operationId": "health_health_liveness_head",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -52,7 +52,7 @@
           "Health"
         ],
         "summary": "Liveness check",
-        "operationId": "health_health_get",
+        "operationId": "health_health_head",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -71,7 +71,7 @@
           "Health"
         ],
         "summary": "Liveness check",
-        "operationId": "health_health_get",
+        "operationId": "health_health_head",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -92,7 +92,7 @@
           "Health"
         ],
         "summary": "Readiness check alias",
-        "operationId": "health_ready_health_readiness_get",
+        "operationId": "health_ready_health_readiness_head",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -114,7 +114,7 @@
           "Health"
         ],
         "summary": "Readiness check alias",
-        "operationId": "health_ready_health_readiness_get",
+        "operationId": "health_ready_health_readiness_head",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -138,7 +138,7 @@
           "Health"
         ],
         "summary": "Readiness check",
-        "operationId": "health_ready_health_ready_get",
+        "operationId": "health_ready_health_ready_head",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -160,7 +160,7 @@
           "Health"
         ],
         "summary": "Readiness check",
-        "operationId": "health_ready_health_ready_get",
+        "operationId": "health_ready_health_ready_head",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -1126,6 +1126,313 @@
         }
       }
     },
+    "/api/v1/employees/hierarchy-violations": {
+      "get": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "Get Hierarchy Violations",
+        "description": "Admin-only audit endpoint listing reporting lines that violate the fixed crew structure.",
+        "operationId": "get_hierarchy_violations_api_v1_employees_hierarchy_violations_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/HierarchyViolationItem"
+                  },
+                  "title": "Response Get Hierarchy Violations Api V1 Employees Hierarchy Violations Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/employees/hierarchy-violations/export": {
+      "get": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "Export Hierarchy Violations",
+        "description": "Admin-only export of hierarchy violations to Excel (.xlsx).",
+        "operationId": "export_hierarchy_violations_api_v1_employees_hierarchy_violations_export_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/employees/hierarchy-violations/{line_id}/deactivate": {
+      "post": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "Deactivate Hierarchy Violation Line",
+        "description": "Deactivate a non-conforming reporting line.",
+        "operationId": "deactivate_hierarchy_violation_line_api_v1_employees_hierarchy_violations__line_id__deactivate_post",
+        "parameters": [
+          {
+            "name": "line_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Line Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Deactivate Hierarchy Violation Line Api V1 Employees Hierarchy Violations  Line Id  Deactivate Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/employees/hierarchy-violations/{line_id}/move-to-supervisor": {
+      "post": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "Move Hierarchy Violation To Supervisor",
+        "description": "Move a worker's direct supt/eng link to their supervisor, then deactivate the worker link.",
+        "operationId": "move_hierarchy_violation_to_supervisor_api_v1_employees_hierarchy_violations__line_id__move_to_supervisor_post",
+        "parameters": [
+          {
+            "name": "line_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Line Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Move Hierarchy Violation To Supervisor Api V1 Employees Hierarchy Violations  Line Id  Move To Supervisor Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/employees/check-tally-id": {
+      "get": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "Check Tally Id",
+        "description": "Check whether a Tally ID is available and whether it was previously held by another employee.",
+        "operationId": "check_tally_id_api_v1_employees_check_tally_id_get",
+        "parameters": [
+          {
+            "name": "tally_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "title": "Tally Id"
+            }
+          },
+          {
+            "name": "exclude_employee_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Exclude Employee Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TallyIdCheckResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/employees/{employee_id}": {
       "get": {
         "tags": [
@@ -1252,6 +1559,293 @@
         }
       }
     },
+    "/api/v1/employees/{employee_id}/change-tally-id": {
+      "post": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "Change Employee Tally Id",
+        "description": "Admin updates an employee's Tally ID (e.g. temporary probation ID -> permanent ID) and login username.",
+        "operationId": "change_employee_tally_id_api_v1_employees__employee_id__change_tally_id_post",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Employee Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TallyIdChangeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/employees/{employee_id}/deactivation-impact": {
+      "get": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "Get Employee Deactivation Impact",
+        "description": "Preview scheduling and reporting-line impact before deactivating an employee (Admin only).",
+        "operationId": "get_employee_deactivation_impact_api_v1_employees__employee_id__deactivation_impact_get",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Employee Id"
+            }
+          },
+          {
+            "name": "effective_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Effective Date"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeDeactivationImpactResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/employees/{employee_id}/deactivate": {
+      "post": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "Deactivate Employee",
+        "description": "Admin-only deactivation with DEACTIVATE confirmation + admin password + cascading schedule cleanup.",
+        "operationId": "deactivate_employee_api_v1_employees__employee_id__deactivate_post",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Employee Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeactivateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityLifecycleResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/employees/{employee_id}/reactivate": {
+      "post": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "Reactivate Employee",
+        "description": "Admin-only clean reactivation (Option A): re-enables account & visibility without restoring old schedules.",
+        "operationId": "reactivate_employee_api_v1_employees__employee_id__reactivate_post",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Employee Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReactivateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityLifecycleResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/employees/{employee_id}/grade-change": {
       "post": {
         "tags": [
@@ -1304,6 +1898,140 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/EmployeeRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/employees/{employee_id}/profile-details": {
+      "patch": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "Update Employee Profile Details",
+        "description": "Update employee trade designation, grade code, or driver status with immutable audit history.",
+        "operationId": "update_employee_profile_details_api_v1_employees__employee_id__profile_details_patch",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Employee Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmployeeProfileDetailsUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/employees/{employee_id}/attribute-history": {
+      "get": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "List Employee Attribute History",
+        "description": "List immutable attribute history records (grade, designation, driver) for an employee.",
+        "operationId": "list_employee_attribute_history_api_v1_employees__employee_id__attribute_history_get",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Employee Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EmployeeAttributeHistoryRead"
+                  },
+                  "title": "Response List Employee Attribute History Api V1 Employees  Employee Id  Attribute History Get"
                 }
               }
             }
@@ -2316,6 +3044,23 @@
         "summary": "List Accommodations",
         "operationId": "list_accommodations_api_v1_accommodations_get",
         "parameters": [
+          {
+            "name": "is_active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": true,
+              "title": "Is Active"
+            }
+          },
           {
             "name": "authorization",
             "in": "header",
@@ -3705,7 +4450,7 @@
           "settings"
         ],
         "summary": "List Staff Grades",
-        "description": "Return distinct staff grade descriptions across employees and settings.",
+        "description": "Return deduplicated union of distinct staff grade descriptions across active employees and job items.",
         "operationId": "list_staff_grades_api_v1_settings_staff_grades_get",
         "parameters": [
           {
@@ -4599,6 +5344,16 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetDatabaseRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -4633,7 +5388,7 @@
           "imports"
         ],
         "summary": "Download Import Template",
-        "description": "Download the generated master data import template workbook.",
+        "description": "Download the import template. Engineers get it without the salary sheets (DEC-47).",
         "operationId": "download_import_template_api_v1_imports_template_get",
         "parameters": [
           {
@@ -4684,6 +5439,24 @@
         "description": "Upload workbook (multipart or raw bytes) and return safe preview with field-level diffs without committing.",
         "operationId": "upload_workbook_api_v1_imports_post",
         "parameters": [
+          {
+            "name": "sheets",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional comma-separated list of sheet names to import (e.g. Worksites,Job_Items).",
+              "title": "Sheets"
+            },
+            "description": "Optional comma-separated list of sheet names to import (e.g. Worksites,Job_Items)."
+          },
           {
             "name": "authorization",
             "in": "header",
@@ -5231,6 +6004,147 @@
         }
       }
     },
+    "/api/v1/employees/{employee_id}/salary/{salary_id}": {
+      "patch": {
+        "tags": [
+          "salary"
+        ],
+        "summary": "Update Future Salary Revision",
+        "description": "Update a future-dated salary revision (DEC-06). Rejects current/past rows.",
+        "operationId": "update_future_salary_revision_api_v1_employees__employee_id__salary__salary_id__patch",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Employee Id"
+            }
+          },
+          {
+            "name": "salary_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Salary Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmployeeSalaryUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeSalaryRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "salary"
+        ],
+        "summary": "Delete Future Salary Revision",
+        "description": "Delete a future-dated salary revision (DEC-06). Rejects current/past rows.",
+        "operationId": "delete_future_salary_revision_api_v1_employees__employee_id__salary__salary_id__delete",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Employee Id"
+            }
+          },
+          {
+            "name": "salary_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Salary Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/salary-structures": {
       "get": {
         "tags": [
@@ -5664,7 +6578,7 @@
           "payroll"
         ],
         "summary": "List Payroll Records",
-        "description": "List payroll records for a run, scoped to user.",
+        "description": "List payroll records for a run (Admin only).",
         "operationId": "list_payroll_records_api_v1_payroll_records_get",
         "parameters": [
           {
@@ -5840,6 +6754,60 @@
                     "$ref": "#/components/schemas/WorkerMobilePayrollSlip"
                   },
                   "title": "Response Get My Payroll Records Api V1 Payroll My Records Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/grades": {
+      "get": {
+        "tags": [
+          "payroll"
+        ],
+        "summary": "List Grade Codes",
+        "description": "Base grade codes in use (revision lines, employees, job items) for dropdowns (DEC-58).",
+        "operationId": "list_grade_codes_api_v1_grades_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Response List Grade Codes Api V1 Grades Get"
                 }
               }
             }
@@ -6516,7 +7484,7 @@
           "jobs"
         ],
         "summary": "List Worksites",
-        "description": "List worksites with optional filtering.",
+        "description": "List worksites in the caller's scope (DEC-57).\n\nDeactivated worksites are visible to Admin only; budget is hidden for non-admins.",
         "operationId": "list_worksites_api_v1_worksites_get",
         "parameters": [
           {
@@ -6644,6 +7612,18 @@
             }
           },
           {
+            "name": "unassigned",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Only worksites with no active supervisor",
+              "default": false,
+              "title": "Unassigned"
+            },
+            "description": "Only worksites with no active supervisor"
+          },
+          {
             "name": "authorization",
             "in": "header",
             "required": false,
@@ -6746,13 +7726,181 @@
         }
       }
     },
+    "/api/v1/worksites/supervisor-proposals": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "List Worksite Supervisor Proposals",
+        "description": "Propose supervisors from current crews for each worksite (Admin reviews; DEC-57).",
+        "operationId": "list_worksite_supervisor_proposals_api_v1_worksites_supervisor_proposals_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WorksiteSupervisorProposal"
+                  },
+                  "title": "Response List Worksite Supervisor Proposals Api V1 Worksites Supervisor Proposals Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/worksites/supervisors/bulk-assign": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Bulk Assign Worksite Supervisors",
+        "description": "Assign the worksite/supervisor pairs Admin confirmed (all or nothing, audited).",
+        "operationId": "bulk_assign_worksite_supervisors_api_v1_worksites_supervisors_bulk_assign_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorksiteSupervisorBulkAssign"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorksiteSupervisorBulkAssignResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/job-items/destinations": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "List Job Item Destinations",
+        "description": "All active job items, for reassignment request destinations (not scoped; no costs).",
+        "operationId": "list_job_item_destinations_api_v1_job_items_destinations_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/JobItemDestination"
+                  },
+                  "title": "Response List Job Item Destinations Api V1 Job Items Destinations Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/worksites/export": {
       "get": {
         "tags": [
           "jobs"
         ],
         "summary": "Export Worksites Excel",
-        "description": "Export worksites list to an Excel spreadsheet.",
+        "description": "Export worksites list with a dedicated Job_Items worksheet (Admin & Engineer only).",
         "operationId": "export_worksites_excel_api_v1_worksites_export_get",
         "parameters": [
           {
@@ -6849,7 +7997,7 @@
           "jobs"
         ],
         "summary": "Get Worksite Detail",
-        "description": "Get full details of a worksite including items and boundary GeoJSON.",
+        "description": "Get full details of a worksite in the caller's scope (DEC-57).",
         "operationId": "get_worksite_detail_api_v1_worksites__worksite_id__get",
         "parameters": [
           {
@@ -6954,6 +8102,420 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/WorksiteResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/worksites/{worksite_id}/supervisors": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "List Worksite Supervisors",
+        "description": "List supervisors assigned to a worksite in the caller's scope.",
+        "operationId": "list_worksite_supervisors_api_v1_worksites__worksite_id__supervisors_get",
+        "parameters": [
+          {
+            "name": "worksite_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Worksite Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WorksiteSupervisorRead"
+                  },
+                  "title": "Response List Worksite Supervisors Api V1 Worksites  Worksite Id  Supervisors Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Assign Worksite Supervisor",
+        "description": "Assign a supervisor to a worksite (Admin & Engineer only).",
+        "operationId": "assign_worksite_supervisor_api_v1_worksites__worksite_id__supervisors_post",
+        "parameters": [
+          {
+            "name": "worksite_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Worksite Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorksiteSupervisorAssign"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorksiteSupervisorRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/worksites/{worksite_id}/supervisors/{supervisor_id}": {
+      "delete": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Remove Worksite Supervisor",
+        "description": "Unassign a supervisor from a worksite (Admin & Engineer only).",
+        "operationId": "remove_worksite_supervisor_api_v1_worksites__worksite_id__supervisors__supervisor_id__delete",
+        "parameters": [
+          {
+            "name": "worksite_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Worksite Id"
+            }
+          },
+          {
+            "name": "supervisor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supervisor Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/worksites/{worksite_id}/deactivation-impact": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Get Worksite Deactivation Impact",
+        "description": "Preview scheduling impact of deactivating a worksite (Admin only).",
+        "operationId": "get_worksite_deactivation_impact_api_v1_worksites__worksite_id__deactivation_impact_get",
+        "parameters": [
+          {
+            "name": "worksite_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Worksite Id"
+            }
+          },
+          {
+            "name": "effective_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Effective Date"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Worksite Deactivation Impact Api V1 Worksites  Worksite Id  Deactivation Impact Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/worksites/{worksite_id}/deactivate": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Deactivate Worksite",
+        "description": "Admin-only worksite deactivation with DEACTIVATE confirmation + admin password + worker schedule release.",
+        "operationId": "deactivate_worksite_api_v1_worksites__worksite_id__deactivate_post",
+        "parameters": [
+          {
+            "name": "worksite_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Worksite Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeactivateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityLifecycleResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/worksites/{worksite_id}/reactivate": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Reactivate Worksite",
+        "description": "Admin-only clean reactivation (Option A): sets worksite active without restoring old schedules.",
+        "operationId": "reactivate_worksite_api_v1_worksites__worksite_id__reactivate_post",
+        "parameters": [
+          {
+            "name": "worksite_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Worksite Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReactivateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityLifecycleResponse"
                 }
               }
             }
@@ -7693,6 +9255,225 @@
                     "$ref": "#/components/schemas/JobOccurrenceResponse"
                   },
                   "title": "Response Generate Occurrences Api V1 Job Items  Job Item Id  Generate Occurrences Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/job-items/{job_item_id}/deactivation-impact": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Get Job Item Deactivation Impact",
+        "description": "Preview scheduling impact of deactivating a single job item (Admin only).",
+        "operationId": "get_job_item_deactivation_impact_api_v1_job_items__job_item_id__deactivation_impact_get",
+        "parameters": [
+          {
+            "name": "job_item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Job Item Id"
+            }
+          },
+          {
+            "name": "effective_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Effective Date"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Job Item Deactivation Impact Api V1 Job Items  Job Item Id  Deactivation Impact Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/job-items/{job_item_id}/deactivate": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Deactivate Job Item",
+        "description": "Admin-only job item deactivation with DEACTIVATE confirmation + admin password + schedule release.",
+        "operationId": "deactivate_job_item_api_v1_job_items__job_item_id__deactivate_post",
+        "parameters": [
+          {
+            "name": "job_item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Job Item Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeactivateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityLifecycleResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/job-items/{job_item_id}/reactivate": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Reactivate Job Item",
+        "description": "Admin-only clean reactivation (Option A) of a job item (parent worksite must be active).",
+        "operationId": "reactivate_job_item_api_v1_job_items__job_item_id__reactivate_post",
+        "parameters": [
+          {
+            "name": "job_item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Job Item Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReactivateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityLifecycleResponse"
                 }
               }
             }
@@ -9270,7 +11051,7 @@
           "scheduling"
         ],
         "summary": "Save Base Template",
-        "description": "Create or update active Base Roster Template for a job item.",
+        "description": "Create or update active Base Roster Template for a job item (Admin, Engineer, Superintendent).",
         "operationId": "save_base_template_api_v1_base_planner_templates_post",
         "parameters": [
           {
@@ -9488,7 +11269,7 @@
           "scheduling"
         ],
         "summary": "Create Operational Shift",
-        "description": "Create a single-day operational shift or cover replacement.",
+        "description": "Create a single-day operational shift or cover replacement (Admin, Engineer, Superintendent).",
         "operationId": "create_operational_shift_api_v1_operational_planner_shifts_post",
         "parameters": [
           {
@@ -9548,7 +11329,7 @@
           "scheduling"
         ],
         "summary": "Delete Operational Shift",
-        "description": "Cancel an operational shift.",
+        "description": "Cancel an operational shift (Admin, Engineer, Superintendent).",
         "operationId": "delete_operational_shift_api_v1_operational_planner_shifts__shift_id__delete",
         "parameters": [
           {
@@ -10022,7 +11803,7 @@
           "scheduling"
         ],
         "summary": "Approve Leave Request",
-        "description": "Approve a leave request (Engineer or Admin).",
+        "description": "Approve a leave request (Admin, Engineer, or Superintendent).",
         "operationId": "approve_leave_request_api_v1_leave_requests__leave_id__approve_post",
         "parameters": [
           {
@@ -10129,6 +11910,76 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/LeaveRequestResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/leave-requests/{leave_id}/bulk-cover": {
+      "post": {
+        "tags": [
+          "scheduling"
+        ],
+        "summary": "Bulk Cover Leave Request",
+        "description": "Assign one cover worker to every remaining TO_BE_COVERED slot of an approved leave.",
+        "operationId": "bulk_cover_leave_request_api_v1_leave_requests__leave_id__bulk_cover_post",
+        "parameters": [
+          {
+            "name": "leave_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Leave Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LeaveBulkCoverRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeaveBulkCoverResponse"
                 }
               }
             }
@@ -10488,13 +12339,220 @@
         }
       }
     },
+    "/api/v1/reassignment-requests/batch": {
+      "post": {
+        "tags": [
+          "scheduling"
+        ],
+        "summary": "Create Reassignment Batch",
+        "description": "Submit multiple temporary reassignment proposals together as one grouped approval batch.",
+        "operationId": "create_reassignment_batch_api_v1_reassignment_requests_batch_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReassignmentBatchCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReassignmentBatchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reassignment-batches/{batch_id}/approve": {
+      "post": {
+        "tags": [
+          "scheduling"
+        ],
+        "summary": "Approve Reassignment Batch",
+        "description": "Approve all pending reassignment items in a batch (Admin, Engineer, or Superintendent).",
+        "operationId": "approve_reassignment_batch_api_v1_reassignment_batches__batch_id__approve_post",
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Batch Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ReassignmentDecisionRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReassignmentBatchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reassignment-batches/{batch_id}/reject": {
+      "post": {
+        "tags": [
+          "scheduling"
+        ],
+        "summary": "Reject Reassignment Batch",
+        "description": "Reject all pending reassignment items in a batch with mandatory reason.",
+        "operationId": "reject_reassignment_batch_api_v1_reassignment_batches__batch_id__reject_post",
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Batch Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReassignmentDecisionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReassignmentBatchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/reassignment-requests/{request_id}/approve": {
       "post": {
         "tags": [
           "scheduling"
         ],
         "summary": "Approve Reassignment Request",
-        "description": "Approve a reassignment request (Engineer or Admin).",
+        "description": "Approve a reassignment request (Admin, Engineer, or Superintendent).",
         "operationId": "approve_reassignment_request_api_v1_reassignment_requests__request_id__approve_post",
         "parameters": [
           {
@@ -11522,7 +13580,7 @@
           "attendance"
         ],
         "summary": "List Events",
-        "description": "Query verified raw event logs in scope (read-only audit).",
+        "description": "Query verified raw event logs (read-only audit).\n\nNon-admins must name one employee and one date, and may see it only when that\nemployee-day is in their operational scope (site-day rule, DEC-57).",
         "operationId": "list_events_api_v1_events_get",
         "parameters": [
           {
@@ -15181,6 +17239,11 @@
             "format": "uuid",
             "title": "Id"
           },
+          "read_only": {
+            "type": "boolean",
+            "title": "Read Only",
+            "default": false
+          },
           "employee_id": {
             "type": "string",
             "format": "uuid",
@@ -16241,6 +18304,63 @@
         ],
         "title": "BoundaryUpdateRequest"
       },
+      "BudgetWarning": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "job_item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Item Id"
+          },
+          "sub_item_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sub Item Code"
+          },
+          "grade_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grade Code"
+          },
+          "annual_hours": {
+            "type": "string",
+            "title": "Annual Hours",
+            "default": "0.0"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "BudgetWarning"
+      },
       "CandidateRecommendationRead": {
         "properties": {
           "employee_id": {
@@ -16809,6 +18929,11 @@
             "type": "integer",
             "title": "Pending Visits Count"
           },
+          "pending_visits_escalated_count": {
+            "type": "integer",
+            "title": "Pending Visits Escalated Count",
+            "default": 0
+          },
           "late_arrivals_count": {
             "type": "integer",
             "title": "Late Arrivals Count"
@@ -16828,6 +18953,17 @@
           "pending_approvals_count": {
             "type": "integer",
             "title": "Pending Approvals Count"
+          },
+          "unassigned_worksites_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unassigned Worksites Count"
           }
         },
         "type": "object",
@@ -16843,6 +18979,41 @@
           "pending_approvals_count"
         ],
         "title": "DashboardSummaryResponse"
+      },
+      "DeactivateRequest": {
+        "properties": {
+          "confirmation_text": {
+            "type": "string",
+            "title": "Confirmation Text"
+          },
+          "admin_password": {
+            "type": "string",
+            "title": "Admin Password"
+          },
+          "effective_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Date"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "confirmation_text",
+          "admin_password",
+          "reason"
+        ],
+        "title": "DeactivateRequest"
       },
       "DeviceStatusRead": {
         "properties": {
@@ -16967,6 +19138,87 @@
         ],
         "title": "DeviceStatusRead"
       },
+      "EmployeeAttributeHistoryRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "employee_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Employee Id"
+          },
+          "attribute_name": {
+            "type": "string",
+            "title": "Attribute Name"
+          },
+          "old_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Old Value"
+          },
+          "new_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Value"
+          },
+          "effective_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Effective From"
+          },
+          "changed_by_user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Changed By User Id"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "actor_role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Role"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "employee_id",
+          "attribute_name",
+          "effective_from",
+          "changed_by_user_id",
+          "reason",
+          "created_at"
+        ],
+        "title": "EmployeeAttributeHistoryRead"
+      },
       "EmployeeBulkUpdateItem": {
         "properties": {
           "accommodation_id": {
@@ -16991,6 +19243,18 @@
               }
             ],
             "title": "Break Override Minutes"
+          },
+          "effective_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From"
           },
           "weekly_off_day": {
             "anyOf": [
@@ -17019,6 +19283,18 @@
           },
           "changes": {
             "$ref": "#/components/schemas/EmployeeBulkUpdateItem"
+          },
+          "effective_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From"
           }
         },
         "type": "object",
@@ -17153,6 +19429,11 @@
               }
             ],
             "title": "Employment End Date"
+          },
+          "confirm_reuse": {
+            "type": "boolean",
+            "title": "Confirm Reuse",
+            "default": false
           }
         },
         "type": "object",
@@ -17162,6 +19443,71 @@
           "role"
         ],
         "title": "EmployeeCreate"
+      },
+      "EmployeeDeactivationImpactResponse": {
+        "properties": {
+          "employee_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Employee Id"
+          },
+          "employee_name": {
+            "type": "string",
+            "title": "Employee Name"
+          },
+          "tally_id": {
+            "type": "string",
+            "title": "Tally Id"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "effective_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Effective Date"
+          },
+          "future_active_shifts": {
+            "type": "integer",
+            "title": "Future Active Shifts"
+          },
+          "base_roster_slots": {
+            "type": "integer",
+            "title": "Base Roster Slots"
+          },
+          "active_standing_assignments": {
+            "type": "integer",
+            "title": "Active Standing Assignments"
+          },
+          "pending_leave_requests": {
+            "type": "integer",
+            "title": "Pending Leave Requests"
+          },
+          "pending_reassignment_requests": {
+            "type": "integer",
+            "title": "Pending Reassignment Requests"
+          },
+          "active_direct_reports": {
+            "type": "integer",
+            "title": "Active Direct Reports"
+          }
+        },
+        "type": "object",
+        "required": [
+          "employee_id",
+          "employee_name",
+          "tally_id",
+          "role",
+          "effective_date",
+          "future_active_shifts",
+          "base_roster_slots",
+          "active_standing_assignments",
+          "pending_leave_requests",
+          "pending_reassignment_requests",
+          "active_direct_reports"
+        ],
+        "title": "EmployeeDeactivationImpactResponse"
       },
       "EmployeeDocumentCreate": {
         "properties": {
@@ -17241,6 +19587,64 @@
           "is_active"
         ],
         "title": "EmployeeDocumentRead"
+      },
+      "EmployeeProfileDetailsUpdate": {
+        "properties": {
+          "staff_grade_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Staff Grade Description"
+          },
+          "grade_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grade Code"
+          },
+          "is_driver": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Driver"
+          },
+          "effective_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "EmployeeProfileDetailsUpdate"
       },
       "EmployeeRead": {
         "properties": {
@@ -17388,6 +19792,12 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
+          },
+          "read_only": {
+            "type": "boolean",
+            "title": "Read Only",
+            "description": "True when the caller sees this employee only through a worksite (DEC-57): view and comment only",
+            "default": false
           }
         },
         "type": "object",
@@ -17471,6 +19881,17 @@
             "title": "Fixed Ot Amount",
             "default": "0.00"
           },
+          "break_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Break Minutes"
+          },
           "bonus": {
             "anyOf": [
               {
@@ -17509,6 +19930,17 @@
             ],
             "title": "Housing Transport Allowance",
             "default": "0.00"
+          },
+          "change_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Source"
           }
         },
         "type": "object",
@@ -17636,6 +20068,17 @@
             "type": "string",
             "title": "Fixed Ot Amount"
           },
+          "break_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Break Minutes"
+          },
           "bonus": {
             "type": "string",
             "title": "Bonus"
@@ -17647,6 +20090,17 @@
           "housing_transport_allowance": {
             "type": "string",
             "title": "Housing Transport Allowance"
+          },
+          "change_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Source"
           },
           "salary_portion": {
             "type": "string",
@@ -17679,6 +20133,141 @@
           "created_at"
         ],
         "title": "EmployeeSalaryRead"
+      },
+      "EmployeeSalaryUpdate": {
+        "properties": {
+          "effective_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From"
+          },
+          "standard_hours": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 24.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Standard Hours"
+          },
+          "basic_salary": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basic Salary"
+          },
+          "special_allowance": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Special Allowance"
+          },
+          "fixed_ot_amount": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fixed Ot Amount"
+          },
+          "break_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Break Minutes"
+          },
+          "bonus": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bonus"
+          },
+          "telephone_allowance": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telephone Allowance"
+          },
+          "housing_transport_allowance": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Housing Transport Allowance"
+          }
+        },
+        "type": "object",
+        "title": "EmployeeSalaryUpdate"
       },
       "EmployeeUpdate": {
         "properties": {
@@ -17804,6 +20393,18 @@
             ],
             "title": "Break Override Minutes"
           },
+          "effective_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From"
+          },
           "join_date": {
             "anyOf": [
               {
@@ -17849,6 +20450,52 @@
           "version"
         ],
         "title": "EmployeeUpdate"
+      },
+      "EntityLifecycleResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "entity_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Entity Id"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "effective_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Date"
+          },
+          "summary": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Summary"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "entity_id",
+          "is_active",
+          "message"
+        ],
+        "title": "EntityLifecycleResponse"
       },
       "EventBatchRequest": {
         "properties": {
@@ -18390,6 +21037,121 @@
         ],
         "title": "HierarchyTreeNode"
       },
+      "HierarchyViolationItem": {
+        "properties": {
+          "reporting_line_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Reporting Line Id"
+          },
+          "employee_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Employee Id"
+          },
+          "employee_tally_id": {
+            "type": "string",
+            "title": "Employee Tally Id"
+          },
+          "employee_name": {
+            "type": "string",
+            "title": "Employee Name"
+          },
+          "employee_role": {
+            "type": "string",
+            "title": "Employee Role"
+          },
+          "manager_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Manager Id"
+          },
+          "manager_tally_id": {
+            "type": "string",
+            "title": "Manager Tally Id"
+          },
+          "manager_name": {
+            "type": "string",
+            "title": "Manager Name"
+          },
+          "manager_role": {
+            "type": "string",
+            "title": "Manager Role"
+          },
+          "relationship": {
+            "type": "string",
+            "title": "Relationship"
+          },
+          "violation_code": {
+            "type": "string",
+            "title": "Violation Code"
+          },
+          "violation_message": {
+            "type": "string",
+            "title": "Violation Message"
+          },
+          "supervisor_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supervisor Id"
+          },
+          "supervisor_tally_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supervisor Tally Id"
+          },
+          "supervisor_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supervisor Name"
+          },
+          "supervisor_already_has_manager": {
+            "type": "boolean",
+            "title": "Supervisor Already Has Manager",
+            "default": false
+          },
+          "can_move_to_supervisor": {
+            "type": "boolean",
+            "title": "Can Move To Supervisor",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "reporting_line_id",
+          "employee_id",
+          "employee_tally_id",
+          "employee_name",
+          "employee_role",
+          "manager_id",
+          "manager_tally_id",
+          "manager_name",
+          "manager_role",
+          "relationship",
+          "violation_code",
+          "violation_message"
+        ],
+        "title": "HierarchyViolationItem"
+      },
       "ImportBatchRead": {
         "properties": {
           "id": {
@@ -18522,6 +21284,17 @@
             },
             "type": "array",
             "title": "Rows"
+          },
+          "filtered_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filtered Total"
           }
         },
         "type": "object",
@@ -18769,6 +21542,57 @@
           "deployment_type"
         ],
         "title": "JobItemCreate"
+      },
+      "JobItemDestination": {
+        "properties": {
+          "job_item_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Job Item Id"
+          },
+          "worksite_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Worksite Id"
+          },
+          "job_number": {
+            "type": "string",
+            "title": "Job Number"
+          },
+          "job_name": {
+            "type": "string",
+            "title": "Job Name"
+          },
+          "country": {
+            "type": "string",
+            "title": "Country"
+          },
+          "sub_item_code": {
+            "type": "string",
+            "title": "Sub Item Code"
+          },
+          "staff_grade_description": {
+            "type": "string",
+            "title": "Staff Grade Description"
+          },
+          "deployment_type": {
+            "type": "string",
+            "title": "Deployment Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_item_id",
+          "worksite_id",
+          "job_number",
+          "job_name",
+          "country",
+          "sub_item_code",
+          "staff_grade_description",
+          "deployment_type"
+        ],
+        "title": "JobItemDestination",
+        "description": "Reassignment destination: names and codes only, no budget or cost figures."
       },
       "JobItemResponse": {
         "properties": {
@@ -19382,6 +22206,66 @@
         "type": "object",
         "title": "JobOccurrenceUpdate"
       },
+      "LeaveBulkCoverRequest": {
+        "properties": {
+          "cover_employee_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Cover Employee Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cover_employee_id"
+        ],
+        "title": "LeaveBulkCoverRequest",
+        "description": "Assign one cover worker to all uncovered TO_BE_COVERED slots of an approved leave."
+      },
+      "LeaveBulkCoverResponse": {
+        "properties": {
+          "leave_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Leave Id"
+          },
+          "cover_employee_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Cover Employee Id"
+          },
+          "cover_employee_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Employee Name"
+          },
+          "covered_count": {
+            "type": "integer",
+            "title": "Covered Count"
+          },
+          "weekly_off_cover_dates": {
+            "items": {
+              "type": "string",
+              "format": "date"
+            },
+            "type": "array",
+            "title": "Weekly Off Cover Dates"
+          }
+        },
+        "type": "object",
+        "required": [
+          "leave_id",
+          "cover_employee_id",
+          "covered_count"
+        ],
+        "title": "LeaveBulkCoverResponse",
+        "description": "Result of bulk-covering all uncovered slots for an approved leave."
+      },
       "LeaveDecisionRequest": {
         "properties": {
           "reason": {
@@ -19406,6 +22290,18 @@
             "type": "string",
             "format": "uuid",
             "title": "Employee Id"
+          },
+          "cover_employee_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Employee Id"
           },
           "leave_type": {
             "type": "string",
@@ -19451,6 +22347,11 @@
             "format": "uuid",
             "title": "Id"
           },
+          "read_only": {
+            "type": "boolean",
+            "title": "Read Only",
+            "default": false
+          },
           "employee_id": {
             "type": "string",
             "format": "uuid",
@@ -19477,6 +22378,67 @@
               }
             ],
             "title": "Tally Id"
+          },
+          "employee_weekly_off_day": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Weekly Off Day"
+          },
+          "cover_employee_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Employee Id"
+          },
+          "cover_employee_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Employee Name"
+          },
+          "cover_employee_tally_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Employee Tally Id"
+          },
+          "cover_weekly_off_day": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Weekly Off Day"
+          },
+          "weekly_off_mismatch": {
+            "type": "boolean",
+            "title": "Weekly Off Mismatch",
+            "default": false
           },
           "leave_type": {
             "type": "string",
@@ -21826,6 +24788,11 @@
               }
             ],
             "title": "Notes"
+          },
+          "treat_leaves_as_paid": {
+            "type": "boolean",
+            "title": "Treat Leaves As Paid",
+            "default": false
           }
         },
         "type": "object",
@@ -22204,6 +25171,11 @@
             "type": "string",
             "title": "Final Total Staff Cost Total",
             "default": "0.00"
+          },
+          "treat_leaves_as_paid": {
+            "type": "boolean",
+            "title": "Treat Leaves As Paid",
+            "default": false
           }
         },
         "type": "object",
@@ -22654,6 +25626,34 @@
         ],
         "title": "PublicHolidayRead"
       },
+      "ReactivateRequest": {
+        "properties": {
+          "confirmation_text": {
+            "type": "string",
+            "title": "Confirmation Text"
+          },
+          "admin_password": {
+            "type": "string",
+            "title": "Admin Password"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "reactivate_items": {
+            "type": "boolean",
+            "title": "Reactivate Items",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "confirmation_text",
+          "admin_password",
+          "reason"
+        ],
+        "title": "ReactivateRequest"
+      },
       "ReadinessResponse": {
         "properties": {
           "status": {
@@ -22672,6 +25672,202 @@
         ],
         "title": "ReadinessResponse"
       },
+      "ReassignmentBatchCreate": {
+        "properties": {
+          "reason_category": {
+            "type": "string",
+            "title": "Reason Category",
+            "description": "LEAVE_COVER | CAPACITY | WEATHER | PRIORITY | OTHER",
+            "default": "CAPACITY"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "batch_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Note"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReassignmentBatchItemCreate"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "ReassignmentBatchCreate",
+        "description": "Payload to submit multiple temporary reassignment items together as one approval batch."
+      },
+      "ReassignmentBatchItemCreate": {
+        "properties": {
+          "reassignment_type": {
+            "type": "string",
+            "title": "Reassignment Type",
+            "description": "REPLACE | MOVE | ADD | CANCEL"
+          },
+          "date_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Date From"
+          },
+          "date_to": {
+            "type": "string",
+            "format": "date",
+            "title": "Date To"
+          },
+          "original_employee_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Employee Id"
+          },
+          "new_employee_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Employee Id"
+          },
+          "original_scheduled_work_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Scheduled Work Id"
+          },
+          "standing_assignment_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Standing Assignment Id"
+          },
+          "target_job_item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Job Item Id"
+          },
+          "hours_per_day": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hours Per Day"
+          },
+          "reason_category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Category"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reassignment_type",
+          "date_from",
+          "date_to"
+        ],
+        "title": "ReassignmentBatchItemCreate",
+        "description": "One proposed reassignment line inside a Supervisor draft batch."
+      },
+      "ReassignmentBatchResponse": {
+        "properties": {
+          "batch_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Batch Id"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReassignmentResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "batch_id",
+          "count"
+        ],
+        "title": "ReassignmentBatchResponse",
+        "description": "Response for creating or deciding a reassignment batch."
+      },
       "ReassignmentDecisionRequest": {
         "properties": {
           "decision_note": {
@@ -22688,7 +25884,7 @@
         },
         "type": "object",
         "title": "ReassignmentDecisionRequest",
-        "description": "Payload to approve or reject a reassignment request."
+        "description": "Payload to approve or reject a reassignment request or batch."
       },
       "ReassignmentPreviewDay": {
         "properties": {
@@ -22976,6 +26172,34 @@
             "type": "string",
             "format": "uuid",
             "title": "Id"
+          },
+          "read_only": {
+            "type": "boolean",
+            "title": "Read Only",
+            "default": false
+          },
+          "batch_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Id"
+          },
+          "batch_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Note"
           },
           "reassignment_type": {
             "type": "string",
@@ -23683,6 +26907,11 @@
             "format": "date-time",
             "title": "Created At"
           },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active",
+            "default": true
+          },
           "is_direct": {
             "type": "boolean",
             "title": "Is Direct",
@@ -23709,6 +26938,24 @@
           "created_at"
         ],
         "title": "ReportingLineRead"
+      },
+      "ResetDatabaseRequest": {
+        "properties": {
+          "confirmation_text": {
+            "type": "string",
+            "title": "Confirmation Text"
+          },
+          "admin_password": {
+            "type": "string",
+            "title": "Admin Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "confirmation_text",
+          "admin_password"
+        ],
+        "title": "ResetDatabaseRequest"
       },
       "ResetPasswordResponse": {
         "properties": {
@@ -23760,6 +27007,11 @@
           "notification_logs_purged": {
             "type": "integer",
             "title": "Notification Logs Purged"
+          },
+          "stream_tickets_purged": {
+            "type": "integer",
+            "title": "Stream Tickets Purged",
+            "default": 0
           },
           "completed_at": {
             "type": "string",
@@ -23823,6 +27075,18 @@
               }
             ],
             "title": "Notes"
+          },
+          "suffix_label": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suffix Label"
           },
           "lines": {
             "items": {
@@ -23890,6 +27154,17 @@
               }
             ],
             "title": "Notes"
+          },
+          "suffix_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suffix Label"
           },
           "line_count": {
             "type": "integer",
@@ -24036,6 +27311,17 @@
             "title": "Fixed Ot Amount",
             "default": "0.00"
           },
+          "break_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Break Minutes"
+          },
           "bonus": {
             "anyOf": [
               {
@@ -24169,6 +27455,17 @@
             "title": "Fixed Ot Amount",
             "default": "0.00"
           },
+          "break_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Break Minutes"
+          },
           "bonus": {
             "type": "string",
             "title": "Bonus",
@@ -24299,6 +27596,17 @@
             "type": "string",
             "title": "Fixed Ot Amount"
           },
+          "break_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Break Minutes"
+          },
           "bonus": {
             "type": "string",
             "title": "Bonus"
@@ -24348,6 +27656,17 @@
             "type": "string",
             "title": "Planned Hourly Cost",
             "default": "0.00"
+          },
+          "display_grade_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Grade Code"
           }
         },
         "type": "object",
@@ -24417,6 +27736,17 @@
             ],
             "title": "Notes"
           },
+          "suffix_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suffix Label"
+          },
           "line_count": {
             "type": "integer",
             "title": "Line Count",
@@ -24480,6 +27810,72 @@
           "basic_salary": {
             "type": "string",
             "title": "Basic Salary"
+          },
+          "special_allowance": {
+            "type": "string",
+            "title": "Special Allowance",
+            "default": "0.00"
+          },
+          "fixed_ot_amount": {
+            "type": "string",
+            "title": "Fixed Ot Amount",
+            "default": "0.00"
+          },
+          "bonus": {
+            "type": "string",
+            "title": "Bonus",
+            "default": "0.00"
+          },
+          "telephone_allowance": {
+            "type": "string",
+            "title": "Telephone Allowance",
+            "default": "0.00"
+          },
+          "housing_transport_allowance": {
+            "type": "string",
+            "title": "Housing Transport Allowance",
+            "default": "0.00"
+          },
+          "gratuity": {
+            "type": "string",
+            "title": "Gratuity",
+            "default": "0.00"
+          },
+          "leave_salary": {
+            "type": "string",
+            "title": "Leave Salary",
+            "default": "0.00"
+          },
+          "per_month_provision": {
+            "type": "string",
+            "title": "Per Month Provision",
+            "default": "0.00"
+          },
+          "total_staff_cost": {
+            "type": "string",
+            "title": "Total Staff Cost",
+            "default": "0.00"
+          },
+          "hr_oh": {
+            "type": "string",
+            "title": "Hr Oh",
+            "default": "0.00"
+          },
+          "final_cost": {
+            "type": "string",
+            "title": "Final Cost",
+            "default": "0.00"
+          },
+          "break_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Break Minutes"
           },
           "effective_from": {
             "type": "string",
@@ -24744,6 +28140,11 @@
           "source": {
             "type": "string",
             "title": "Source"
+          },
+          "is_weekly_off_cover": {
+            "type": "boolean",
+            "title": "Is Weekly Off Cover",
+            "default": false
           },
           "version": {
             "type": "integer",
@@ -25019,6 +28420,18 @@
             "title": "Gap Type",
             "default": "LEAVE"
           },
+          "leave_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leave Id"
+          },
           "days_to_go": {
             "type": "integer",
             "title": "Days To Go"
@@ -25291,6 +28704,37 @@
         ],
         "title": "StreamTicketResponse"
       },
+      "SupervisorProposal": {
+        "properties": {
+          "supervisor_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Supervisor Id"
+          },
+          "supervisor_name": {
+            "type": "string",
+            "title": "Supervisor Name"
+          },
+          "supervisor_tally_id": {
+            "type": "string",
+            "title": "Supervisor Tally Id"
+          },
+          "crew_members_on_site": {
+            "type": "integer",
+            "title": "Crew Members On Site",
+            "description": "Crew members with active standing assignments here"
+          }
+        },
+        "type": "object",
+        "required": [
+          "supervisor_id",
+          "supervisor_name",
+          "supervisor_tally_id",
+          "crew_members_on_site"
+        ],
+        "title": "SupervisorProposal",
+        "description": "A supervisor whose crew works on a worksite but who is not assigned to it yet."
+      },
       "SyncAckRequest": {
         "properties": {
           "cursor": {
@@ -25460,6 +28904,129 @@
           "entities"
         ],
         "title": "SyncSnapshotResponse"
+      },
+      "TallyIdChangeRequest": {
+        "properties": {
+          "new_tally_id": {
+            "type": "string",
+            "title": "New Tally Id"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "confirm_reuse": {
+            "type": "boolean",
+            "title": "Confirm Reuse",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "new_tally_id",
+          "reason"
+        ],
+        "title": "TallyIdChangeRequest"
+      },
+      "TallyIdCheckResponse": {
+        "properties": {
+          "tally_id": {
+            "type": "string",
+            "title": "Tally Id"
+          },
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "in_use_by_employee_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "In Use By Employee Id"
+          },
+          "in_use_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "In Use By Name"
+          },
+          "previously_used": {
+            "type": "boolean",
+            "title": "Previously Used",
+            "default": false
+          },
+          "previous_uses": {
+            "items": {
+              "$ref": "#/components/schemas/TallyIdPreviousUse"
+            },
+            "type": "array",
+            "title": "Previous Uses"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tally_id",
+          "available"
+        ],
+        "title": "TallyIdCheckResponse"
+      },
+      "TallyIdPreviousUse": {
+        "properties": {
+          "employee_id": {
+            "type": "string",
+            "title": "Employee Id"
+          },
+          "employee_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Name"
+          },
+          "new_tally_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Tally Id"
+          },
+          "changed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "employee_id"
+        ],
+        "title": "TallyIdPreviousUse"
       },
       "TimeRuleCreate": {
         "properties": {
@@ -26162,8 +29729,15 @@
             "title": "Id"
           },
           "employee_id": {
-            "type": "string",
-            "format": "uuid",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Employee Id"
           },
           "username": {
@@ -26202,7 +29776,6 @@
         "type": "object",
         "required": [
           "id",
-          "employee_id",
           "username",
           "role",
           "is_active",
@@ -26780,6 +30353,18 @@
             "type": "boolean",
             "title": "Is Custom Budget Override",
             "default": false
+          },
+          "missing_rate_hours": {
+            "type": "string",
+            "title": "Missing Rate Hours",
+            "default": "0.0"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/BudgetWarning"
+            },
+            "type": "array",
+            "title": "Warnings"
           }
         },
         "type": "object",
@@ -27132,6 +30717,14 @@
             "type": "array",
             "title": "Job Items",
             "default": []
+          },
+          "supervisors": {
+            "items": {
+              "$ref": "#/components/schemas/WorksiteSupervisorRead"
+            },
+            "type": "array",
+            "title": "Supervisors",
+            "default": []
           }
         },
         "type": "object",
@@ -27346,6 +30939,176 @@
           "updated_at"
         ],
         "title": "WorksiteResponse"
+      },
+      "WorksiteSupervisorAssign": {
+        "properties": {
+          "supervisor_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Supervisor Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "supervisor_id"
+        ],
+        "title": "WorksiteSupervisorAssign"
+      },
+      "WorksiteSupervisorBulkAssign": {
+        "properties": {
+          "assignments": {
+            "items": {
+              "$ref": "#/components/schemas/WorksiteSupervisorPair"
+            },
+            "type": "array",
+            "maxItems": 2000,
+            "minItems": 1,
+            "title": "Assignments"
+          }
+        },
+        "type": "object",
+        "required": [
+          "assignments"
+        ],
+        "title": "WorksiteSupervisorBulkAssign"
+      },
+      "WorksiteSupervisorBulkAssignResult": {
+        "properties": {
+          "assigned": {
+            "type": "integer",
+            "title": "Assigned"
+          },
+          "already_assigned": {
+            "type": "integer",
+            "title": "Already Assigned"
+          }
+        },
+        "type": "object",
+        "required": [
+          "assigned",
+          "already_assigned"
+        ],
+        "title": "WorksiteSupervisorBulkAssignResult"
+      },
+      "WorksiteSupervisorPair": {
+        "properties": {
+          "worksite_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Worksite Id"
+          },
+          "supervisor_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Supervisor Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "worksite_id",
+          "supervisor_id"
+        ],
+        "title": "WorksiteSupervisorPair"
+      },
+      "WorksiteSupervisorProposal": {
+        "properties": {
+          "worksite_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Worksite Id"
+          },
+          "job_number": {
+            "type": "string",
+            "title": "Job Number"
+          },
+          "job_name": {
+            "type": "string",
+            "title": "Job Name"
+          },
+          "assigned_supervisor_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Assigned Supervisor Ids",
+            "default": []
+          },
+          "proposals": {
+            "items": {
+              "$ref": "#/components/schemas/SupervisorProposal"
+            },
+            "type": "array",
+            "title": "Proposals",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "worksite_id",
+          "job_number",
+          "job_name"
+        ],
+        "title": "WorksiteSupervisorProposal"
+      },
+      "WorksiteSupervisorRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "worksite_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Worksite Id"
+          },
+          "supervisor_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Supervisor Id"
+          },
+          "supervisor_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supervisor Name"
+          },
+          "supervisor_tally_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supervisor Tally Id"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "worksite_id",
+          "supervisor_id",
+          "is_active",
+          "created_at"
+        ],
+        "title": "WorksiteSupervisorRead"
       },
       "WorksiteUpdate": {
         "properties": {

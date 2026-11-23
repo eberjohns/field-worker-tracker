@@ -231,6 +231,7 @@ class EmployeeAttributeHistory(Base):
         nullable=False,
     )
     reason: Mapped[str] = mapped_column(String(255), nullable=False)
+    actor_role: Mapped[str | None] = mapped_column(String(30), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),

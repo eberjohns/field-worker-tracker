@@ -14,10 +14,16 @@ from fw.modules.imports.registry import (
     CONTROLLED_SGDS,
     SHEET_REGISTRY,
 )
+from fw.rules.imports import ADMIN_ONLY_SHEETS, is_admin_only_row
 
 
-def generate_import_template_bytes() -> bytes:
-    """Generate the full XLSX import template as bytes."""
+def generate_import_template_bytes(include_admin_only: bool = True) -> bytes:
+    """Generate the XLSX import template as bytes.
+
+    ``include_admin_only=False`` (Engineers, DEC-47) leaves out the salary sheets and the
+    money/rate example rows of Company_Settings.
+    """
+    sheet_names = [s for s in ALL_SHEET_NAMES if include_admin_only or s not in ADMIN_ONLY_SHEETS]
     wb = openpyxl.Workbook()
     # Remove default sheet
     wb.remove(wb.active)  # type: ignore
@@ -95,6 +101,8 @@ def generate_import_template_bytes() -> bytes:
         ("Company_Settings", "Effective-dated company settings & provisions (Phase 03)."),
         ("Time_Rules", "Planned shift hours and break rules (Phase 03)."),
     ]
+    if not include_admin_only:
+        readme_rows = [r for r in readme_rows if r[0] not in ADMIN_ONLY_SHEETS]
     for r_idx, (col1, col2) in enumerate(readme_rows, start=4):
         ws_readme.cell(row=r_idx, column=1, value=col1).font = (
             font_bold
@@ -111,7 +119,7 @@ def generate_import_template_bytes() -> bytes:
     ws_readme.column_dimensions["B"].width = 80
 
     # 2. Data Sheets
-    for sheet_name in ALL_SHEET_NAMES:
+    for sheet_name in sheet_names:
         sheet_def = SHEET_REGISTRY[sheet_name]
         ws = wb.create_sheet(title=sheet_name)
         ws.views.sheetView[0].showGridLines = True
@@ -146,7 +154,12 @@ def generate_import_template_bytes() -> bytes:
             c.alignment = Alignment(horizontal="center")
 
         # Row 5+: Examples
-        for e_idx, ex in enumerate(sheet_def.examples, start=5):
+        examples = [
+            ex
+            for ex in sheet_def.examples
+            if include_admin_only or not is_admin_only_row(sheet_name, ex.get("setting_key"))
+        ]
+        for e_idx, ex in enumerate(examples, start=5):
             c_ex = ws.cell(row=e_idx, column=1, value="EXAMPLE")
             c_ex.font = font_example
             c_ex.fill = fill_example
@@ -239,7 +252,7 @@ def generate_import_template_bytes() -> bytes:
         cell.border = thin_border
 
     dict_r = 2
-    for sheet_name in ALL_SHEET_NAMES:
+    for sheet_name in sheet_names:
         sheet_def = SHEET_REGISTRY[sheet_name]
         for col in sheet_def.columns:
             allowed = f"list: {col.enum_values}" if col.enum_values else None

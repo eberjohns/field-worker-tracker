@@ -302,7 +302,7 @@ async def test_employee_profile_details_and_attribute_history():
             f"/api/v1/employees/{emp.id}/profile-details",
             headers={"Authorization": f"Bearer {admin_token}"},
             json={
-                "staff_grade_description": "Mason",
+                "staff_grade_description": "Gardener Expert",
                 "grade_code": "G2B",
                 "is_driver": True,
                 "reason": "Annual promotion & license acquired",
@@ -310,7 +310,7 @@ async def test_employee_profile_details_and_attribute_history():
         )
         assert resp.status_code == 200
         updated = resp.json()
-        assert updated["staff_grade_description"] == "Mason"
+        assert updated["staff_grade_description"] == "Gardener Expert"
         assert updated["grade_code"] == "G2B"
         assert updated["is_driver"] is True
 
@@ -326,7 +326,7 @@ async def test_employee_profile_details_and_attribute_history():
         history_map = {h["attribute_name"]: h for h in history}
         assert "STAFF_GRADE_DESCRIPTION" in history_map
         assert history_map["STAFF_GRADE_DESCRIPTION"]["old_value"] == "Helper"
-        assert history_map["STAFF_GRADE_DESCRIPTION"]["new_value"] == "Mason"
+        assert history_map["STAFF_GRADE_DESCRIPTION"]["new_value"] == "Gardener Expert"
         assert (
             history_map["STAFF_GRADE_DESCRIPTION"]["reason"]
             == "Annual promotion & license acquired"
@@ -471,14 +471,14 @@ async def test_salary_structure_cost_breakdown_and_rbac():
         assert float(target["gratuity"]) == 98.63
         # Leave salary: 1200 / 12 = 100.00
         assert float(target["leave_salary"]) == 100.00
-        # Provisions: 550 (fixed) + 98.63 + 100.00 = 748.63
-        assert float(target["per_month_provision"]) == 748.63
-        # Staff cost: 1500 + 748.63 = 2248.63
-        assert float(target["total_staff_cost"]) == 2248.63
-        # HR OH: 2248.63 * 0.05 = 112.43
-        assert float(target["hr_oh"]) == 112.43
-        # Final cost: 2248.63 + 112.43 = 2361.06
-        assert float(target["final_cost"]) == 2361.06
+        # Provisions from settings (132+65+30+550+65 = 842) + 98.63 + 100.00 = 1040.63
+        assert float(target["per_month_provision"]) == 1040.63
+        # Staff cost: 1500 + 1040.63 = 2540.63
+        assert float(target["total_staff_cost"]) == 2540.63
+        # HR OH: 2540.63 * 0.05 = 127.03
+        assert float(target["hr_oh"]) == 127.03
+        # Final cost: 2540.63 + 127.03 = 2667.66
+        assert float(target["final_cost"]) == 2667.66
 
 
 @db_required

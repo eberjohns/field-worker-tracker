@@ -29,6 +29,7 @@ from fw.modules.payroll.models import (
 )
 from fw.modules.payroll.repository import PayrollRepository
 from fw.modules.payroll.schemas import (
+    BudgetWarning,
     EmployeeSalaryCreate,
     EmployeeSalaryHistoryResponse,
     EmployeeSalaryRead,
@@ -51,6 +52,14 @@ from fw.modules.payroll.schemas import (
     WorksiteBudgetVsActualItem,
 )
 from fw.modules.settings.service import SettingsService
+from fw.rules.grades import (
+    InvalidGradeCodeError,
+    base_grade_code,
+    display_grade_code,
+    grade_sort_key,
+    is_base_grade_code,
+    try_base_grade_code,
+)
 from fw.rules.payroll import (
     calculate_final_total_staff_cost,
     calculate_gratuity,
@@ -68,6 +77,102 @@ from fw.rules.payroll import (
     compute_next_payroll_month_start,
     round_money,
 )
+
+
+def _base_grade_or_422(raw: str) -> str:
+    """Base grade code (DEC-58) or a 422 INVALID_GRADE_CODE."""
+    try:
+        return base_grade_code(raw)
+    except InvalidGradeCodeError as exc:
+        raise AppError(code=exc.code, message=str(exc), status_code=422) from exc
+
+
+async def _required_decimal_setting(
+    session: AsyncSession, key: str, country: str | None, as_of: date
+) -> Decimal:
+    """Money/rate settings have no hard-coded fallback: a missing value stops the calculation."""
+    val = await SettingsService.get_setting(session, key, country=country, as_of=as_of)
+    if val is None:
+        raise AppError(
+            code="SETTING_MISSING",
+            message=f"Company setting '{key}' has no value for {country or 'any country'} on {as_of}.",
+            status_code=422,
+            extra={"setting_key": key, "country": country, "as_of": str(as_of)},
+        )
+    return Decimal(str(val))
+
+
+_SALARY_AMOUNT_FIELDS = (
+    "standard_hours",
+    "basic_salary",
+    "special_allowance",
+    "fixed_ot_amount",
+    "bonus",
+    "telephone_allowance",
+    "housing_transport_allowance",
+)
+
+
+def _salary_snapshot(row: EmployeeSalary) -> dict[str, Any]:
+    """Full-row audit snapshot of an employee_salary row."""
+    snap: dict[str, Any] = {
+        "id": str(row.id),
+        "effective_from": str(row.effective_from),
+        "break_minutes": row.break_minutes,
+        "change_source": row.change_source,
+    }
+    for f in _SALARY_AMOUNT_FIELDS:
+        v = getattr(row, f)
+        snap[f] = str(v) if v is not None else None
+    return snap
+
+
+async def _resync_crew_break_rows(
+    session: AsyncSession, employee_id: UUID, after: date
+) -> list[dict[str, Any]]:
+    """Future CREW_BREAK rows copy their amounts from the row before them (keep their break).
+
+    Called after a future salary row is edited or deleted so a crew-break row never keeps
+    stale amounts. Returns the changes for the audit entry.
+    """
+    rows = list(
+        (
+            await session.execute(
+                select(EmployeeSalary)
+                .where(EmployeeSalary.employee_id == employee_id)
+                .order_by(EmployeeSalary.effective_from.asc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    changes: list[dict[str, Any]] = []
+    for idx, row in enumerate(rows):
+        if idx == 0 or row.effective_from <= after or row.change_source != "CREW_BREAK":
+            continue
+        prev = rows[idx - 1]
+        diff = {
+            f: {"old": str(getattr(row, f)), "new": str(getattr(prev, f))}
+            for f in _SALARY_AMOUNT_FIELDS
+            if getattr(row, f) != getattr(prev, f)
+        }
+        if diff:
+            for f in _SALARY_AMOUNT_FIELDS:
+                setattr(row, f, getattr(prev, f))
+            changes.append({"id": str(row.id), "effective_from": str(row.effective_from), **diff})
+    if changes:
+        await session.flush()
+    return changes
+
+
+def _reject_crew_break_row(row: EmployeeSalary, verb: str) -> None:
+    if row.change_source == "CREW_BREAK":
+        raise AppError(
+            "CREW_BREAK_ROW_LOCKED",
+            f"Cannot {verb} a crew-break salary row directly. Its amounts follow the row before it; "
+            "change the crew break on the supervisor instead.",
+            status_code=422,
+        )
 
 
 class PayrollSalaryService:
@@ -157,7 +262,7 @@ class PayrollSalaryService:
             raise AppError(code="NOT_FOUND", message="Employee not found", status_code=404)
 
         effective_date = payload.effective_from or compute_next_payroll_month_start(
-            datetime.now(UTC).date()
+            site_today(emp.country)
         )
 
         break_mins = payload.break_minutes
@@ -406,6 +511,8 @@ class PayrollSalaryService:
                 "Cannot edit historical or currently active salary revisions. Only future revisions can be modified.",
                 status_code=422,
             )
+        _reject_crew_break_row(row, "edit")
+        before = _salary_snapshot(row)
 
         diff: dict[str, Any] = {}
         if data.standard_hours is not None and data.standard_hours != row.standard_hours:
@@ -468,12 +575,18 @@ class PayrollSalaryService:
 
         if diff:
             await session.flush()
+            resynced = await _resync_crew_break_rows(session, employee_id, today_local)
             await AuditService.log_action(
                 session=session,
                 action="UPDATE_FUTURE_SALARY_REVISION",
                 entity_type="employee_salary",
                 entity_id=str(salary_id),
-                diff=diff,
+                diff={
+                    **diff,
+                    "before": before,
+                    "after": _salary_snapshot(row),
+                    "crew_break_rows_resynced": resynced,
+                },
                 actor_user_id=actor_user_id,
                 actor_role=actor_role,
                 reason="Future salary revision updated",
@@ -533,19 +646,19 @@ class PayrollSalaryService:
                 "Cannot delete historical or currently active salary revisions. Only future revisions can be deleted.",
                 status_code=422,
             )
+        _reject_crew_break_row(row, "delete")
+        snapshot = _salary_snapshot(row)
 
         await session.delete(row)
         await session.flush()
+        resynced = await _resync_crew_break_rows(session, employee_id, today_local)
 
         await AuditService.log_action(
             session=session,
             action="DELETE_FUTURE_SALARY_REVISION",
             entity_type="employee_salary",
             entity_id=str(salary_id),
-            diff={
-                "deleted_effective_from": str(row.effective_from),
-                "basic_salary": float(row.basic_salary),
-            },
+            diff={"deleted_row": snapshot, "crew_break_rows_resynced": resynced},
             actor_user_id=actor_user_id,
             actor_role=actor_role,
             reason="Future salary revision deleted",
@@ -572,46 +685,31 @@ class PayrollSalaryService:
         employees = list(res.scalars().all())
 
         items: list[SalaryStructureListItem] = []
-        today = as_of or datetime.now(UTC).date()
         prov_cache: dict[str, Decimal] = {}
 
         async def get_prov_sum(cntry: str, as_of_d: date) -> Decimal:
             if cntry in prov_cache:
                 return prov_cache[cntry]
-            visa = await SettingsService.get_setting(
-                session, "visa_provision", country=cntry, as_of=as_of_d, default=Decimal("100.00")
-            )
-            air = await SettingsService.get_setting(
-                session,
-                "air_ticket_provision",
-                country=cntry,
-                as_of=as_of_d,
-                default=Decimal("75.00"),
-            )
-            uni = await SettingsService.get_setting(
-                session, "uniform_provision", country=cntry, as_of=as_of_d, default=Decimal("25.00")
-            )
-            acc = await SettingsService.get_setting(
-                session,
-                "accommodation_provision",
-                country=cntry,
-                as_of=as_of_d,
-                default=Decimal("300.00"),
-            )
-            med = await SettingsService.get_setting(
-                session, "medical_provision", country=cntry, as_of=as_of_d, default=Decimal("50.00")
-            )
             total_prov = calculate_provisions(
-                visa=Decimal(str(visa if visa is not None else 100)),
-                air_ticket=Decimal(str(air if air is not None else 75)),
-                uniform=Decimal(str(uni if uni is not None else 25)),
-                accommodation=Decimal(str(acc if acc is not None else 300)),
-                medical=Decimal(str(med if med is not None else 50)),
+                visa=await _required_decimal_setting(session, "provision_visa", cntry, as_of_d),
+                air_ticket=await _required_decimal_setting(
+                    session, "provision_air_ticket", cntry, as_of_d
+                ),
+                uniform=await _required_decimal_setting(
+                    session, "provision_uniform", cntry, as_of_d
+                ),
+                accommodation=await _required_decimal_setting(
+                    session, "provision_accommodation", cntry, as_of_d
+                ),
+                medical=await _required_decimal_setting(
+                    session, "provision_medical", cntry, as_of_d
+                ),
             )
             prov_cache[cntry] = total_prov
             return total_prov
 
         for emp in employees:
+            today = as_of or site_today(emp.country)
             salary = await PayrollRepository.get_latest_salary_for_employee(session, emp.id, today)
             if salary:
                 portion = calculate_salary_portion(
@@ -892,26 +990,36 @@ class PayrollService:
             await PayrollRepository.delete_draft_run(session, existing_run.id)
 
         # 2. Resolve effective settings for the country as of period_end
-        async def get_setting_dec(key: str, default: Decimal) -> Decimal:
-            val = await SettingsService.get_setting(
-                session=session,
-                key=key,
-                as_of=payload.period_end,
-                country=payload.country,
-                default=default,
-            )
-            return Decimal(str(val)) if val is not None else default
 
-        ot_divisor = await get_setting_dec("ot_divisor", Decimal("208"))
-        ot1_multiplier = await get_setting_dec("ot1_multiplier", Decimal("1.25"))
-        ot2_multiplier = await get_setting_dec("ot2_multiplier", Decimal("1.50"))
-        hr_oh_rate = await get_setting_dec("hr_overhead_rate", Decimal("0.05"))
+        ot_divisor = await _required_decimal_setting(
+            session, "standard_ot_divisor_hours", payload.country, payload.period_end
+        )
+        ot1_multiplier = await _required_decimal_setting(
+            session, "ot1_multiplier", payload.country, payload.period_end
+        )
+        ot2_multiplier = await _required_decimal_setting(
+            session, "ot2_multiplier", payload.country, payload.period_end
+        )
+        hr_oh_rate = await _required_decimal_setting(
+            session, "hr_overhead_rate", payload.country, payload.period_end
+        )
 
-        visa_prov = await get_setting_dec("visa_provision", Decimal("100.00"))
-        air_prov = await get_setting_dec("air_ticket_provision", Decimal("75.00"))
-        uniform_prov = await get_setting_dec("uniform_provision", Decimal("25.00"))
-        accom_prov = await get_setting_dec("accommodation_provision", Decimal("300.00"))
-        medical_prov = await get_setting_dec("medical_provision", Decimal("50.00"))
+        # Seeded keys (migration 0003, Company_Settings); no hard-coded fallback.
+        visa_prov = await _required_decimal_setting(
+            session, "provision_visa", payload.country, payload.period_end
+        )
+        air_prov = await _required_decimal_setting(
+            session, "provision_air_ticket", payload.country, payload.period_end
+        )
+        uniform_prov = await _required_decimal_setting(
+            session, "provision_uniform", payload.country, payload.period_end
+        )
+        accom_prov = await _required_decimal_setting(
+            session, "provision_accommodation", payload.country, payload.period_end
+        )
+        medical_prov = await _required_decimal_setting(
+            session, "provision_medical", payload.country, payload.period_end
+        )
 
         company_provisions = calculate_provisions(
             visa=visa_prov,
@@ -1576,12 +1684,19 @@ class PayrollService:
             effective_to=payload.effective_to,
             status="ACTIVE",
             notes=payload.notes,
+            suffix_label=(payload.suffix_label or "").strip() or str(payload.effective_from.year),
         )
 
+        seen_grades: set[str] = set()
         for line_in in payload.lines:
-            gc = line_in.grade_code.strip()
-            if not gc.endswith(f"-{payload.code}") and payload.code not in gc:
-                gc = f"{gc}-{payload.code}"
+            gc = _base_grade_or_422(line_in.grade_code)
+            if gc in seen_grades:
+                raise AppError(
+                    code="DUPLICATE_GRADE_LINE",
+                    message=f"Grade '{gc}' appears more than once in revision '{payload.code}'.",
+                    status_code=422,
+                )
+            seen_grades.add(gc)
             rev.lines.append(
                 SalaryRevisionLine(
                     grade_code=gc,
@@ -1663,6 +1778,7 @@ class PayrollService:
                     total_provisions=provisions_sum,
                     total_salary_portion=salary_portion,
                     planned_hourly_cost=hourly_cost,
+                    display_grade_code=display_grade_code(line.grade_code, rev.suffix_label),
                 )
             )
 
@@ -1675,11 +1791,18 @@ class PayrollService:
             effective_to=rev.effective_to,
             status=rev.status,
             notes=rev.notes,
+            suffix_label=rev.suffix_label,
             line_count=len(lines_read),
             created_at=rev.created_at,
             updated_at=rev.updated_at,
             lines=lines_read,
         )
+
+    @staticmethod
+    async def list_grade_codes(session: AsyncSession) -> list[str]:
+        """Base grade codes in use (DEC-58), naturally sorted, for dropdowns. Codes only, no money."""
+        codes = await PayrollRepository.list_distinct_grade_codes(session)
+        return sorted((c for c in codes if is_base_grade_code(c)), key=grade_sort_key)
 
     @staticmethod
     async def list_revisions(
@@ -1697,6 +1820,7 @@ class PayrollService:
                 effective_to=r.effective_to,
                 status=r.status,
                 notes=r.notes,
+                suffix_label=r.suffix_label,
                 line_count=len(r.lines) if r.lines else 0,
                 created_at=r.created_at,
                 updated_at=r.updated_at,
@@ -1725,10 +1849,6 @@ class PayrollService:
         if base_rev:
             for rev_line in base_rev.lines:
                 base_map[rev_line.grade_code] = rev_line
-                if base_rev.code and rev_line.grade_code.endswith(f"-{base_rev.code}"):
-                    base_code = rev_line.grade_code[: -len(f"-{base_rev.code}")]
-                    if base_code not in base_map:
-                        base_map[base_code] = rev_line
 
         diffs: list[SalaryRevisionLineDiff] = []
         new_count = 0
@@ -1749,16 +1869,9 @@ class PayrollService:
         ]
 
         for inc in incoming_lines:
-            inc_code = inc.grade_code.strip()
+            inc_code = _base_grade_or_422(inc.grade_code)
+            inc.grade_code = inc_code
             base_line = base_map.get(inc_code)
-            if (
-                not base_line
-                and target_revision_code
-                and inc_code.endswith(f"-{target_revision_code}")
-            ):
-                base_line = base_map.get(inc_code[: -len(f"-{target_revision_code}")])
-            if not base_line:
-                base_line = base_map.get(inc_code.split("-")[0])
             if not base_line:
                 new_count += 1
                 for f, label in fields_to_compare:
@@ -1864,9 +1977,7 @@ class PayrollService:
 
         if lines:
             for line in lines:
-                export_grade = line.grade_code
-                if rev and rev.code and export_grade.endswith(f"-{rev.code}"):
-                    export_grade = export_grade[: -len(f"-{rev.code}")]
+                export_grade = line.grade_code  # base code (DEC-58)
                 row_data = [
                     export_grade,
                     line.grade_group_title or "",
@@ -2148,12 +2259,14 @@ class PayrollService:
         as_of_date: date | None = None,
     ) -> list[WorksiteBudgetVsActualItem]:
         """Calculate dynamic contract budget from assigned revision lines and items vs actual allocated cost."""
-        target_date = as_of_date or datetime.now(UTC).date()
         worksites = await PayrollRepository.get_worksites_and_items(session, country=country)
 
         items: list[WorksiteBudgetVsActualItem] = []
 
         for ws in worksites:
+            target_date = as_of_date or site_today(ws.country)
+            warnings: list[BudgetWarning] = []
+            missing_rate_hours = Decimal("0.0")
             # 1. Resolve assigned or latest active revision
             rev = await PayrollRepository.get_active_revision_for_worksite(
                 session, ws.country, ws.salary_revision_code
@@ -2214,14 +2327,27 @@ class PayrollService:
                 item_annual_hours = annual_occurrences * staff_cnt * hrs_per_occ
                 annual_man_hours += item_annual_hours
 
-                # Lookup grade rate
-                grade = item.planned_grade_code or ""
-                # Strip year suffix if present (e.g. "GE-2024" -> "GE")
-                base_grade = grade.split("-")[0] if "-" in grade else grade
-                rate = grade_hourly_rates.get(
-                    grade,
-                    grade_hourly_rates.get(base_grade, Decimal("10.00")),
-                )
+                # Lookup grade rate by base code (DEC-58). No fallback rate: a grade with no
+                # line in the revision is reported and left out of the totals.
+                grade = try_base_grade_code(item.planned_grade_code)
+                rate = grade_hourly_rates.get(grade) if grade else None
+                if rate is None:
+                    missing_rate_hours += item_annual_hours
+                    annual_man_hours -= item_annual_hours
+                    warnings.append(
+                        BudgetWarning(
+                            code="MISSING_GRADE_RATE",
+                            job_item_id=item.id,
+                            sub_item_code=item.sub_item_code,
+                            grade_code=item.planned_grade_code,
+                            annual_hours=item_annual_hours,
+                            message=(
+                                f"Grade '{item.planned_grade_code or '(blank)'}' has no line in "
+                                f"revision {rev.code if rev else '(none)'}; item left out of the budget."
+                            ),
+                        )
+                    )
+                    continue
                 item_annual_cost = round_money(item_annual_hours * rate)
                 annual_labor_budget += item_annual_cost
 
@@ -2295,6 +2421,8 @@ class PayrollService:
                     is_custom_budget_override=bool(
                         ws.budget_amount and ws.budget_amount > Decimal("0.00")
                     ),
+                    missing_rate_hours=missing_rate_hours,
+                    warnings=warnings,
                 )
             )
 

@@ -608,7 +608,8 @@ export const SalaryStructures: React.FC = () => {
                               </span>
                             ) : null}
 
-                            {isFuture && user?.role === "ADMIN" && (
+                            {/* CREW_BREAK rows follow the row before them; change the crew break instead. */}
+                            {isFuture && user?.role === "ADMIN" && rec.change_source !== "CREW_BREAK" && (
                               <div className="flex items-center gap-1.5 ml-2 border-l border-slate-200 pl-2">
                                 <button
                                   type="button"

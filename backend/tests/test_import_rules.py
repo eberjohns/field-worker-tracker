@@ -3,6 +3,9 @@
 from datetime import date
 from decimal import Decimal
 
+import pytest
+
+from fw.rules.grades import InvalidGradeCodeError
 from fw.rules.imports.normalizer import (
     normalize_grade_code,
     normalize_sgd,
@@ -26,8 +29,13 @@ def test_normalize_text():
 def test_normalize_grade_code():
     assert normalize_grade_code("G5-C") == "G5C"
     assert normalize_grade_code("g5c") == "G5C"
-    assert normalize_grade_code("G5C26") == "G5C"
-    assert normalize_grade_code("G2B26") == "G2B"
+    assert normalize_grade_code("G5C-2026") == "G5C"
+    assert normalize_grade_code("G2B-R2") == "G2B"
+    assert normalize_grade_code("  ") is None
+    # DEC-58: no guessing on forms like G5C26; they are rejected.
+    for bad in ("G5C26", "G3CR2", "3C", "GE", "G3C-2026-X"):
+        with pytest.raises(InvalidGradeCodeError):
+            normalize_grade_code(bad)
     assert normalize_grade_code("G1A") == "G1A"
 
 

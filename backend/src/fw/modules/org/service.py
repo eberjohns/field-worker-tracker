@@ -47,11 +47,23 @@ from fw.modules.org.schemas import (
     ZoneUpdate,
 )
 from fw.modules.settings import SettingsService
+from fw.rules.grades import InvalidGradeCodeError, base_grade_code
 from fw.rules.hierarchy import (
     HierarchyRuleViolation,
     compute_transitive_scope,
     validate_reporting_link,
 )
+from fw.rules.imports import CONTROLLED_SGDS
+
+
+def _grade_or_422(raw: str | None) -> str | None:
+    """Base grade code (DEC-58); blank -> None; unparseable -> 422 INVALID_GRADE_CODE."""
+    if raw is None or not str(raw).strip():
+        return None
+    try:
+        return base_grade_code(str(raw))
+    except InvalidGradeCodeError as exc:
+        raise AppError(code=exc.code, message=str(exc), status_code=422) from exc
 
 
 class ScopeService:
@@ -367,7 +379,7 @@ class OrgService:
             phone=data.phone,
             email=data.email,
             role=data.role,
-            grade_code=data.grade_code,
+            grade_code=_grade_or_422(data.grade_code),
             staff_grade_description=data.staff_grade_description,
             accommodation_id=data.accommodation_id,
             weekly_off_day=data.weekly_off_day,
@@ -435,6 +447,8 @@ class OrgService:
         for field, value in data.model_dump(
             exclude_unset=True, exclude={"version", "effective_from"}
         ).items():
+            if field == "grade_code":
+                value = _grade_or_422(value)
             old_val = getattr(employee, field)
             if old_val != value:
                 diff[field] = {"old": str(old_val), "new": str(value)}
@@ -517,6 +531,7 @@ class OrgService:
         actor_role: str,
     ) -> Employee:
         employee = await OrgService.get_employee(session, employee_id)
+        request.new_grade_code = _grade_or_422(request.new_grade_code) or request.new_grade_code
         old_grade = employee.grade_code
 
         employee.grade_code = request.new_grade_code
@@ -555,51 +570,82 @@ class OrgService:
         actor_role: str,
     ) -> Employee:
         employee = await OrgService.get_employee(session, employee_id)
-        eff_from = request.effective_from or site_today(employee.country)
+        today = site_today(employee.country)
+        eff_from = request.effective_from or today
+        if eff_from > today:
+            raise AppError(
+                code="FUTURE_PROFILE_CHANGE_NOT_SUPPORTED",
+                message=(
+                    f"Profile changes take effect today or on a past date; {eff_from} is in the "
+                    "future. Future-dated profile changes are not supported yet."
+                ),
+                status_code=422,
+            )
+        new_grade = _grade_or_422(request.grade_code)
+        new_sgd = (
+            request.staff_grade_description.strip()
+            if request.staff_grade_description is not None
+            else None
+        )
+        if new_sgd is not None and new_sgd != employee.staff_grade_description:
+            # Client meeting 19 Nov: Staff Grade Description is locked for staff roles.
+            if employee.role in ("SUPERVISOR", "SUPERINTENDENT", "ENGINEER"):
+                raise AppError(
+                    code="STAFF_GRADE_DESCRIPTION_LOCKED",
+                    message=(
+                        f"Staff Grade Description cannot be changed for a {employee.role.title()}."
+                    ),
+                    status_code=422,
+                )
+            if new_sgd not in CONTROLLED_SGDS:
+                raise AppError(
+                    code="INVALID_STAFF_GRADE_DESCRIPTION",
+                    message=f"Staff Grade Description '{new_sgd}' is not in the controlled list.",
+                    status_code=422,
+                )
         diff: dict[str, Any] = {}
 
         # 1. Staff grade description change
-        if (
-            request.staff_grade_description is not None
-            and request.staff_grade_description != employee.staff_grade_description
-        ):
+        if new_sgd is not None and new_sgd != employee.staff_grade_description:
             old_sgd = employee.staff_grade_description
-            employee.staff_grade_description = request.staff_grade_description
+            employee.staff_grade_description = new_sgd
             diff["staff_grade_description"] = {
                 "old": old_sgd,
-                "new": request.staff_grade_description,
+                "new": new_sgd,
             }
             hist_sgd = EmployeeAttributeHistory(
                 employee_id=employee.id,
                 attribute_name="STAFF_GRADE_DESCRIPTION",
                 old_value=old_sgd,
-                new_value=request.staff_grade_description,
+                new_value=new_sgd,
                 effective_from=eff_from,
                 changed_by_user_id=actor_user_id,
                 reason=request.reason,
+                actor_role=actor_role,
             )
             session.add(hist_sgd)
 
         # 2. Grade code change
-        if request.grade_code is not None and request.grade_code != employee.grade_code:
+        if new_grade is not None and new_grade != employee.grade_code:
             old_gc = employee.grade_code
-            employee.grade_code = request.grade_code
-            diff["grade_code"] = {"old": old_gc, "new": request.grade_code}
+            employee.grade_code = new_grade
+            diff["grade_code"] = {"old": old_gc, "new": new_grade}
             hist_gc = EmployeeAttributeHistory(
                 employee_id=employee.id,
                 attribute_name="GRADE_CODE",
                 old_value=old_gc,
-                new_value=request.grade_code,
+                new_value=new_grade,
                 effective_from=eff_from,
                 changed_by_user_id=actor_user_id,
                 reason=request.reason,
+                actor_role=actor_role,
             )
             session.add(hist_gc)
             # Also keep EmployeeGradeHistory in sync for backward compatibility
             grade_hist = EmployeeGradeHistory(
                 employee_id=employee.id,
                 old_grade_code=old_gc,
-                new_grade_code=request.grade_code,
+                new_grade_code=new_grade,
                 effective_from=eff_from,
                 changed_by_user_id=actor_user_id,
                 reason=request.reason,
@@ -619,6 +665,7 @@ class OrgService:
                 effective_from=eff_from,
                 changed_by_user_id=actor_user_id,
                 reason=request.reason,
+                actor_role=actor_role,
             )
             session.add(hist_drv)
 

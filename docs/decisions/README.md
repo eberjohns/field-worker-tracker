@@ -31,6 +31,7 @@ One decision per file, numbered. Use the `write-adr` skill. Status: Proposed, Ac
 | 025 | [Batch 5 Audit Fixes: Overtime Alignment, Worker Scheduling, and Multi-Process Safety](025-batch5-audit-fixes.md) | Accepted |
 | 026 | [Worksite Scoping, Multi-Supervisor Assignment, RBAC Hardening & Salary Cost Transparency](026-worksite-scoping-salary-cost-transparency.md) | Accepted (scoping amended by 027) |
 | 027 | [Worksite-based operational scope](027-worksite-based-operational-scope.md) | Accepted |
+| 028 | [Base grade codes, budget warnings, Admin-only salary data](028-base-grade-codes-and-admin-only-salary.md) | Accepted |
 
 See also [decision-register.md](decision-register.md) for business decisions awaiting client confirmation.
 

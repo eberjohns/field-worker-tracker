@@ -13,7 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fw.core.db import get_db
 from fw.core.errors import AppError
 from fw.modules.identity import User, get_current_user, require_role
-from fw.modules.org import ScopeService
 from fw.modules.payroll.schemas import (
     PayrollRecordRead,
     PayrollRunCreate,
@@ -59,7 +58,7 @@ async def generate_payroll_run(
 async def list_payroll_runs(
     country: str | None = None,
     status_filter: str | None = Query(None, alias="status"),
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    current_user: User = Depends(require_role("ADMIN")),  # DEC-47: salary and cost
     session: AsyncSession = Depends(get_db),
 ) -> list[PayrollRunRead]:
     """List payroll runs with status, totals, and run counts."""
@@ -73,26 +72,21 @@ async def list_payroll_runs(
 @router.get("/payroll/runs/{run_id}", response_model=PayrollRunDetailRead)
 async def get_payroll_run(
     run_id: UUID,
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    current_user: User = Depends(require_role("ADMIN")),  # DEC-47: salary and cost
     session: AsyncSession = Depends(get_db),
 ) -> PayrollRunDetailRead:
     """Get payroll run detail with worker records."""
-    scoped_employee_ids: list[UUID] | None = None
-    if current_user.role == "ENGINEER":
-        scoped_set = await ScopeService.get_scoped_employee_ids(session, current_user)
-        scoped_employee_ids = list(scoped_set) if scoped_set is not None else None
-
     return await PayrollService.get_payroll_run_detail(
         session=session,
         run_id=run_id,
-        scoped_employee_ids=scoped_employee_ids,
+        scoped_employee_ids=None,
     )
 
 
 @router.get("/payroll/runs/{run_id}/issues", response_model=PayrollRunIssuesResponse)
 async def get_payroll_run_issues(
     run_id: UUID,
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    current_user: User = Depends(require_role("ADMIN")),  # DEC-47: salary and cost
     session: AsyncSession = Depends(get_db),
 ) -> PayrollRunIssuesResponse:
     """List issues needing review before approval (unapproved OT, missing salary structures)."""
@@ -118,19 +112,14 @@ async def approve_payroll_run(
 @router.get("/payroll/records", response_model=list[PayrollRecordRead])
 async def list_payroll_records(
     run_id: UUID,
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    current_user: User = Depends(require_role("ADMIN")),  # DEC-47: salary and cost
     session: AsyncSession = Depends(get_db),
 ) -> list[PayrollRecordRead]:
-    """List payroll records for a run, scoped to user."""
-    scoped_employee_ids: list[UUID] | None = None
-    if current_user.role == "ENGINEER":
-        scoped_set = await ScopeService.get_scoped_employee_ids(session, current_user)
-        scoped_employee_ids = list(scoped_set) if scoped_set is not None else None
-
+    """List payroll records for a run (Admin only)."""
     detail = await PayrollService.get_payroll_run_detail(
         session=session,
         run_id=run_id,
-        scoped_employee_ids=scoped_employee_ids,
+        scoped_employee_ids=None,
     )
     return detail.records
 
@@ -196,6 +185,15 @@ async def get_my_payroll_records(
     )
 
 
+@router.get("/grades", response_model=list[str])
+async def list_grade_codes(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> list[str]:
+    """Base grade codes in use (revision lines, employees, job items) for dropdowns (DEC-58)."""
+    return await PayrollService.list_grade_codes(session=session)
+
+
 # --- Salary Revisions ---
 
 
@@ -212,7 +210,7 @@ async def list_salary_revisions(
 @router.get("/salary-revisions/{code}", response_model=SalaryRevisionDetailRead)
 async def get_salary_revision_detail(
     code: str,
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    current_user: User = Depends(require_role("ADMIN")),  # DEC-47: salary and cost
     session: AsyncSession = Depends(get_db),
 ) -> SalaryRevisionDetailRead:
     """Get full details of a salary revision with grade lines and calculated planned rates."""
@@ -222,7 +220,7 @@ async def get_salary_revision_detail(
 @router.get("/salary-revisions/{code}/export-template")
 async def export_salary_revision_template(
     code: str,
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    current_user: User = Depends(require_role("ADMIN")),  # DEC-47: salary and cost
     session: AsyncSession = Depends(get_db),
 ) -> StreamingResponse:
     """Download professionally formatted Excel (.xlsx) template pre-populated with revision lines."""

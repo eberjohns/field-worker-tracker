@@ -1,5 +1,13 @@
 """Pure import rules for normalization and validation."""
 
+from fw.rules.imports.access import (
+    ADMIN_ONLY_SETTING_KEYS,
+    ADMIN_ONLY_SHEETS,
+    SETTING_ADMIN_ONLY,
+    SHEET_ADMIN_ONLY,
+    is_admin_only_row,
+    is_admin_only_setting,
+)
 from fw.rules.imports.normalizer import (
     CONTROLLED_SGDS,
     SGD_ALIASES,
@@ -18,6 +26,12 @@ from fw.rules.imports.validator import (
 )
 
 __all__ = [
+    "ADMIN_ONLY_SETTING_KEYS",
+    "ADMIN_ONLY_SHEETS",
+    "SETTING_ADMIN_ONLY",
+    "SHEET_ADMIN_ONLY",
+    "is_admin_only_row",
+    "is_admin_only_setting",
     "CONTROLLED_SGDS",
     "SGD_ALIASES",
     "check_date_range",

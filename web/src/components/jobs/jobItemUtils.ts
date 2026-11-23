@@ -17,29 +17,7 @@ export const CONTROLLED_STAFF_GRADE_DESCRIPTIONS = [
   "Team Leader",
 ];
 
-export const DEFAULT_GRADE_CODES = [
-  "G1A",
-  "G1B",
-  "G1C",
-  "G2A",
-  "G2B",
-  "G2C",
-  "G3A",
-  "G3B",
-  "G3C",
-  "G4A",
-  "G4B",
-  "G4C",
-  "G5A",
-  "G5B",
-  "G5C",
-  "G6A",
-  "G6B",
-  "G6C",
-  "G7A",
-  "G7B",
-  "G7C",
-];
+// Grade dropdowns read GET /api/v1/grades (features/grades); no hard-coded list (DEC-58).
 
 export function formatApiError(errData: any): string {
   if (Array.isArray(errData?.invalid_params) && errData.invalid_params.length > 0) {

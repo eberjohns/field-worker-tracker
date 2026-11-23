@@ -359,6 +359,7 @@ class EmployeeAttributeHistoryRead(BaseModel):
     effective_from: date
     changed_by_user_id: UUID
     reason: str
+    actor_role: str | None = None
     created_at: datetime
 
 

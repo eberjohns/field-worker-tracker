@@ -16,12 +16,24 @@ from fw.modules.payroll.models import (
     PayrollRecord,
     PayrollRun,
     SalaryRevision,
+    SalaryRevisionLine,
 )
 from fw.modules.scheduling.models import LeaveRequest, ScheduledWork
 
 
 class PayrollRepository:
     # --- Salary Revisions ---
+    @staticmethod
+    async def list_distinct_grade_codes(session: AsyncSession) -> set[str]:
+        """Distinct grade codes on revision lines, active employees and active job items."""
+        codes: set[str] = set()
+        for stmt in (
+            select(SalaryRevisionLine.grade_code).distinct(),
+            select(Employee.grade_code).where(Employee.is_active.is_(True)).distinct(),
+            select(JobItem.planned_grade_code).where(JobItem.is_active.is_(True)).distinct(),
+        ):
+            codes.update(v for v in (await session.execute(stmt)).scalars().all() if v)
+        return codes
 
     @staticmethod
     async def get_revision_by_code(
