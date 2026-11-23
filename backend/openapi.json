@@ -4450,7 +4450,7 @@
           "settings"
         ],
         "summary": "List Staff Grades",
-        "description": "Return deduplicated union of distinct staff grade descriptions across active employees and job items.",
+        "description": "Staff types for the budget-only checklist: the managed list (DEC-60).\n\nDeprecated: use ``GET /lookups/staff_grade_description``.",
         "operationId": "list_staff_grades_api_v1_settings_staff_grades_get",
         "parameters": [
           {
@@ -5382,13 +5382,232 @@
         }
       }
     },
+    "/api/v1/lookups/{list_key}": {
+      "get": {
+        "tags": [
+          "lookups"
+        ],
+        "summary": "List Lookup Values",
+        "description": "Values of a managed list (any signed-in role; codes and names only, no money).\n\nValues in use that are not in the list are appended with ``id`` null and source ``IN_USE``.",
+        "operationId": "list_lookup_values_api_v1_lookups__list_key__get",
+        "parameters": [
+          {
+            "name": "list_key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "List Key"
+            }
+          },
+          {
+            "name": "include_inactive",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Inactive"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LookupValueRead"
+                  },
+                  "title": "Response List Lookup Values Api V1 Lookups  List Key  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "lookups"
+        ],
+        "summary": "Add Lookup Value",
+        "description": "Add a value (\"Other \u2013 add new\u2026\"). Duplicates are refused; near matches need\n``confirm_near_match``. A new grade without a line in an active revision gets a warning.",
+        "operationId": "add_lookup_value_api_v1_lookups__list_key__post",
+        "parameters": [
+          {
+            "name": "list_key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "List Key"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LookupValueCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LookupValueCreated"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/lookups/{list_key}/{value_id}": {
+      "patch": {
+        "tags": [
+          "lookups"
+        ],
+        "summary": "Update Lookup Value",
+        "description": "Deactivate or reactivate a value (Admin). Values are never deleted; records keep theirs.",
+        "operationId": "update_lookup_value_api_v1_lookups__list_key___value_id__patch",
+        "parameters": [
+          {
+            "name": "list_key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "List Key"
+            }
+          },
+          {
+            "name": "value_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Value Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LookupValueUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LookupValueRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/imports/template": {
       "get": {
         "tags": [
           "imports"
         ],
         "summary": "Download Import Template",
-        "description": "Download the import template. Engineers get it without the salary sheets (DEC-47).",
+        "description": "Download the import template. Engineers get it without the salary sheets (DEC-47).\n\nThe Lists sheet carries the current staff type and grade lists (DEC-60).",
         "operationId": "download_import_template_api_v1_imports_template_get",
         "parameters": [
           {
@@ -6777,7 +6996,7 @@
           "payroll"
         ],
         "summary": "List Grade Codes",
-        "description": "Base grade codes in use (revision lines, employees, job items) for dropdowns (DEC-58).",
+        "description": "Grade codes for dropdowns: the managed list plus codes in use (DEC-58, DEC-60).\n\nDeprecated: use ``GET /lookups/grade_code``.",
         "operationId": "list_grade_codes_api_v1_grades_get",
         "parameters": [
           {
@@ -23354,6 +23573,201 @@
           "password"
         ],
         "title": "LoginRequest"
+      },
+      "LookupValueCreate": {
+        "properties": {
+          "value": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Value"
+          },
+          "confirm_near_match": {
+            "type": "boolean",
+            "title": "Confirm Near Match",
+            "description": "Add even though a near match or known alias exists ('Add anyway').",
+            "default": false
+          },
+          "country": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country",
+            "description": "Grade codes: country whose active revision is checked for a line (AE/SA)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "title": "LookupValueCreate"
+      },
+      "LookupValueCreated": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "value": {
+            "type": "string",
+            "title": "Value"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active",
+            "default": true
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": "SEED"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/LookupWarning"
+            },
+            "type": "array",
+            "title": "Warnings",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "title": "LookupValueCreated"
+      },
+      "LookupValueRead": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "value": {
+            "type": "string",
+            "title": "Value"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active",
+            "default": true
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": "SEED"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "title": "LookupValueRead",
+        "description": "One managed-list value. ``id`` is None for a value in use that is not in the list."
+      },
+      "LookupValueUpdate": {
+        "properties": {
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "is_active",
+          "version"
+        ],
+        "title": "LookupValueUpdate"
+      },
+      "LookupWarning": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "LookupWarning"
       },
       "MatchedRuleExplanationRead": {
         "properties": {

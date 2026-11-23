@@ -24,12 +24,8 @@ import {
 } from "lucide-react";
 import { MapContainer, PolygonEditor, PlaceSearch } from "../features/map";
 import { Map as MapLibreMap } from "maplibre-gl";
-import {
-  CONTROLLED_STAFF_GRADE_DESCRIPTIONS,
-} from "../components/jobs/jobItemUtils";
 import SupervisorProposalsModal from "../components/jobs/SupervisorProposalsModal";
-import { useGrades } from "../features/grades/useGrades";
-import { gradeOptions } from "../features/grades/gradeOptions";
+import { LookupSelect } from "../components/lookups/LookupSelect";
 
 interface Worksite {
   id: string;
@@ -141,7 +137,6 @@ interface InitialJobItem {
 export const Worksites: React.FC = () => {
   const navigate = useNavigate();
   const { token, user } = useAuth();
-  const apiGrades = useGrades(token);
   const [activeTab, setActiveTab] = useState<"worksites" | "accommodations">("worksites");
   const [worksites, setWorksites] = useState<Worksite[]>([]);
   const [accommodations, setAccommodations] = useState<AccommodationItem[]>([]);
@@ -1348,35 +1343,28 @@ export const Worksites: React.FC = () => {
                       </div>
                       <div>
                         <label className="block text-[10px] text-slate-500 mb-0.5">Staff Designation</label>
-                        <select
+                        <LookupSelect
+                          listKey="staff_grade_description"
                           value={item.staff_grade_description}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setInitialJobItems((prev) => prev.map((it, i) => i === idx ? { ...it, staff_grade_description: val } : it));
-                          }}
-                          className="w-full p-1 border rounded bg-white text-xs"
-                        >
-                          <option value="">Select…</option>
-                          {CONTROLLED_STAFF_GRADE_DESCRIPTIONS.map((d) => (
-                            <option key={d} value={d}>{d}</option>
-                          ))}
-                        </select>
+                          onChange={(val) =>
+                            setInitialJobItems((prev) => prev.map((it, i) => (i === idx ? { ...it, staff_grade_description: val } : it)))
+                          }
+                          placeholder="Select…"
+                          inputClassName="w-full p-1 border rounded bg-white text-xs"
+                        />
                       </div>
                       <div>
                         <label className="block text-[10px] text-slate-500 mb-0.5">Planned Grade</label>
-                        <select
+                        <LookupSelect
+                          listKey="grade_code"
                           value={item.planned_grade_code}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setInitialJobItems((prev) => prev.map((it, i) => i === idx ? { ...it, planned_grade_code: val } : it));
-                          }}
-                          className="w-full p-1 border rounded bg-white text-xs font-mono"
-                        >
-                          <option value="">Select…</option>
-                          {gradeOptions(apiGrades, item.planned_grade_code).map((g) => (
-                            <option key={g} value={g}>{g}</option>
-                          ))}
-                        </select>
+                          onChange={(val) =>
+                            setInitialJobItems((prev) => prev.map((it, i) => (i === idx ? { ...it, planned_grade_code: val } : it)))
+                          }
+                          country={formCountry}
+                          placeholder="Select…"
+                          inputClassName="w-full p-1 border rounded bg-white text-xs font-mono"
+                        />
                       </div>
                     </div>
                     <div className="grid grid-cols-4 gap-2">

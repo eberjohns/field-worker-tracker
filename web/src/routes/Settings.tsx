@@ -19,8 +19,10 @@ import {
   Archive,
   Eye,
   EyeOff,
+  ListChecks,
 } from "lucide-react";
 import { ArchiveSettings } from "../features/admin/ArchiveSettings";
+import { ManagedListsPanel } from "../features/lookups/ManagedListsPanel";
 
 interface SettingItem {
   id: string;
@@ -117,7 +119,7 @@ interface ResolvedSchedule {
 export const Settings: React.FC = () => {
   const { token, user } = useAuth();
   const [activeTab, setActiveTab] = useState<
-    "company" | "timerules" | "checktool" | "holidays" | "budget" | "password" | "consent" | "database" | "archive"
+    "company" | "timerules" | "checktool" | "holidays" | "budget" | "lists" | "password" | "consent" | "database" | "archive"
   >("company");
 
   // Reset database state
@@ -697,6 +699,7 @@ export const Settings: React.FC = () => {
           { id: "checktool", label: "Resolver Check Tool", icon: Sparkles },
           { id: "holidays", label: "Public Holidays", icon: Calendar },
           { id: "budget", label: "Budget-Only Roles", icon: Users },
+          { id: "lists", label: "Managed Lists", icon: ListChecks },
           { id: "password", label: "Default Password", icon: KeyRound },
           { id: "consent", label: "Consent Notice", icon: ShieldCheck },
           ...(user?.role === "ADMIN"
@@ -1228,15 +1231,18 @@ export const Settings: React.FC = () => {
         </div>
       )}
 
+      {/* Managed lists: staff types and grade codes (DEC-60) */}
+      {activeTab === "lists" && <ManagedListsPanel />}
+
       {/* TAB 5: Budget-Only Roles */}
       {activeTab === "budget" && (
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
           <div>
             <h3 className="text-base font-semibold text-slate-900">Budget-Only Staff Types</h3>
             <p className="text-xs text-slate-500">
-              Per DEC-09 and BR-JB-07: Roles selected below (resolved from active workforce &amp;
-              contract job items) are included strictly for contract budgeting; they are never
-              scheduled and never tracked on phones.
+              Per DEC-09 and BR-JB-07: staff types selected below (from the managed staff type
+              list, see Managed Lists) are included strictly for contract budgeting; they are
+              never scheduled and never tracked on phones.
             </p>
           </div>
 
@@ -1251,12 +1257,11 @@ export const Settings: React.FC = () => {
               <>
                 {loadingStaffGrades ? (
                   <div className="py-8 text-center text-slate-400 text-xs">
-                    Loading unique staff types from active workforce and job items...
+                    Loading the staff type list...
                   </div>
                 ) : staffGrades.length === 0 ? (
                   <div className="py-8 text-center text-slate-400 text-xs bg-slate-50 rounded-lg border border-slate-200">
-                    No staff grade descriptions found in active workforce or job items. Import
-                    employees/worksites to configure budget-only roles.
+                    The staff type list is empty. Add values under Managed Lists.
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-2">

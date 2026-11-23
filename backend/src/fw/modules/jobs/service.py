@@ -45,9 +45,9 @@ from fw.modules.jobs.schemas import (
     WorksiteSupervisorRead,
     WorksiteUpdate,
 )
+from fw.modules.lookups import LookupService
 from fw.modules.org import Accommodation, Employee, Group, Zone
 from fw.modules.settings import SettingsService
-from fw.rules.grades import InvalidGradeCodeError, base_grade_code
 from fw.rules.jobs import (
     calculate_days_per_occurrence,
     calculate_expected_activities_per_year,
@@ -57,18 +57,19 @@ from fw.rules.jobs import (
     split_job_unit_days,
     validate_job_number,
 )
+from fw.rules.lookups import GRADE_CODE, STAFF_GRADE_DESCRIPTION
 
 logger = structlog.get_logger(__name__)
 
 
-def _grade_or_422(raw: str | None) -> str | None:
-    """Base grade code (DEC-58); blank -> None; unparseable -> 422 INVALID_GRADE_CODE."""
-    if raw is None or not str(raw).strip():
-        return None
-    try:
-        return base_grade_code(str(raw))
-    except InvalidGradeCodeError as exc:
-        raise AppError(code=exc.code, message=str(exc), status_code=422) from exc
+async def _required_staff_type(
+    session: AsyncSession, raw: str | None, current: str | None = None
+) -> str:
+    """Staff type from the managed list (DEC-60); blank -> 422."""
+    value = await LookupService.ensure_value(session, STAFF_GRADE_DESCRIPTION, raw, current=current)
+    if not value:
+        raise AppError("VALUE_REQUIRED", "Choose a Staff Grade Description.", status_code=422)
+    return value
 
 
 class JobsService:
@@ -1297,11 +1298,14 @@ class JobsService:
                 status_code=409,
             )
 
+        sgd = await _required_staff_type(session, payload.staff_grade_description)
+        grade = await LookupService.ensure_value(session, GRADE_CODE, payload.planned_grade_code)
+
         item = JobItem(
             worksite_id=worksite_id,
             sub_item_code=sub_code,
-            staff_grade_description=payload.staff_grade_description.strip(),
-            planned_grade_code=_grade_or_422(payload.planned_grade_code) or "",
+            staff_grade_description=sgd,
+            planned_grade_code=grade or "",
             frequency_unit=payload.frequency_unit.strip().upper(),
             occurrences_per_period=payload.occurrences_per_period,
             period_interval=payload.period_interval,
@@ -1400,11 +1404,19 @@ class JobsService:
             diff["deployment_type"] = payload.deployment_type
             item.deployment_type = payload.deployment_type.strip()
         if payload.staff_grade_description is not None:
-            diff["staff_grade_description"] = payload.staff_grade_description
-            item.staff_grade_description = payload.staff_grade_description.strip()
+            new_sgd = await _required_staff_type(
+                session, payload.staff_grade_description, current=item.staff_grade_description
+            )
+            diff["staff_grade_description"] = new_sgd
+            item.staff_grade_description = new_sgd
             regen_needed = True
         if payload.planned_grade_code is not None:
-            new_grade = _grade_or_422(payload.planned_grade_code) or ""
+            new_grade = (
+                await LookupService.ensure_value(
+                    session, GRADE_CODE, payload.planned_grade_code, current=item.planned_grade_code
+                )
+                or ""
+            )
             diff["planned_grade_code"] = new_grade
             item.planned_grade_code = new_grade
         if payload.frequency_unit is not None:

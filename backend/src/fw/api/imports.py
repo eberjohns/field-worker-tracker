@@ -23,6 +23,8 @@ from fw.modules.imports import (
     admin_only_rows_clause,
     generate_import_template_bytes,
 )
+from fw.modules.lookups import LookupService
+from fw.rules.lookups import GRADE_CODE, STAFF_GRADE_DESCRIPTION
 
 router = APIRouter(prefix="/imports", tags=["imports"])
 
@@ -30,9 +32,17 @@ router = APIRouter(prefix="/imports", tags=["imports"])
 @router.get("/template")
 async def download_import_template(
     current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    session: AsyncSession = Depends(get_db),
 ) -> Response:
-    """Download the import template. Engineers get it without the salary sheets (DEC-47)."""
-    content = generate_import_template_bytes(include_admin_only=current_user.role == "ADMIN")
+    """Download the import template. Engineers get it without the salary sheets (DEC-47).
+
+    The Lists sheet carries the current staff type and grade lists (DEC-60).
+    """
+    content = generate_import_template_bytes(
+        include_admin_only=current_user.role == "ADMIN",
+        staff_types=await LookupService.active_values(session, STAFF_GRADE_DESCRIPTION),
+        grade_codes=await LookupService.active_values(session, GRADE_CODE),
+    )
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

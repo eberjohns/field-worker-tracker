@@ -32,17 +32,12 @@ export interface JobItemModalProps {
   onSuccess: () => void;
 }
 
-import {
-  CONTROLLED_STAFF_GRADE_DESCRIPTIONS,
-  formatApiError,
-  buildJobItemPayload,
-} from "./jobItemUtils";
-import { useGrades } from "../../features/grades/useGrades";
-import { gradeOptions } from "../../features/grades/gradeOptions";
+import { formatApiError, buildJobItemPayload } from "./jobItemUtils";
+import { LookupSelect } from "../lookups/LookupSelect";
 import { useBudgetPreview } from "../../features/budget/useBudgetPreview";
 import { fmtHours, fmtMoney } from "../../features/budget/budgetFormat";
 
-export { CONTROLLED_STAFF_GRADE_DESCRIPTIONS, formatApiError, buildJobItemPayload };
+export { formatApiError, buildJobItemPayload };
 
 const WEEKDAYS = [
   { code: "MON", label: "Mon" },
@@ -79,7 +74,6 @@ export const JobItemModal: React.FC<JobItemModalProps> = ({
 }) => {
   const { token, user } = useAuth();
   const isAdmin = user?.role === "ADMIN";
-  const apiGrades = useGrades(token, isOpen);
   const [subItemCode, setSubItemCode] = useState("");
   const [sgd, setSgd] = useState("");
   const [plannedGrade, setPlannedGrade] = useState("");
@@ -331,19 +325,13 @@ export const JobItemModal: React.FC<JobItemModalProps> = ({
               <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Staff Grade Description (SGD) *
               </label>
-              <select
+              <LookupSelect
+                listKey="staff_grade_description"
                 required
                 value={sgd}
-                onChange={(e) => setSgd(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white"
-              >
-                <option value="">Select Staff Grade Description *</option>
-                {CONTROLLED_STAFF_GRADE_DESCRIPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
+                onChange={setSgd}
+                placeholder="Select Staff Grade Description *"
+              />
             </div>
           </div>
 
@@ -353,19 +341,13 @@ export const JobItemModal: React.FC<JobItemModalProps> = ({
               <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Planned Grade Code *
               </label>
-              <select
+              <LookupSelect
+                listKey="grade_code"
                 required
                 value={plannedGrade}
-                onChange={(e) => setPlannedGrade(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white"
-              >
-                <option value="">Select Grade Code *</option>
-                {gradeOptions(apiGrades, plannedGrade).map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
+                onChange={setPlannedGrade}
+                placeholder="Select Grade Code *"
+              />
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">

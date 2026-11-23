@@ -23,11 +23,7 @@ import {
   AlertCircle,
   Banknote,
 } from "lucide-react";
-import {
-  CONTROLLED_STAFF_GRADE_DESCRIPTIONS,
-} from "../components/jobs/jobItemUtils";
-import { useGrades } from "../features/grades/useGrades";
-import { gradeOptions } from "../features/grades/gradeOptions";
+import { LookupSelect } from "../components/lookups/LookupSelect";
 
 interface Employee {
   id: string;
@@ -66,7 +62,6 @@ interface HierarchyNode {
 
 export const Employees: React.FC = () => {
   const { token, user } = useAuth();
-  const apiGrades = useGrades(token);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -1863,41 +1858,27 @@ export const Employees: React.FC = () => {
                       <option value="Project Manager">Project Manager</option>
                     </select>
                   ) : (
-                    <select
+                    <LookupSelect
+                      listKey="staff_grade_description"
                       value={createFormData.staff_grade_description}
-                      onChange={(e) =>
-                        setCreateFormData({
-                          ...createFormData,
-                          staff_grade_description: e.target.value,
-                        })
+                      onChange={(v) =>
+                        setCreateFormData({ ...createFormData, staff_grade_description: v })
                       }
-                      className="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    >
-                      {CONTROLLED_STAFF_GRADE_DESCRIPTIONS.map((d) => (
-                        <option key={d} value={d}>
-                          {d}
-                        </option>
-                      ))}
-                    </select>
+                      inputClassName="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
                   )}
                 </div>
 
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">Grade Code</label>
-                  <select
+                  <LookupSelect
+                    listKey="grade_code"
                     value={createFormData.grade_code}
-                    onChange={(e) =>
-                      setCreateFormData({ ...createFormData, grade_code: e.target.value })
-                    }
-                    className="w-full border border-slate-300 rounded-lg p-2 text-xs font-mono bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  >
-                    <option value="">None / Unassigned</option>
-                    {gradeOptions(apiGrades, createFormData.grade_code).map((g) => (
-                      <option key={g} value={g}>
-                        {g}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(v) => setCreateFormData({ ...createFormData, grade_code: v })}
+                    country={createFormData.country}
+                    placeholder="None / Unassigned"
+                    inputClassName="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+                  />
                 </div>
 
                 <div>

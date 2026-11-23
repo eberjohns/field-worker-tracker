@@ -17,6 +17,7 @@ from fw.rules.imports.validator import (
     detect_file_key_clashes,
     detect_reporting_issues,
 )
+from fw.rules.lookups import SEED_STAFF_TYPES
 
 
 def test_normalize_text():
@@ -40,29 +41,34 @@ def test_normalize_grade_code():
 
 
 def test_normalize_sgd():
-    # Exact match in controlled list
-    sgd, code = normalize_sgd("Gardener Helper")
+    # Exact match in the managed list (DEC-60; here the seed)
+    sgd, code = normalize_sgd("Gardener Helper", SEED_STAFF_TYPES)
     assert sgd == "Gardener Helper"
     assert code is None
 
     # Case insensitive exact match
-    sgd, code = normalize_sgd("gardener helper")
+    sgd, code = normalize_sgd("gardener helper", SEED_STAFF_TYPES)
     assert sgd == "Gardener Helper"
     assert code is None
 
     # Alias match
-    sgd, code = normalize_sgd("Gardner Helper")
+    sgd, code = normalize_sgd("Gardner Helper", SEED_STAFF_TYPES)
     assert sgd == "Gardener Helper"
     assert code == "SGD_ALIAS_APPLIED"
 
-    sgd, code = normalize_sgd("Superintent")
+    sgd, code = normalize_sgd("Superintent", SEED_STAFF_TYPES)
     assert sgd == "Superintendent"
     assert code == "SGD_ALIAS_APPLIED"
 
     # Unknown
-    sgd, code = normalize_sgd("Specialized Drone Pilot")
+    sgd, code = normalize_sgd("Specialized Drone Pilot", SEED_STAFF_TYPES)
     assert sgd == "Specialized Drone Pilot"
     assert code == "SGD_UNKNOWN"
+
+    # A value added on screen is accepted; an alias whose target is not listed is unknown
+    sgd, code = normalize_sgd("drone  pilot", ["Drone Pilot"])
+    assert (sgd, code) == ("Drone Pilot", None)
+    assert normalize_sgd("Gardner Helper", ["Drone Pilot"])[1] == "SGD_UNKNOWN"
 
 
 def test_parse_cell_value_cell_rules():

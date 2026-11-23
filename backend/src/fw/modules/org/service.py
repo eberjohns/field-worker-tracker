@@ -11,6 +11,7 @@ from fw.core.errors import AppError
 from fw.core.events import EmployeeProfileChanged, event_bus
 from fw.modules.audit import AuditLog, AuditService
 from fw.modules.identity import User, hash_password
+from fw.modules.lookups import LookupService
 from fw.modules.org.models import (
     Accommodation,
     Employee,
@@ -47,23 +48,12 @@ from fw.modules.org.schemas import (
     ZoneUpdate,
 )
 from fw.modules.settings import SettingsService
-from fw.rules.grades import InvalidGradeCodeError, base_grade_code
 from fw.rules.hierarchy import (
     HierarchyRuleViolation,
     compute_transitive_scope,
     validate_reporting_link,
 )
-from fw.rules.imports import CONTROLLED_SGDS
-
-
-def _grade_or_422(raw: str | None) -> str | None:
-    """Base grade code (DEC-58); blank -> None; unparseable -> 422 INVALID_GRADE_CODE."""
-    if raw is None or not str(raw).strip():
-        return None
-    try:
-        return base_grade_code(str(raw))
-    except InvalidGradeCodeError as exc:
-        raise AppError(code=exc.code, message=str(exc), status_code=422) from exc
+from fw.rules.lookups import GRADE_CODE, STAFF_GRADE_DESCRIPTION, value_key
 
 
 class ScopeService:
@@ -373,14 +363,18 @@ class OrgService:
                 status_code=409,
             )
 
+        grade_code = await LookupService.ensure_value(session, GRADE_CODE, data.grade_code)
+        staff_type = await LookupService.ensure_value(
+            session, STAFF_GRADE_DESCRIPTION, data.staff_grade_description
+        )
         employee = Employee(
             tally_id=clean_tally,
             name=data.name,
             phone=data.phone,
             email=data.email,
             role=data.role,
-            grade_code=_grade_or_422(data.grade_code),
-            staff_grade_description=data.staff_grade_description,
+            grade_code=grade_code,
+            staff_grade_description=staff_type,
             accommodation_id=data.accommodation_id,
             weekly_off_day=data.weekly_off_day,
             is_driver=data.is_driver,
@@ -448,7 +442,16 @@ class OrgService:
             exclude_unset=True, exclude={"version", "effective_from"}
         ).items():
             if field == "grade_code":
-                value = _grade_or_422(value)
+                value = await LookupService.ensure_value(
+                    session, GRADE_CODE, value, current=employee.grade_code
+                )
+            elif field == "staff_grade_description":
+                value = await LookupService.ensure_value(
+                    session,
+                    STAFF_GRADE_DESCRIPTION,
+                    value,
+                    current=employee.staff_grade_description,
+                )
             old_val = getattr(employee, field)
             if old_val != value:
                 diff[field] = {"old": str(old_val), "new": str(value)}
@@ -531,7 +534,12 @@ class OrgService:
         actor_role: str,
     ) -> Employee:
         employee = await OrgService.get_employee(session, employee_id)
-        request.new_grade_code = _grade_or_422(request.new_grade_code) or request.new_grade_code
+        request.new_grade_code = (
+            await LookupService.ensure_value(
+                session, GRADE_CODE, request.new_grade_code, current=employee.grade_code
+            )
+            or request.new_grade_code
+        )
         old_grade = employee.grade_code
 
         employee.grade_code = request.new_grade_code
@@ -581,28 +589,30 @@ class OrgService:
                 ),
                 status_code=422,
             )
-        new_grade = _grade_or_422(request.grade_code)
-        new_sgd = (
-            request.staff_grade_description.strip()
-            if request.staff_grade_description is not None
-            else None
+        new_grade = await LookupService.ensure_value(
+            session, GRADE_CODE, request.grade_code, current=employee.grade_code
         )
-        if new_sgd is not None and new_sgd != employee.staff_grade_description:
-            # Client meeting 19 Nov: Staff Grade Description is locked for staff roles.
-            if employee.role in ("SUPERVISOR", "SUPERINTENDENT", "ENGINEER"):
-                raise AppError(
-                    code="STAFF_GRADE_DESCRIPTION_LOCKED",
-                    message=(
-                        f"Staff Grade Description cannot be changed for a {employee.role.title()}."
-                    ),
-                    status_code=422,
-                )
-            if new_sgd not in CONTROLLED_SGDS:
-                raise AppError(
-                    code="INVALID_STAFF_GRADE_DESCRIPTION",
-                    message=f"Staff Grade Description '{new_sgd}' is not in the controlled list.",
-                    status_code=422,
-                )
+        new_sgd: str | None = None
+        raw_sgd = (request.staff_grade_description or "").strip()
+        if raw_sgd:
+            if value_key(raw_sgd) != value_key(employee.staff_grade_description or ""):
+                # Client meeting 19 Nov: Staff Grade Description is locked for staff roles.
+                if employee.role in ("SUPERVISOR", "SUPERINTENDENT", "ENGINEER"):
+                    raise AppError(
+                        code="STAFF_GRADE_DESCRIPTION_LOCKED",
+                        message=(
+                            "Staff Grade Description cannot be changed for a "
+                            f"{employee.role.title()}."
+                        ),
+                        status_code=422,
+                    )
+            # Managed list (DEC-60); the current value stays valid even if deactivated.
+            new_sgd = await LookupService.ensure_value(
+                session,
+                STAFF_GRADE_DESCRIPTION,
+                raw_sgd,
+                current=employee.staff_grade_description,
+            )
         diff: dict[str, Any] = {}
 
         # 1. Staff grade description change

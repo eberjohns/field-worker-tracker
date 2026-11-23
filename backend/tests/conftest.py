@@ -79,3 +79,34 @@ async def seeded_payroll_settings() -> None:
                     )
                 )
         await session.commit()
+
+
+# Managed lists (DEC-60): grade codes and staff types that tests send through the API. A fresh
+# database (CI) seeds no grades, and the "reset database" test clears the lists, so make sure
+# these exist before each test. Staff types in the seed list come back with every reset.
+_TEST_GRADE_CODES = (
+    "G1 G1A G1B G1C G2 G2A G2B G2C G3 G3A G3B G3C G4 G4A G5 G5A G5C G6B G9A G9B G9C G10A G16A G25"
+).split()
+
+
+@pytest.fixture(autouse=True)
+async def managed_list_values() -> None:
+    if not is_db_available():
+        return
+    from sqlalchemy import text
+
+    from fw.rules.lookups import SEED_STAFF_TYPES, value_key
+
+    rows = [("grade_code", g) for g in _TEST_GRADE_CODES] + [
+        ("staff_grade_description", v) for v in SEED_STAFF_TYPES
+    ]
+    async with async_session_factory() as session:
+        await session.execute(
+            text(
+                "INSERT INTO lookup_values (id, list_key, value, value_key, source, is_active, "
+                "version, created_at, updated_at) VALUES (gen_random_uuid(), :k, :v, :vk, 'SEED', "
+                "true, 1, now(), now()) ON CONFLICT (list_key, value_key) DO NOTHING"
+            ),
+            [{"k": k, "v": v, "vk": value_key(v)} for k, v in rows],
+        )
+        await session.commit()

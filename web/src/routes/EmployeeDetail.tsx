@@ -28,11 +28,7 @@ import {
   Loader2,
   Truck,
 } from "lucide-react";
-import {
-  CONTROLLED_STAFF_GRADE_DESCRIPTIONS,
-} from "../components/jobs/jobItemUtils";
-import { useGrades } from "../features/grades/useGrades";
-import { gradeOptions } from "../features/grades/gradeOptions";
+import { LookupSelect } from "../components/lookups/LookupSelect";
 
 interface AttributeHistoryItem {
   id: string;
@@ -50,7 +46,6 @@ interface AttributeHistoryItem {
 export const EmployeeDetail: React.FC = () => {
   const { employeeId } = useParams({ strict: false }) as { employeeId: string };
   const { token, user } = useAuth();
-  const apiGrades = useGrades(token);
 
   const [employee, setEmployee] = useState<any>(null);
   const [accommodations, setAccommodations] = useState<any[]>([]);
@@ -2262,29 +2257,21 @@ export const EmployeeDetail: React.FC = () => {
                     className="w-full border border-slate-200 bg-slate-50 text-slate-500 rounded-lg p-2 text-xs font-medium cursor-not-allowed"
                   />
                 ) : employee.role === "ENGINEER" ? (
-                  <select
-                    value={detailDesig}
-                    onChange={(e) => setDetailDesig(e.target.value)}
-                    className="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  >
-                    <option value="Landscaping Engineer">Landscaping Engineer</option>
-                    <option value="Irrigation Engineer">Irrigation Engineer</option>
-                    <option value="HSE Engineer">HSE Engineer</option>
-                    <option value="Project Manager">Project Manager</option>
-                  </select>
+                  // Locked for staff roles (client meeting 19 Nov; the server refuses a change).
+                  <input
+                    type="text"
+                    disabled
+                    value={detailDesig || "—"}
+                    className="w-full border border-slate-200 bg-slate-50 text-slate-500 rounded-lg p-2 text-xs font-medium cursor-not-allowed"
+                  />
                 ) : (
-                  <select
+                  <LookupSelect
+                    listKey="staff_grade_description"
                     value={detailDesig}
-                    onChange={(e) => setDetailDesig(e.target.value)}
-                    className="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  >
-                    <option value="">None / Unassigned</option>
-                    {CONTROLLED_STAFF_GRADE_DESCRIPTIONS.map((d) => (
-                      <option key={d} value={d}>
-                        {d}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setDetailDesig}
+                    placeholder="None / Unassigned"
+                    inputClassName="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
                 )}
               </div>
 
@@ -2292,18 +2279,14 @@ export const EmployeeDetail: React.FC = () => {
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Grade Code
                 </label>
-                <select
+                <LookupSelect
+                  listKey="grade_code"
                   value={detailGrade}
-                  onChange={(e) => setDetailGrade(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg p-2 text-xs font-mono bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="">None / Unassigned</option>
-                  {gradeOptions(apiGrades, detailGrade).map((g) => (
-                    <option key={g} value={g}>
-                      {g}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setDetailGrade}
+                  country={employee.country}
+                  placeholder="None / Unassigned"
+                  inputClassName="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+                />
               </div>
 
               <div>

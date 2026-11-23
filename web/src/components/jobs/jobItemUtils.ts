@@ -1,23 +1,4 @@
-export const CONTROLLED_STAFF_GRADE_DESCRIPTIONS = [
-  "Admin",
-  "Commercial - QS",
-  "Foreman With DL",
-  "Foreman Without DL",
-  "Gardener - Hand Watering",
-  "Gardener Expert",
-  "Gardener Helper",
-  "HSE Engineer",
-  "Irrigation Engineer",
-  "Irrigation Technician",
-  "Landscaping Engineer",
-  "Palm Tree Technician",
-  "Project Manager",
-  "Superintendent",
-  "Supervisor",
-  "Team Leader",
-];
-
-// Grade dropdowns read GET /api/v1/grades (features/grades); no hard-coded list (DEC-58).
+// Staff type and grade dropdowns read the managed lists (components/lookups/LookupSelect, DEC-60).
 
 export function formatApiError(errData: any): string {
   if (Array.isArray(errData?.invalid_params) && errData.invalid_params.length > 0) {

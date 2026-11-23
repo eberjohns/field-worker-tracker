@@ -530,7 +530,7 @@ async def test_job_item_create_validations(admin_client, test_org_setup):
     )
     assert res_bad_sgd.status_code == 422
     err_sgd = res_bad_sgd.json()
-    assert "not in the controlled list" in str(err_sgd)
+    assert "is not in the list" in str(err_sgd)
 
     # 3. Rejection when start_date is missing
     res_no_date = await client.post(

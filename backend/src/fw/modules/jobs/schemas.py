@@ -5,9 +5,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
-
-from fw.rules.imports.normalizer import CONTROLLED_SGDS
+from pydantic import BaseModel, ConfigDict, Field
 
 # --- Job budget and man-hours (DEC-59, ADR-029) ---------------------------------------------
 # Filled in by the budget module. Money fields are Admin only (DEC-47): null for other roles.
@@ -135,17 +133,6 @@ class JobItemBase(BaseModel):
     deployment_type: str = Field(..., description="PERMANENT or REMOTE")
     break_override_minutes: int | None = None
 
-    @field_validator("staff_grade_description")
-    @classmethod
-    def validate_staff_grade_description(cls, v: str) -> str:
-        cleaned = v.strip()
-        if cleaned not in CONTROLLED_SGDS:
-            allowed = ", ".join(sorted(CONTROLLED_SGDS))
-            raise ValueError(
-                f"Staff grade description '{cleaned}' is not in the controlled list. Must be one of: {allowed}"
-            )
-        return cleaned
-
 
 class JobItemCreate(JobItemBase):
     pass
@@ -169,19 +156,6 @@ class JobItemUpdate(BaseModel):
     break_override_minutes: int | None = None
     is_active: bool | None = None
     version: int = Field(..., description="Optimistic locking version")
-
-    @field_validator("staff_grade_description")
-    @classmethod
-    def validate_staff_grade_description(cls, v: str | None) -> str | None:
-        if v is not None:
-            cleaned = v.strip()
-            if cleaned not in CONTROLLED_SGDS:
-                allowed = ", ".join(sorted(CONTROLLED_SGDS))
-                raise ValueError(
-                    f"Staff grade description '{cleaned}' is not in the controlled list. Must be one of: {allowed}"
-                )
-            return cleaned
-        return v
 
 
 class JobOccurrenceResponse(BaseModel):

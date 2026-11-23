@@ -9,7 +9,6 @@ from fw.rules.imports.access import (
     is_admin_only_setting,
 )
 from fw.rules.imports.normalizer import (
-    CONTROLLED_SGDS,
     SGD_ALIASES,
     normalize_frequency_text,
     normalize_grade_code,
@@ -32,7 +31,6 @@ __all__ = [
     "SHEET_ADMIN_ONLY",
     "is_admin_only_row",
     "is_admin_only_setting",
-    "CONTROLLED_SGDS",
     "SGD_ALIASES",
     "check_date_range",
     "detect_file_key_clashes",

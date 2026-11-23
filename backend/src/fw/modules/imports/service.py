@@ -36,6 +36,7 @@ from fw.modules.imports.schemas import (
     ImportRowRead,
 )
 from fw.modules.jobs import JobItem, JobsService, Worksite, WorksiteSupervisor
+from fw.modules.lookups import LookupService
 from fw.modules.org import (
     Accommodation,
     Employee,
@@ -71,6 +72,15 @@ from fw.rules.imports import (
     validate_worksite_job_number,
 )
 from fw.rules.jobs import is_job_outdoor
+from fw.rules.lookups import (
+    GRADE_ADDED_TO_LIST,
+    GRADE_CODE,
+    LOOKUP_VALUE_INACTIVE,
+    STAFF_GRADE_DESCRIPTION,
+    did_you_mean,
+    near_matches,
+    value_key,
+)
 from fw.rules.payroll import compute_next_payroll_month_start
 
 
@@ -205,6 +215,12 @@ class ImportService:
         )
         session.add(batch)
         await session.flush()
+
+        # Managed lists (DEC-60), loaded once for the whole preview.
+        lookup_lists = await LookupService.lists_for_import(session)
+        staff_rows = lookup_lists[STAFF_GRADE_DESCRIPTION]
+        active_staff_types = [r.value for r in staff_rows.values() if r.is_active]
+        grade_rows = lookup_lists[GRADE_CODE]
 
         total_rows = 0
         skipped_comment_rows = 0
@@ -554,7 +570,28 @@ class ImportService:
 
                     # Additional normalizations
                     if col.name == "staff_grade_description" and parsed_val is not None:
-                        sgd_val, sgd_code = normalize_sgd(parsed_val)
+                        sgd_val, sgd_code = normalize_sgd(parsed_val, active_staff_types)
+                        inactive_row = (
+                            staff_rows.get(value_key(sgd_val or ""))
+                            if sgd_code == "SGD_UNKNOWN"
+                            else None
+                        )
+                        if inactive_row is not None:
+                            # Deactivated value: existing records may still carry it (DEC-60).
+                            sgd_val, sgd_code = inactive_row.value, None
+                            row_codes.append(LOOKUP_VALUE_INACTIVE)
+                            row_messages.append(
+                                {
+                                    "field": col.name,
+                                    "code": LOOKUP_VALUE_INACTIVE,
+                                    "message": (
+                                        f"Staff Grade Description '{inactive_row.value}' has been "
+                                        "deactivated."
+                                    ),
+                                }
+                            )
+                            if row_status != "ERROR":
+                                row_status = "WARNING"
                         parsed_val = sgd_val
                         if sgd_code == "SGD_ALIAS_APPLIED":
                             row_codes.append("SGD_ALIAS_APPLIED")
@@ -566,16 +603,23 @@ class ImportService:
                                 }
                             )
                         elif sgd_code == "SGD_UNKNOWN":
+                            # Values are added on screen, never by import (DEC-60).
+                            hints = near_matches(
+                                STAFF_GRADE_DESCRIPTION, str(sgd_val), active_staff_types
+                            )
                             row_codes.append("SGD_UNKNOWN")
                             row_messages.append(
                                 {
                                     "field": col.name,
                                     "code": "SGD_UNKNOWN",
-                                    "message": f"Unknown SGD '{raw_val}'",
+                                    "message": (
+                                        f"Staff Grade Description '{raw_val}' is not in the list."
+                                        f"{did_you_mean(hints)} Add it on screen first "
+                                        "(Other – add new…), then import again."
+                                    ),
                                 }
                             )
-                            if row_status != "ERROR":
-                                row_status = "WARNING"
+                            row_status = "ERROR"
 
                     elif (
                         col.name in ("grade_code", "planned_grade_code") and parsed_val is not None
@@ -588,6 +632,22 @@ class ImportService:
                                 {"field": col.name, "code": INVALID_GRADE_CODE, "message": str(exc)}
                             )
                             row_status = "ERROR"
+                        else:
+                            if parsed_val and value_key(parsed_val) not in grade_rows:
+                                # Grades arriving by import join the list on commit (DEC-60).
+                                row_codes.append(GRADE_ADDED_TO_LIST)
+                                row_messages.append(
+                                    {
+                                        "field": col.name,
+                                        "code": GRADE_ADDED_TO_LIST,
+                                        "message": (
+                                            f"Grade {parsed_val} is not in the grade list yet; it "
+                                            "is added when this import is committed."
+                                        ),
+                                    }
+                                )
+                                if row_status != "ERROR":
+                                    row_status = "WARNING"
 
                     normalized_dict[col.name] = {
                         "value": parsed_val,
@@ -1441,6 +1501,19 @@ class ImportService:
         for r in all_rows:
             sheet_to_rows[r.sheet].append(r)
 
+        # Grade codes new to the managed list join it now (DEC-60); skipped rows add nothing.
+        new_grades = {
+            str(r.normalized.get(field))
+            for r in all_rows
+            if GRADE_ADDED_TO_LIST in (r.codes or []) and r.action != "SKIPPED"
+            for field in ("grade_code", "planned_grade_code")
+            if r.normalized.get(field)
+        }
+        if new_grades:
+            await LookupService.add_imported_grades(
+                session, new_grades, actor_user_id=user_id, actor_role=actor_role
+            )
+
         # Order of execution: Groups, Zones, Accommodations, Employees, Reporting, Salary, Holidays, Settings, TimeRules
         # 1. Groups
         for r in sheet_to_rows.get("Groups", []):
@@ -1821,7 +1894,9 @@ class ImportService:
                 # Option A: Intersect imported budget_only_staff_types with resolved staff grades
                 # across active employees, active job items, and incoming Job_Items in this batch.
                 emp_grades = await OrgService.get_unique_staff_grades(session)
-                job_grades = await JobsService.get_unique_staff_grades(session)
+                job_grades = await JobsService.get_unique_staff_grades(
+                    session
+                ) + await LookupService.active_values(session, STAFF_GRADE_DESCRIPTION)
                 incoming_job_grades = [
                     str(jr.normalized.get("staff_grade_description")).strip()
                     for jr in sheet_to_rows.get("Job_Items", [])

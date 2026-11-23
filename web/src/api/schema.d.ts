@@ -1105,7 +1105,9 @@ export interface paths {
         };
         /**
          * List Staff Grades
-         * @description Return deduplicated union of distinct staff grade descriptions across active employees and job items.
+         * @description Staff types for the budget-only checklist: the managed list (DEC-60).
+         *
+         *     Deprecated: use ``GET /lookups/staff_grade_description``.
          */
         get: operations["list_staff_grades_api_v1_settings_staff_grades_get"];
         put?: never;
@@ -1279,6 +1281,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lookups/{list_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Lookup Values
+         * @description Values of a managed list (any signed-in role; codes and names only, no money).
+         *
+         *     Values in use that are not in the list are appended with ``id`` null and source ``IN_USE``.
+         */
+        get: operations["list_lookup_values_api_v1_lookups__list_key__get"];
+        put?: never;
+        /**
+         * Add Lookup Value
+         * @description Add a value ("Other – add new…"). Duplicates are refused; near matches need
+         *     ``confirm_near_match``. A new grade without a line in an active revision gets a warning.
+         */
+        post: operations["add_lookup_value_api_v1_lookups__list_key__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lookups/{list_key}/{value_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Lookup Value
+         * @description Deactivate or reactivate a value (Admin). Values are never deleted; records keep theirs.
+         */
+        patch: operations["update_lookup_value_api_v1_lookups__list_key___value_id__patch"];
+        trace?: never;
+    };
     "/api/v1/imports/template": {
         parameters: {
             query?: never;
@@ -1289,6 +1338,8 @@ export interface paths {
         /**
          * Download Import Template
          * @description Download the import template. Engineers get it without the salary sheets (DEC-47).
+         *
+         *     The Lists sheet carries the current staff type and grade lists (DEC-60).
          */
         get: operations["download_import_template_api_v1_imports_template_get"];
         put?: never;
@@ -1627,7 +1678,9 @@ export interface paths {
         };
         /**
          * List Grade Codes
-         * @description Base grade codes in use (revision lines, employees, job items) for dropdowns (DEC-58).
+         * @description Grade codes for dropdowns: the managed list plus codes in use (DEC-58, DEC-60).
+         *
+         *     Deprecated: use ``GET /lookups/grade_code``.
          */
         get: operations["list_grade_codes_api_v1_grades_get"];
         put?: never;
@@ -6723,6 +6776,86 @@ export interface components {
             username: string;
             /** Password */
             password: string;
+        };
+        /** LookupValueCreate */
+        LookupValueCreate: {
+            /** Value */
+            value: string;
+            /**
+             * Confirm Near Match
+             * @description Add even though a near match or known alias exists ('Add anyway').
+             * @default false
+             */
+            confirm_near_match: boolean;
+            /**
+             * Country
+             * @description Grade codes: country whose active revision is checked for a line (AE/SA).
+             */
+            country?: string | null;
+        };
+        /** LookupValueCreated */
+        LookupValueCreated: {
+            /** Id */
+            id?: string | null;
+            /** Value */
+            value: string;
+            /**
+             * Is Active
+             * @default true
+             */
+            is_active: boolean;
+            /**
+             * Source
+             * @default SEED
+             */
+            source: string;
+            /** Version */
+            version?: number | null;
+            /** Created At */
+            created_at?: string | null;
+            /**
+             * Warnings
+             * @default []
+             */
+            warnings: components["schemas"]["LookupWarning"][];
+        };
+        /**
+         * LookupValueRead
+         * @description One managed-list value. ``id`` is None for a value in use that is not in the list.
+         */
+        LookupValueRead: {
+            /** Id */
+            id?: string | null;
+            /** Value */
+            value: string;
+            /**
+             * Is Active
+             * @default true
+             */
+            is_active: boolean;
+            /**
+             * Source
+             * @default SEED
+             */
+            source: string;
+            /** Version */
+            version?: number | null;
+            /** Created At */
+            created_at?: string | null;
+        };
+        /** LookupValueUpdate */
+        LookupValueUpdate: {
+            /** Is Active */
+            is_active: boolean;
+            /** Version */
+            version: number;
+        };
+        /** LookupWarning */
+        LookupWarning: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
         };
         /** MatchedRuleExplanationRead */
         MatchedRuleExplanationRead: {
@@ -13042,6 +13175,116 @@ export interface operations {
                     "application/json": {
                         [key: string]: string;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_lookup_values_api_v1_lookups__list_key__get: {
+        parameters: {
+            query?: {
+                include_inactive?: boolean;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                list_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LookupValueRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_lookup_value_api_v1_lookups__list_key__post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                list_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LookupValueCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LookupValueCreated"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_lookup_value_api_v1_lookups__list_key___value_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                list_key: string;
+                value_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LookupValueUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LookupValueRead"];
                 };
             };
             /** @description Validation Error */
