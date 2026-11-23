@@ -1340,7 +1340,7 @@ export interface paths {
         };
         /**
          * Download Import Template
-         * @description Download the import template. Engineers get it without the salary sheets (DEC-47).
+         * @description Download the import template (Admin only, DEC-61).
          *
          *     The Lists sheet carries the current staff type and grade lists (DEC-60).
          */
@@ -1939,7 +1939,9 @@ export interface paths {
         put?: never;
         /**
          * Create Worksite
-         * @description Create a worksite record (Admin only).
+         * @description Create a worksite, with its job items and supervisors if given, in one transaction.
+         *
+         *     Admin only (DEC-61). A failing item or supervisor saves nothing; the error names the row.
          */
         post: operations["create_worksite_api_v1_worksites_post"];
         delete?: never;
@@ -1962,6 +1964,46 @@ export interface paths {
         get: operations["list_worksite_supervisor_proposals_api_v1_worksites_supervisor_proposals_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/worksites/job-number-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Check Job Number
+         * @description Live format and uniqueness check for the Add Worksite wizard (Admin, DEC-61).
+         */
+        get: operations["check_job_number_api_v1_worksites_job_number_check_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/job-items/validation-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Job Item Checks
+         * @description Validation panel for a job item that is not saved yet (wizard rows). Saves nothing.
+         */
+        post: operations["preview_job_item_checks_api_v1_job_items_validation_preview_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2067,7 +2109,7 @@ export interface paths {
         put?: never;
         /**
          * Assign Worksite Supervisor
-         * @description Assign a supervisor to a worksite (Admin & Engineer only).
+         * @description Assign a supervisor to a worksite (Admin; Engineer on worksites in scope).
          */
         post: operations["assign_worksite_supervisor_api_v1_worksites__worksite_id__supervisors_post"];
         delete?: never;
@@ -2088,7 +2130,7 @@ export interface paths {
         post?: never;
         /**
          * Remove Worksite Supervisor
-         * @description Unassign a supervisor from a worksite (Admin & Engineer only).
+         * @description Unassign a supervisor from a worksite (Admin; Engineer on worksites in scope).
          */
         delete: operations["remove_worksite_supervisor_api_v1_worksites__worksite_id__supervisors__supervisor_id__delete"];
         options?: never;
@@ -2207,7 +2249,7 @@ export interface paths {
         put?: never;
         /**
          * Import Boundaries
-         * @description Bulk import boundaries with row-level validation and skip reporting.
+         * @description Bulk import boundaries with row-level validation and skip reporting (Admin, DEC-61).
          */
         post: operations["import_boundaries_api_v1_boundaries_import_post"];
         delete?: never;
@@ -6193,6 +6235,33 @@ export interface components {
             /** Warnings */
             warnings?: components["schemas"]["BudgetWarning"][];
         };
+        /**
+         * JobItemChecks
+         * @description The job item validation panel for an unsaved item (BR-JB-06, BR-JB-12).
+         */
+        JobItemChecks: {
+            /** Calculated Activities Per Year */
+            calculated_activities_per_year: string;
+            /** Calculated Annual Hours */
+            calculated_annual_hours: string;
+            /** Expected Occurrences Count */
+            expected_occurrences_count: number;
+            /** Days Per Occurrence */
+            days_per_occurrence: number;
+            /** Daily Hours Split */
+            daily_hours_split: string[];
+            /** Eligible Workers Count */
+            eligible_workers_count: number;
+        };
+        /**
+         * JobItemChecksRequest
+         * @description Checks for a job item that is not saved yet (Add Worksite wizard rows).
+         */
+        JobItemChecksRequest: {
+            /** Country */
+            country: string;
+            item: components["schemas"]["JobItemCreate"];
+        };
         /** JobItemCreate */
         JobItemCreate: {
             /** Sub Item Code */
@@ -6399,6 +6468,27 @@ export interface components {
             eligible_workers_count: number;
             /** Difference Note */
             difference_note: string | null;
+        };
+        /**
+         * JobNumberCheck
+         * @description Live check of a job number for the Add Worksite wizard (format and uniqueness).
+         */
+        JobNumberCheck: {
+            /** Job Number */
+            job_number: string;
+            /** Valid */
+            valid: boolean;
+            /**
+             * Exists
+             * @default false
+             */
+            exists: boolean;
+            /** Message */
+            message?: string | null;
+            /** Is Outdoor */
+            is_outdoor?: boolean | null;
+            /** Kind */
+            kind?: string | null;
         };
         /** JobOccurrenceResponse */
         JobOccurrenceResponse: {
@@ -9949,7 +10039,12 @@ export interface components {
              */
             is_custom_budget_override: boolean;
         };
-        /** WorksiteCreate */
+        /**
+         * WorksiteCreate
+         * @description A worksite, optionally with its job items and supervisors (Batch 5.1 B wizard).
+         *
+         *     Everything is created in one transaction: if any item or supervisor fails, nothing is saved.
+         */
         WorksiteCreate: {
             /**
              * Job Number
@@ -9986,6 +10081,10 @@ export interface components {
             end_date?: string | null;
             /** Budget Amount */
             budget_amount?: number | string | null;
+            /** Job Items */
+            job_items?: components["schemas"]["JobItemCreate"][];
+            /** Supervisor Ids */
+            supervisor_ids?: string[];
         };
         /** WorksiteDetailResponse */
         WorksiteDetailResponse: {
@@ -14507,6 +14606,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorksiteSupervisorProposal"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    check_job_number_api_v1_worksites_job_number_check_get: {
+        parameters: {
+            query: {
+                job_number: string;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobNumberCheck"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_job_item_checks_api_v1_job_items_validation_preview_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JobItemChecksRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobItemChecks"];
                 };
             };
             /** @description Validation Error */

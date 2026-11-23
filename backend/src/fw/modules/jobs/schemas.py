@@ -68,10 +68,6 @@ class WorksiteBase(BaseModel):
     budget_amount: Decimal | None = None
 
 
-class WorksiteCreate(WorksiteBase):
-    pass
-
-
 class WorksiteUpdate(BaseModel):
     job_name: str | None = None
     renewal_reference: str | None = None
@@ -136,6 +132,48 @@ class JobItemBase(BaseModel):
 
 class JobItemCreate(JobItemBase):
     pass
+
+
+MAX_WIZARD_JOB_ITEMS = 50
+
+
+class WorksiteCreate(WorksiteBase):
+    """A worksite, optionally with its job items and supervisors (Batch 5.1 B wizard).
+
+    Everything is created in one transaction: if any item or supervisor fails, nothing is saved.
+    """
+
+    job_items: list[JobItemCreate] = Field(default_factory=list, max_length=MAX_WIZARD_JOB_ITEMS)
+    supervisor_ids: list[UUID] = Field(default_factory=list)
+
+
+class JobNumberCheck(BaseModel):
+    """Live check of a job number for the Add Worksite wizard (format and uniqueness)."""
+
+    job_number: str
+    valid: bool
+    exists: bool = False
+    message: str | None = None
+    is_outdoor: bool | None = None
+    kind: str | None = None
+
+
+class JobItemChecksRequest(BaseModel):
+    """Checks for a job item that is not saved yet (Add Worksite wizard rows)."""
+
+    country: str = Field(..., pattern="^(AE|SA)$")
+    item: JobItemCreate
+
+
+class JobItemChecks(BaseModel):
+    """The job item validation panel for an unsaved item (BR-JB-06, BR-JB-12)."""
+
+    calculated_activities_per_year: Decimal
+    calculated_annual_hours: Decimal
+    expected_occurrences_count: int
+    days_per_occurrence: int
+    daily_hours_split: list[Decimal]
+    eligible_workers_count: int
 
 
 class JobItemUpdate(BaseModel):

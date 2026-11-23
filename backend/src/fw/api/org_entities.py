@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.core.db import get_db
+from fw.core.errors import AppError
 from fw.modules.identity import User, get_current_user, require_role
 from fw.modules.org import (
     AccommodationCreate,
@@ -35,7 +36,7 @@ async def list_groups(
 @router.post("/groups", response_model=GroupRead, status_code=201)
 async def create_group(
     request: GroupCreate,
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    current_user: User = Depends(require_role("ADMIN")),
     session: AsyncSession = Depends(get_db),
 ) -> GroupRead:
     group = await OrgService.create_group(
@@ -70,7 +71,7 @@ async def list_zones(
 @router.post("/zones", response_model=ZoneRead, status_code=201)
 async def create_zone(
     request: ZoneCreate,
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    current_user: User = Depends(require_role("ADMIN")),
     session: AsyncSession = Depends(get_db),
 ) -> ZoneRead:
     zone = await OrgService.create_zone(
@@ -130,6 +131,13 @@ async def update_accommodation(
     current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
     session: AsyncSession = Depends(get_db),
 ) -> AccommodationRead:
+    if request.is_active is not None and current_user.role != "ADMIN":
+        # Every deactivation and reactivation is Admin-only (DEC-61).
+        raise AppError(
+            code="FORBIDDEN",
+            message="Only an Admin can deactivate or reactivate an accommodation.",
+            status_code=403,
+        )
     acc = await OrgService.update_accommodation(
         session, acc_id, request, actor_user_id=current_user.id, actor_role=current_user.role
     )

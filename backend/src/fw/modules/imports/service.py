@@ -20,7 +20,7 @@ from uuid import UUID
 
 import openpyxl
 from openpyxl.styles import Font, PatternFill
-from sqlalchemy import ColumnElement, and_, func, or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.core.clock import site_today
@@ -59,13 +59,8 @@ from fw.rules.grades import INVALID_GRADE_CODE, InvalidGradeCodeError, try_base_
 from fw.rules.groups import INVALID_GROUP_CODE, is_group_code
 from fw.rules.hierarchy import HierarchyRuleViolation, validate_reporting_link
 from fw.rules.imports import (
-    ADMIN_ONLY_SETTING_KEYS,
-    ADMIN_ONLY_SHEETS,
-    SETTING_ADMIN_ONLY,
-    SHEET_ADMIN_ONLY,
     detect_file_key_clashes,
     detect_reporting_issues,
-    is_admin_only_setting,
     normalize_frequency_text,
     normalize_grade_code,
     normalize_sgd,
@@ -115,65 +110,6 @@ def to_json_serializable(val: Any) -> Any:
     return val
 
 
-def admin_only_rows_clause() -> ColumnElement[bool]:
-    """SQL condition for rows holding Admin-only data (DEC-47); SKIPPED rows hold no values."""
-    setting_key = func.lower(func.split_part(ImportRow.natural_key, ":", 1))
-    return and_(
-        ImportRow.action != "SKIPPED",
-        or_(
-            ImportRow.sheet.in_(sorted(ADMIN_ONLY_SHEETS)),
-            and_(
-                ImportRow.sheet == "Company_Settings",
-                or_(
-                    setting_key.like(r"provision\_%"),
-                    setting_key.in_(sorted(ADMIN_ONLY_SETTING_KEYS)),
-                ),
-            ),
-        ),
-    )
-
-
-async def _reject_admin_only_batch(session: AsyncSession, batch_id: UUID, verb: str) -> None:
-    """Non-Admins cannot commit or roll back a batch that writes salary or cost data."""
-    hit = (
-        await session.execute(
-            select(ImportRow.id)
-            .where(ImportRow.batch_id == batch_id, admin_only_rows_clause())
-            .limit(1)
-        )
-    ).first()
-    if hit:
-        raise ValueError(
-            f"This batch contains salary or cost data (Admin only); a non-Admin cannot {verb} it."
-        )
-
-
-def _admin_only_skipped_row(
-    batch_id: UUID, sheet: str, row_number: int, code: str, setting_key: str | None = None
-) -> ImportRow:
-    """A SKIPPED/WARNING row for Admin-only data seen by a non-Admin; values are not stored."""
-    what = f"Setting '{setting_key}'" if setting_key else f"Sheet {sheet}"
-    return ImportRow(
-        batch_id=batch_id,
-        sheet=sheet,
-        row_number=row_number,
-        natural_key=setting_key or f"row-{row_number}",
-        action="SKIPPED",
-        status="WARNING",
-        codes=[code],
-        messages=[
-            {
-                "field": "setting_key" if setting_key else None,
-                "code": code,
-                "message": f"{what} is Admin-only (salary and cost data); row skipped.",
-            }
-        ],
-        diff={},
-        normalized={},
-        raw_row={"setting_key": setting_key} if setting_key else {},
-    )
-
-
 class ImportService:
     @staticmethod
     async def parse_and_preview(
@@ -186,9 +122,8 @@ class ImportService:
     ) -> ImportPreviewResponse:
         """Parse uploaded workbook, compare with database, and store preview rows with field-level diffs.
 
-        Non-Admins (DEC-47): salary sheets and money settings are skipped; their values are not stored.
+        Imports are Admin-only (DEC-61), so every sheet is read, salary sheets included.
         """
-        is_admin = actor_role == "ADMIN"
         file_hash = hashlib.sha256(file_bytes).hexdigest()
         wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
 
@@ -371,7 +306,7 @@ class ImportService:
                         file_employees_roles[t_id] = str(col_role).strip().upper()
 
         file_revisions: set[str] = set()
-        if is_admin and _sheet_enabled("Salary_Revisions"):
+        if _sheet_enabled("Salary_Revisions"):
             ws_sr = wb["Salary_Revisions"]
             for r_idx in range(5, ws_sr.max_row + 1):
                 col_a = ws_sr.cell(r_idx, 1).value
@@ -385,7 +320,7 @@ class ImportService:
         # being in a revision (DEC-60, owner decision 23 Nov 2026); Engineers' imports skip the
         # salary sheets, so only an Admin's file can bring new grades.
         file_revision_grades: set[str] = set()
-        if is_admin and _sheet_enabled("Salary_Revision_Lines"):
+        if _sheet_enabled("Salary_Revision_Lines"):
 
             def _cell_text(sheet: Any, r_idx: int, col_name: str, sheet_name: str) -> str:
                 cols = [c.name for c in SHEET_REGISTRY[sheet_name].columns]
@@ -440,25 +375,6 @@ class ImportService:
                 continue
 
             ws = wb[sheet_name]
-
-            # DEC-47: salary sheets are Admin-only. Record one SKIPPED row per data row (no values).
-            if not is_admin and sheet_name in ADMIN_ONLY_SHEETS:
-                for r_idx in range(5, ws.max_row + 1):
-                    col_a = ws.cell(r_idx, 1).value
-                    if col_a is not None and str(col_a).strip() != "":
-                        continue
-                    vals = [ws.cell(r_idx, c).value for c in range(2, len(sheet_def.columns) + 2)]
-                    if not any(v is not None and str(v).strip() != "" for v in vals):
-                        continue
-                    session.add(
-                        _admin_only_skipped_row(batch.id, sheet_name, r_idx, SHEET_ADMIN_ONLY)
-                    )
-                    counts["SKIPPED"] += 1
-                    counts["WARNING"] += 1
-                    sheet_counts[sheet_name]["skipped"] += 1
-                    sheet_counts[sheet_name]["warnings"] += 1
-                    sheet_counts[sheet_name]["total"] += 1
-                continue
 
             # Out of scope sheet check
             if not sheet_def.is_in_scope_phase_03:
@@ -519,28 +435,6 @@ class ImportService:
                     row_dict[col.name] = cell_val
                     if cell_val is not None and str(cell_val).strip() != "":
                         has_any_val = True
-                if (
-                    has_any_val
-                    and not is_admin
-                    and sheet_name == "Company_Settings"
-                    and is_admin_only_setting(row_dict.get("setting_key"))
-                ):
-                    # DEC-47: money/rate settings are Admin-only; keep the key, drop the value.
-                    session.add(
-                        _admin_only_skipped_row(
-                            batch.id,
-                            sheet_name,
-                            r_idx,
-                            SETTING_ADMIN_ONLY,
-                            setting_key=str(row_dict.get("setting_key")).strip(),
-                        )
-                    )
-                    counts["SKIPPED"] += 1
-                    counts["WARNING"] += 1
-                    sheet_counts[sheet_name]["skipped"] += 1
-                    sheet_counts[sheet_name]["warnings"] += 1
-                    sheet_counts[sheet_name]["total"] += 1
-                    continue
                 if has_any_val:
                     raw_rows.append((r_idx, row_dict))
 
@@ -1523,8 +1417,6 @@ class ImportService:
         batch = b_res.scalar_one_or_none()
         if not batch:
             raise ValueError(f"Import batch {batch_id} not found")
-        if actor_role != "ADMIN":
-            await _reject_admin_only_batch(session, batch_id, "commit")
 
         if batch.status == "COMMITTED":
             return ImportCommitResponse(
@@ -2381,8 +2273,6 @@ class ImportService:
             raise ValueError(f"Batch {batch_id} not found")
         if batch.status != "COMMITTED":
             raise ValueError(f"Batch {batch_id} is in status '{batch.status}' (cannot rollback)")
-        if actor_role != "ADMIN":
-            await _reject_admin_only_batch(session, batch_id, "roll back")
 
         # Revert salary records created by this batch
         del_sal = select(EmployeeSalary).where(EmployeeSalary.import_batch_id == batch.id)
@@ -2411,18 +2301,12 @@ class ImportService:
         )
 
     @staticmethod
-    async def export_errors_xlsx(
-        session: AsyncSession,
-        batch_id: UUID,
-        actor_role: str = "ADMIN",
-    ) -> bytes:
-        """Export error and warning rows as a downloadable Excel report (Admin-only rows hidden)."""
+    async def export_errors_xlsx(session: AsyncSession, batch_id: UUID) -> bytes:
+        """Export error and warning rows as a downloadable Excel report."""
         stmt = select(ImportRow).where(
             ImportRow.batch_id == batch_id,
             ImportRow.status.in_(["ERROR", "WARNING"]),
         )
-        if actor_role != "ADMIN":
-            stmt = stmt.where(~admin_only_rows_clause())
         stmt = stmt.order_by(ImportRow.sheet.asc(), ImportRow.row_number.asc())
         res = await session.execute(stmt)
         rows = list(res.scalars().all())

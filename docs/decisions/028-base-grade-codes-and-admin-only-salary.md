@@ -35,7 +35,9 @@ and fell back to constants. Engineers could read revision lines, payroll runs an
   Admin only. Engineers' imports skip the salary sheets (`SHEET_ADMIN_ONLY`) and money settings in
   Company_Settings (`SETTING_ADMIN_ONLY`) without storing their values; their template leaves them out;
   `default_password` is skipped the same way;
-  they cannot commit or roll back a batch that writes such data. The worker's own payslip
+  they cannot commit or roll back a batch that writes such data. *(Superseded 23 Nov 2026 by DEC-61:
+  the whole Master Data Import is Admin only, so these Engineer paths are removed; the salary sheets
+  stay Admin only by role.)* The worker's own payslip
   (`/mobile/me/payroll`, `/payroll/my-records`) is unchanged (mobile contract).
 - `GET /grades` returns the base codes in use (codes only) for all dropdowns.
 - profile-details: grade validated; `staff_grade_description` must be on the controlled list and is locked
@@ -52,6 +54,7 @@ Rejecting unknown forms surfaces bad data instead of hiding it. Money must come 
 - Import files with forms like `G3C26` now fail preview with `INVALID_GRADE_CODE` and must be corrected.
 - "Reset database" re-seeds the default company settings (migration 0003 values, kept in
   `fw.modules.settings.defaults`), so payroll works straight after a reset (owner, 23 Nov).
-- `default_password` is also Admin only in Company_Settings imports (`SETTING_ADMIN_ONLY`; owner, 23 Nov).
+- `default_password` is also Admin only in Company_Settings imports (`SETTING_ADMIN_ONLY`; owner, 23 Nov;
+  now covered by DEC-61, which makes every import Admin only).
 - Migration 0022 cannot restore removed suffixes on downgrade (data only).
 - Docs: `docs/07`, `docs/08`, `docs/11`; register DEC-58.

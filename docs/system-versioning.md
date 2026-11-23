@@ -55,3 +55,4 @@ Field Worker Tracker follows semantic versioning `v<MAJOR>.<MINOR>.<PATCH>`:
 | **v1.13.1** | 2026-11-23 | `feat/batch5.1c-managed-lists` | `81eebce` | Commit on 'feat/batch5.1c-managed-lists' |
 | **v1.14.0** | 2026-11-23 | `fix/test-db-isolation-and-lists` | `bc4d239` | New branch 'fix/test-db-isolation-and-lists' |
 | **v1.14.1** | 2026-11-23 | `fix/test-db-isolation-and-lists` | `7020315` | Commit on 'fix/test-db-isolation-and-lists' |
+| **v1.15.0** | 2026-11-23 | `feat/batch5.1b-worksite-wizard` | `a9f2b16` | New branch 'feat/batch5.1b-worksite-wizard' |

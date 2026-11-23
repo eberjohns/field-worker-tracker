@@ -32,11 +32,14 @@ from fw.modules.jobs.schemas import (
     BoundaryImportResponse,
     BoundaryQueueItemResponse,
     BoundaryQueueResponse,
+    JobItemChecks,
+    JobItemChecksRequest,
     JobItemCreate,
     JobItemDestination,
     JobItemResponse,
     JobItemUpdate,
     JobItemValidationResponse,
+    JobNumberCheck,
     JobOccurrenceResponse,
     JobOccurrenceUpdate,
     WorksiteCreate,
@@ -49,6 +52,8 @@ from fw.modules.lookups import LookupService
 from fw.modules.org import Accommodation, Employee, Group, Zone
 from fw.modules.settings import SettingsService
 from fw.rules.jobs import (
+    InvalidJobNumberError,
+    OccurrenceSlot,
     calculate_days_per_occurrence,
     calculate_expected_activities_per_year,
     calculate_expected_annual_hours,
@@ -58,6 +63,35 @@ from fw.rules.jobs import (
     validate_job_number,
 )
 from fw.rules.lookups import GRADE_CODE, STAFF_GRADE_DESCRIPTION
+
+# Lookup list key -> job item field, so a wizard row error names the field (Batch 5.1 B).
+_ITEM_FIELD_BY_LIST = {
+    GRADE_CODE: "planned_grade_code",
+    STAFF_GRADE_DESCRIPTION: "staff_grade_description",
+}
+_ITEM_FIELD_BY_CODE = {
+    "DUPLICATE_SUB_ITEM": "sub_item_code",
+    "VALUE_REQUIRED": "staff_grade_description",
+    "INVALID_STAFF_GRADE_DESCRIPTION": "staff_grade_description",
+    "UNKNOWN_GRADE_CODE": "planned_grade_code",
+}
+
+
+def _job_item_row_error(exc: AppError, index: int, sub_item_code: str) -> AppError:
+    """Re-raise a job item error from the wizard so it points at its row (job_items[2].field)."""
+    raw_field = exc.extra.get("field")
+    field = _ITEM_FIELD_BY_LIST.get(str(raw_field)) or _ITEM_FIELD_BY_CODE.get(exc.code)
+    if field is None and raw_field:
+        field = str(raw_field)
+    path = f"job_items[{index}].{field}" if field else f"job_items[{index}]"
+    code = sub_item_code.strip() or "?"
+    return AppError(
+        exc.code,
+        f"Job item {index + 1} ({code}): {exc.detail}",
+        status_code=exc.status_code,
+        extra={**exc.extra, "field": path, "row": index},
+    )
+
 
 logger = structlog.get_logger(__name__)
 
@@ -524,8 +558,17 @@ class JobsService:
         actor_user_id: UUID | None = None,
         actor_role: str | None = None,
     ) -> WorksiteResponse:
-        """Create a new worksite (BR-JB-01)."""
-        valid_number = validate_job_number(payload.job_number)
+        """Create a new worksite (BR-JB-01), with its supervisors and job items if given.
+
+        Batch 5.1 B wizard: all in one transaction. ``get_db`` commits once at the end, so an error
+        in any supervisor or item row leaves nothing saved; row errors name the row and field.
+        """
+        try:
+            valid_number = validate_job_number(payload.job_number.strip().upper())
+        except InvalidJobNumberError as exc:
+            raise AppError(
+                "INVALID_JOB_NUMBER", str(exc), status_code=422, extra={"field": "job_number"}
+            ) from exc
 
         # Check uniqueness
         exists_stmt = select(Worksite.id).where(Worksite.job_number == valid_number)
@@ -578,12 +621,70 @@ class JobsService:
                 "job_name": ws.job_name,
                 "country": ws.country,
                 "salary_revision_code": ws.salary_revision_code,
+                "job_items": len(payload.job_items),
+                "supervisors": len(payload.supervisor_ids),
             },
             actor_user_id=actor_user_id,
             actor_role=actor_role,
         )
 
+        for supervisor_id in dict.fromkeys(payload.supervisor_ids):
+            try:
+                await JobsService.assign_worksite_supervisor(
+                    session=session,
+                    worksite_id=ws.id,
+                    supervisor_id=supervisor_id,
+                    actor_user_id=actor_user_id,
+                    actor_role=actor_role,
+                )
+            except AppError as exc:
+                raise AppError(
+                    exc.code,
+                    f"Supervisor: {exc.detail}",
+                    status_code=exc.status_code,
+                    extra={**exc.extra, "field": "supervisor_ids"},
+                ) from exc
+
+        for index, item in enumerate(payload.job_items):
+            try:
+                await JobsService.create_job_item(
+                    session=session,
+                    worksite_id=ws.id,
+                    payload=item,
+                    actor_user_id=actor_user_id,
+                    actor_role=actor_role,
+                )
+            except AppError as exc:
+                raise _job_item_row_error(exc, index, item.sub_item_code) from exc
+            except ValueError as exc:
+                raise _job_item_row_error(
+                    AppError("INVALID_JOB_ITEM", str(exc), status_code=422),
+                    index,
+                    item.sub_item_code,
+                ) from exc
+
         return await JobsService.get_worksite(session, ws.id)
+
+    @staticmethod
+    async def check_job_number(session: AsyncSession, job_number: str) -> JobNumberCheck:
+        """Format and uniqueness of a job number, for the wizard's live check (BR-JB-01)."""
+        raw = job_number.strip().upper()
+        try:
+            valid_number = validate_job_number(raw)
+        except InvalidJobNumberError as exc:
+            return JobNumberCheck(job_number=raw, valid=False, message=str(exc))
+        exists = (
+            await session.scalar(select(Worksite.id).where(Worksite.job_number == valid_number))
+        ) is not None
+        kind = {"A": "Outdoor", "B": "Indoor", "C": "Water feature"}[valid_number[2]]
+        return JobNumberCheck(
+            job_number=valid_number,
+            valid=not exists,
+            exists=exists,
+            message=f"Worksite with job number {valid_number} already exists." if exists else None,
+            is_outdoor=is_job_outdoor(valid_number),
+            kind=kind,
+        )
 
     @staticmethod
     async def update_worksite(
@@ -1536,6 +1637,23 @@ class JobsService:
         if not item:
             raise AppError("JOB_ITEM_NOT_FOUND", "Job item not found.", status_code=404)
 
+        slots = await JobsService._planned_slots(session, item, from_date, to_date)
+        # (generation continues below with the same slots the item checks count)
+        return await JobsService._store_occurrence_slots(
+            session, item, slots, actor_user_id=actor_user_id, actor_role=actor_role
+        )
+
+    @staticmethod
+    async def _planned_slots(
+        session: AsyncSession,
+        item: JobItem,
+        from_date: date | None = None,
+        to_date: date | None = None,
+    ) -> list[OccurrenceSlot]:
+        """The occurrence slots of an item over the rolling horizon (BR-JB-07).
+
+        ``item`` may be unsaved (wizard checks): only its fields are read.
+        """
         # Budget-only staff types check
         budget_types = await SettingsService.get_setting(
             session=session,
@@ -1579,7 +1697,18 @@ class JobsService:
             staff_grade_description=item.staff_grade_description,
             budget_only_types=budget_types,
         )
+        return list(slots)
 
+    @staticmethod
+    async def _store_occurrence_slots(
+        session: AsyncSession,
+        item: JobItem,
+        slots: list[OccurrenceSlot],
+        actor_user_id: UUID | None = None,
+        actor_role: str | None = None,
+    ) -> list[JobOccurrenceResponse]:
+        """Create, update or remove occurrences so they match ``slots`` (idempotent)."""
+        job_item_id = item.id
         # Existing occurrences for this item
         existing_stmt = select(JobOccurrence).where(
             JobOccurrence.job_item_id == job_item_id,
@@ -1659,6 +1788,61 @@ class JobsService:
         ]
 
     @staticmethod
+    async def _eligible_workers_count(
+        session: AsyncSession, country: str, staff_grade_description: str
+    ) -> int:
+        """Active employees in the country with the item's staff type (BR-JB-12)."""
+        stmt = select(func.count(Employee.id)).where(
+            Employee.is_active.is_(True),
+            Employee.country == country,
+            Employee.staff_grade_description.ilike(staff_grade_description),
+        )
+        return await session.scalar(stmt) or 0
+
+    @staticmethod
+    async def check_new_job_item(
+        session: AsyncSession, payload: JobItemChecksRequest
+    ) -> JobItemChecks:
+        """The validation panel for an item that is not saved yet (wizard rows). Saves nothing.
+
+        Expected occurrences are the slots creating the item would generate now.
+        """
+        data = payload.item
+        draft = JobItem(
+            sub_item_code=data.sub_item_code.strip(),
+            staff_grade_description=data.staff_grade_description,
+            planned_grade_code=data.planned_grade_code,
+            frequency_unit=data.frequency_unit.strip().upper(),
+            occurrences_per_period=data.occurrences_per_period,
+            period_interval=data.period_interval,
+            weekday_pattern=data.weekday_pattern,
+            required_staff_count=data.required_staff_count,
+            hours_per_occurrence_per_staff=data.hours_per_occurrence_per_staff,
+            start_date=data.start_date,
+            end_date=data.end_date,
+            deployment_type=data.deployment_type.strip().upper(),
+        )
+        try:
+            slots = await JobsService._planned_slots(session, draft, draft.start_date, None)
+        except ValueError as exc:
+            raise AppError("INVALID_JOB_ITEM", str(exc), status_code=422) from exc
+        activities = calculate_expected_activities_per_year(
+            draft.frequency_unit, draft.occurrences_per_period, draft.period_interval
+        )
+        return JobItemChecks(
+            calculated_activities_per_year=activities,
+            calculated_annual_hours=calculate_expected_annual_hours(
+                activities, draft.required_staff_count, draft.hours_per_occurrence_per_staff
+            ),
+            expected_occurrences_count=len(slots),
+            days_per_occurrence=calculate_days_per_occurrence(draft.hours_per_occurrence_per_staff),
+            daily_hours_split=split_job_unit_days(draft.hours_per_occurrence_per_staff),
+            eligible_workers_count=await JobsService._eligible_workers_count(
+                session, payload.country.upper(), data.staff_grade_description
+            ),
+        )
+
+    @staticmethod
     async def get_job_item_validation(
         session: AsyncSession,
         job_item_id: UUID,
@@ -1685,17 +1869,10 @@ class JobsService:
             or 0
         )
 
-        # Count eligible workers with matching SGD or Grade Group
-        # Look up worksite country
         ws = await session.get(Worksite, item.worksite_id)
-        ws_country = ws.country if ws else "AE"
-
-        emp_count_stmt = select(func.count(Employee.id)).where(
-            Employee.is_active.is_(True),
-            Employee.country == ws_country,
-            Employee.staff_grade_description.ilike(item.staff_grade_description),
+        eligible_count = await JobsService._eligible_workers_count(
+            session, ws.country if ws else "AE", item.staff_grade_description
         )
-        eligible_count = await session.scalar(emp_count_stmt) or 0
 
         note: str | None = None
         if (

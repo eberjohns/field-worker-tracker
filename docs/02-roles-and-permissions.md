@@ -40,9 +40,9 @@ C = create, R = read, U = update, D = delete (unused records only), A = approve/
 | Employees | CRUD | R scope; U weekly-off, accommodation, break (bulk) in scope | R scope | R scope | R self |
 | Employee grade code | U | X | X | X | X |
 | Accounts, devices | CRUD, revoke | X | X | X | X |
-| Groups, Zones, Accommodations | CRUD | R | R | R | X |
-| Worksites + boundaries | CRUD | CRU (creates sites and draws boundaries) | R scope | R scope | R own sites |
-| Job Items | CRUD | CRU | R | R | R own |
+| Groups, Zones, Accommodations | CRUD | R; CU accommodations (no deactivation) | R | R | X |
+| Worksites + boundaries | CRUD | R scope; draws and edits boundaries, assigns supervisors in scope (no create, no boundary file import; DEC-61) | R scope | R scope | R own sites |
+| Job Items | CRUD | CRU scope (no deactivation; DEC-61) | R | R | R own |
 | Occurrences, weekly patterns | CRUD | CRU scope | R | R | X |
 | Scheduled Work (permanent) | CRUD | CRUD scope | R | R | R self |
 | Temporary reassignment | CRUD (auto-approved) | CRUD scope, **approve** | C (request) scope | C (request) scope | R self |
@@ -61,12 +61,12 @@ C = create, R = read, U = update, D = delete (unused records only), A = approve/
 | Live map and dashboard | R all | R scope | R scope | R scope | X |
 | Pending visits | R, close | R scope, manage (reschedule, close) | R scope | R scope; explain (comment) | X |
 | Contract labour budget override | CRU | R | X | X | X |
-| Import / export | CRUD | X | X | X | X |
+| Import / export | CRUD | export only, without salary and budget columns (import is Admin only, DEC-61) | X | X | X |
 | Audit log | R | X | X | X | X |
 
 Notes:
 - Supervisors cannot see salary/cost reports or payroll data.
-- A site created by an Engineer is visible to that Engineer even before any employee is scheduled there.
+- Only Admin creates worksites and employees, runs imports, adds groups and zones, and deactivates or reactivates anything (DEC-61, 23 Nov 2026). A worksite is visible to an Engineer once one of their supervisors is assigned to it (DEC-57).
 - Superintendents cannot edit permanent schedules, jobs or master data; their only write action is temporary reassignment.
 - Engineers can view payroll/cost reports for their scope; only Admin finalizes payroll.
 - A Supervisor cannot edit master data, permanent schedules or job definitions.

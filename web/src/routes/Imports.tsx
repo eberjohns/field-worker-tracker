@@ -375,6 +375,16 @@ export const Imports: React.FC = () => {
   const rangeStart = filteredTotal === 0 ? 0 : page * pageSize + 1;
   const rangeEnd = Math.min(filteredTotal, (page + 1) * pageSize);
 
+  // Master Data Import is Admin only (DEC-61); the API refuses everyone else too.
+  if (user && user.role !== "ADMIN") {
+    return (
+      <div className="p-6 bg-white border border-slate-200 rounded-xl text-sm text-slate-700">
+        <h1 className="text-lg font-bold text-slate-900 mb-1">Master Data Import</h1>
+        <p>Admin only. Ask an Admin to import the workbook.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Page Header */}

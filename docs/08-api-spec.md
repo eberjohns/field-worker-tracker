@@ -56,16 +56,18 @@ Roles: A = Admin, E = Engineer, S = Superintendent, V = Supervisor. "scope" = li
 `GET /users`, `PATCH /users/{id}` (active/role), `POST /users/{id}/reset-password` (**Admin only**: sets the user back to the company default password and forces a change; applies to workers too).
 
 ### Groups, Zones, Accommodations
-`GET/POST/PATCH /groups`, `/zones`, `/accommodations` (A write, except `POST /groups` and `POST /zones`: A E; A E S V read). `POST /groups` `{name, code?, confirm_near_match?}`: without `code` the next free 3-digit code is generated; a given code must be 3 digits (422 `INVALID_GROUP_CODE`). `POST /zones` `{code, name, confirm_near_match?}`. Both: 409 `DUPLICATE_NAME` (name equal ignoring case and spaces; `existing`, `existing_id`, `existing_code`, `is_active`) or `DUPLICATE_CODE`; 422 `NEAR_MATCH` (`suggestions`) until `confirm_near_match` (DEC-60 amendment). `PUT /accommodations/{id}/boundary` (GeoJSON Polygon). Delete only if unreferenced.
+`GET/POST/PATCH /groups`, `/zones`, `/accommodations` (A write; `POST /accommodations` and `PATCH /accommodations/{id}`: A E, but `is_active` on the PATCH is Admin only, 403 `FORBIDDEN` (DEC-61); A E S V read). `POST /groups` and `POST /zones` are Admin only (DEC-61; Admin and Engineer in v1.14). `POST /groups` `{name, code?, confirm_near_match?}`: without `code` the next free 3-digit code is generated; a given code must be 3 digits (422 `INVALID_GROUP_CODE`). `POST /zones` `{code, name, confirm_near_match?}`. Both: 409 `DUPLICATE_NAME` (name equal ignoring case and spaces; `existing`, `existing_id`, `existing_code`, `is_active`) or `DUPLICATE_CODE`; 422 `NEAR_MATCH` (`suggestions`) until `confirm_near_match` (DEC-60 amendment). `PUT /accommodations/{id}/boundary` (GeoJSON Polygon). Delete only if unreferenced.
 
 ### Worksites and job items
 | Method | Path | Roles | Purpose |
 |---|---|---|---|
 | GET | /worksites | scope | list (DEC-57 worksite scope); filters `q, group_id, zone_id, country, has_boundary, is_active`, `unassigned` (Admin: no active supervisor) |
 | POST/PATCH | /worksites, /worksites/{id} | A | PATCH can change `group_id` and `zone_id` (active group/zone, else 422 `GROUP_NOT_FOUND` / `ZONE_NOT_FOUND`) |
+| POST | /worksites (Add Worksite wizard, Batch 5.1 B) | A | body = worksite fields + `job_items: [JobItemCreate]` (0-50) + `supervisor_ids: [uuid]`; one transaction: the worksite, each supervisor assignment and each item (with its occurrences and audit entries) or nothing. A row error re-raises the item's error with `field: "job_items[N].<field>"`, `row: N` and a message starting "Job item N+1 (code): " (e.g. 422 `UNKNOWN_GRADE_CODE`, 409 duplicate sub-item code); a schema error names `body.job_items.N.<field>` in `invalid_params`; a bad supervisor gives `field: "supervisor_ids"`; a malformed job number is 422 `INVALID_JOB_NUMBER` (`field: "job_number"`; it was a 500) |
+| GET | /worksites/job-number-check?job_number= | A | live check for the wizard: `{job_number (trimmed, upper case), valid, exists, message, is_outdoor, kind}`; `kind` = Outdoor (A), Indoor (B), Water feature (C); an existing number is `valid: false, exists: true` |
 | GET | /worksites/{id} | scope | detail with items and staffing summary; 404 when out of scope |
 | GET | /worksites/{id}/supervisors | scope | assigned supervisors; 404 when out of scope |
-| POST / DELETE | /worksites/{id}/supervisors, /worksites/{id}/supervisors/{employee_id} | A | assign (role SUPERVISOR, active) / end an assignment (deactivates the row) |
+| POST / DELETE | /worksites/{id}/supervisors, /worksites/{id}/supervisors/{employee_id} | A, E (scope: 404 outside the Engineer's DEC-57 worksites) | assign (role SUPERVISOR, active) / end an assignment (deactivates the row) |
 | GET | /worksites/supervisor-proposals | A | per worksite: supervisors whose crew holds standing assignments there today and who are not assigned yet, plus unassigned worksites |
 | POST | /worksites/supervisors/bulk-assign | A | body `{ assignments: [{worksite_id, supervisor_id}] }` (1-2000); all or nothing; returns `{assigned, already_assigned}` |
 | GET | /job-items/destinations | A E SI S | every active job item on an active worksite (job number, name, sub-item, staff type; no costs), for reassignment requests; not scoped |
@@ -74,9 +76,11 @@ Roles: A = Admin, E = Engineer, S = Superintendent, V = Supervisor. "scope" = li
 | POST | /worksites/{id}/copy-boundary-to | A E | Copy this worksite's boundary to target worksites list (`target_worksite_ids`) |
 | GET | /worksites/search-map | scope | by text/number for the boundary editor |
 | GET | /boundary-queue | A E | worksites and accommodations with no boundary yet, with progress counts; each links to the boundary editor |
-| GET/POST | /worksites/{id}/job-items | A (write), scope (read) | |
-| PATCH | /job-items/{id} | A (all), E (staffing fields, scope) | |
-| POST | /job-items/{id}/generate-occurrences | A E | body `{ from, to }`; idempotent |
+| POST | /boundaries/import | A | boundary file import (GeoJSON/JSON text matched to worksites and accommodations); Admin only (DEC-61); Engineers keep drawing and editing on the map and the boundary queue |
+| GET/POST | /worksites/{id}/job-items | A E (write; E in scope, else 404), scope (read) | |
+| PATCH | /job-items/{id} | A, E (in scope, else 404) | `is_active` is Admin only: 403 `FORBIDDEN` for anyone else (DEC-61); Admin also has `/deactivate` and `/reactivate` |
+| POST | /job-items/validation-preview | A E | checks for an unsaved item (wizard rows), saves nothing: body `{country, item: JobItemCreate}` -> `{calculated_activities_per_year, calculated_annual_hours, expected_occurrences_count, days_per_occurrence, daily_hours_split, eligible_workers_count}`; occurrences are the slots create would generate (item window, occurrence horizon); 422 `INVALID_JOB_ITEM` when no slots can be planned |
+| POST | /job-items/{id}/generate-occurrences | A E (E in scope, else 404) | body `{ from, to }`; idempotent |
 | GET/PUT | /job-items/{id}/weekly-pattern | A E | weekday pattern; `apply_to_future_windows` flag |
 | GET | /job-items/{id}/validation | scope | declared vs computed activities/hours |
 | GET | /occurrences | scope | filters `job_item_id, worksite_id, from, to, status, understaffed` |
@@ -185,12 +189,12 @@ Roles: A = Admin, E = Engineer, S = Superintendent, V = Supervisor. "scope" = li
 | GET | /live/stream?ticket= | A E S V scope | Server-Sent Events: `position` and `state` updates for the user's scope; heartbeat every 20 s; client falls back to polling `/live/positions` every 30 s |
 | GET | /live/trail/{employee_id} | A E S V scope | Chronological GPS breadcrumb trail of mobile event logs for day route playback |
 | POST | /documents/check-alerts | A | Evaluates document expiry lead days and creates DOC_EXPIRY alerts |
-| POST | /imports | A, E | upload workbook (multipart) -> batch. For Engineers the salary sheets (`SHEET_ADMIN_ONLY`) and money settings and `default_password` in Company_Settings (`SETTING_ADMIN_ONLY`) are skipped and their values not stored (DEC-47) |
-| GET | /imports/{id}/preview | A, E | per-sheet counts, row-level errors/warnings; Engineers never see salary or money-setting rows; `INVALID_GRADE_CODE` for unparseable grades |
-| POST | /imports/{id}/commit | A, E | commit in one transaction -> job; a non-Admin cannot commit (or roll back) a batch that writes salary or cost data (422) |
+| POST | /imports | A | upload workbook (multipart) -> batch. The whole Master Data Import is Admin only (DEC-61, 23 Nov 2026): every `/imports` route returns 403 to other roles, so there are no Engineer-skipped sheets or settings any more |
+| GET | /imports/{id}/preview | A | per-sheet counts, row-level errors/warnings; `INVALID_GRADE_CODE` for unparseable grades |
+| POST | /imports/{id}/commit | A | commit in one transaction -> job |
 | GET | /imports/{id}/errors.xlsx | A | downloadable error report |
 | POST | /imports/{id}/rollback | A | rollback a committed batch (if safe) |
-| GET | /imports/template | A, E | download the template workbook; Engineers get it without the salary sheets and money-setting examples |
+| GET | /imports/template | A | download the template workbook (every sheet) |
 | GET | /documents/expiring?within_days= | A E S V scope | document-expiry list |
 | GET | /audit-logs | A | filters `actor, entity_type, entity_id, from, to` |
 | GET | /health, /health/ready | public | liveness / readiness |

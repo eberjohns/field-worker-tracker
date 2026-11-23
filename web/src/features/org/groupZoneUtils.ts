@@ -20,9 +20,9 @@ export const NEW_UNIT = "__NEW__";
 
 export const UNIT_LABELS: Record<UnitKind, string> = { group: "Customer Group", zone: "Zone" };
 
-/** Admin and Engineer can add groups and zones. */
+/** Only Admin adds groups and zones (DEC-61). */
 export function canAddUnit(role: string | null | undefined): boolean {
-  return role === "ADMIN" || role === "ENGINEER";
+  return role === "ADMIN"; // DEC-61
 }
 
 export function unitLabel(u: OrgUnit): string {

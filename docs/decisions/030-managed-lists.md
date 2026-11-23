@@ -77,7 +77,8 @@ codes. The owner changed that the same day:
   database or in the same file's Salary_Revision_Lines, is an error `UNKNOWN_GRADE_CODE` with a
   hint. `GRADE_ADDED_TO_LIST` is removed; nothing is ever added to a list by import.
 - **Groups and zones** (client meeting item 3): the group and zone dropdowns in Add Worksite and the
-  worksite edit get "Other – add new…" (Admin, Engineer). It saves at once and selects the new value.
+  worksite edit get "Other – add new…" (Admin only since DEC-61, 23 Nov 2026; Admin and Engineer
+  before). It saves at once and selects the new value.
   A group needs only its name: the next free 3-digit code after the highest in use is generated
   (151 -> 152; past 999 the lowest free from 100). A zone needs code and name. Duplicate names
   (ignoring case and spaces) and codes are refused (409 `DUPLICATE_NAME`, `DUPLICATE_CODE`); a near

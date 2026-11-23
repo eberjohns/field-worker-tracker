@@ -134,7 +134,7 @@ function parseImportText(text: string): { entity_type: string; code: string; pol
 
 export const Boundaries: React.FC = () => {
   const navigate = useNavigate();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [data, setData] = useState<BoundaryQueueData | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -326,19 +326,21 @@ export const Boundaries: React.FC = () => {
             Export JSON
           </button>
 
-          {/* Import Button */}
-          <button
-            type="button"
-            onClick={() => {
-              setImportText("");
-              setImportResult(null);
-              setShowImportModal(true);
-            }}
-            className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-colors"
-          >
-            <Upload className="h-3.5 w-3.5" />
-            Import Boundaries
-          </button>
+          {/* Import Button: boundary file import is Admin only (DEC-61) */}
+          {user?.role === "ADMIN" && (
+            <button
+              type="button"
+              onClick={() => {
+                setImportText("");
+                setImportResult(null);
+                setShowImportModal(true);
+              }}
+              className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-colors"
+            >
+              <Upload className="h-3.5 w-3.5" />
+              Import Boundaries
+            </button>
+          )}
 
           <button
             type="button"
