@@ -618,6 +618,21 @@ class JobsService:
         if payload.customer_type is not None:
             diff["customer_type"] = {"old": ws.customer_type, "new": payload.customer_type}
             ws.customer_type = payload.customer_type
+        # Group and zone can be changed in the worksite edit (owner decision 23 Nov 2026).
+        if payload.group_id is not None and payload.group_id != ws.group_id:
+            group = await session.get(Group, payload.group_id)
+            if group is None or not group.is_active:
+                raise AppError(
+                    "GROUP_NOT_FOUND", "Customer group not found or deactivated.", status_code=422
+                )
+            diff["group_id"] = {"old": str(ws.group_id), "new": str(group.id)}
+            ws.group_id = group.id
+        if payload.zone_id is not None and payload.zone_id != ws.zone_id:
+            zone = await session.get(Zone, payload.zone_id)
+            if zone is None or not zone.is_active:
+                raise AppError("ZONE_NOT_FOUND", "Zone not found or deactivated.", status_code=422)
+            diff["zone_id"] = {"old": str(ws.zone_id), "new": str(zone.id)}
+            ws.zone_id = zone.id
         if payload.contract_group_ref is not None:
             diff["contract_group_ref"] = {
                 "old": ws.contract_group_ref,

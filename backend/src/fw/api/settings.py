@@ -526,7 +526,8 @@ async def reset_database(
     # Re-seed the default company settings (migration 0003 values) so payroll works
     # straight after a reset; money settings have no hard-coded fallbacks (DEC-58).
     await SettingsService.seed_default_settings(session)
-    # Managed lists (DEC-60): staff types back to the seed; grades return with the next import.
+    # Managed lists (DEC-60): staff types back to the seed; the grade list is empty like the
+    # revisions and returns with the next salary revision.
     await LookupService.reseed(session)
     await SettingsService.set_setting(
         session,

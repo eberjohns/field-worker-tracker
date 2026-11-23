@@ -1,7 +1,8 @@
 """Managed lists (DEC-60, ADR-030): staff types and grade codes.
 
-Here rather than in ``fw.modules.lookups`` because the list also shows values in use on
-employees, job items and revision lines, which live in higher modules.
+Here rather than in ``fw.modules.lookups`` because Settings also shows values in use on employees,
+job items and revision lines, which live in higher modules. Dropdowns get the active values only.
+Staff types are added and deactivated by Admin; grade codes come only from active salary revisions.
 """
 
 from uuid import UUID
@@ -15,14 +16,12 @@ from fw.modules.jobs import JobsService
 from fw.modules.lookups import (
     LookupService,
     LookupValueCreate,
-    LookupValueCreated,
     LookupValueRead,
     LookupValueUpdate,
-    LookupWarning,
 )
 from fw.modules.org import OrgService
 from fw.modules.payroll import PayrollService
-from fw.rules.lookups import GRADE_CODE, NO_REVISION_LINE, sort_values, value_key
+from fw.rules.lookups import GRADE_CODE, sort_values, value_key
 
 router = APIRouter(tags=["lookups"])
 
@@ -56,10 +55,13 @@ async def list_lookup_values(
 ) -> list[LookupValueRead]:
     """Values of a managed list (any signed-in role; codes and names only, no money).
 
-    Values in use that are not in the list are appended with ``id`` null and source ``IN_USE``.
+    Default (dropdowns): the active values. ``include_inactive`` (Settings > Managed Lists): every
+    value, plus values in use that are not in the list, with ``id`` null and source ``IN_USE``.
     """
     rows = await LookupService.list_values(session, list_key, include_inactive=True)
-    out = [LookupValueRead.model_validate(r) for r in rows if include_inactive or r.is_active]
+    if not include_inactive:
+        return [LookupValueRead.model_validate(r) for r in rows if r.is_active]
+    out = [LookupValueRead.model_validate(r) for r in rows]
     known = {r.value_key for r in rows}
     extra = [v for v in await _in_use(session, list_key) if value_key(v) not in known]
     for v in sort_values(list_key, {value_key(v): v for v in extra}.values()):
@@ -70,17 +72,17 @@ async def list_lookup_values(
 
 @router.post(
     "/lookups/{list_key}",
-    response_model=LookupValueCreated,
+    response_model=LookupValueRead,
     status_code=status.HTTP_201_CREATED,
 )
 async def add_lookup_value(
     list_key: str,
     payload: LookupValueCreate,
-    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    current_user: User = Depends(require_role("ADMIN")),
     session: AsyncSession = Depends(get_db),
-) -> LookupValueCreated:
-    """Add a value ("Other – add new…"). Duplicates are refused; near matches need
-    ``confirm_near_match``. A new grade without a line in an active revision gets a warning."""
+) -> LookupValueRead:
+    """Add a staff type (Admin, Settings > Managed Lists). Duplicates are refused; near matches
+    need ``confirm_near_match``. Grade codes are refused (422 ``GRADE_FROM_REVISION_ONLY``)."""
     row = await LookupService.add_value(
         session,
         list_key,
@@ -89,21 +91,7 @@ async def add_lookup_value(
         actor_user_id=current_user.id,
         actor_role=current_user.role,
     )
-    warnings: list[LookupWarning] = []
-    if list_key == GRADE_CODE:
-        country = payload.country.upper() if payload.country else None
-        missing = await PayrollService.active_revisions_without_grade(session, row.value, country)
-        if missing:
-            warnings.append(
-                LookupWarning(
-                    code=NO_REVISION_LINE,
-                    message=(
-                        f"No line for {row.value} in revision {', '.join(missing)} yet: job items "
-                        "with this grade are left out of the budget until the revision has one."
-                    ),
-                )
-            )
-    return LookupValueCreated(**LookupValueRead.model_validate(row).model_dump(), warnings=warnings)
+    return LookupValueRead.model_validate(row)
 
 
 @router.patch("/lookups/{list_key}/{value_id}", response_model=LookupValueRead)
@@ -114,7 +102,9 @@ async def update_lookup_value(
     current_user: User = Depends(require_role("ADMIN")),
     session: AsyncSession = Depends(get_db),
 ) -> LookupValueRead:
-    """Deactivate or reactivate a value (Admin). Values are never deleted; records keep theirs."""
+    """Deactivate or reactivate a staff type (Admin). Never deleted; records keep theirs.
+
+    Grade codes are refused: they follow the active salary revisions."""
     row = await LookupService.set_active(
         session,
         list_key,

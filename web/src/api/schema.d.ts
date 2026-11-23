@@ -12,13 +12,13 @@ export interface paths {
             cookie?: never;
         };
         /** Liveness check alias */
-        get: operations["health_health_liveness_get"];
+        get: operations["health_health_liveness_head"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         /** Liveness check alias */
-        head: operations["health_health_liveness_get"];
+        head: operations["health_health_liveness_head"];
         patch?: never;
         trace?: never;
     };
@@ -30,13 +30,13 @@ export interface paths {
             cookie?: never;
         };
         /** Liveness check */
-        get: operations["health_health_get"];
+        get: operations["health_health_head"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         /** Liveness check */
-        head: operations["health_health_get"];
+        head: operations["health_health_head"];
         patch?: never;
         trace?: never;
     };
@@ -48,13 +48,13 @@ export interface paths {
             cookie?: never;
         };
         /** Readiness check alias */
-        get: operations["health_ready_health_readiness_get"];
+        get: operations["health_ready_health_readiness_head"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         /** Readiness check alias */
-        head: operations["health_ready_health_readiness_get"];
+        head: operations["health_ready_health_readiness_head"];
         patch?: never;
         trace?: never;
     };
@@ -66,13 +66,13 @@ export interface paths {
             cookie?: never;
         };
         /** Readiness check */
-        get: operations["health_ready_health_ready_get"];
+        get: operations["health_ready_health_ready_head"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         /** Readiness check */
-        head: operations["health_ready_health_ready_get"];
+        head: operations["health_ready_health_ready_head"];
         patch?: never;
         trace?: never;
     };
@@ -1292,14 +1292,15 @@ export interface paths {
          * List Lookup Values
          * @description Values of a managed list (any signed-in role; codes and names only, no money).
          *
-         *     Values in use that are not in the list are appended with ``id`` null and source ``IN_USE``.
+         *     Default (dropdowns): the active values. ``include_inactive`` (Settings > Managed Lists): every
+         *     value, plus values in use that are not in the list, with ``id`` null and source ``IN_USE``.
          */
         get: operations["list_lookup_values_api_v1_lookups__list_key__get"];
         put?: never;
         /**
          * Add Lookup Value
-         * @description Add a value ("Other – add new…"). Duplicates are refused; near matches need
-         *     ``confirm_near_match``. A new grade without a line in an active revision gets a warning.
+         * @description Add a staff type (Admin, Settings > Managed Lists). Duplicates are refused; near matches
+         *     need ``confirm_near_match``. Grade codes are refused (422 ``GRADE_FROM_REVISION_ONLY``).
          */
         post: operations["add_lookup_value_api_v1_lookups__list_key__post"];
         delete?: never;
@@ -1323,7 +1324,9 @@ export interface paths {
         head?: never;
         /**
          * Update Lookup Value
-         * @description Deactivate or reactivate a value (Admin). Values are never deleted; records keep theirs.
+         * @description Deactivate or reactivate a staff type (Admin). Never deleted; records keep theirs.
+         *
+         *     Grade codes are refused: they follow the active salary revisions.
          */
         patch: operations["update_lookup_value_api_v1_lookups__list_key___value_id__patch"];
         trace?: never;
@@ -1678,7 +1681,7 @@ export interface paths {
         };
         /**
          * List Grade Codes
-         * @description Grade codes for dropdowns: the managed list plus codes in use (DEC-58, DEC-60).
+         * @description Grade codes for dropdowns: base codes with a line in an active revision (DEC-58, DEC-60).
          *
          *     Deprecated: use ``GET /lookups/grade_code``.
          */
@@ -5907,12 +5910,24 @@ export interface components {
             /** Reason */
             reason: string;
         };
-        /** GroupCreate */
+        /**
+         * GroupCreate
+         * @description A new group. On screen only the name is sent and the next free 3-digit code is generated.
+         */
         GroupCreate: {
-            /** Code */
-            code: string;
             /** Name */
             name: string;
+            /**
+             * Code
+             * @description 3 digits; left out, the next free code is used.
+             */
+            code?: string | null;
+            /**
+             * Confirm Near Match
+             * @description Add even though a group with a near name exists ('Add anyway').
+             * @default false
+             */
+            confirm_near_match: boolean;
         };
         /** GroupRead */
         GroupRead: {
@@ -6787,37 +6802,6 @@ export interface components {
              * @default false
              */
             confirm_near_match: boolean;
-            /**
-             * Country
-             * @description Grade codes: country whose active revision is checked for a line (AE/SA).
-             */
-            country?: string | null;
-        };
-        /** LookupValueCreated */
-        LookupValueCreated: {
-            /** Id */
-            id?: string | null;
-            /** Value */
-            value: string;
-            /**
-             * Is Active
-             * @default true
-             */
-            is_active: boolean;
-            /**
-             * Source
-             * @default SEED
-             */
-            source: string;
-            /** Version */
-            version?: number | null;
-            /** Created At */
-            created_at?: string | null;
-            /**
-             * Warnings
-             * @default []
-             */
-            warnings: components["schemas"]["LookupWarning"][];
         };
         /**
          * LookupValueRead
@@ -6849,13 +6833,6 @@ export interface components {
             is_active: boolean;
             /** Version */
             version: number;
-        };
-        /** LookupWarning */
-        LookupWarning: {
-            /** Code */
-            code: string;
-            /** Message */
-            message: string;
         };
         /** MatchedRuleExplanationRead */
         MatchedRuleExplanationRead: {
@@ -10280,6 +10257,12 @@ export interface components {
             code: string;
             /** Name */
             name: string;
+            /**
+             * Confirm Near Match
+             * @description Add even though a zone with a near name exists ('Add anyway').
+             * @default false
+             */
+            confirm_near_match: boolean;
         };
         /** ZoneRead */
         ZoneRead: {
@@ -10315,7 +10298,7 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    health_health_liveness_get: {
+    health_health_liveness_head: {
         parameters: {
             query?: never;
             header?: never;
@@ -10335,7 +10318,7 @@ export interface operations {
             };
         };
     };
-    health_health_liveness_get: {
+    health_health_liveness_head: {
         parameters: {
             query?: never;
             header?: never;
@@ -10355,7 +10338,7 @@ export interface operations {
             };
         };
     };
-    health_health_get: {
+    health_health_head: {
         parameters: {
             query?: never;
             header?: never;
@@ -10375,7 +10358,7 @@ export interface operations {
             };
         };
     };
-    health_health_get: {
+    health_health_head: {
         parameters: {
             query?: never;
             header?: never;
@@ -10395,7 +10378,7 @@ export interface operations {
             };
         };
     };
-    health_ready_health_readiness_get: {
+    health_ready_health_readiness_head: {
         parameters: {
             query?: never;
             header?: never;
@@ -10422,7 +10405,7 @@ export interface operations {
             };
         };
     };
-    health_ready_health_readiness_get: {
+    health_ready_health_readiness_head: {
         parameters: {
             query?: never;
             header?: never;
@@ -10449,7 +10432,7 @@ export interface operations {
             };
         };
     };
-    health_ready_health_ready_get: {
+    health_ready_health_ready_head: {
         parameters: {
             query?: never;
             header?: never;
@@ -10476,7 +10459,7 @@ export interface operations {
             };
         };
     };
-    health_ready_health_ready_get: {
+    health_ready_health_ready_head: {
         parameters: {
             query?: never;
             header?: never;
@@ -13246,7 +13229,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["LookupValueCreated"];
+                    "application/json": components["schemas"]["LookupValueRead"];
                 };
             };
             /** @description Validation Error */

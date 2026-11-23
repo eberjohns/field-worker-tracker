@@ -1,8 +1,9 @@
 """Managed lists (DEC-60): staff types (``staff_grade_description``) and grade codes.
 
-Values are added on screen by Admin or Engineer, deactivated by Admin, never deleted. This module
-holds the pure parts: how a value is cleaned, when two values are the same, near-match hints and
-the seed list. Pure: no I/O.
+Staff types are added and deactivated by Admin in Settings > Managed Lists, never deleted. Grade
+codes are the base codes with a line in an ACTIVE salary revision: payroll keeps that list, nobody
+adds a grade any other way (owner decision 23 Nov 2026). This module holds the pure parts: how a
+value is cleaned, when two values are the same, near-match hints and the seed list. Pure: no I/O.
 """
 
 import difflib
@@ -21,8 +22,13 @@ LOOKUP_NEAR_MATCH = "LOOKUP_NEAR_MATCH"
 LOOKUP_VALUE_INACTIVE = "LOOKUP_VALUE_INACTIVE"
 INVALID_STAFF_GRADE_DESCRIPTION = "INVALID_STAFF_GRADE_DESCRIPTION"
 UNKNOWN_GRADE_CODE = "UNKNOWN_GRADE_CODE"
-NO_REVISION_LINE = "NO_REVISION_LINE"
-GRADE_ADDED_TO_LIST = "GRADE_ADDED_TO_LIST"
+GRADE_FROM_REVISION_ONLY = "GRADE_FROM_REVISION_ONLY"
+
+# lookup_values.source: SEED (migration / reset), SCREEN (Settings), REVISION (grade list kept by
+# payroll from active salary revisions), IMPORT (grades added by an import before 23 Nov 2026).
+SOURCE_SEED = "SEED"
+SOURCE_SCREEN = "SCREEN"
+SOURCE_REVISION = "REVISION"
 
 NEAR_MATCH_CUTOFF = 0.85
 
@@ -81,6 +87,17 @@ def find_existing(value: str, existing: Iterable[str]) -> str | None:
     return None
 
 
+def close_names(value: str, existing: Iterable[str], exclude_equal: bool = True) -> list[str]:
+    """Up to three existing names spelled almost like ``value`` (ignoring case and spaces)."""
+    by_key = {value_key(v): v for v in existing}
+    key = value_key(value)
+    return [
+        by_key[k]
+        for k in difflib.get_close_matches(key, list(by_key), n=3, cutoff=NEAR_MATCH_CUTOFF)
+        if not (exclude_equal and k == key)
+    ]
+
+
 def near_matches(list_key: str, value: str, existing: Iterable[str]) -> list[str]:
     """Values the user probably meant: a known alias first, then close spellings.
 
@@ -96,12 +113,9 @@ def near_matches(list_key: str, value: str, existing: Iterable[str]) -> list[str
         hit = find_existing(alias_target, pool)
         if hit:
             hints.append(hit)
-    by_key = {value_key(v): v for v in pool}
-    for key in difflib.get_close_matches(
-        value_key(value), list(by_key), n=3, cutoff=NEAR_MATCH_CUTOFF
-    ):
-        if by_key[key] not in hints and key != value_key(value):
-            hints.append(by_key[key])
+    for hit in close_names(value, pool):
+        if hit not in hints:
+            hints.append(hit)
     return hints
 
 

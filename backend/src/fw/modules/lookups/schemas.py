@@ -22,20 +22,6 @@ class LookupValueCreate(BaseModel):
     confirm_near_match: bool = Field(
         False, description="Add even though a near match or known alias exists ('Add anyway')."
     )
-    country: str | None = Field(
-        None,
-        max_length=2,
-        description="Grade codes: country whose active revision is checked for a line (AE/SA).",
-    )
-
-
-class LookupWarning(BaseModel):
-    code: str
-    message: str
-
-
-class LookupValueCreated(LookupValueRead):
-    warnings: list[LookupWarning] = []
 
 
 class LookupValueUpdate(BaseModel):

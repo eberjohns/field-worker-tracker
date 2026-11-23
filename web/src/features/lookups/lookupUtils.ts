@@ -1,4 +1,6 @@
 // Managed lists (DEC-60): staff types and grade codes. Pure helpers, tested with node:test.
+// Owner decision 23 Nov 2026: dropdowns are plain; Admin adds staff types in Settings; grade codes
+// come only from active salary revisions.
 
 export type ListKey = "staff_grade_description" | "grade_code";
 
@@ -58,15 +60,31 @@ export function optionsWithCurrent(
   return sortValues(listKey, [...byKey.values()]);
 }
 
-/** Options containing the typed text, ignoring case and spaces. */
-export function filterOptions(options: readonly string[], query: string): string[] {
-  const q = valueKey(query);
-  return q ? options.filter((o) => valueKey(o).includes(q)) : [...options];
+export interface SelectOption {
+  value: string;
+  label: string;
 }
 
-/** Only Admin and Engineer may add values ("Other – add new…"). */
-export function canAddLookup(role: string | null | undefined): boolean {
-  return role === "ADMIN" || role === "ENGINEER";
+/**
+ * Options for a plain dropdown: the active values, plus the record's current value when it is
+ * not in the list any more, marked "(not in list)" once the list has loaded.
+ */
+export function selectOptions(
+  listKey: ListKey,
+  values: readonly string[],
+  current: string | null | undefined,
+  loaded: boolean,
+): SelectOption[] {
+  const listed = new Set(values.map(valueKey));
+  return optionsWithCurrent(listKey, values, current).map((v) => ({
+    value: v,
+    label: loaded && !listed.has(valueKey(v)) ? `${v} (not in list)` : v,
+  }));
+}
+
+/** Only Admin adds, deactivates and reactivates staff types (Settings > Managed Lists). */
+export function canManageLists(role: string | null | undefined): boolean {
+  return role === "ADMIN";
 }
 
 /** "G3C" + "2026" -> "G3C-2026"; the stored value stays the base code (DEC-58). */
@@ -75,29 +93,32 @@ export function displayGrade(base: string, suffixLabel?: string | null): string 
 }
 
 export type AddOutcome =
-  | { kind: "added"; value: string; warnings: string[] }
-  | { kind: "exists"; value: string; isActive: boolean; message: string }
+  | { kind: "added"; value: string; body: any }
+  | { kind: "exists"; value: string; existingId: string | null; isActive: boolean; message: string }
   | { kind: "near"; value: string; suggestions: string[]; message: string }
   | { kind: "error"; message: string };
 
-/** Turn the POST /lookups response into what the add form shows. */
+const DUPLICATE_CODES = new Set(["LOOKUP_DUPLICATE", "DUPLICATE_NAME"]);
+const NEAR_CODES = new Set(["LOOKUP_NEAR_MATCH", "NEAR_MATCH"]);
+
+/**
+ * Turn an "add" response into what an add form shows. Shared by the staff type form
+ * (POST /lookups) and the group and zone forms (POST /groups, /zones).
+ */
 export function addOutcome(status: number, body: any): AddOutcome {
-  if (status === 201) {
-    return {
-      kind: "added",
-      value: String(body?.value ?? ""),
-      warnings: Array.isArray(body?.warnings) ? body.warnings.map((w: any) => String(w.message)) : [],
-    };
+  if (status === 201 || status === 200) {
+    return { kind: "added", value: String(body?.value ?? body?.name ?? ""), body };
   }
-  if (status === 409 && body?.code === "LOOKUP_DUPLICATE") {
+  if (status === 409 && DUPLICATE_CODES.has(body?.code)) {
     return {
       kind: "exists",
       value: String(body.existing ?? ""),
+      existingId: body.existing_id ? String(body.existing_id) : null,
       isActive: body.is_active !== false,
       message: String(body.detail ?? "Already in the list."),
     };
   }
-  if (status === 422 && body?.code === "LOOKUP_NEAR_MATCH") {
+  if (status === 422 && NEAR_CODES.has(body?.code)) {
     return {
       kind: "near",
       value: String(body.value ?? ""),

@@ -1,6 +1,19 @@
 # Changelog
 All notable changes. Format: Keep a Changelog. Mobile-contract changes are also logged in `docs/09-mobile-sync-contract.md`.
 
+## [1.14.0] - 2026-11-23
+### Changed
+- **Tests use their own database.** Tests ran against `fw_db`, the working database, which is how test rows got into local data and how the reset-database test wiped settings. `tests/conftest.py` now points the app and every test session at `fw_test` (or `FW_TEST_DATABASE`, which must end in `_test`), drops, recreates and migrates it at the start of every run, and refuses to run against any other database. CI's backend job now has a PostGIS service and runs the database tests it used to skip.
+- **Managed lists, owner decision (DEC-60 and ADR-030 amended).**
+  - Staff type and grade dropdowns are plain dropdowns: no "Other – add new…", no search. The record's current value stays selectable, marked "(not in list)" when it has left the list.
+  - Staff types: only Admin adds, deactivates and reactivates them, in Settings > Managed Lists (`POST /lookups/staff_grade_description` is Admin-only).
+  - Grade codes come only from salary revisions: the grade list is the base codes with a line in an active revision and follows the revisions (migration 0025, source `REVISION`). `POST`/`PATCH /lookups/grade_code` return `GRADE_FROM_REVISION_ONLY`. Screens refuse a grade with no line in an active revision (`UNKNOWN_GRADE_CODE`).
+  - Imports: a grade on Employees or Job_Items with no line in an active revision, in the database or the same file, is an error with a hint. Grades are never added to a list by import (`GRADE_ADDED_TO_LIST` removed).
+### Added
+- **Groups and zones: "Other – add new…"** in the Add Worksite form and the worksite edit (Admin, Engineer). A group needs only its name and gets the next free 3-digit code; a zone needs code and name. Duplicate names and codes are refused, near names ask "Did you mean …?". New group codes in imports and the API must be 3 digits. The worksite edit can now change the group and zone.
+### Removed
+- The `NO_REVISION_LINE` warning, `GRADE_ADDED_TO_LIST`, and the Add Worksite group/zone fields that created the group or zone only when the worksite was saved.
+
 ## [1.13.0] - 2026-11-23
 ### Added
 - **Batch 5.1 C: managed lists for staff types and grade codes (DEC-60, ADR-030).** Client meeting 19 Nov, item 2.

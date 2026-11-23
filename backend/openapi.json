@@ -12,7 +12,7 @@
           "Health"
         ],
         "summary": "Liveness check alias",
-        "operationId": "health_health_liveness_get",
+        "operationId": "health_health_liveness_head",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -31,7 +31,7 @@
           "Health"
         ],
         "summary": "Liveness check alias",
-        "operationId": "health_health_liveness_get",
+        "operationId": "health_health_liveness_head",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -52,7 +52,7 @@
           "Health"
         ],
         "summary": "Liveness check",
-        "operationId": "health_health_get",
+        "operationId": "health_health_head",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -71,7 +71,7 @@
           "Health"
         ],
         "summary": "Liveness check",
-        "operationId": "health_health_get",
+        "operationId": "health_health_head",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -92,7 +92,7 @@
           "Health"
         ],
         "summary": "Readiness check alias",
-        "operationId": "health_ready_health_readiness_get",
+        "operationId": "health_ready_health_readiness_head",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -114,7 +114,7 @@
           "Health"
         ],
         "summary": "Readiness check alias",
-        "operationId": "health_ready_health_readiness_get",
+        "operationId": "health_ready_health_readiness_head",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -138,7 +138,7 @@
           "Health"
         ],
         "summary": "Readiness check",
-        "operationId": "health_ready_health_ready_get",
+        "operationId": "health_ready_health_ready_head",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -160,7 +160,7 @@
           "Health"
         ],
         "summary": "Readiness check",
-        "operationId": "health_ready_health_ready_get",
+        "operationId": "health_ready_health_ready_head",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -5388,7 +5388,7 @@
           "lookups"
         ],
         "summary": "List Lookup Values",
-        "description": "Values of a managed list (any signed-in role; codes and names only, no money).\n\nValues in use that are not in the list are appended with ``id`` null and source ``IN_USE``.",
+        "description": "Values of a managed list (any signed-in role; codes and names only, no money).\n\nDefault (dropdowns): the active values. ``include_inactive`` (Settings > Managed Lists): every\nvalue, plus values in use that are not in the list, with ``id`` null and source ``IN_USE``.",
         "operationId": "list_lookup_values_api_v1_lookups__list_key__get",
         "parameters": [
           {
@@ -5459,7 +5459,7 @@
           "lookups"
         ],
         "summary": "Add Lookup Value",
-        "description": "Add a value (\"Other \u2013 add new\u2026\"). Duplicates are refused; near matches need\n``confirm_near_match``. A new grade without a line in an active revision gets a warning.",
+        "description": "Add a staff type (Admin, Settings > Managed Lists). Duplicates are refused; near matches\nneed ``confirm_near_match``. Grade codes are refused (422 ``GRADE_FROM_REVISION_ONLY``).",
         "operationId": "add_lookup_value_api_v1_lookups__list_key__post",
         "parameters": [
           {
@@ -5504,7 +5504,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LookupValueCreated"
+                  "$ref": "#/components/schemas/LookupValueRead"
                 }
               }
             }
@@ -5528,7 +5528,7 @@
           "lookups"
         ],
         "summary": "Update Lookup Value",
-        "description": "Deactivate or reactivate a value (Admin). Values are never deleted; records keep theirs.",
+        "description": "Deactivate or reactivate a staff type (Admin). Never deleted; records keep theirs.\n\nGrade codes are refused: they follow the active salary revisions.",
         "operationId": "update_lookup_value_api_v1_lookups__list_key___value_id__patch",
         "parameters": [
           {
@@ -6996,7 +6996,7 @@
           "payroll"
         ],
         "summary": "List Grade Codes",
-        "description": "Grade codes for dropdowns: the managed list plus codes in use (DEC-58, DEC-60).\n\nDeprecated: use ``GET /lookups/grade_code``.",
+        "description": "Grade codes for dropdowns: base codes with a line in an active revision (DEC-58, DEC-60).\n\nDeprecated: use ``GET /lookups/grade_code``.",
         "operationId": "list_grade_codes_api_v1_grades_get",
         "parameters": [
           {
@@ -21388,21 +21388,38 @@
       },
       "GroupCreate": {
         "properties": {
-          "code": {
-            "type": "string",
-            "title": "Code"
-          },
           "name": {
             "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
             "title": "Name"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code",
+            "description": "3 digits; left out, the next free code is used."
+          },
+          "confirm_near_match": {
+            "type": "boolean",
+            "title": "Confirm Near Match",
+            "description": "Add even though a group with a near name exists ('Add anyway').",
+            "default": false
           }
         },
         "type": "object",
         "required": [
-          "code",
           "name"
         ],
-        "title": "GroupCreate"
+        "title": "GroupCreate",
+        "description": "A new group. On screen only the name is sent and the next free 3-digit code is generated."
       },
       "GroupRead": {
         "properties": {
@@ -23587,19 +23604,6 @@
             "title": "Confirm Near Match",
             "description": "Add even though a near match or known alias exists ('Add anyway').",
             "default": false
-          },
-          "country": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 2
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Country",
-            "description": "Grade codes: country whose active revision is checked for a line (AE/SA)."
           }
         },
         "type": "object",
@@ -23607,72 +23611,6 @@
           "value"
         ],
         "title": "LookupValueCreate"
-      },
-      "LookupValueCreated": {
-        "properties": {
-          "id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Id"
-          },
-          "value": {
-            "type": "string",
-            "title": "Value"
-          },
-          "is_active": {
-            "type": "boolean",
-            "title": "Is Active",
-            "default": true
-          },
-          "source": {
-            "type": "string",
-            "title": "Source",
-            "default": "SEED"
-          },
-          "version": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Version"
-          },
-          "created_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Created At"
-          },
-          "warnings": {
-            "items": {
-              "$ref": "#/components/schemas/LookupWarning"
-            },
-            "type": "array",
-            "title": "Warnings",
-            "default": []
-          }
-        },
-        "type": "object",
-        "required": [
-          "value"
-        ],
-        "title": "LookupValueCreated"
       },
       "LookupValueRead": {
         "properties": {
@@ -23750,24 +23688,6 @@
           "version"
         ],
         "title": "LookupValueUpdate"
-      },
-      "LookupWarning": {
-        "properties": {
-          "code": {
-            "type": "string",
-            "title": "Code"
-          },
-          "message": {
-            "type": "string",
-            "title": "Message"
-          }
-        },
-        "type": "object",
-        "required": [
-          "code",
-          "message"
-        ],
-        "title": "LookupWarning"
       },
       "MatchedRuleExplanationRead": {
         "properties": {
@@ -32615,11 +32535,21 @@
         "properties": {
           "code": {
             "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
             "title": "Code"
           },
           "name": {
             "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
             "title": "Name"
+          },
+          "confirm_near_match": {
+            "type": "boolean",
+            "title": "Confirm Near Match",
+            "description": "Add even though a zone with a near name exists ('Add anyway').",
+            "default": false
           }
         },
         "type": "object",

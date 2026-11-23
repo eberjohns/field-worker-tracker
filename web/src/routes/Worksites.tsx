@@ -26,6 +26,7 @@ import { MapContainer, PolygonEditor, PlaceSearch } from "../features/map";
 import { Map as MapLibreMap } from "maplibre-gl";
 import SupervisorProposalsModal from "../components/jobs/SupervisorProposalsModal";
 import { LookupSelect } from "../components/lookups/LookupSelect";
+import { GroupZoneSelect } from "../components/org/GroupZoneSelect";
 
 interface Worksite {
   id: string;
@@ -67,12 +68,14 @@ interface Group {
   id: string;
   code: string;
   name: string;
+  is_active?: boolean;
 }
 
 interface Zone {
   id: string;
   code: string;
   name: string;
+  is_active?: boolean;
 }
 
 /** Live man-hours (and, for Admin, cost) of one Add Worksite item row (DEC-59). */
@@ -177,11 +180,7 @@ export const Worksites: React.FC = () => {
   const [formNumber, setFormNumber] = useState("");
   const [formName, setFormName] = useState("");
   const [formGroupId, setFormGroupId] = useState("");
-  const [newGroupName, setNewGroupName] = useState("");
-  const [newGroupCode, setNewGroupCode] = useState("");
   const [formZoneId, setFormZoneId] = useState("");
-  const [newZoneName, setNewZoneName] = useState("");
-  const [newZoneCode, setNewZoneCode] = useState("");
   const [formCountry, setFormCountry] = useState("AE");
   const [formCustomerType, setFormCustomerType] = useState("Direct");
   const [formRenewalRef, setFormRenewalRef] = useState("");
@@ -329,42 +328,6 @@ export const Worksites: React.FC = () => {
 
     setCreateLoading(true);
     try {
-      let effectiveGroupId = formGroupId;
-      if (formGroupId === "__NEW__") {
-        if (!newGroupName.trim()) throw new Error("Please enter a name for the new Customer Group.");
-        const code = (newGroupCode.trim() || newGroupName.trim().toUpperCase().replace(/[^A-Z0-9]/g, "_")).slice(0, 16);
-        const gRes = await fetch("/api/v1/groups", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-          body: JSON.stringify({ name: newGroupName.trim(), code }),
-        });
-        if (!gRes.ok) {
-          const gErr = await gRes.json().catch(() => ({}));
-          throw new Error(gErr.detail || "Failed to create new customer group.");
-        }
-        const createdG = await gRes.json();
-        effectiveGroupId = createdG.id;
-        setGroups((prev) => [...prev, createdG]);
-      }
-
-      let effectiveZoneId = formZoneId;
-      if (formZoneId === "__NEW__") {
-        if (!newZoneName.trim()) throw new Error("Please enter a name for the new Zone.");
-        const code = (newZoneCode.trim() || newZoneName.trim().toUpperCase().replace(/[^A-Z0-9]/g, "_")).slice(0, 16);
-        const zRes = await fetch("/api/v1/zones", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-          body: JSON.stringify({ name: newZoneName.trim(), code, country: formCountry }),
-        });
-        if (!zRes.ok) {
-          const zErr = await zRes.json().catch(() => ({}));
-          throw new Error(zErr.detail || "Failed to create new zone.");
-        }
-        const createdZ = await zRes.json();
-        effectiveZoneId = createdZ.id;
-        setZones((prev) => [...prev, createdZ]);
-      }
-
       const res = await fetch("/api/v1/worksites", {
         method: "POST",
         headers: {
@@ -374,8 +337,8 @@ export const Worksites: React.FC = () => {
         body: JSON.stringify({
           job_number: cleanedNumber,
           job_name: formName.trim(),
-          group_id: effectiveGroupId,
-          zone_id: effectiveZoneId,
+          group_id: formGroupId,
+          zone_id: formZoneId,
           country: formCountry,
           customer_type: formCustomerType || null,
           renewal_reference: formRenewalRef.trim() || null,
@@ -419,11 +382,7 @@ export const Worksites: React.FC = () => {
       setFormNumber("");
       setFormName("");
       setFormGroupId("");
-      setNewGroupName("");
-      setNewGroupCode("");
       setFormZoneId("");
-      setNewZoneName("");
-      setNewZoneCode("");
       setFormRenewalRef("");
       setFormBudget("");
       setInitialJobItems([]);
@@ -1160,78 +1119,28 @@ export const Worksites: React.FC = () => {
                   <label className="block text-xs font-medium text-slate-700 mb-1">
                     Customer Group *
                   </label>
-                  <select
+                  <GroupZoneSelect
+                    kind="group"
                     required
                     value={formGroupId}
-                    onChange={(e) => setFormGroupId(e.target.value)}
-                    className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-indigo-500 bg-white"
-                  >
-                    <option value="">Select Group...</option>
-                    {groups.map((g) => (
-                      <option key={g.id} value={g.id}>
-                        {g.name}
-                      </option>
-                    ))}
-                    <option value="__NEW__">+ Add New Group...</option>
-                  </select>
-                  {formGroupId === "__NEW__" && (
-                    <div className="mt-2 space-y-1.5 p-2.5 bg-slate-50 border border-slate-200 rounded">
-                      <input
-                        type="text"
-                        required
-                        placeholder="New Group Name (e.g. Emaar)"
-                        value={newGroupName}
-                        onChange={(e) => setNewGroupName(e.target.value)}
-                        className="w-full px-2.5 py-1 text-xs border border-slate-300 rounded bg-white"
-                      />
-                      <input
-                        type="text"
-                        placeholder="Group Code (Optional, e.g. EMAAR)"
-                        value={newGroupCode}
-                        onChange={(e) => setNewGroupCode(e.target.value.toUpperCase())}
-                        className="w-full px-2.5 py-1 text-xs font-mono border border-slate-300 rounded bg-white"
-                      />
-                    </div>
-                  )}
+                    onChange={setFormGroupId}
+                    items={groups}
+                    onCreated={(u) => setGroups((prev) => [...prev, u])}
+                  />
                 </div>
 
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
                     Zone *
                   </label>
-                  <select
+                  <GroupZoneSelect
+                    kind="zone"
                     required
                     value={formZoneId}
-                    onChange={(e) => setFormZoneId(e.target.value)}
-                    className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-indigo-500 bg-white"
-                  >
-                    <option value="">Select Zone...</option>
-                    {zones.map((z) => (
-                      <option key={z.id} value={z.id}>
-                        {z.name}
-                      </option>
-                    ))}
-                    <option value="__NEW__">+ Add New Zone...</option>
-                  </select>
-                  {formZoneId === "__NEW__" && (
-                    <div className="mt-2 space-y-1.5 p-2.5 bg-slate-50 border border-slate-200 rounded">
-                      <input
-                        type="text"
-                        required
-                        placeholder="New Zone Name (e.g. Dubai Marina)"
-                        value={newZoneName}
-                        onChange={(e) => setNewZoneName(e.target.value)}
-                        className="w-full px-2.5 py-1 text-xs border border-slate-300 rounded bg-white"
-                      />
-                      <input
-                        type="text"
-                        placeholder="Zone Code (Optional, e.g. MARINA)"
-                        value={newZoneCode}
-                        onChange={(e) => setNewZoneCode(e.target.value.toUpperCase())}
-                        className="w-full px-2.5 py-1 text-xs font-mono border border-slate-300 rounded bg-white"
-                      />
-                    </div>
-                  )}
+                    onChange={setFormZoneId}
+                    items={zones}
+                    onCreated={(u) => setZones((prev) => [...prev, u])}
+                  />
                 </div>
               </div>
 
@@ -1361,7 +1270,6 @@ export const Worksites: React.FC = () => {
                           onChange={(val) =>
                             setInitialJobItems((prev) => prev.map((it, i) => (i === idx ? { ...it, planned_grade_code: val } : it)))
                           }
-                          country={formCountry}
                           placeholder="Select…"
                           inputClassName="w-full p-1 border rounded bg-white text-xs font-mono"
                         />

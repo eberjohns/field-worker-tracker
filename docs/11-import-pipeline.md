@@ -61,8 +61,9 @@ One registry in code (`modules/imports/registry.py`) defines sheets, columns, ty
 
 ## 4. Normalization rules
 - Trim whitespace, collapse internal spaces, normalize non-breaking spaces. IDs stay text.
-- **Staff Grade Description** (DEC-60): match to the managed staff type list ignoring case and spaces, else the `SGD_Aliases` table (`Gardner Helper` -> `Gardener Helper`, `Irrigation Technitian` -> `Irrigation Technician`, `Forman With DL` -> `Foreman With DL`, `Superintent` -> `Superintendent`...), on every sheet. Alias use -> `SGD_ALIAS_APPLIED` (info). Unknown value -> `SGD_UNKNOWN` (**error**, with "Did you mean …?"): staff types are added on screen (Settings → Managed Lists or "Other – add new…"), never by import. A deactivated value -> `LOOKUP_VALUE_INACTIVE` (warning; kept).
-- **Grade codes** (DEC-60): a valid base code that is not in the grade list -> `GRADE_ADDED_TO_LIST` (warning); it is added to the list when the batch is committed (rows skipped for Engineers add nothing).
+- **Staff Grade Description** (DEC-60): match to the managed staff type list ignoring case and spaces, else the `SGD_Aliases` table (`Gardner Helper` -> `Gardener Helper`, `Irrigation Technitian` -> `Irrigation Technician`, `Forman With DL` -> `Foreman With DL`, `Superintent` -> `Superintendent`...), on every sheet. Alias use -> `SGD_ALIAS_APPLIED` (info). Unknown value -> `SGD_UNKNOWN` (**error**, with "Did you mean …?"): an Admin adds staff types in Settings → Managed Lists, never by import. A deactivated value -> `LOOKUP_VALUE_INACTIVE` (warning; kept).
+- **Grade codes** (DEC-60, amended 23 Nov 2026): a grade on Employees (`grade_code`) or Job_Items (`planned_grade_code`) must have a line in an ACTIVE salary revision, in the database or in the same file's Salary_Revision_Lines (for a revision whose status in the file or database is ACTIVE/APPROVED); otherwise `UNKNOWN_GRADE_CODE` (**error**, with a hint). Nothing is added to a list by import; after commit the grade list follows the active revisions.
+- **Group codes** (DEC-60 amendment): a *new* group's `group_code` must be 3 digits, as groups added on screen (`INVALID_GROUP_CODE`, error). Existing groups keep their codes and still update.
 - **Booleans** `Y/N`. **Dates** `YYYY-MM-DD` (Excel date cells accepted). **Times** `HH:MM`. Decimals accept `.` only.
 - **Frequency** is structured in the template. For the legacy converter, free text is parsed:
 
@@ -99,8 +100,9 @@ Stable codes shown in the preview and error report.
 | ENGINEER_MISSING | warning | worker has no engineer |
 | HIERARCHY_ROLE_MISMATCH | warning | referenced supervisor/superintendent/engineer has a different role |
 | SGD_ALIAS_APPLIED | info | alias normalized |
-| SGD_UNKNOWN | error | staff type not in the managed list (DEC-60); add it on screen first |
-| GRADE_ADDED_TO_LIST | warning | grade code not in the grade list yet; added on commit (DEC-60) |
+| SGD_UNKNOWN | error | staff type not in the managed list (DEC-60); an Admin adds it in Settings first |
+| UNKNOWN_GRADE_CODE | error | grade code has no line in an active salary revision (database or same file) (DEC-60) |
+| INVALID_GROUP_CODE | error | a new group's code is not 3 digits (DEC-60 amendment) |
 | LOOKUP_VALUE_INACTIVE | warning | staff type was deactivated; kept on the record |
 | ACTIVITIES_MISMATCH / ANNUAL_HOURS_MISMATCH | info | declared figures differ from the calculated ones (the calculated value is used) |
 | GRADE_CODE_NOT_IN_REVISION | warning | employee grade code has no salary line in the active revision |

@@ -22,7 +22,9 @@ class LookupValue(ModelBase):
             "list_key IN ('staff_grade_description', 'grade_code')",
             name="ck_lookup_values_list_key",
         ),
-        CheckConstraint("source IN ('SEED', 'SCREEN', 'IMPORT')", name="ck_lookup_values_source"),
+        CheckConstraint(
+            "source IN ('SEED', 'SCREEN', 'IMPORT', 'REVISION')", name="ck_lookup_values_source"
+        ),
         Index("ix_lookup_values_list_key_active", "list_key", "is_active"),
     )
 

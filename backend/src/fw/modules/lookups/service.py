@@ -1,9 +1,14 @@
 """Managed lists (DEC-60, ADR-030): staff types and grade codes.
 
 Every screen that sets a staff type or a grade code validates against the active list here; the
-import pipeline reads the lists once per preview. Values are added on screen (Admin, Engineer),
-deactivated by Admin and never deleted. Grade codes that arrive by import are added to the list on
-commit (plan approved 23 Nov 2026); staff types are never added by import.
+import pipeline reads the lists once per preview.
+
+- Staff types: Admin adds and deactivates them in Settings > Managed Lists; never deleted, never
+  added by import.
+- Grade codes: the base codes with a line in an ACTIVE salary revision. Payroll keeps this list
+  through ``sync_grades`` after every change to revisions; nothing else adds or deactivates a grade
+  (owner decision 23 Nov 2026). Payroll sits above this module, so org and jobs can validate
+  grades here without reading payroll tables.
 """
 
 from collections.abc import Iterable
@@ -19,12 +24,16 @@ from fw.modules.lookups.repository import LookupRepository
 from fw.rules.grades import InvalidGradeCodeError
 from fw.rules.lookups import (
     GRADE_CODE,
+    GRADE_FROM_REVISION_ONLY,
     INVALID_STAFF_GRADE_DESCRIPTION,
     LIST_KEYS,
     LOOKUP_DUPLICATE,
     LOOKUP_NEAR_MATCH,
     LOOKUP_VALUE_INACTIVE,
     SEED_STAFF_TYPES,
+    SOURCE_REVISION,
+    SOURCE_SCREEN,
+    SOURCE_SEED,
     STAFF_GRADE_DESCRIPTION,
     UNKNOWN_GRADE_CODE,
     clean_value,
@@ -44,6 +53,30 @@ def _check_list_key(list_key: str) -> None:
             message=f"Unknown list '{list_key}'. Lists: {', '.join(LIST_KEYS)}.",
             status_code=404,
         )
+
+
+def _refuse_grade_edits(list_key: str) -> None:
+    if list_key == GRADE_CODE:
+        raise AppError(
+            code=GRADE_FROM_REVISION_ONLY,
+            message=(
+                "Grade codes come from salary revisions: add a line for the grade to a salary "
+                "revision instead."
+            ),
+            status_code=422,
+        )
+
+
+def _grade_not_listed(code: str) -> AppError:
+    return AppError(
+        code=UNKNOWN_GRADE_CODE,
+        message=(
+            f"Grade code '{code}' has no line in an active salary revision. "
+            "Add it to a revision first."
+        ),
+        status_code=422,
+        extra={"field": GRADE_CODE, "suggestions": []},
+    )
 
 
 def _clean_or_422(list_key: str, raw: str | None) -> str | None:
@@ -97,14 +130,15 @@ class LookupService:
         rows = await LookupRepository.list_values(session, list_key, include_inactive=True)
         by_key = {r.value_key: r for r in rows}
         row = by_key.get(value_key(cleaned))
+        if list_key == GRADE_CODE and (row is None or not row.is_active):
+            raise _grade_not_listed(cleaned)
         if row is None:
             hints = near_matches(list_key, cleaned, [r.value for r in rows if r.is_active])
-            code = UNKNOWN_GRADE_CODE if list_key == GRADE_CODE else INVALID_STAFF_GRADE_DESCRIPTION
             raise AppError(
-                code=code,
+                code=INVALID_STAFF_GRADE_DESCRIPTION,
                 message=(
                     f"{_LABEL[list_key]} '{cleaned}' is not in the list.{did_you_mean(hints)} "
-                    "Add it with 'Other – add new…' first."
+                    "An Admin can add it under Settings > Managed Lists."
                 ),
                 status_code=422,
                 extra={"field": list_key, "suggestions": hints},
@@ -126,10 +160,14 @@ class LookupService:
         confirm_near_match: bool,
         actor_user_id: UUID | None,
         actor_role: str | None,
-        source: str = "SCREEN",
+        source: str = SOURCE_SCREEN,
     ) -> LookupValue:
-        """Add a value on screen: no duplicates; near matches need confirmation."""
+        """Add a staff type (Admin, Settings): no duplicates; near matches need confirmation.
+
+        Grade codes are refused: they come from salary revisions.
+        """
         _check_list_key(list_key)
+        _refuse_grade_edits(list_key)
         cleaned = _clean_or_422(list_key, raw)
         if cleaned is None:
             raise AppError(code="VALUE_REQUIRED", message="Enter a value.", status_code=422)
@@ -187,8 +225,9 @@ class LookupService:
         actor_user_id: UUID | None,
         actor_role: str | None,
     ) -> LookupValue:
-        """Deactivate or reactivate (Admin). Existing records keep their value."""
+        """Deactivate or reactivate a staff type (Admin). Existing records keep their value."""
         _check_list_key(list_key)
+        _refuse_grade_edits(list_key)
         row = await LookupRepository.get(session, list_key, value_id)
         if row is None:
             raise AppError(code="NOT_FOUND", message="Value not found.", status_code=404)
@@ -217,53 +256,66 @@ class LookupService:
         return row
 
     @staticmethod
-    async def add_imported_grades(
+    async def sync_grades(
         session: AsyncSession,
         codes: Iterable[str],
-        actor_user_id: UUID | None,
-        actor_role: str | None,
-    ) -> list[str]:
-        """Add grade codes from a committed import that are not in the list yet (plan approved 23 Nov).
+        actor_user_id: UUID | None = None,
+        actor_role: str | None = None,
+    ) -> dict[str, list[str]]:
+        """Make the active grade list exactly ``codes`` (base codes in ACTIVE revisions).
 
-        Codes are already base codes (the preview validated them). Returns the codes added.
+        Called by payroll after every change to salary revisions. Codes not in ``codes`` are
+        deactivated (records keep them), returning codes are reactivated, new ones are added with
+        source REVISION. Audited when anything changes. Returns what changed.
         """
-        existing = {
-            r.value_key
-            for r in await LookupRepository.list_values(session, GRADE_CODE, include_inactive=True)
-        }
-        added: list[str] = []
-        for code in sort_values(GRADE_CODE, set(codes)):
-            key = value_key(code)
-            if key in existing:
-                continue
-            existing.add(key)
-            session.add(
-                LookupValue(
-                    list_key=GRADE_CODE,
-                    value=code,
-                    value_key=key,
-                    source="IMPORT",
-                    created_by_user_id=actor_user_id,
+        wanted = {value_key(c): c for c in codes}
+        rows = await LookupRepository.list_values(session, GRADE_CODE, include_inactive=True)
+        by_key = {r.value_key: r for r in rows}
+        now = datetime.now(UTC)
+        changes: dict[str, list[str]] = {"added": [], "reactivated": [], "deactivated": []}
+        for key, code in wanted.items():
+            row = by_key.get(key)
+            if row is None:
+                session.add(
+                    LookupValue(
+                        list_key=GRADE_CODE,
+                        value=code,
+                        value_key=key,
+                        source=SOURCE_REVISION,
+                        created_by_user_id=actor_user_id,
+                    )
                 )
-            )
-            added.append(code)
-        if added:
+                changes["added"].append(code)
+            elif not row.is_active:
+                row.is_active = True
+                row.deactivated_at = None
+                row.deactivated_by_user_id = None
+                row.version += 1
+                changes["reactivated"].append(row.value)
+        for key, row in by_key.items():
+            if key not in wanted and row.is_active:
+                row.is_active = False
+                row.deactivated_at = now
+                row.deactivated_by_user_id = actor_user_id
+                row.version += 1
+                changes["deactivated"].append(row.value)
+        if any(changes.values()):
             await session.flush()
             await AuditService.log_action(
                 session=session,
-                action="LOOKUP_VALUES_IMPORTED",
+                action="GRADE_LIST_SYNCED",
                 entity_type="lookup_value",
                 entity_id=GRADE_CODE,
-                diff={"list_key": GRADE_CODE, "values": added},
+                diff={k: sort_values(GRADE_CODE, v) for k, v in changes.items() if v},
                 actor_user_id=actor_user_id,
                 actor_role=actor_role,
             )
-        return added
+        return changes
 
     @staticmethod
     async def reseed(session: AsyncSession) -> int:
-        """ "Reset database": clear both lists and re-seed the staff types (grades come back
-        with the next import)."""
+        """ "Reset database": clear both lists and re-seed the staff types. The grade list
+        comes back with the next salary revision."""
         await LookupRepository.delete_all(session)
         for value in sort_values(STAFF_GRADE_DESCRIPTION, SEED_STAFF_TYPES):
             session.add(
@@ -271,7 +323,7 @@ class LookupService:
                     list_key=STAFF_GRADE_DESCRIPTION,
                     value=value,
                     value_key=value_key(value),
-                    source="SEED",
+                    source=SOURCE_SEED,
                 )
             )
         await session.flush()

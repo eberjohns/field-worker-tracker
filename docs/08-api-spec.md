@@ -56,13 +56,13 @@ Roles: A = Admin, E = Engineer, S = Superintendent, V = Supervisor. "scope" = li
 `GET /users`, `PATCH /users/{id}` (active/role), `POST /users/{id}/reset-password` (**Admin only**: sets the user back to the company default password and forces a change; applies to workers too).
 
 ### Groups, Zones, Accommodations
-`GET/POST/PATCH /groups`, `/zones`, `/accommodations` (A write; A E S V read). `PUT /accommodations/{id}/boundary` (GeoJSON Polygon). Delete only if unreferenced.
+`GET/POST/PATCH /groups`, `/zones`, `/accommodations` (A write, except `POST /groups` and `POST /zones`: A E; A E S V read). `POST /groups` `{name, code?, confirm_near_match?}`: without `code` the next free 3-digit code is generated; a given code must be 3 digits (422 `INVALID_GROUP_CODE`). `POST /zones` `{code, name, confirm_near_match?}`. Both: 409 `DUPLICATE_NAME` (name equal ignoring case and spaces; `existing`, `existing_id`, `existing_code`, `is_active`) or `DUPLICATE_CODE`; 422 `NEAR_MATCH` (`suggestions`) until `confirm_near_match` (DEC-60 amendment). `PUT /accommodations/{id}/boundary` (GeoJSON Polygon). Delete only if unreferenced.
 
 ### Worksites and job items
 | Method | Path | Roles | Purpose |
 |---|---|---|---|
 | GET | /worksites | scope | list (DEC-57 worksite scope); filters `q, group_id, zone_id, country, has_boundary, is_active`, `unassigned` (Admin: no active supervisor) |
-| POST/PATCH | /worksites, /worksites/{id} | A | |
+| POST/PATCH | /worksites, /worksites/{id} | A | PATCH can change `group_id` and `zone_id` (active group/zone, else 422 `GROUP_NOT_FOUND` / `ZONE_NOT_FOUND`) |
 | GET | /worksites/{id} | scope | detail with items and staffing summary; 404 when out of scope |
 | GET | /worksites/{id}/supervisors | scope | assigned supervisors; 404 when out of scope |
 | POST / DELETE | /worksites/{id}/supervisors, /worksites/{id}/supervisors/{employee_id} | A | assign (role SUPERVISOR, active) / end an assignment (deactivates the row) |
@@ -139,10 +139,10 @@ Roles: A = Admin, E = Engineer, S = Superintendent, V = Supervisor. "scope" = li
 | Method | Path | Roles | Purpose |
 |---|---|---|---|
 | GET/POST | /salary-revisions | A (write), E (read: codes, names, dates only) | list & create a salary revision with lines; `suffix_label` optional (default: year of `effective_from`); grade codes stored as base codes (DEC-58; `INVALID_GRADE_CODE`, `DUPLICATE_GRADE_LINE`) |
-| GET | /lookups/{list_key}?include_inactive= | any signed-in role | managed list (`staff_grade_description` or `grade_code`, DEC-60): `[{id, value, is_active, source, version}]`, sorted (grades naturally); values in use that are missing from the list are appended with `id` null and source `IN_USE` |
-| POST | /lookups/{list_key} | A, E | add a value `{value, confirm_near_match?, country?}` -> 201 `{..., warnings[]}` (`NO_REVISION_LINE` for a grade with no line in an active revision); 409 `LOOKUP_DUPLICATE` (`existing`, `is_active`); 422 `LOOKUP_NEAR_MATCH` (`suggestions`) until `confirm_near_match`; 422 `INVALID_GRADE_CODE`. Audited |
-| PATCH | /lookups/{list_key}/{id} | A | deactivate or reactivate `{is_active, version}`; never deleted; records keep their value. Audited |
-| GET | /grades | any signed-in role | deprecated: the grade list (managed list plus codes in use), naturally sorted (DEC-58, DEC-60) |
+| GET | /lookups/{list_key}?include_inactive= | any signed-in role | managed list (`staff_grade_description` or `grade_code`, DEC-60): `[{id, value, is_active, source, version}]`, sorted (grades naturally). Default: active values (dropdowns). `include_inactive=true` (Settings): every value, plus values in use that are not in the list (`id` null, source `IN_USE`). Grade codes are the base codes with a line in an ACTIVE salary revision |
+| POST | /lookups/{list_key} | A | add a staff type `{value, confirm_near_match?}` -> 201; 409 `LOOKUP_DUPLICATE` (`existing`, `is_active`); 422 `LOOKUP_NEAR_MATCH` (`suggestions`) until `confirm_near_match`. Grade codes: 422 `GRADE_FROM_REVISION_ONLY` (they come from salary revisions). Audited |
+| PATCH | /lookups/{list_key}/{id} | A | deactivate or reactivate a staff type `{is_active, version}`; never deleted; records keep their value. Grade codes: 422 `GRADE_FROM_REVISION_ONLY`. Audited |
+| GET | /grades | any signed-in role | deprecated: the active grade list (base codes with a line in an ACTIVE revision), naturally sorted (DEC-58, DEC-60) |
 | GET | /salary-revisions/{code} | A | revision detail with grade lines, planned hourly cost and `display_grade_code` (e.g. `G3C-2026`); also `GET /salary-revisions/{code}/export-template` (A) |
 | POST | /salary-revisions/diff | A | side-by-side diff comparing incoming revision lines against base revision |
 | GET | /settings?country=&as_of= | A (write), E (read) | settings resolved for a date (default today) |
@@ -250,4 +250,4 @@ POST /api/v1/payroll/runs   { "period_start": "2026-10-01", "period_end": "2026-
 - Generate the TypeScript client for the dashboard from the OpenAPI file (`openapi-typescript`).
 - Export the mobile contract with `tools/export_openapi.py --tag mobile > openapi-mobile.json` in CI.
 
-**Managed lists (DEC-60).** Job item create/update, employee create/update, grade change and `PATCH /employees/{id}/profile-details` validate staff type and grade against the active lists: 422 `INVALID_STAFF_GRADE_DESCRIPTION` or `UNKNOWN_GRADE_CODE` (with `suggestions` and "Did you mean …?"), 422 `LOOKUP_VALUE_INACTIVE` when switching to a deactivated value. The record's current value is always accepted.
+**Managed lists (DEC-60).** Job item create/update, employee create/update, grade change and `PATCH /employees/{id}/profile-details` validate staff type and grade against the active lists: 422 `INVALID_STAFF_GRADE_DESCRIPTION` (with `suggestions` and "Did you mean …?") or `UNKNOWN_GRADE_CODE` (the grade has no line in an active salary revision), 422 `LOOKUP_VALUE_INACTIVE` when switching to a deactivated staff type. The record's current value is always accepted.
