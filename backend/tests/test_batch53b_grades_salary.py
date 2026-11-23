@@ -450,3 +450,139 @@ async def test_missing_money_setting_stops_with_setting_missing() -> None:
                 session, "provision_does_not_exist", "AE", site_today("AE")
             )
     assert exc.value.code == "SETTING_MISSING"
+
+
+# --- default_password is Admin only in Company_Settings (owner, 23 Nov) ------------------------
+
+
+def test_default_password_is_admin_only_setting() -> None:
+    from fw.rules.imports import is_admin_only_row, is_admin_only_setting
+
+    assert is_admin_only_setting("default_password")
+    assert is_admin_only_row("Company_Settings", "default_password")
+    assert not is_admin_only_setting("grace_period_minutes")
+
+
+@db_required
+@pytest.mark.asyncio
+async def test_engineer_import_skips_default_password() -> None:
+    async with async_session_factory() as session:
+        _, eng_token = await _person(session, "ENGINEER", "EngPwd53b")
+        await session.commit()
+    eng = {"Authorization": f"Bearer {eng_token}"}
+
+    wb = openpyxl.load_workbook(io.BytesIO(generate_import_template_bytes()))
+    _fill(
+        wb,
+        "Company_Settings",
+        {"setting_key": "default_password", "value": "Leak@12345", "effective_from": "2026-01-01"},
+    )
+    _fill(
+        wb,
+        "Company_Settings",
+        {"setting_key": "grace_period_minutes", "value": "12", "effective_from": "2026-01-01"},
+        row=6,
+    )
+    for name in wb.sheetnames:
+        if name not in ("README", "Company_Settings"):
+            ws = wb[name]
+            for r in range(5, ws.max_row + 1):
+                ws.cell(r, 1, value="#")
+    out = io.BytesIO()
+    wb.save(out)
+
+    async with AsyncClient(transport=ASGITransport(app=create_app()), base_url="http://t") as c:
+        t = await c.get("/api/v1/imports/template", headers=eng)
+        # Exact key only: default_password_max_days is not a credential and stays.
+        assert b"'default_password'" not in _sheet_text(t.content, "Company_Settings")
+        assert b"'default_password_max_days'" in _sheet_text(t.content, "Company_Settings")
+
+        up = await c.post(
+            "/api/v1/imports", headers=eng, files={"file": ("p.xlsx", out.getvalue(), XLSX)}
+        )
+        assert up.status_code == 201, up.text
+        batch = up.json()["batch_id"]
+        rows = (await c.get(f"/api/v1/imports/{batch}/preview?limit=500", headers=eng)).json()[
+            "rows"
+        ]
+    cs = {r["natural_key"].split(":")[0]: r for r in rows if r["sheet"] == "Company_Settings"}
+    # Same as the money settings: shown as skipped, with no value.
+    assert cs["default_password"]["action"] == "SKIPPED"
+    assert cs["default_password"]["codes"] == ["SETTING_ADMIN_ONLY"]
+    assert cs["default_password"]["normalized"] == {}
+    assert cs["grace_period_minutes"]["action"] != "SKIPPED"
+
+    async with async_session_factory() as session:
+        stored = (
+            (
+                await session.execute(
+                    select(ImportRow).where(
+                        ImportRow.batch_id == batch, ImportRow.sheet == "Company_Settings"
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+    pwd = [r for r in stored if str(r.natural_key).startswith("default_password")]
+    assert pwd and all(r.action == "SKIPPED" for r in pwd)
+    assert all(r.raw_row == {"setting_key": "default_password"} for r in pwd)
+    assert "Leak@12345" not in str([r.raw_row for r in stored])
+
+
+def _sheet_text(xlsx: bytes, sheet: str) -> bytes:
+    wb = openpyxl.load_workbook(io.BytesIO(xlsx))
+    if sheet not in wb.sheetnames:
+        return b""
+    return str([[c.value for c in row] for row in wb[sheet].iter_rows()]).encode()
+
+
+# --- Reset database re-seeds default settings (owner, 23 Nov) ----------------------------------
+
+
+@db_required
+@pytest.mark.asyncio
+async def test_reset_database_reseeds_default_settings() -> None:
+    from fw.modules.identity import User, hash_password
+    from fw.modules.settings import CompanySettingValue
+    from fw.modules.settings.defaults import DEFAULT_COMPANY_SETTINGS
+
+    async with async_session_factory() as session:
+        _, token = await get_admin_user_and_token(session)
+        admin = (await session.execute(select(User).where(User.role == "ADMIN"))).scalars().first()
+        assert admin is not None
+        admin.credential_hash = hash_password("Admin@1234")
+        await session.commit()
+
+    async with AsyncClient(transport=ASGITransport(app=create_app()), base_url="http://t") as c:
+        res = await c.post(
+            "/api/v1/settings/reset-database",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"confirmation_text": "RESET", "admin_password": "Admin@1234"},
+        )
+    assert res.status_code == 200, res.text
+
+    async with async_session_factory() as session:
+        rows = (await session.execute(select(CompanySettingValue))).scalars().all()
+        keys = {(r.setting_key, r.country) for r in rows}
+        assert {(k, c) for k, c, _, _ in DEFAULT_COMPANY_SETTINGS} <= keys
+        assert ("default_password", None) in keys
+        # Every payroll money setting resolves again, without reimporting Company_Settings.
+        today = site_today("AE")
+        provisions = Decimal("0")
+        for key in (
+            "provision_visa",
+            "provision_air_ticket",
+            "provision_uniform",
+            "provision_accommodation",
+            "provision_medical",
+        ):
+            provisions += await _required_decimal_setting(session, key, "AE", today)
+        assert provisions == Decimal("842")
+        for key in (
+            "standard_ot_divisor_hours",
+            "ot1_multiplier",
+            "ot2_multiplier",
+            "hr_overhead_rate",
+        ):
+            assert await _required_decimal_setting(session, key, "AE", today) > 0

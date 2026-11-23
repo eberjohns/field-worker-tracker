@@ -178,7 +178,7 @@ Roles: A = Admin, E = Engineer, S = Superintendent, V = Supervisor. "scope" = li
 | GET | /live/stream?ticket= | A E S V scope | Server-Sent Events: `position` and `state` updates for the user's scope; heartbeat every 20 s; client falls back to polling `/live/positions` every 30 s |
 | GET | /live/trail/{employee_id} | A E S V scope | Chronological GPS breadcrumb trail of mobile event logs for day route playback |
 | POST | /documents/check-alerts | A | Evaluates document expiry lead days and creates DOC_EXPIRY alerts |
-| POST | /imports | A, E | upload workbook (multipart) -> batch. For Engineers the salary sheets (`SHEET_ADMIN_ONLY`) and money settings in Company_Settings (`SETTING_ADMIN_ONLY`) are skipped and their values not stored (DEC-47) |
+| POST | /imports | A, E | upload workbook (multipart) -> batch. For Engineers the salary sheets (`SHEET_ADMIN_ONLY`) and money settings and `default_password` in Company_Settings (`SETTING_ADMIN_ONLY`) are skipped and their values not stored (DEC-47) |
 | GET | /imports/{id}/preview | A, E | per-sheet counts, row-level errors/warnings; Engineers never see salary or money-setting rows; `INVALID_GRADE_CODE` for unparseable grades |
 | POST | /imports/{id}/commit | A, E | commit in one transaction -> job; a non-Admin cannot commit (or roll back) a batch that writes salary or cost data (422) |
 | GET | /imports/{id}/errors.xlsx | A | downloadable error report |

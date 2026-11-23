@@ -5,7 +5,8 @@ ADMIN_ONLY_SHEETS: frozenset[str] = frozenset(
     {"Employee_Salary", "Salary_Revisions", "Salary_Revision_Lines"}
 )
 
-# Company_Settings keys that are money, rates or budget inputs.
+# Company_Settings keys that are money, rates or budget inputs, plus the shared default
+# password (a credential; owner decision 23 Nov 2026).
 ADMIN_ONLY_SETTING_KEYS: frozenset[str] = frozenset(
     {
         "standard_ot_divisor_hours",
@@ -16,6 +17,7 @@ ADMIN_ONLY_SETTING_KEYS: frozenset[str] = frozenset(
         "leave_salary_divisor",
         "budget_only_staff_types",
         "default_salary_revision_code",
+        "default_password",
     }
 )
 
@@ -24,7 +26,7 @@ SETTING_ADMIN_ONLY = "SETTING_ADMIN_ONLY"
 
 
 def is_admin_only_setting(key: object) -> bool:
-    """True for provision_* keys and the money/rate keys above."""
+    """True for provision_* keys and the money/rate/credential keys above."""
     k = str(key or "").strip().lower()
     return k.startswith("provision_") or k in ADMIN_ONLY_SETTING_KEYS
 

@@ -525,21 +525,21 @@ async def reset_database(
         {"cred_hash": cred_hash, "now": now},
     )
 
+    # Re-seed the default company settings (migration 0003 values) so payroll works
+    # straight after a reset; money settings have no hard-coded fallbacks (DEC-58).
+    await SettingsService.seed_default_settings(session)
     await SettingsService.set_setting(
         session,
         key="default_password",
         value=default_pwd,
         effective_from=date(2026, 1, 1),
     )
-    await SettingsService.set_setting(
-        session,
-        key="default_password_max_days",
-        value=7,
-        effective_from=date(2026, 1, 1),
-    )
 
     await session.commit()
     return {
         "status": "success",
-        "message": "Database reset to clean bootstrap state. Only ADMIN001 is retained.",
+        "message": (
+            "Database reset to clean bootstrap state. Only ADMIN001 is retained; "
+            "default company settings re-seeded."
+        ),
     }

@@ -34,6 +34,7 @@ and fell back to constants. Engineers could read revision lines, payroll runs an
 - DEC-47: revision lines, revision template export, payroll runs, run detail, issues and records are
   Admin only. Engineers' imports skip the salary sheets (`SHEET_ADMIN_ONLY`) and money settings in
   Company_Settings (`SETTING_ADMIN_ONLY`) without storing their values; their template leaves them out;
+  `default_password` is skipped the same way;
   they cannot commit or roll back a batch that writes such data. The worker's own payslip
   (`/mobile/me/payroll`, `/payroll/my-records`) is unchanged (mobile contract).
 - `GET /grades` returns the base codes in use (codes only) for all dropdowns.
@@ -49,7 +50,8 @@ Rejecting unknown forms surfaces bad data instead of hiding it. Money must come 
 ## Consequences
 - Draft payroll runs change when recalculated: provisions now follow settings (842 instead of the old 550).
 - Import files with forms like `G3C26` now fail preview with `INVALID_GRADE_CODE` and must be corrected.
-- After "Reset database" (which deletes company settings) payroll stops with `SETTING_MISSING` until
-  Company_Settings is imported again.
+- "Reset database" re-seeds the default company settings (migration 0003 values, kept in
+  `fw.modules.settings.defaults`), so payroll works straight after a reset (owner, 23 Nov).
+- `default_password` is also Admin only in Company_Settings imports (`SETTING_ADMIN_ONLY`; owner, 23 Nov).
 - Migration 0022 cannot restore removed suffixes on downgrade (data only).
 - Docs: `docs/07`, `docs/08`, `docs/11`; register DEC-58.
