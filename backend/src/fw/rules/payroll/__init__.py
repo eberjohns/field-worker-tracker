@@ -14,7 +14,6 @@ from fw.rules.payroll.formulas import (
     calculate_missed_hours_deduction,
     calculate_per_month_provision,
     calculate_provisions,
-    calculate_revision_planned_hourly_cost,
     calculate_total_staff_cost,
 )
 from fw.rules.payroll.salary import (
@@ -38,7 +37,6 @@ __all__ = [
     "calculate_missed_hours_deduction",
     "calculate_per_month_provision",
     "calculate_provisions",
-    "calculate_revision_planned_hourly_cost",
     "calculate_salary_difference",
     "calculate_salary_portion",
     "calculate_total_staff_cost",

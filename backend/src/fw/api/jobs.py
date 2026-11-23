@@ -15,6 +15,7 @@ from fw.core.clock import site_today
 from fw.core.db import get_db
 from fw.core.errors import AppError
 from fw.modules.audit import AuditService
+from fw.modules.budget import BudgetService
 from fw.modules.identity import User, get_current_user, require_role, verify_password
 from fw.modules.jobs import (
     BoundaryCopyRequest,
@@ -52,6 +53,33 @@ from fw.modules.scheduling import (
 )
 
 router = APIRouter(tags=["jobs"])
+
+
+async def _with_budget(
+    session: AsyncSession, detail: WorksiteDetailResponse, user: User
+) -> WorksiteDetailResponse:
+    """Add planned man-hours (and, for Admin, cost) per item and the worksite totals (DEC-59)."""
+    res = await BudgetService.worksite_budget_by_id(
+        session, detail.id, is_admin=user.role == "ADMIN"
+    )
+    if res is None:
+        return detail
+    per_item, totals = res
+    for it in [*detail.items, *detail.job_items]:
+        it.budget = per_item.get(it.id)
+    detail.budget_totals = totals
+    return detail
+
+
+async def _item_with_budget(
+    session: AsyncSession, item: JobItemResponse, user: User
+) -> JobItemResponse:
+    res = await BudgetService.worksite_budget_by_id(
+        session, item.worksite_id, is_admin=user.role == "ADMIN"
+    )
+    if res is not None:
+        item.budget = res[0].get(item.id)
+    return item
 
 
 # --- Worksites ---
@@ -292,7 +320,7 @@ async def get_worksite_detail(
             raise AppError(code="NOT_FOUND", message="Worksite not found.", status_code=404)
         detail.items = [it for it in detail.items if it.is_active]
         detail.budget_amount = None
-    return detail
+    return await _with_budget(session, detail, current_user)
 
 
 @router.get("/worksites/{worksite_id}/supervisors", response_model=list[WorksiteSupervisorRead])
@@ -747,14 +775,15 @@ async def create_job_item(
     current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
     session: AsyncSession = Depends(get_db),
 ) -> JobItemResponse:
-    """Create a job item under a worksite."""
-    return await JobsService.create_job_item(
+    """Create a job item under a worksite. The response includes its planned man-hours."""
+    item = await JobsService.create_job_item(
         session=session,
         worksite_id=worksite_id,
         payload=payload,
         actor_user_id=current_user.id,
         actor_role=current_user.role,
     )
+    return await _item_with_budget(session, item, current_user)
 
 
 @router.patch("/job-items/{job_item_id}", response_model=JobItemResponse)
@@ -764,14 +793,15 @@ async def update_job_item(
     current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
     session: AsyncSession = Depends(get_db),
 ) -> JobItemResponse:
-    """Update a job item with optimistic locking."""
-    return await JobsService.update_job_item(
+    """Update a job item with optimistic locking. The response includes its planned man-hours."""
+    item = await JobsService.update_job_item(
         session=session,
         job_item_id=job_item_id,
         payload=payload,
         actor_user_id=current_user.id,
         actor_role=current_user.role,
     )
+    return await _item_with_budget(session, item, current_user)
 
 
 @router.post(

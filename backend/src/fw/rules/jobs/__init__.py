@@ -1,5 +1,23 @@
 """Public interface for jobs domain rules (BR-JB-*)."""
 
+from fw.rules.jobs.budget import (
+    MISSING_GRADE_RATE,
+    PROVISIONS_DIFFER_FROM_PAYROLL,
+    GradeLine,
+    GradeMonthlyCost,
+    ItemPlan,
+    ItemSchedule,
+    active_window,
+    contract_year_containing,
+    full_year_hours,
+    grade_hourly_rate,
+    grade_monthly_cost,
+    month_ranges,
+    plan_item,
+    split_by_weights,
+    variance,
+    year_fraction,
+)
 from fw.rules.jobs.day_split import (
     DEFAULT_PLANNED_WORKDAY_HOURS,
     calculate_days_per_occurrence,
@@ -24,6 +42,22 @@ from fw.rules.jobs.occurrences import (
 )
 
 __all__ = [
+    "MISSING_GRADE_RATE",
+    "PROVISIONS_DIFFER_FROM_PAYROLL",
+    "GradeLine",
+    "GradeMonthlyCost",
+    "ItemPlan",
+    "ItemSchedule",
+    "active_window",
+    "contract_year_containing",
+    "full_year_hours",
+    "grade_hourly_rate",
+    "grade_monthly_cost",
+    "month_ranges",
+    "plan_item",
+    "split_by_weights",
+    "variance",
+    "year_fraction",
     "DEFAULT_PLANNED_WORKDAY_HOURS",
     "InvalidFrequencyError",
     "InvalidJobNumberError",

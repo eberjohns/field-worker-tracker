@@ -80,21 +80,23 @@ docs/  .agents/  infra/
 | sync | change log, snapshot builder, delta/ack, device sync status |
 | attendance | visits, gaps, daily calculation, versions, comments, approvals, alerts |
 | payroll | salary revisions, runs, snapshots, job-cost allocation |
+| budget | job budget and man-hours, planned vs actual (reads jobs, payroll, attendance, scheduling, settings; no tables) |
 | notifications | notification log, document-expiry, push/email dispatch |
 | imports | workbook registry, parser, validators, preview/commit |
 | reports | report registry and exports |
 
 **Layer contract** (a module may import only modules in lower layers, via their public `__init__`), enforced by `import-linter`:
 ```
-1  reports | imports
-2  payroll
-3  attendance
-4  sync | notifications
-5  scheduling | events
-6  jobs
-7  org
-8  settings | identity | audit
-9  core
+1  reports | imports | archive
+2  budget
+3  payroll
+4  attendance
+5  sync | notifications
+6  scheduling | events
+7  jobs
+8  org
+9  settings | identity | audit
+10 core
 ```
 `rules/` and `adapters/` follow their own contracts: `rules` imports nothing from `modules` or `adapters`; modules use adapters only through ports.
 

@@ -995,6 +995,23 @@ SHEET_REGISTRY: dict[str, SheetDef] = {
                 example="0.00",
             ),
             ColumnDef("notes", "text", False, "Optional", description="Notes.", example=None),
+            # Added in 5.4 (DEC-59) after "notes" so files made before then still line up.
+            ColumnDef(
+                "telephone_allowance",
+                "decimal",
+                False,
+                "Optional",
+                description="Telephone allowance per month (job budget only; blank = 0).",
+                example="0.00",
+            ),
+            ColumnDef(
+                "housing_transport_allowance",
+                "decimal",
+                False,
+                "Optional",
+                description="Housing/transport allowance per month (job budget only; blank = 0).",
+                example="0.00",
+            ),
         ],
     ),
     "Company_Settings": SheetDef(

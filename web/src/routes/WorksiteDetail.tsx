@@ -37,6 +37,9 @@ import { Map as MapLibreMap } from "maplibre-gl";
 import { JobItemModal } from "../components/jobs/JobItemModal";
 import { JobItemValidationModal } from "../components/jobs/JobItemValidationModal";
 import { CopyBoundaryModal } from "../components/jobs/CopyBoundaryModal";
+import { PlannedVsActualPanel } from "../components/jobs/PlannedVsActualPanel";
+import { fmtHours, fmtMoney } from "../features/budget/budgetFormat";
+import type { WorksiteBudgetTotals } from "../features/budget/budgetFormat";
 
 interface WorksiteDetail {
   id: string;
@@ -59,6 +62,7 @@ interface WorksiteDetail {
   rep_latitude: number | null;
   rep_longitude: number | null;
   budget_amount: number | null;
+  budget_totals?: WorksiteBudgetTotals | null;
   is_active: boolean;
   version: number;
   job_items: any[];
@@ -1087,7 +1091,7 @@ export const WorksiteDetail: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+          <div className="bg-white border border-slate-200 rounded-xl overflow-x-auto shadow-xs">
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
                 <tr>
@@ -1098,6 +1102,20 @@ export const WorksiteDetail: React.FC = () => {
                   <th className="px-4 py-3 text-right">Hours / Occ</th>
                   <th className="px-4 py-3">Deployment</th>
                   <th className="px-4 py-3 text-right">Break</th>
+                  <th className="px-4 py-3 text-right" title="Activities per year (honours the interval)">
+                    Act. / Yr
+                  </th>
+                  <th
+                    className="px-4 py-3 text-right"
+                    title="Planned man-hours in the current contract year (item and contract dates)"
+                  >
+                    Annual Hours
+                  </th>
+                  {user?.role === "ADMIN" && (
+                    <th className="px-4 py-3 text-right" title="Planned cost in the current contract year">
+                      Annual Cost
+                    </th>
+                  )}
                   <th className="px-4 py-3 text-center">Actions</th>
                 </tr>
               </thead>
@@ -1171,6 +1189,29 @@ export const WorksiteDetail: React.FC = () => {
                         ? `${item.break_override_minutes}m`
                         : "Default"}
                     </td>
+                    <td className="px-4 py-3 text-right font-mono text-slate-700">
+                      {item.budget
+                        ? Number(item.budget.activities_per_year).toLocaleString(undefined, {
+                            maximumFractionDigits: 1,
+                          })
+                        : "–"}
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono font-semibold text-slate-800">
+                      {fmtHours(item.budget?.annual_hours)}
+                      {item.budget?.warnings?.some((w: any) => w.code === "MISSING_GRADE_RATE") && (
+                        <span
+                          className="block text-[10px] font-sans font-semibold text-amber-700"
+                          title="This grade has no line in the revision; the item is left out of the totals."
+                        >
+                          no grade rate
+                        </span>
+                      )}
+                    </td>
+                    {user?.role === "ADMIN" && (
+                      <td className="px-4 py-3 text-right font-mono text-slate-800">
+                        {fmtMoney(item.budget?.annual_cost)}
+                      </td>
+                    )}
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-1.5">
                         <button
@@ -1242,14 +1283,52 @@ export const WorksiteDetail: React.FC = () => {
                 ))}
                 {itemsList.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
+                    <td
+                      colSpan={user?.role === "ADMIN" ? 11 : 10}
+                      className="px-4 py-8 text-center text-slate-400"
+                    >
                       No job items configured for this worksite.
                     </td>
                   </tr>
                 )}
               </tbody>
+              {worksite.budget_totals && itemsList.length > 0 && (
+                <tfoot className="bg-slate-50 border-t-2 border-slate-200 text-slate-800 font-semibold">
+                  <tr>
+                    <td className="px-4 py-3" colSpan={8}>
+                      Worksite total ({worksite.budget_totals.period_from} –{" "}
+                      {worksite.budget_totals.period_to}
+                      {worksite.budget_totals.revision_code
+                        ? `, revision ${worksite.budget_totals.revision_code}`
+                        : ""}
+                      )
+                      {Number(worksite.budget_totals.missing_rate_hours) > 0 && (
+                        <span className="block text-[10px] font-normal text-amber-700">
+                          {fmtHours(worksite.budget_totals.missing_rate_hours)} left out: grade
+                          without a revision rate
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono">
+                      {fmtHours(worksite.budget_totals.total_hours)}
+                    </td>
+                    {user?.role === "ADMIN" && (
+                      <td className="px-4 py-3 text-right font-mono">
+                        {fmtMoney(worksite.budget_totals.total_cost)}
+                      </td>
+                    )}
+                    <td />
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
+
+          <PlannedVsActualPanel
+            worksiteId={worksite.id}
+            isAdmin={user?.role === "ADMIN"}
+            token={token}
+          />
         </div>
       )}
 

@@ -1301,6 +1301,8 @@ class ImportService:
                             "medical_provision",
                             "accommodation_provision",
                             "transportation_provision",
+                            "telephone_allowance",
+                            "housing_transport_allowance",
                         ):
                             act = normalized_dict.get(field_name, {}).get("action")
                             new_v = normalized_dict.get(field_name, {}).get("value")
@@ -2135,9 +2137,17 @@ class ImportService:
                         "medical_provision",
                         "accommodation_provision",
                         "transportation_provision",
+                        "telephone_allowance",
+                        "housing_transport_allowance",
                     ):
                         if field_name in r.normalized:
                             val = r.normalized[field_name]
+                            if val is None and field_name in (
+                                "telephone_allowance",
+                                "housing_transport_allowance",
+                            ):
+                                setattr(existing_line, field_name, Decimal("0.00"))
+                                continue
                             if val is not None and field_name != "grade_group_title":
                                 setattr(existing_line, field_name, Decimal(str(val)))
                             else:
@@ -2163,6 +2173,12 @@ class ImportService:
                             str(r.normalized.get("accommodation_provision") or 0)
                         ),
                         transportation_provision=trans_dec,
+                        telephone_allowance=Decimal(
+                            str(r.normalized.get("telephone_allowance") or 0)
+                        ),
+                        housing_transport_allowance=Decimal(
+                            str(r.normalized.get("housing_transport_allowance") or 0)
+                        ),
                     )
                     session.add(new_line)
 

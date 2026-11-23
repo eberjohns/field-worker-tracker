@@ -18,6 +18,7 @@ from fw.api.scheduling import router as scheduling_router
 from fw.api.settings import router as settings_router
 from fw.api.users import router as users_router
 from fw.modules.archive import archive_router, retention_router
+from fw.modules.budget import budget_router
 from fw.modules.notifications import alert_router
 from fw.modules.payroll import payroll_router
 from fw.modules.reports import reports_router
@@ -35,6 +36,7 @@ api_v1_router.include_router(settings_router)
 api_v1_router.include_router(imports_router)
 api_v1_router.include_router(salary_router)
 api_v1_router.include_router(payroll_router)
+api_v1_router.include_router(budget_router)
 api_v1_router.include_router(jobs_router)
 api_v1_router.include_router(scheduling_router)
 api_v1_router.include_router(attendance_router)

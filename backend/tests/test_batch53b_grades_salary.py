@@ -15,11 +15,12 @@ from fw.core.clock import site_today
 from fw.core.db import async_session_factory
 from fw.core.errors import AppError
 from fw.main import create_app
+from fw.modules.budget import BudgetService
 from fw.modules.imports import ImportRow, generate_import_template_bytes
 from fw.modules.jobs.models import JobItem
 from fw.modules.org.models import EmployeeAttributeHistory
 from fw.modules.payroll.models import EmployeeSalary, SalaryRevision, SalaryRevisionLine
-from fw.modules.payroll.service import PayrollService, _required_decimal_setting
+from fw.modules.payroll.service import _required_decimal_setting
 from fw.rules.grades import (
     InvalidGradeCodeError,
     base_grade_code,
@@ -176,14 +177,15 @@ async def test_budget_reports_missing_grade_and_leaves_it_out() -> None:
         session.add(item_b)
         await session.commit()
 
-        rows = await PayrollService.get_budget_vs_actual(session, country="AE")
+        rows = await BudgetService.planned_vs_actual(session, is_admin=True, worksite_ids=[ws.id])
     row = next(r for r in rows if r.worksite_id == ws.id)
-    assert [w.code for w in row.warnings] == ["MISSING_GRADE_RATE"]
-    assert row.warnings[0].grade_code == "G9C"
-    assert row.missing_rate_hours == Decimal("416.0")  # 1 x 52 weeks x 8 h
-    # Only item A (6 x 52 x 8 = 2496 h) counts.
-    assert row.annual_planned_man_hours == Decimal("2496.0")
-    assert row.annual_labor_budget > Decimal("0.00")
+    missing = [w for w in row.warnings if w.code == "MISSING_GRADE_RATE"]
+    assert len(missing) == 1 and missing[0].grade_code == "G9C"
+    # Item B (1 x 52 x 8 h a year) is left out; item A (6 x 52 x 8) counts. Both run over the
+    # same days of the contract year (DEC-59 pro-rates by day), so B's hours are 1/6 of A's.
+    assert row.missing_rate_hours > 0
+    assert abs(row.missing_rate_hours * 6 - row.annual_planned_man_hours) < Decimal("0.01")
+    assert row.annual_labor_budget is not None and row.annual_labor_budget > Decimal("0.00")
 
 
 # --- Future salary rows and CREW_BREAK rows ---------------------------------------------------

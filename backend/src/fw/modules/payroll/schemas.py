@@ -107,6 +107,8 @@ class SalaryRevisionLineCreate(BaseModel):
     medical_provision: Decimal = Field(default=Decimal("0.00"), ge=Decimal("0.00"))
     accommodation_provision: Decimal = Field(default=Decimal("0.00"), ge=Decimal("0.00"))
     transportation_provision: Decimal | None = Field(default=Decimal("0.00"), ge=Decimal("0.00"))
+    telephone_allowance: Decimal = Field(default=Decimal("0.00"), ge=Decimal("0.00"))
+    housing_transport_allowance: Decimal = Field(default=Decimal("0.00"), ge=Decimal("0.00"))
 
 
 class SalaryRevisionLineRead(BaseModel):
@@ -126,6 +128,8 @@ class SalaryRevisionLineRead(BaseModel):
     medical_provision: Decimal
     accommodation_provision: Decimal
     transportation_provision: Decimal | None = None
+    telephone_allowance: Decimal = Decimal("0.00")
+    housing_transport_allowance: Decimal = Decimal("0.00")
     total_provisions: Decimal = Decimal("0.00")
     total_salary_portion: Decimal = Decimal("0.00")
     planned_hourly_cost: Decimal = Decimal("0.00")
@@ -329,37 +333,3 @@ class WorkerMobilePayrollSlip(BaseModel):
     gross_pay: Decimal
     net_pay: Decimal
     approved_at: datetime | None = None
-
-
-class BudgetWarning(BaseModel):
-    code: str  # MISSING_GRADE_RATE
-    job_item_id: UUID | None = None
-    sub_item_code: str | None = None
-    grade_code: str | None = None
-    annual_hours: Decimal = Decimal("0.0")
-    message: str
-
-
-class WorksiteBudgetVsActualItem(BaseModel):
-    worksite_id: UUID
-    job_number: str
-    job_name: str
-    country: str
-    salary_revision_code: str | None = None
-    assigned_revision_code: str | None = None
-    annual_planned_man_hours: Decimal
-    annual_labor_budget: Decimal
-    prorated_budget: Decimal
-    pro_rated_budget: Decimal | None = None
-    actual_cost_allocated: Decimal
-    actual_allocated_cost: Decimal | None = None
-    variance: Decimal  # actual - prorated_budget
-    variance_amount: Decimal | None = None
-    variance_percent: Decimal = Decimal("0.0")
-    is_over_budget: bool
-    is_under_budget: bool = False
-    manual_budget_override: Decimal | None = None
-    is_custom_budget_override: bool = False
-    # DEC-58: job items whose grade has no line in the revision are left out of the totals.
-    missing_rate_hours: Decimal = Decimal("0.0")
-    warnings: list[BudgetWarning] = Field(default_factory=list)

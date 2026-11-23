@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import { useNewWorksiteBudgetPreview } from "../features/budget/useBudgetPreview";
+import { fmtHours, fmtMoney } from "../features/budget/budgetFormat";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -76,6 +78,51 @@ interface Zone {
   code: string;
   name: string;
 }
+
+/** Live man-hours (and, for Admin, cost) of one Add Worksite item row (DEC-59). */
+const InlineItemBudget: React.FC<{
+  token: string | null | undefined;
+  country: string;
+  isAdmin: boolean;
+  item: InitialJobItem;
+}> = ({ token, country, isAdmin, item }) => {
+  const ready =
+    item.sub_item_code.trim() &&
+    item.staff_grade_description &&
+    item.planned_grade_code &&
+    item.start_date &&
+    item.hours_per_occurrence_per_staff > 0;
+  const { budget, error } = useNewWorksiteBudgetPreview(
+    token,
+    country,
+    ready
+      ? {
+          sub_item_code: item.sub_item_code.trim(),
+          staff_grade_description: item.staff_grade_description,
+          planned_grade_code: item.planned_grade_code,
+          start_date: item.start_date,
+          end_date: item.end_date || null,
+          frequency_unit: item.frequency_unit,
+          occurrences_per_period: item.occurrences_per_period,
+          period_interval: item.period_interval || 1,
+          required_staff_count: item.required_staff_count,
+          hours_per_occurrence_per_staff: item.hours_per_occurrence_per_staff,
+          deployment_type: item.deployment_type,
+        }
+      : null,
+  );
+  if (!ready) return null;
+  return (
+    <div className="text-[11px] text-indigo-800 pt-1">
+      ≈ {fmtHours(budget?.annual_hours)} this year
+      {isAdmin && budget?.annual_cost != null && <> · {fmtMoney(budget.annual_cost)}</>}
+      {budget?.warnings.map((w, i) => (
+        <span key={i} className="block text-amber-700">{w.message}</span>
+      ))}
+      {error && <span className="block text-rose-700">{error}</span>}
+    </div>
+  );
+};
 
 interface InitialJobItem {
   sub_item_code: string;
@@ -1387,6 +1434,12 @@ export const Worksites: React.FC = () => {
                         />
                       </div>
                     </div>
+                    <InlineItemBudget
+                      token={token}
+                      country={formCountry}
+                      isAdmin={user?.role === "ADMIN"}
+                      item={item}
+                    />
                   </div>
                 ))}
               </div>
