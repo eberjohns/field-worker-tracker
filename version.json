@@ -1,9 +1,9 @@
 {
-  "version": "1.13.0",
+  "version": "1.13.1",
   "major": 1,
   "minor": 13,
-  "patch": 0,
+  "patch": 1,
   "last_branch": "feat/batch5.1c-managed-lists",
-  "last_commit": "62e1a64",
-  "updated_at": "2026-11-23T11:56:51.408679+00:00"
+  "last_commit": "81eebce",
+  "updated_at": "2026-11-23T12:01:02.868306+00:00"
 }

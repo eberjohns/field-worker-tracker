@@ -81,9 +81,30 @@ async def admin_client():
         await engine.dispose()
 
 
+def test_template_lists_sheet_from_managed_lists():
+    """Generator without a database: the Lists sheet carries the lists it is given (DEC-60)."""
+    wb = openpyxl.load_workbook(
+        io.BytesIO(
+            generate_import_template_bytes(
+                staff_types=["Team Leader", "Gardener Helper"], grade_codes=["G10A", "G2A"]
+            )
+        )
+    )
+    ws = wb["Lists"]
+    headers = {ws.cell(1, c).value: c for c in range(1, ws.max_column + 1)}
+    col = headers["staff_grade_description"]
+    assert [ws.cell(r, col).value for r in (2, 3)] == ["Gardener Helper", "Team Leader"]
+    col = headers["grade_code"]
+    assert [ws.cell(r, col).value for r in (2, 3)] == ["G2A", "G10A"]
+    # Without lists (tools/generate_import_template.py): the seed staff types, no grade column.
+    ws = openpyxl.load_workbook(io.BytesIO(generate_import_template_bytes()))["Lists"]
+    assert "grade_code" not in {str(ws.cell(1, c).value) for c in range(1, ws.max_column + 1)}
+
+
+@db_required
 @pytest.mark.asyncio
 async def test_download_template():
-    """Verify template generator and download endpoint without requiring live DB."""
+    """Download endpoint; its Lists sheet is filled from the managed lists (needs the DB)."""
     admin_user = User(
         id=uuid4(),
         employee_id=None,
@@ -104,6 +125,9 @@ async def test_download_template():
             assert "Employees" in wb.sheetnames
             assert "Employee_Salary" in wb.sheetnames
             assert "Lists" in wb.sheetnames
+            lists = wb["Lists"]
+            heads = {str(lists.cell(1, c).value) for c in range(1, lists.max_column + 1)}
+            assert {"staff_grade_description", "grade_code"} <= heads
     finally:
         app.dependency_overrides.pop(get_current_user, None)
 

@@ -52,3 +52,4 @@ Field Worker Tracker follows semantic versioning `v<MAJOR>.<MINOR>.<PATCH>`:
 | **v1.11.0** | 2026-11-23 | `fix/batch5.3b` | `99cd3dd` | New branch 'fix/batch5.3b' |
 | **v1.12.0** | 2026-11-23 | `fix/batch5.4` | `a68c70b` | New branch 'fix/batch5.4' |
 | **v1.13.0** | 2026-11-23 | `feat/batch5.1c-managed-lists` | `62e1a64` | New branch 'feat/batch5.1c-managed-lists' |
+| **v1.13.1** | 2026-11-23 | `feat/batch5.1c-managed-lists` | `81eebce` | Commit on 'feat/batch5.1c-managed-lists' |
