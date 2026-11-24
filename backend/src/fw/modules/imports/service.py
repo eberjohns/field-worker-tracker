@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.core.clock import site_today
 from fw.core.errors import AppError
+from fw.core.events import event_bus
 from fw.modules.audit import AuditService
 from fw.modules.identity import User, hash_password
 from fw.modules.imports.models import ImportBatch, ImportRow
@@ -54,6 +55,9 @@ from fw.modules.payroll import (
     SalaryRevisionLine,
 )
 from fw.modules.payroll.schemas import EmployeeSalaryCreate
+from fw.modules.scheduling import LeaveRequest
+from fw.modules.scheduling.events import LeaveApprovedEvent
+from fw.modules.scheduling.materialise import RosterMaterialiser
 from fw.modules.settings import CompanySettingValue, PublicHoliday, SettingsService, TimeRule
 from fw.rules.grades import INVALID_GRADE_CODE, InvalidGradeCodeError, try_base_grade_code
 from fw.rules.groups import INVALID_GROUP_CODE, is_group_code
@@ -217,6 +221,20 @@ class ImportService:
             (h.holiday_date, h.country): h
             for h in (await session.execute(select(PublicHoliday))).scalars().all()
         }
+        # Open leave (requested or approved) by tally id, for the Leave sheet's overlap check.
+        existing_leaves: dict[str, list[LeaveRequest]] = defaultdict(list)
+        for lv, lv_tally in (
+            await session.execute(
+                select(LeaveRequest, Employee.tally_id)
+                .join(Employee, Employee.id == LeaveRequest.employee_id)
+                .where(
+                    LeaveRequest.status.in_(("REQUESTED", "APPROVED")),
+                    LeaveRequest.is_active.is_(True),
+                )
+            )
+        ).all():
+            existing_leaves[lv_tally].append(lv)
+        file_leaves: dict[str, list[tuple[date, date, int]]] = defaultdict(list)
         existing_settings = {
             (s.setting_key, s.country, s.effective_from): s
             for s in (await session.execute(select(CompanySettingValue))).scalars().all()
@@ -926,6 +944,81 @@ class ImportService:
                             row_diff["holiday_name"] = {"old": h.name, "new": h_name}
                         else:
                             row_action = "UNCHANGED"
+
+                # Leave (validated like the Admin leave import, plus dates and overlaps)
+                elif sheet_name == "Leave":
+                    lv_tally = normalized_dict["tally_id"]["value"]
+                    lv_from = to_date_obj(normalized_dict["from_date"]["value"])
+                    lv_to = to_date_obj(normalized_dict["to_date"]["value"])
+                    lv_type = normalized_dict["leave_type"]["value"]
+                    lv_status = (normalized_dict["status"]["value"] or "APPROVED").upper()
+                    if lv_tally and not (
+                        lv_tally in existing_employees or lv_tally in file_employees
+                    ):
+                        row_codes.append("REFERENCE_NOT_FOUND")
+                        row_messages.append(
+                            {
+                                "field": "tally_id",
+                                "code": "REFERENCE_NOT_FOUND",
+                                "message": f"Employee {lv_tally} not found",
+                            }
+                        )
+                        row_status = "ERROR"
+                    if lv_from and lv_to and lv_to < lv_from:
+                        row_codes.append("INVALID_DATE_RANGE")
+                        row_messages.append(
+                            {
+                                "field": "to_date",
+                                "code": "INVALID_DATE_RANGE",
+                                "message": "to_date is before from_date",
+                            }
+                        )
+                        row_status = "ERROR"
+                    elif lv_tally and lv_from and lv_to:
+                        same = next(
+                            (
+                                lv
+                                for lv in existing_leaves.get(lv_tally, [])
+                                if lv.from_date == lv_from
+                                and lv.to_date == lv_to
+                                and lv.leave_type == lv_type
+                            ),
+                            None,
+                        )
+                        if same is not None:
+                            # Re-importing the same leave changes nothing.
+                            row_action = "UNCHANGED"
+                        else:
+                            clash = next(
+                                (
+                                    lv
+                                    for lv in existing_leaves.get(lv_tally, [])
+                                    if lv.from_date <= lv_to and lv.to_date >= lv_from
+                                ),
+                                None,
+                            )
+                            file_clash = any(
+                                f <= lv_to and t >= lv_from and other_row != r_idx
+                                for f, t, other_row in file_leaves.get(lv_tally, [])
+                            )
+                            if clash is not None or file_clash:
+                                where = (
+                                    f"existing {clash.status.lower()} leave "
+                                    f"{clash.from_date}..{clash.to_date}"
+                                    if clash is not None
+                                    else "another row in this file"
+                                )
+                                row_codes.append("LEAVE_OVERLAP")
+                                row_messages.append(
+                                    {
+                                        "field": "from_date",
+                                        "code": "LEAVE_OVERLAP",
+                                        "message": f"Overlaps {where}",
+                                    }
+                                )
+                                row_status = "ERROR"
+                            file_leaves[lv_tally].append((lv_from, lv_to, r_idx))
+                    normalized_dict["status"] = {"value": lv_status, "action": "SET"}
 
                 # Company_Settings
                 elif sheet_name == "Company_Settings":
@@ -1780,6 +1873,56 @@ class ImportService:
                     )
 
         await session.flush()
+
+        # 7b. Leave: pending leave waits in the approvals inbox; approved leave takes the worker
+        #     off the materialised roster and raises the usual cover-needed alert.
+        leave_rows = [r for r in sheet_to_rows.get("Leave", []) if r.action == "NEW"]
+        approved_leaves: list[tuple[LeaveRequest, Employee]] = []
+        if leave_rows:
+            emp_by_tally_lv = {
+                e.tally_id: e for e in (await session.execute(select(Employee))).scalars().all()
+            }
+            lv_now = datetime.now(UTC)
+            for r in leave_rows:
+                emp = emp_by_tally_lv.get(str(r.normalized.get("tally_id") or "").strip())
+                lv_from = to_date_obj(r.normalized.get("from_date"))
+                lv_to = to_date_obj(r.normalized.get("to_date"))
+                if emp is None or lv_from is None or lv_to is None:
+                    continue
+                approved = (r.normalized.get("status") or "APPROVED").upper() == "APPROVED"
+                leave = LeaveRequest(
+                    employee_id=emp.id,
+                    leave_type=str(r.normalized.get("leave_type")).upper(),
+                    from_date=lv_from,
+                    to_date=lv_to,
+                    reason=str(r.normalized.get("reason") or "Imported leave").strip(),
+                    status="APPROVED" if approved else "REQUESTED",
+                    recorded_by_user_id=user_id,
+                    approved_by_user_id=user_id if approved else None,
+                    approved_at=lv_now if approved else None,
+                )
+                session.add(leave)
+                if approved:
+                    approved_leaves.append((leave, emp))
+            await session.flush()
+            if approved_leaves:
+                await RosterMaterialiser.run(
+                    session, employee_ids={emp.id for _, emp in approved_leaves}
+                )
+                for leave, emp in approved_leaves:
+                    if leave.to_date >= site_today(emp.country or "AE"):
+                        await event_bus.publish(
+                            LeaveApprovedEvent(
+                                leave_id=leave.id,
+                                employee_id=emp.id,
+                                date_from=leave.from_date,
+                                date_to=leave.to_date,
+                                worker_name=emp.name,
+                                approved_by_user_id=user_id,
+                            ),
+                            session=session,
+                        )
+            await session.flush()
 
         # 8. Company_Settings
         for r in sheet_to_rows.get("Company_Settings", []):

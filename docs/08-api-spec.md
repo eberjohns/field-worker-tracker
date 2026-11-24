@@ -118,11 +118,11 @@ Roles: A = Admin, E = Engineer, S = Superintendent, V = Supervisor. "scope" = li
 | Method | Path | Roles | Purpose |
 |---|---|---|---|
 | GET | /base-planner/worksites | A E scope | Base blueprint master schedule: worksites with job items, contract quotas, and template assignments across Mon–Sun. DEC-57: a non-Admin sees only the worksites in their scope (v1.19.0) |
-| POST | /base-planner/templates | A E | Create or replace recurring blueprint roster template for a job item with explicit daily / periodic cadence masks |
+| POST | /base-planner/templates | A E | Create or replace recurring blueprint roster template for a job item with explicit daily / periodic cadence masks. The template is materialised into scheduled work (`source = TEMPLATE`) from tomorrow to `roster_materialise_weeks` ahead; untouched TEMPLATE rows follow the change, rows edited by hand are kept (ADR-032, v1.22.0) |
 | GET | /operational-planner/coverage?week_start= | A E scope | Live operational coverage matrix: 7 calendar days, blueprint shifts (muted), leave gaps (TO_BE_COVERED), operational covers (solid), and removals (red). DEC-57: only the worksites in the caller's scope (v1.19.0) |
 | GET | /operational-planner/roster?week_start= | A E scope | Live worker roster: workers x days with assigned shifts, weekly totals vs standard hours, supervisor info, and job numbers. DEC-57: a non-Admin sees the workers in their directory scope (crew plus workers on their worksites) (v1.19.0) |
-| POST | /operational-planner/shifts | A E | Assign operational shift (direct shift or leave cover) or stage base shift cancellation (status CANCELLED with override_reason) |
-| DELETE | /operational-planner/shifts/{id} | A E | Remove operational shift or restore cancelled base blueprint shift |
+| POST | /operational-planner/shifts | A E | Assign operational shift (direct shift or leave cover) or stage base shift cancellation (status CANCELLED with override_reason). Removing a base worker cancels their TEMPLATE row in place (it is the REMOVED marker); a cover with `original_employee_id` marks the original's TEMPLATE row REASSIGNED and links it (`original_scheduled_work_id`) (v1.22.0) |
+| DELETE | /operational-planner/shifts/{id} | A E | Remove operational shift or restore cancelled base blueprint shift: a cancelled TEMPLATE row becomes ACTIVE again; a removal marker outside the materialised window is deleted; removing a cover restores the original's TEMPLATE row unless they are on approved leave (v1.22.0) |
 
 ### Events, attendance, approvals
 | Method | Path | Roles | Purpose |
@@ -135,6 +135,7 @@ Roles: A = Admin, E = Engineer, S = Superintendent, V = Supervisor. "scope" = li
 | POST | /attendance/{id}/comments | A E V | operational comment |
 | POST | /attendance/{id}/decisions | A E | `{ decision, comment }` (comment required for REJECTED) |
 | POST | /attendance/recalculate | A | `{ employee_id?, from, to, reason }` |
+| POST | /attendance/manual-times | A, E (crew chain) | `{ employee_id, work_date, first_site_entry, last_site_exit, accommodation_departure?, accommodation_return?, reason }` (site-local `HH:MM`; reason required). For a day the phone did not record: the day is recalculated from these times (reason `MANUAL_CORRECTION`, flag `MANUAL_TIMES`, back to review), earlier versions kept, audited `ATTENDANCE_MANUAL_TIMES`. 422 for a future day, exit not after entry, or one accommodation time without the other; 409 `PAYROLL_LOCKED`; 403 outside the crew chain. Returns the attendance record (v1.22.0) |
 | GET | /attendance/exceptions | A E (scope) | PENDING_REVIEW queue |
 | GET | /alerts | scope | open alerts |
 | POST | /alerts/{id}/resolve | A E V | |
@@ -162,7 +163,7 @@ Roles: A = Admin, E = Engineer, S = Superintendent, V = Supervisor. "scope" = li
 | GET/POST/DELETE | /public-holidays | A | per country |
 | POST | /payroll/runs | A | create or **re-run** a DRAFT for a month (increments `run_no`; auto-created `payroll_auto_run_delay_days` after month-end). Creating or re-running a draft generates the month-end draft reports once; viewing a run no longer regenerates them (v1.16.0). Each record's `snapshot.salary` stores the six salary components (`basic_salary`, `special_allowance`, `fixed_ot_amount`, `bonus`, `telephone_allowance`, `housing_transport_allowance`) that add up to `salary_portion`, and `snapshot.settings.currency` / `totals_snapshot.currency` the country's `currency` setting |
 | GET | /payroll/runs, /payroll/runs/{id} | A | list and inspect monthly payroll runs (Admin only since Batch 5.3b, DEC-47). Each run has `currency` (AED / SAR: the stored one, else the country's). Records return the six salary components; for runs made before v1.16.0 a component missing from the snapshot comes from the salary row the run used (`salary_id`), else the employee's row in effect at `period_end` |
-| GET | /payroll/runs/{id}/issues | A | inspect blocking issues (unapproved overtime, missing salary structures) |
+| GET | /payroll/runs/{id}/issues | A | inspect blocking issues (unapproved overtime, absences pending review `PENDING_ABSENCE` with `pending_absence_count`, missing salary structures) |
 | POST | /payroll/runs/{id}/approve | A | approves the draft: freezes immutable records, locks attendance, stores final snapshots |
 | GET | /payroll/records?employee_id=&period= | A | inspect immutable snapshots. Payroll needs every money setting (`provision_*`, `standard_ot_divisor_hours`, `ot1_multiplier`, `ot2_multiplier`, `hr_overhead_rate`); a missing one gives 422 `SETTING_MISSING` |
 | GET | /payroll/my-records | Self (Worker) | worker's own approved monthly payslips (employee components only, no provisions) |

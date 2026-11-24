@@ -1,5 +1,7 @@
 import json
+from collections.abc import Sequence
 from datetime import UTC, date, datetime, timedelta
+from typing import Any
 from uuid import UUID, uuid5
 
 import structlog
@@ -12,6 +14,7 @@ from fw.core.events import (
     EmployeeProfileChanged,
     HolidayChanged,
     ScheduledWorkChanged,
+    ScheduledWorkRemoved,
     TimeRuleChanged,
     WorksiteBoundaryChanged,
     event_bus,
@@ -46,6 +49,64 @@ from fw.rules.scheduling import INT_TO_WEEKDAY
 logger = structlog.get_logger(__name__)
 
 
+def _blueprint_item_id(entry_id: UUID, day: date) -> UUID:
+    """The id of a template item sent for a day with no scheduled_work row (stable per day)."""
+    return uuid5(UUID("00000000-0000-0000-0000-000000000001"), f"bp_{entry_id}_{day.isoformat()}")
+
+
+def _blueprint_item_matches(entry: BaseRosterEntry, tmpl: BaseRosterTemplate, day: date) -> bool:
+    """Whether a template entry produced a phone item for ``day`` (the sync feed's own matcher)."""
+    if tmpl.start_date and tmpl.start_date > day:
+        return False
+    if tmpl.end_date and tmpl.end_date < day:
+        return False
+    dow = INT_TO_WEEKDAY[day.weekday()]
+    mask = (entry.weekday_mask or "").upper()
+    if mask in ("ALL", dow):
+        return True
+    parts = mask.split("_")
+    return len(parts) == 2 and parts[1] == dow and parts[0] == f"W{(day.day - 1) // 7 + 1}"
+
+
+async def _retract_blueprint_items(
+    session: AsyncSession,
+    employee_id: UUID,
+    bp_rows: Sequence[Any],  # rows of (BaseRosterEntry, BaseRosterTemplate, JobItem, Worksite)
+    day: date,
+    today: date,
+) -> None:
+    """Tombstone the template items for ``day`` (a DELETE of an id the phone never had is a
+    no-op, as the contract says)."""
+    priority = 1 if (day - today).days <= 1 else 0
+    for entry, tmpl, _ji, _ws in bp_rows:
+        if _blueprint_item_matches(entry, tmpl, day):
+            await SyncService.write_sync_change(
+                session=session,
+                employee_id=employee_id,
+                entity_type="SCHEDULE_ITEM",
+                entity_id=str(_blueprint_item_id(entry.id, day)),
+                entity_version=2,
+                op="DELETE",
+                payload=None,
+                priority=priority,
+            )
+
+
+async def handle_scheduled_work_removed(event: ScheduledWorkRemoved, session: AsyncSession) -> None:
+    """Rows deleted from the plan: tell each phone to drop the schedule item (op DELETE)."""
+    for employee_id, scheduled_work_id, version in event.items:
+        await SyncService.write_sync_change(
+            session=session,
+            employee_id=employee_id,
+            entity_type="SCHEDULE_ITEM",
+            entity_id=str(scheduled_work_id),
+            entity_version=version + 1,
+            op="DELETE",
+            payload=None,
+            priority=0,
+        )
+
+
 async def handle_scheduled_work_changed(event: ScheduledWorkChanged, session: AsyncSession) -> None:
     """When schedule items change, record delta changes and update DayPlan."""
     now = datetime.now(UTC)
@@ -64,8 +125,13 @@ async def handle_scheduled_work_changed(event: ScheduledWorkChanged, session: As
                 ScheduledWork.work_date <= window_end,
             )
         )
-        res = await session.execute(sw_query)
-        rows = res.all()
+        all_rows = (await session.execute(sw_query)).all()
+        covered_dates = {sw.work_date for sw, _, _ in all_rows}
+        # Targeted (the roster materialiser): send only the rows that changed.
+        targeted = event.scheduled_work_ids is not None
+        wanted = set(event.scheduled_work_ids or [])
+        rows = [r for r in all_rows if not targeted or r[0].id in wanted]
+        changed_dates = {sw.work_date for sw, _, _ in rows}
 
         for sw, ji, ws in rows:
             is_urgent = (sw.work_date - today).days <= 1
@@ -172,33 +238,17 @@ async def handle_scheduled_work_changed(event: ScheduledWorkChanged, session: As
             )
         )
         bp_rows = (await session.execute(bp_query)).all()
-        covered_dates = {sw.work_date for sw, _, _ in rows}
 
         cur_check = today
         while cur_check <= window_end:
-            if cur_check not in covered_dates:
-                dow = INT_TO_WEEKDAY[cur_check.weekday()]
+            if cur_check in covered_dates:
+                # A real row now holds this day: retract template items sent before it existed.
+                if not targeted or cur_check in changed_dates:
+                    await _retract_blueprint_items(session, emp_id, bp_rows, cur_check, today)
+            elif not targeted:
                 for entry, tmpl, ji, ws in bp_rows:
-                    if tmpl.start_date and tmpl.start_date > cur_check:
-                        continue
-                    if tmpl.end_date and tmpl.end_date < cur_check:
-                        continue
-
-                    mask = (entry.weekday_mask or "").upper()
-                    matches_dow = mask in ("ALL", dow)
-                    if not matches_dow and "_" in mask:
-                        parts = mask.split("_")
-                        if len(parts) == 2 and parts[1] == dow:
-                            day_of_month = cur_check.day
-                            week_num = (day_of_month - 1) // 7 + 1
-                            if parts[0] == f"W{week_num}":
-                                matches_dow = True
-
-                    if matches_dow:
-                        bp_item_id = uuid5(
-                            UUID("00000000-0000-0000-0000-000000000001"),
-                            f"bp_{entry.id}_{cur_check.isoformat()}",
-                        )
+                    if _blueprint_item_matches(entry, tmpl, cur_check):
+                        bp_item_id = _blueprint_item_id(entry.id, cur_check)
                         is_urgent = (cur_check - today).days <= 1
                         priority = 1 if is_urgent else 0
 
@@ -597,6 +647,7 @@ def register_sync_listeners() -> None:
         return
     _registered = True
     event_bus.subscribe_sync(ScheduledWorkChanged, handle_scheduled_work_changed)
+    event_bus.subscribe_sync(ScheduledWorkRemoved, handle_scheduled_work_removed)
     event_bus.subscribe_sync(HolidayChanged, handle_holiday_changed)
     event_bus.subscribe_sync(TimeRuleChanged, handle_time_rule_changed)
     event_bus.subscribe_sync(WorksiteBoundaryChanged, handle_worksite_boundary_changed)

@@ -35,6 +35,7 @@ One decision per file, numbered. Use the `write-adr` skill. Status: Proposed, Ac
 | 029 | [Job budget, man-hours and planned vs actual](029-job-budget-and-man-hours.md) | Accepted |
 | 030 | [Managed lists for staff types and grade codes](030-managed-lists.md) | Accepted |
 | 031 | [Web UI component layer (`web/src/ui`)](031-web-ui-component-layer.md) | Accepted |
+| 032 | [Base Planner templates materialised into scheduled work](032-roster-materialisation.md) | Accepted |
 
 See also [decision-register.md](decision-register.md) for business decisions awaiting client confirmation.
 

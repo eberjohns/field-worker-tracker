@@ -146,6 +146,18 @@ class AttendanceDecisionRequest(BaseModel):
     comment: str | None = None
 
 
+class AttendanceManualTimesRequest(BaseModel):
+    """Times for a day the phone did not record (site-local, HH:MM), with a required reason."""
+
+    employee_id: UUID
+    work_date: date
+    first_site_entry: time
+    last_site_exit: time
+    accommodation_departure: time | None = None
+    accommodation_return: time | None = None
+    reason: str = Field(min_length=1, max_length=1000)
+
+
 class AttendanceRecalculateRequest(BaseModel):
     employee_id: UUID | None = None
     from_date: date

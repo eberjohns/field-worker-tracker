@@ -2,7 +2,7 @@
 
 `FieldWorkerTracker_Import_Template_v1.0.xlsx` is the workbook the client fills in: 15 data tabs (header row 4, data from row 5, grey EXAMPLE rows with fictional or sample values), plus README, Lists, SGD_Aliases and Field_Dictionary (every column, its rule and the client file column it comes from).
 
-Tabs: Groups, Zones, Accommodations, Employees, Employee_Reporting, Employee_Salary, Worksites, Job_Items, Worksite_Supervisors (who sees which worksite, DEC-57), Leave (optional), Public_Holidays (optional), Salary_Revisions and Salary_Revision_Lines (job budget only; optional `telephone_allowance` and `housing_transport_allowance` at the end of the lines sheet, blank = 0), Company_Settings, Time_Rules.
+Tabs: Groups, Zones, Accommodations, Employees, Employee_Reporting, Employee_Salary, Worksites, Job_Items, Worksite_Supervisors (who sees which worksite, DEC-57), Leave (optional; read since v1.22.0, optional `status` APPROVED or PENDING at the end, blank = APPROVED), Public_Holidays (optional), Salary_Revisions and Salary_Revision_Lines (job budget only; optional `telephone_allowance` and `housing_transport_allowance` at the end of the lines sheet, blank = 0), Company_Settings, Time_Rules.
 
 Cell rules (also on the workbook README and the import preview): a **blank cell keeps the existing value**; **`_` clears** a value; nothing is ever deleted by an import; the import shows new / updated (old -> new) / unchanged / clashes and changes nothing until confirmed. `Worksites` and `Accommodations` include an optional `boundary_polygon` column (accepting GeoJSON Polygon or WKT `POLYGON((lng lat, ...))`). You may upload either the full workbook, a single-sheet workbook with matching sheet name, or select specific sheet(s) directly on the Imports screen.
 

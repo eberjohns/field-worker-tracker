@@ -20,6 +20,7 @@ from fw.modules.attendance.schemas import (
     AttendanceCommentResponse,
     AttendanceDecisionRequest,
     AttendanceListResponse,
+    AttendanceManualTimesRequest,
     AttendanceRecalculateRequest,
     AttendanceRecalculateResponse,
     AttendanceRecordResponse,
@@ -395,6 +396,56 @@ async def record_attendance_decision(
         calculation_id=approval.calculation_id,
         created_at=approval.created_at,
     )
+
+
+@router.post("/attendance/manual-times", response_model=AttendanceRecordResponse)
+async def set_attendance_manual_times(
+    request: AttendanceManualTimesRequest,
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER")),
+    session: AsyncSession = Depends(get_db),
+) -> AttendanceRecordResponse:
+    """Enter the times for a day the phone did not record (Admin; Engineer for their crew).
+
+    A reason is required. The day gets a new calculation version flagged MANUAL_TIMES and goes
+    to review; earlier versions are kept. Audited. Refused once payroll for the day is approved.
+    """
+    scope = await AccessScope.resolve(session, current_user)
+    if await scope.operations_access(
+        session, request.employee_id, request.work_date
+    ) is None or not scope.can_decide(request.employee_id):
+        raise AppError(
+            code="OUT_OF_SCOPE",
+            message="You can enter times only for workers in your crew chain (DEC-10).",
+            status_code=403,
+        )
+    record = await AttendanceService.set_manual_times(
+        session,
+        employee_id=request.employee_id,
+        work_date=request.work_date,
+        first_site_entry=request.first_site_entry,
+        last_site_exit=request.last_site_exit,
+        accommodation_departure=request.accommodation_departure,
+        accommodation_return=request.accommodation_return,
+        reason=request.reason,
+        actor=current_user,
+    )
+    await session.commit()
+
+    q = (
+        select(AttendanceRecord, Employee)
+        .join(Employee, Employee.id == AttendanceRecord.employee_id)
+        .where(AttendanceRecord.id == record.id)
+        .options(
+            selectinload(AttendanceRecord.current_calculation),
+            selectinload(AttendanceRecord.comments),
+            selectinload(AttendanceRecord.approvals),
+        )
+        .execution_options(populate_existing=True)
+    )
+    loaded, employee = (await session.execute(q)).one()
+    result = _to_record_response(loaded, employee)
+    result.read_only = scope.is_read_only(loaded.employee_id)
+    return result
 
 
 @router.post("/attendance/recalculate", response_model=AttendanceRecalculateResponse)

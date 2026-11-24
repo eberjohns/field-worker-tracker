@@ -19,6 +19,7 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import delete, select
 
+from fw.core.clock import site_today
 from fw.core.db import async_session_factory, engine
 from fw.modules.jobs.models import JobItem, Worksite
 from fw.modules.scheduling.models import ScheduledWork
@@ -111,12 +112,14 @@ async def test_planner_coverage_and_excess_integrity():
             f"Verified Supervisor Item: id={sup_item.id}, freq={sup_item.frequency_unit}, occ={sup_item.occurrences_per_period}, pattern={sup_item.weekday_pattern}"
         )
 
-        # Choose a clean test week: 2026-11-23 (Monday) to 2026-11-29 (Sunday)
-        test_week_monday = date(2026, 11, 23)
-        test_tuesday = test_week_monday + timedelta(days=1)  # 2026-11-24
-        test_thursday = test_week_monday + timedelta(days=3)  # 2026-11-26
-        test_friday = test_week_monday + timedelta(days=4)  # 2026-11-27
-        test_sunday = test_week_monday + timedelta(days=6)  # 2026-11-29
+        # A clean test week in the future (the Monday after next): a fixed week turned into the
+        # past and the "no past dates" rule refused its assignments.
+        site_now = site_today("AE")
+        test_week_monday = site_now + timedelta(days=(7 - site_now.weekday()) + 7)
+        test_tuesday = test_week_monday + timedelta(days=1)
+        test_thursday = test_week_monday + timedelta(days=3)
+        test_friday = test_week_monday + timedelta(days=4)
+        test_sunday = test_week_monday + timedelta(days=6)
 
         # Clean any existing ScheduledWork in this test week for this item
         del_stmt = delete(ScheduledWork).where(

@@ -24,6 +24,20 @@ class DomainEvent:
 class ScheduledWorkChanged(DomainEvent):
     employee_ids: list[UUID] = field(default_factory=list)
     work_date: Any = None
+    # When set, only these rows are synced to the phones (the roster materialiser adds one day a
+    # night; re-sending every worker's whole window each time would flood sync_changes).
+    scheduled_work_ids: list[UUID] | None = None
+
+
+@dataclass
+class ScheduledWorkRemoved(DomainEvent):
+    """Scheduled work rows deleted outright (untouched template rows the plan no longer has).
+
+    Each item is (employee_id, scheduled_work_id, version). Deleted rows cannot be read back, so
+    the phones are told with a DELETE change instead of the usual CANCELLED status.
+    """
+
+    items: list[tuple[UUID, UUID, int]] = field(default_factory=list)
 
 
 @dataclass

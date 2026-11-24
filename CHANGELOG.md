@@ -1,6 +1,24 @@
 # Changelog
 All notable changes. Format: Keep a Changelog. Mobile-contract changes are also logged in `docs/09-mobile-sync-contract.md`.
 
+## [1.22.0] - 2026-11-25
+### Added (owner decisions of 25 Nov 2026)
+- **Base Planner templates become scheduled work** (ADR-032). From tomorrow to `roster_materialise_weeks` ahead (new company setting, default 4), each template produces real `scheduled_work` rows with `source = TEMPLATE`.
+  - **When:** a daily worker job, saving a template, and approving leave (including leave imported as approved).
+  - **Idempotent:** one row per employee, job item and date. Running twice in a day changes nothing, and runs never interleave (advisory lock).
+  - **Manual work is never overwritten.** Only untouched rows (`TEMPLATE`, `ACTIVE`, version 1) follow a template change; anything changed in the Operational Planner, a cover or a reassignment is kept.
+  - **Same rules as the Operational Planner:** weekly off and approved leave skipped (leave keeps its cover), template, item and worksite dates, inactive employees and items, budget-only staff types, PERMANENT/REMOTE rules; over the standard day is logged, not blocked; public holidays are scheduled (worked hours become OT2).
+  - **Operational Planner on template rows:** removing a base worker cancels the TEMPLATE row in place, a cover marks it REASSIGNED, and restore/undo put it back. Planner edits now reach the phones (they did not before).
+- **ABSENT at day close.** A new daily job (before pending visits) calculates every employee with scheduled work and no attendance events: **ABSENT**, the planned hours as missed hours, flag `NO_ATTENDANCE_EVENTS`, **pending review**. It shows in the attendance review, the dashboard and the approvals count. Not for approved leave, the weekly off, or no scheduled work.
+- **Manual attendance times** (`POST /attendance/manual-times`; Admin, and Engineers for their crew chain), from the attendance drawer ("Enter times"). For a dead phone: first site entry and last site exit, optional accommodation departure and return, and a required reason. The day gets a new calculation version (flag `MANUAL_TIMES`, back to review); earlier versions are kept; audited. Refused for a future day or a payroll-locked day.
+- **Payroll:** approved ABSENT days are deducted at basic / 208 (DEC-30). Absences still pending review are not deducted and appear as `PENDING_ABSENCE` issues ("n absences pending review" on the payroll page).
+- **The master import reads the Leave sheet.** New optional `status` column (APPROVED by default, or PENDING). Validated like the Admin leave import (worker, leave type, dates), plus to ≥ from and no overlap with open leave or another row; re-importing the same leave is UNCHANGED. Approved leave takes the worker off the materialised roster and raises the usual cover alert.
+### Fixed
+- **Restoring a removed base worker** left the cancellation in place; it now restores the worker.
+- **Coverage and roster** skipped public holidays for template workers and did not skip their weekly off; they now match the materialised rows.
+- **Reset database** (Settings) clears the new manual-times table.
+- **A planner scenario test had a fixed week** (23–29 Nov 2026) that turned into the past; it now uses a week after next.
+
 ## [1.21.0] - 2026-11-25
 ### Added (Batch 10 A: UI component layer, ADR-031)
 - **`web/src/ui`, the app's building blocks** with stable props, built only on what is already installed (no new dependency):

@@ -748,11 +748,14 @@ SHEET_REGISTRY: dict[str, SheetDef] = {
     ),
     "Leave": SheetDef(
         name="Leave",
-        title="Approved leave records. One row per leave event.",
-        description="Historical or scheduled worker leaves. Deferred to Phase 06.",
+        title="Leave records, pending or approved. One row per leave event.",
+        description=(
+            "Historical or scheduled worker leaves (owner decision 25 Nov 2026). Validated like "
+            "the Admin leave import; approved leave takes the worker off the materialised roster."
+        ),
         primary_key=["tally_id", "from_date"],
         commit_order=9,
-        is_in_scope_phase_03=False,
+        is_in_scope_phase_03=True,
         columns=[
             ColumnDef(
                 "tally_id", "text", True, "Required", description="FK Employees.", example="2002"
@@ -789,6 +792,18 @@ SHEET_REGISTRY: dict[str, SheetDef] = {
                 "Optional",
                 description="Reason note.",
                 example="Annual vacation",
+            ),
+            ColumnDef(
+                "status",
+                "text",
+                False,
+                "Optional",
+                enum_values=["APPROVED", "PENDING"],
+                description=(
+                    "APPROVED (default, as the Admin leave import) or PENDING: waits for approval "
+                    "in the approvals inbox."
+                ),
+                example="APPROVED",
             ),
         ],
     ),
@@ -1393,6 +1408,15 @@ SHEET_REGISTRY: dict[str, SheetDef] = {
                 "effective_from": "2026-01-01",
                 "status": "PROPOSED_DEFAULT",
                 "description": "Rolling months ahead to generate recurring job slots",
+            },
+            {
+                "setting_key": "roster_materialise_weeks",
+                "value": "4",
+                "unit": "weeks",
+                "country": None,
+                "effective_from": "2026-01-01",
+                "status": "PROPOSED_DEFAULT",
+                "description": "Weeks ahead (from tomorrow) that Base Planner templates become scheduled work",
             },
             {
                 "setting_key": "default_password_max_days",

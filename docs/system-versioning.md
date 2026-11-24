@@ -62,3 +62,4 @@ Field Worker Tracker follows semantic versioning `v<MAJOR>.<MINOR>.<PATCH>`:
 | **v1.19.0** | 2026-11-24 | `perf/batch9-quickwins` | `5bedefb` | New branch 'perf/batch9-quickwins' |
 | **v1.20.0** | 2026-11-24 | `feat/demo-activity-generator` | `bc183ef` | New branch 'feat/demo-activity-generator' |
 | **v1.21.0** | 2026-11-24 | `feat/batch10-ui-a` | `0a55faa` | New branch 'feat/batch10-ui-a' |
+| **v1.22.0** | 2026-11-24 | `fix/roster-materialise-absent` | `23c3a11` | New branch 'fix/roster-materialise-absent' |

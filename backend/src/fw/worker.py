@@ -15,9 +15,11 @@ from fw.core.db import async_session_factory
 from fw.core.logging import setup_logging
 from fw.modules.archive.repository import ArchiveRepository
 from fw.modules.archive.service import ArchiveService
+from fw.modules.attendance.day_close import DayCloseService
 from fw.modules.attendance.pending_visits import PendingVisitsService
 from fw.modules.attendance.watchdogs import AttendanceWatchdogs
 from fw.modules.notifications.service import NotificationService
+from fw.modules.scheduling.materialise import RosterMaterialiser
 from fw.modules.settings.service import SettingsService
 
 logger = structlog.get_logger("fw.worker")
@@ -108,6 +110,23 @@ class WorkerScheduler:
 
         return await self._execute_job("watchdogs", _job)
 
+    async def run_day_close(self, country: str) -> dict[str, int]:
+        """The site day that has ended: planned days with no attendance become ABSENT (review)."""
+
+        async def _job(session: AsyncSession) -> dict[str, int]:
+            target_date = site_today(country) - timedelta(days=1)
+            return await DayCloseService.close_day(session, target_date, country)
+
+        return await self._execute_job(f"day_close_{country}", _job)
+
+    async def run_roster_materialise(self) -> dict[str, Any]:
+        """Keep Base Planner templates materialised from tomorrow to roster_materialise_weeks."""
+
+        async def _job(session: AsyncSession) -> dict[str, Any]:
+            return (await RosterMaterialiser.run(session)).as_dict()
+
+        return await self._execute_job("roster_materialise", _job)
+
     async def run_pending_visits(self, country: str) -> dict[str, int]:
         """Detect unvisited scheduled sites for the day that has ended and send reminders."""
 
@@ -178,7 +197,9 @@ class WorkerScheduler:
         settings = get_settings()
         country = settings.DEPLOYMENT_COUNTRY
         await self.run_watchdogs()
+        await self.run_day_close(country)
         await self.run_pending_visits(country)
+        await self.run_roster_materialise()
         await self.run_document_expiry()
         await self.run_retention_purge()
         await self.run_yearly_archive()
@@ -210,7 +231,9 @@ class WorkerScheduler:
 
                 # Daily jobs run once per site local date
                 if self._daily_jobs_run.get(country) != today_site:
+                    await self.run_day_close(country)
                     await self.run_pending_visits(country)
+                    await self.run_roster_materialise()
                     await self.run_document_expiry()
                     await self.run_retention_purge()
                     await self.run_yearly_archive()

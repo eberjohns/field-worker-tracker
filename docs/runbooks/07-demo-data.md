@@ -39,7 +39,7 @@ This does the same as Settings > Reset database (Admin). It clears every master 
 - 4 crews (32 people), 23 sites, 57 job items, worksite supervisors, time rules, AE/SA public holidays, salaries and the company settings, including the default password;
 - a user account for each supervisor, superintendent and engineer, with username = Tally ID.
 
-**Workers get their user on their first phone login.** The **Leave** sheet is not read by the master import yet (`OUT_OF_SCOPE_PHASE_03`), so the generator imports those rows in step 4.
+**Workers get their user on their first phone login.** Since v1.22.0 the master import also reads the **Leave** sheet (approved unless its `status` says PENDING), so step 1 of the generator finds the leave already there and skips it.
 
 ## 4. Generate the activity
 
@@ -61,7 +61,7 @@ The full range (1 Oct to 23 Nov: about 1,100 worker-days and 71,000 events) take
 
 **What it does, in order. It never writes attendance, site visit, pending visit or payroll rows itself:**
 
-1. **Leave.** The demo's 3 leave rows go through the Admin leave import (`POST /leave-requests/import`), unless they're already there.
+1. **Leave.** The demo's 3 leave rows go through the Admin leave import (`POST /leave-requests/import`), unless they're already there (the master import creates them since v1.22.0).
 2. **Plan:**
    - Base Planner templates from `tools/demo_data/demo_assignments.json` (`save_base_template`, one entry per worker and weekday, in the file's visit order).
    - One Operational Planner shift per worker, day and item (`create_operational_shift`), from `--from` to `--to` + 30 days. Public holidays and weekly offs are skipped. Each shift first passes the scheduler's own validation, and any error stops the run.
