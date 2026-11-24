@@ -23,7 +23,7 @@ When resolving a setting for a worker, worksite, or process:
 
 | Setting Key | Data Type | Default Value | Unit | Country Scope | Status | Business Description |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `currency` | string | `AED` (AE), `SAR` (SA) | — | Country | GIVEN_BY_CLIENT | ISO 4217 currency symbol used for payslips, payroll runs, tenders, and job budgets. |
+| `currency` | string | `AED` (AE), `SAR` (SA) | — | Country | GIVEN_BY_CLIENT | ISO 4217 currency symbol used for payslips, payroll runs, tenders, and job budgets. A payroll run stores it (`currency`); the web shows every amount through one formatter as "AED 1,234.56", with the run's currency or the country's (v1.16.0). |
 | `standard_ot_divisor_hours` | decimal | `208` | hours | Global | GIVEN_BY_CLIENT | Monthly standard hours divisor used to derive hourly base rate for overtime calculations (`basic_salary / 208`). |
 | `ot1_multiplier` | decimal | `1.25` | ratio | Global | GIVEN_BY_CLIENT | Overtime multiplier applied to normal working day excess hours (`1.25x`). |
 | `ot2_multiplier` | decimal | `1.50` | ratio | Global | GIVEN_BY_CLIENT | Overtime multiplier applied to weekly rest day (OT2 weekday) and public holiday hours (`1.50x`). |
@@ -97,7 +97,7 @@ Staff types (Staff Grade Description, "Designation") and grade codes are managed
 - Staff type and grade dropdowns are plain dropdowns of the active values; the record's current value stays selectable, marked "(not in list)" when it has left the list.
 - **Staff types:** only an Admin adds, deactivates and reactivates them, in Settings → Managed Lists. Duplicates (ignoring case and spaces) are refused; a near spelling or known alias asks "Did you mean …?" and needs "Add anyway". Deactivated values leave the dropdowns; records that use them keep them. Never deleted; audited. Imports never add a staff type (an unknown one is an error).
 - **Grade codes** come only from salary revisions: the list is every base code (`G3C`) with a line in an active salary revision, and it follows the revisions automatically. To add a grade, add a line for it to a revision. Settings shows the grade list read-only.
-- `budget_only_staff_types` is chosen from the staff type list.
+- `budget_only_staff_types` is chosen from the staff type list (Settings > Budget-Only Roles shows the active list). A saved value that is not in the list (for example "QA/QC Engineer" from a settings import) is flagged "Not in the staff type list": Admin can add it to the list, Admin or Engineer can remove it (v1.16.0).
 - Reset database clears both lists and re-seeds the staff types; the grade list comes back with the next salary revision.
 
 **Groups and zones** are not managed lists, but the worksite forms (Add Worksite, worksite edit) offer "Other – add new…" in their dropdowns to Admin only (DEC-61; Admin and Engineer in v1.14): a group needs only its name (the next free 3-digit code is given), a zone its code and name, with the same duplicate and "Did you mean …?" checks.

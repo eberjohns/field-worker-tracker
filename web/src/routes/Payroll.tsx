@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { currencyForCountry, formatMoney } from "../features/format/money";
 import { diffClass, fmtDiff, fmtHours, fmtMoney, fmtPct } from "../features/budget/budgetFormat";
 import {
   DollarSign,
@@ -38,11 +39,13 @@ interface PayrollRunItem {
   approved_by_user_id: string | null;
   notes: string | null;
   record_count: number;
-  total_gross_pay: number;
-  total_net_pay: number;
-  total_employer_cost: number;
+  /** The run's currency (AED / SAR); never "$" (v1.16.0). */
+  currency?: string | null;
   totals_snapshot?: {
     treat_leaves_as_paid?: boolean;
+    gross_pay_total?: string | number;
+    net_pay_total?: string | number;
+    final_total_staff_cost_total?: string | number;
     [key: string]: any;
   };
 }
@@ -71,6 +74,8 @@ interface PayrollRecordItem {
   special_allowance?: number;
   fixed_ot_amount?: number;
   bonus?: number;
+  telephone_allowance?: number;
+  housing_transport_allowance?: number;
   ot1_hours: number;
   ot1_rate?: number;
   ot1_amount: number;
@@ -616,6 +621,11 @@ export const Payroll: React.FC = () => {
   };
 
   // Filter records
+  // Money in the run's currency (falls back to its country's currency).
+  const runCurrency =
+    selectedRunDetail?.run.currency || currencyForCountry(selectedRunDetail?.run.country);
+  const money = (v: number | string | null | undefined) => formatMoney(v ?? 0, runCurrency);
+
   const filteredRecords = (selectedRunDetail?.records || []).filter((r) => {
     const role = (r.employee_role || r.role || "WORKER").toUpperCase();
     if (roleFilter !== "ALL" && role !== roleFilter) return false;
@@ -863,39 +873,39 @@ export const Payroll: React.FC = () => {
                   <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
                     <span className="text-3xs uppercase font-bold text-slate-400 block">Gross Payroll</span>
                     <span className="text-lg font-bold text-slate-900 font-mono">
-                      ${Number(selectedRunDetail.run.total_gross_pay || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      {money(selectedRunDetail.run.totals_snapshot?.gross_pay_total)}
                     </span>
                   </div>
 
                   <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
                     <span className="text-3xs uppercase font-bold text-slate-400 block">Net Employee Pay</span>
                     <span className="text-lg font-bold text-indigo-700 font-mono">
-                      ${Number(selectedRunDetail.run.total_net_pay || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      {money(selectedRunDetail.run.totals_snapshot?.net_pay_total)}
                     </span>
                   </div>
 
                   <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
                     <span className="text-3xs uppercase font-bold text-slate-400 block">Overtime Paid</span>
                     <span className="text-lg font-bold text-amber-700 font-mono">
-                      ${Number(
+                      {money(
                         (selectedRunDetail.records || []).reduce((acc, r) => acc + Number(r.ot1_amount || 0) + Number(r.ot2_amount || 0), 0)
-                      ).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      )}
                     </span>
                   </div>
 
                   <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
                     <span className="text-3xs uppercase font-bold text-slate-400 block">Missed Deductions</span>
                     <span className="text-lg font-bold text-rose-700 font-mono">
-                      ${Number(
+                      {money(
                         (selectedRunDetail.records || []).reduce((acc, r) => acc + Number(r.missed_hours_deduction || 0), 0)
-                      ).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      )}
                     </span>
                   </div>
 
                   <div className="bg-indigo-50/60 p-3.5 rounded-xl border border-indigo-100">
                     <span className="text-3xs uppercase font-bold text-indigo-600 block">Employer Cost (+5% OH)</span>
                     <span className="text-lg font-bold text-indigo-900 font-mono">
-                      ${Number(selectedRunDetail.run.total_employer_cost || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      {money(selectedRunDetail.run.totals_snapshot?.final_total_staff_cost_total)}
                     </span>
                   </div>
                 </div>
@@ -1046,7 +1056,7 @@ export const Payroll: React.FC = () => {
                             <td className="py-2.5 px-3 font-mono">
                               {missed > 0 ? (
                                 <span className="text-rose-600 font-semibold">
-                                  {missed.toFixed(1)}h (-${missedDed.toFixed(2)})
+                                  {missed.toFixed(1)}h ({money(-missedDed)})
                                 </span>
                               ) : (
                                 <span className="text-slate-400">0h</span>
@@ -1055,7 +1065,7 @@ export const Payroll: React.FC = () => {
                             <td className="py-2.5 px-3 font-mono">
                               {ot1 > 0 ? (
                                 <span className="text-amber-700 font-semibold">
-                                  {ot1.toFixed(1)}h (${ot1Amt.toFixed(2)})
+                                  {ot1.toFixed(1)}h ({money(ot1Amt)})
                                 </span>
                               ) : (
                                 <span className="text-slate-400">0h</span>
@@ -1064,20 +1074,20 @@ export const Payroll: React.FC = () => {
                             <td className="py-2.5 px-3 font-mono">
                               {ot2 > 0 ? (
                                 <span className="text-indigo-700 font-semibold">
-                                  {ot2.toFixed(1)}h (${ot2Amt.toFixed(2)})
+                                  {ot2.toFixed(1)}h ({money(ot2Amt)})
                                 </span>
                               ) : (
                                 <span className="text-slate-400">0h</span>
                               )}
                             </td>
                             <td className="py-2.5 px-3 font-mono font-bold text-slate-900">
-                              ${gross.toFixed(2)}
+                              {money(gross)}
                             </td>
                             <td className="py-2.5 px-3 font-mono font-bold text-indigo-700">
-                              ${net.toFixed(2)}
+                              {money(net)}
                             </td>
                             <td className="py-2.5 px-3 font-mono font-semibold text-slate-800">
-                              ${totalCost.toFixed(2)}
+                              {money(totalCost)}
                             </td>
                             <td className="py-2.5 px-4 text-right">
                               <button
@@ -1197,6 +1207,9 @@ export const Payroll: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {activeRevisionLines.map((line) => {
+                    const revCurrency = currencyForCountry(
+                      revisions.find((r) => r.code === selectedRevisionCode)?.country,
+                    );
                     const totalAllowances =
                       Number(line.special_allowance || 0) +
                       Number(line.fixed_ot_amount || 0) +
@@ -1216,16 +1229,16 @@ export const Payroll: React.FC = () => {
                           {line.grade_group_title || "--"}
                         </td>
                         <td className="py-2.5 px-3 font-mono font-semibold text-slate-800">
-                          ${Number(line.basic_salary).toFixed(2)}
+                          {formatMoney(line.basic_salary, revCurrency)}
                         </td>
                         <td className="py-2.5 px-3 font-mono text-slate-600">
-                          ${totalAllowances.toFixed(2)}
+                          {formatMoney(totalAllowances, revCurrency)}
                         </td>
                         <td className="py-2.5 px-3 font-mono text-slate-600">
-                          ${totalProvisions.toFixed(2)}
+                          {formatMoney(totalProvisions, revCurrency)}
                         </td>
                         <td className="py-2.5 px-4 font-mono font-extrabold text-indigo-700 bg-indigo-50/30">
-                          ${Number(line.planned_hourly_cost).toFixed(2)} / hr
+                          {formatMoney(line.planned_hourly_cost, revCurrency)} / hr
                         </td>
                       </tr>
                     );
@@ -1345,7 +1358,7 @@ export const Payroll: React.FC = () => {
                         <span className="text-3xs font-mono text-slate-500">{item.job_number}</span>
                         {item.is_custom_budget_override && (
                           <span className="inline-block mt-0.5 px-1.5 py-0.2 bg-amber-100 text-amber-800 rounded text-3xs font-semibold">
-                            Manual annual budget {fmtMoney(item.manual_budget_override)}
+                            Manual annual budget {fmtMoney(item.manual_budget_override, currencyForCountry(item.country))}
                           </span>
                         )}
                         {(item.warnings || []).map((w, i) => (
@@ -1406,14 +1419,12 @@ export const Payroll: React.FC = () => {
                         {fmtDiff(item.hours_diff, (n) => n.toLocaleString(undefined, { maximumFractionDigits: 1 }))}
                         <span className="block text-3xs">{fmtPct(item.hours_diff_pct)}</span>
                       </td>
-                      <td className="py-2.5 px-3 text-right font-mono">{fmtMoney(item.planned_cost)}</td>
+                      <td className="py-2.5 px-3 text-right font-mono">{fmtMoney(item.planned_cost, currencyForCountry(item.country))}</td>
                       <td className="py-2.5 px-3 text-right font-mono font-bold text-indigo-700">
-                        {fmtMoney(item.actual_cost)}
+                        {fmtMoney(item.actual_cost, currencyForCountry(item.country))}
                       </td>
                       <td className={`py-2.5 px-4 text-right font-mono ${diffClass(item.cost_diff)}`}>
-                        {fmtDiff(item.cost_diff, (n) =>
-                          n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-                        )}
+                        {fmtDiff(item.cost_diff, (n) => formatMoney(n, currencyForCountry(item.country)))}
                         <span className="block text-3xs">{fmtPct(item.cost_diff_pct)}</span>
                       </td>
                     </tr>
@@ -1458,31 +1469,31 @@ export const Payroll: React.FC = () => {
                 <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 space-y-2">
                   <div className="flex justify-between">
                     <span className="text-slate-600">Basic Salary:</span>
-                    <span className="font-mono font-bold">
-                      ${Number(selectedRecord.basic_salary ?? selectedRecord.snapshot?.basic_salary ?? 0).toFixed(2)}
-                    </span>
+                    <span className="font-mono font-bold">{money(selectedRecord.basic_salary)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-600">Special Allowance:</span>
-                    <span className="font-mono">
-                      ${Number(selectedRecord.special_allowance ?? selectedRecord.snapshot?.special_allowance ?? 0).toFixed(2)}
-                    </span>
+                    <span className="font-mono">{money(selectedRecord.special_allowance)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-600">Fixed Overtime:</span>
-                    <span className="font-mono">
-                      ${Number(selectedRecord.fixed_ot_amount ?? selectedRecord.snapshot?.fixed_ot_amount ?? 0).toFixed(2)}
-                    </span>
+                    <span className="font-mono">{money(selectedRecord.fixed_ot_amount)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-600">Bonus:</span>
-                    <span className="font-mono">
-                      ${Number(selectedRecord.bonus ?? selectedRecord.snapshot?.bonus ?? 0).toFixed(2)}
-                    </span>
+                    <span className="font-mono">{money(selectedRecord.bonus)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">Telephone Allowance:</span>
+                    <span className="font-mono">{money(selectedRecord.telephone_allowance)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">Housing / Transport Allowance:</span>
+                    <span className="font-mono">{money(selectedRecord.housing_transport_allowance)}</span>
                   </div>
                   <div className="flex justify-between border-t border-slate-200 pt-1 font-bold text-slate-900">
                     <span>Base Salary Portion:</span>
-                    <span className="font-mono">${Number(selectedRecord.salary_portion || 0).toFixed(2)}</span>
+                    <span className="font-mono">{money(selectedRecord.salary_portion)}</span>
                   </div>
                 </div>
 
@@ -1491,22 +1502,20 @@ export const Payroll: React.FC = () => {
                   <div className="flex justify-between text-slate-600">
                     <span>OT1 (Normal Hours &gt; Std):</span>
                     <span className="font-mono">
-                      {Number(selectedRecord.ot1_hours || 0).toFixed(1)}h × $
-                      {Number(selectedRecord.ot1_rate ?? selectedRecord.snapshot?.ot1_rate ?? 0).toFixed(2)} ={" "}
-                      <strong className="text-slate-900">${Number(selectedRecord.ot1_amount || 0).toFixed(2)}</strong>
+                      {Number(selectedRecord.ot1_hours || 0).toFixed(1)}h × {money(selectedRecord.ot1_rate)} ={" "}
+                      <strong className="text-slate-900">{money(selectedRecord.ot1_amount)}</strong>
                     </span>
                   </div>
                   <div className="flex justify-between text-slate-600">
                     <span>OT2 (Holiday & Weekly Off):</span>
                     <span className="font-mono">
-                      {Number(selectedRecord.ot2_hours || 0).toFixed(1)}h × $
-                      {Number(selectedRecord.ot2_rate ?? selectedRecord.snapshot?.ot2_rate ?? 0).toFixed(2)} ={" "}
-                      <strong className="text-slate-900">${Number(selectedRecord.ot2_amount || 0).toFixed(2)}</strong>
+                      {Number(selectedRecord.ot2_hours || 0).toFixed(1)}h × {money(selectedRecord.ot2_rate)} ={" "}
+                      <strong className="text-slate-900">{money(selectedRecord.ot2_amount)}</strong>
                     </span>
                   </div>
                   <div className="flex justify-between border-t border-slate-200 pt-1 font-bold text-slate-900">
                     <span>Gross Pay:</span>
-                    <span className="font-mono">${Number(selectedRecord.gross_pay || 0).toFixed(2)}</span>
+                    <span className="font-mono">{money(selectedRecord.gross_pay)}</span>
                   </div>
                 </div>
 
@@ -1515,12 +1524,12 @@ export const Payroll: React.FC = () => {
                   <div className="flex justify-between">
                     <span>Missed Hours ({Number(selectedRecord.missed_hours || 0).toFixed(1)}h @ Basic/208):</span>
                     <span className="font-mono font-bold">
-                      -${Number(selectedRecord.missed_hours_deduction || 0).toFixed(2)}
+                      {money(-Number(selectedRecord.missed_hours_deduction || 0))}
                     </span>
                   </div>
                   <div className="flex justify-between border-t border-rose-200/60 pt-1 font-bold text-sm text-indigo-900">
                     <span>Final Net Pay:</span>
-                    <span className="font-mono">${Number(selectedRecord.net_pay || 0).toFixed(2)}</span>
+                    <span className="font-mono">{money(selectedRecord.net_pay)}</span>
                   </div>
                 </div>
               </div>
@@ -1535,30 +1544,30 @@ export const Payroll: React.FC = () => {
                   <div className="flex justify-between text-slate-600">
                     <span>Gratuity Provision (basic / 365 × 30):</span>
                     <span className="font-mono font-semibold">
-                      ${Number(selectedRecord.gratuity_provision ?? selectedRecord.snapshot?.gratuity_provision ?? 0).toFixed(2)}
+                      {money(selectedRecord.gratuity_provision)}
                     </span>
                   </div>
                   <div className="flex justify-between text-slate-600">
                     <span>Leave Salary Provision (basic / 12):</span>
                     <span className="font-mono font-semibold">
-                      ${Number(selectedRecord.leave_salary_provision ?? selectedRecord.snapshot?.leave_salary_provision ?? 0).toFixed(2)}
+                      {money(selectedRecord.leave_salary_provision)}
                     </span>
                   </div>
                   <div className="flex justify-between text-slate-600">
                     <span>Company Provisions (5 Items):</span>
                     <span className="font-mono font-semibold">
-                      ${Number(selectedRecord.company_provisions_total ?? selectedRecord.snapshot?.company_provisions_total ?? 0).toFixed(2)}
+                      {money(selectedRecord.company_provisions_total)}
                     </span>
                   </div>
                   <div className="flex justify-between text-slate-600">
                     <span>HR Overhead (5% of Subtotal):</span>
                     <span className="font-mono font-semibold">
-                      ${Number(selectedRecord.hr_overhead_amount ?? selectedRecord.snapshot?.hr_overhead_amount ?? 0).toFixed(2)}
+                      {money(selectedRecord.hr_overhead_amount)}
                     </span>
                   </div>
                   <div className="flex justify-between border-t border-slate-200 pt-1 font-bold text-sm text-indigo-950">
                     <span>Final Total Staff Cost:</span>
-                    <span className="font-mono">${Number(selectedRecord.final_total_staff_cost).toFixed(2)}</span>
+                    <span className="font-mono">{money(selectedRecord.final_total_staff_cost)}</span>
                   </div>
                 </div>
               </div>
@@ -2040,7 +2049,7 @@ export const Payroll: React.FC = () => {
                   <div><strong>OT2 Rate (Public Holidays & Weekly Off):</strong> (Basic Salary / 208) × 1.50</div>
                 </div>
                 <p className="text-3xs text-slate-500">
-                  <em>Benchmark:</em> Basic of $1,100 yields an OT1 rate of $6.61/hr and OT2 rate of $7.93/hr.
+                  <em>Benchmark:</em> Basic of AED 1,100 yields an OT1 rate of AED 6.61/hr and OT2 rate of AED 7.93/hr.
                 </p>
               </div>
 

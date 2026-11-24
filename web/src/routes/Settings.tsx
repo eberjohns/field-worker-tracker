@@ -23,6 +23,8 @@ import {
 } from "lucide-react";
 import { ArchiveSettings } from "../features/admin/ArchiveSettings";
 import { ManagedListsPanel } from "../features/lookups/ManagedListsPanel";
+import { addLookupValue, lookupLoaded, useLookup } from "../features/lookups/useLookup";
+import { isBudgetOnly, splitBudgetOnly, valueKey } from "../features/lookups/lookupUtils";
 
 interface SettingItem {
   id: string;
@@ -187,9 +189,10 @@ export const Settings: React.FC = () => {
     country: "AE",
   });
 
-  // Dynamic Staff Grades for Budget-Only Roles
-  const [staffGrades, setStaffGrades] = useState<string[]>([]);
-  const [loadingStaffGrades, setLoadingStaffGrades] = useState(false);
+  // Budget-only roles: options are the active staff type list (DEC-60), shared app-wide.
+  const staffTypes = useLookup("staff_grade_description", token);
+  const loadingStaffTypes = !lookupLoaded("staff_grade_description");
+  const [addingToList, setAddingToList] = useState<string | null>(null);
 
   // Consent Policy Modal
   const [showConsentModal, setShowConsentModal] = useState(false);
@@ -277,22 +280,6 @@ export const Settings: React.FC = () => {
     }
   };
 
-  const fetchStaffGrades = async () => {
-    setLoadingStaffGrades(true);
-    try {
-      const res = await fetch("/api/v1/settings/staff-grades", {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (res.ok) {
-        setStaffGrades(await res.json());
-      }
-    } catch {
-      // silent
-    } finally {
-      setLoadingStaffGrades(false);
-    }
-  };
-
   useEffect(() => {
     fetchEmployees();
   }, []);
@@ -302,9 +289,6 @@ export const Settings: React.FC = () => {
     setErrorMessage(null);
     if (activeTab === "company" || activeTab === "budget" || activeTab === "password") {
       fetchSettings();
-      if (activeTab === "budget") {
-        fetchStaffGrades();
-      }
     } else if (activeTab === "timerules") {
       fetchTimeRules();
     } else if (activeTab === "holidays") {
@@ -565,12 +549,39 @@ export const Settings: React.FC = () => {
     return [];
   };
 
+  const handleAddBudgetValueToList = async (value: string, confirmNearMatch = false) => {
+    setStatusMessage(null);
+    setErrorMessage(null);
+    setAddingToList(value);
+    try {
+      const outcome = await addLookupValue("staff_grade_description", token, value, confirmNearMatch);
+      if (outcome.kind === "added") {
+        setStatusMessage(`"${outcome.value}" added to the staff type list.`);
+      } else if (outcome.kind === "near") {
+        const hint = outcome.suggestions.length ? ` Similar: ${outcome.suggestions.join(", ")}.` : "";
+        if (window.confirm(`${outcome.message}${hint}\n\nAdd "${value}" to the staff type list anyway?`)) {
+          await handleAddBudgetValueToList(value, true);
+        }
+      } else if (outcome.kind === "exists") {
+        setErrorMessage(
+          outcome.isActive
+            ? `"${value}" is already in the staff type list as "${outcome.value}".`
+            : `"${outcome.value}" is in the staff type list but inactive. Reactivate it under Managed Lists.`,
+        );
+      } else {
+        setErrorMessage(outcome.message);
+      }
+    } finally {
+      setAddingToList(null);
+    }
+  };
+
   const handleToggleBudgetRole = async (roleName: string) => {
     const budgetSetting = settings.find((s) => s.setting_key === "budget_only_staff_types");
     const currentList = parseRoleList(budgetSetting?.value);
-    const isSelected = currentList.some((r) => r.toLowerCase() === roleName.toLowerCase());
+    const isSelected = isBudgetOnly(currentList, roleName);
     const nextList = isSelected
-      ? currentList.filter((r) => r.toLowerCase() !== roleName.toLowerCase())
+      ? currentList.filter((r) => valueKey(r) !== valueKey(roleName))
       : [...currentList, roleName];
 
     try {
@@ -1249,26 +1260,24 @@ export const Settings: React.FC = () => {
           {(() => {
             const budgetSetting = settings.find((s) => s.setting_key === "budget_only_staff_types");
             const currentList = parseRoleList(budgetSetting?.value);
-            const activeLower = new Set(staffGrades.map((g) => g.toLowerCase()));
-            const orphanedSaved = currentList.filter((r) => !activeLower.has(r.toLowerCase()));
+            const { notInList } = splitBudgetOnly(currentList, staffTypes);
             const canEditBudget = user?.role === "ADMIN" || user?.role === "ENGINEER";
+            const canAddToList = user?.role === "ADMIN"; // POST /lookups is Admin only (DEC-60)
 
             return (
               <>
-                {loadingStaffGrades ? (
+                {loadingStaffTypes ? (
                   <div className="py-8 text-center text-slate-400 text-xs">
                     Loading the staff type list...
                   </div>
-                ) : staffGrades.length === 0 ? (
+                ) : staffTypes.length === 0 ? (
                   <div className="py-8 text-center text-slate-400 text-xs bg-slate-50 rounded-lg border border-slate-200">
                     The staff type list is empty. Add values under Managed Lists.
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-2">
-                    {staffGrades.map((role) => {
-                      const isChecked = currentList.some(
-                        (r) => r.toLowerCase() === role.toLowerCase()
-                      );
+                    {staffTypes.map((role) => {
+                      const isChecked = isBudgetOnly(currentList, role);
 
                       return (
                         <label
@@ -1293,37 +1302,50 @@ export const Settings: React.FC = () => {
                   </div>
                 )}
 
-                {orphanedSaved.length > 0 && (
+                {notInList.length > 0 && (
                   <div className="mt-4 p-4 rounded-lg bg-amber-50/70 border border-amber-200 space-y-2">
                     <div>
-                      <h4 className="text-xs font-semibold text-amber-900">
-                        Saved Budget-Only Roles (Not Currently in Active Workforce / Job Items)
-                      </h4>
+                      <h4 className="text-xs font-semibold text-amber-900">Not in the staff type list</h4>
                       <p className="text-[11px] text-amber-700">
-                        These roles remain active in settings and will automatically apply whenever
-                        matching staff or contract job items exist. Click × to remove a role.
+                        These saved budget-only values match no active staff type, so no job item or
+                        employee can use them (for example values from a settings import).{" "}
+                        {canAddToList
+                          ? "Add each one to the staff type list, or remove it from the budget-only roles."
+                          : "An Admin can add them to the staff type list; you can remove them here."}
                       </p>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      {orphanedSaved.map((role) => (
-                        <span
+                    <ul className="space-y-1.5">
+                      {notInList.map((role) => (
+                        <li
                           key={role}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-white border border-amber-300 text-amber-900 shadow-2xs"
+                          className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 rounded-md bg-white border border-amber-300 text-xs text-amber-900"
                         >
-                          <span>{role}</span>
-                          {canEditBudget && (
-                            <button
-                              type="button"
-                              onClick={() => handleToggleBudgetRole(role)}
-                              title={`Remove ${role} from budget-only roles`}
-                              className="text-amber-600 hover:text-rose-600 font-bold leading-none cursor-pointer"
-                            >
-                              ×
-                            </button>
-                          )}
-                        </span>
+                          <span className="font-medium">{role}</span>
+                          <span className="flex items-center gap-2">
+                            {canAddToList && (
+                              <button
+                                type="button"
+                                disabled={addingToList === role}
+                                onClick={() => handleAddBudgetValueToList(role)}
+                                className="px-2 py-0.5 rounded border border-indigo-200 bg-indigo-50 text-indigo-700 font-semibold hover:bg-indigo-100 disabled:opacity-50"
+                              >
+                                {addingToList === role ? "Adding…" : "Add to list"}
+                              </button>
+                            )}
+                            {canEditBudget && (
+                              <button
+                                type="button"
+                                onClick={() => handleToggleBudgetRole(role)}
+                                title={`Remove ${role} from budget-only roles`}
+                                className="px-2 py-0.5 rounded border border-rose-200 text-rose-700 font-semibold hover:bg-rose-50"
+                              >
+                                Remove
+                              </button>
+                            )}
+                          </span>
+                        </li>
                       ))}
-                    </div>
+                    </ul>
                   </div>
                 )}
               </>

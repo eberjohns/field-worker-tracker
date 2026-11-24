@@ -129,3 +129,25 @@ export function addOutcome(status: number, body: any): AddOutcome {
   const msg = typeof body?.detail === "string" ? body.detail : "Could not add the value.";
   return { kind: "error", message: msg };
 }
+
+/**
+ * Budget-only staff types (Settings): which saved values match an active staff type and which
+ * are not in the list (compared like the server: ignoring case and spaces). A value not in the
+ * list can be added to the list (Admin) or removed from the setting.
+ */
+export function splitBudgetOnly(
+  saved: readonly string[],
+  listValues: readonly string[],
+): { inList: string[]; notInList: string[] } {
+  const known = new Set(listValues.map(valueKey));
+  const inList: string[] = [];
+  const notInList: string[] = [];
+  for (const v of saved) (known.has(valueKey(v)) ? inList : notInList).push(v);
+  return { inList, notInList };
+}
+
+/** Is `value` one of the saved budget-only values (ignoring case and spaces)? */
+export function isBudgetOnly(saved: readonly string[], value: string): boolean {
+  const key = valueKey(value);
+  return saved.some((v) => valueKey(v) === key);
+}

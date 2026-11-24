@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import { currencyForCountry, formatMoney } from "../features/format/money";
 import { Link } from "@tanstack/react-router";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -2288,7 +2289,7 @@ export const OperationalPlanner: React.FC = () => {
                         </div>
                         <div>
                           <span className="font-medium text-slate-700">Annual Budget:</span>{" "}
-                          {ws.budget_amount ? `${Number(ws.budget_amount).toLocaleString()} AED / yr` : "Not specified"}
+                          {ws.budget_amount ? `${formatMoney(ws.budget_amount, currencyForCountry(ws.country))} / yr` : "Not specified"}
                         </div>
                         <div>
                           <span className="font-medium text-slate-700">Items:</span> {ws.items.length} contract lines

@@ -4793,6 +4793,8 @@ export interface components {
             end_date?: string | null;
             /** Budget Amount */
             budget_amount?: string | null;
+            /** Country */
+            country?: string | null;
             /** Items */
             items: components["schemas"]["BasePlannerItemRow"][];
         };
@@ -7448,6 +7450,8 @@ export interface components {
             end_date?: string | null;
             /** Budget Amount */
             budget_amount?: string | null;
+            /** Country */
+            country?: string | null;
             /** Items */
             items: components["schemas"]["OperationalJobItemRow"][];
         };
@@ -7661,6 +7665,8 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /** Currency */
+            currency?: string | null;
             /** Records */
             records?: components["schemas"]["PayrollRecordRead"][];
         };
@@ -7736,6 +7742,8 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /** Currency */
+            currency?: string | null;
         };
         /** PayrollTotalsSnapshot */
         PayrollTotalsSnapshot: {
@@ -7804,6 +7812,8 @@ export interface components {
              * @default false
              */
             treat_leaves_as_paid: boolean;
+            /** Currency */
+            currency?: string | null;
         };
         /** PendingVisitCloseRequest */
         PendingVisitCloseRequest: {

@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { currencyForCountry } from "../../features/format/money";
+import { RENEWAL_HINT, RENEWAL_LABEL, RenewalLabel } from "./RenewalLabel";
 import {
   AlertCircle,
   AlertTriangle,
@@ -466,9 +468,7 @@ export const AddWorksiteWizard: React.FC<AddWorksiteWizardProps> = ({
                   <input id="wz-end" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className={input} />
                 </div>
                 <div>
-                  <label className={label} htmlFor="wz-renewal">
-                    Renewal reference
-                  </label>
+                  <RenewalLabel className={label} htmlFor="wz-renewal" />
                   <input id="wz-renewal" value={renewalRef} onChange={(e) => setRenewalRef(e.target.value)} className={input} />
                 </div>
                 <div>
@@ -491,7 +491,7 @@ export const AddWorksiteWizard: React.FC<AddWorksiteWizardProps> = ({
                 </div>
                 <div>
                   <label className={label} htmlFor="wz-budget">
-                    Manual labour budget (optional)
+                    Manual labour budget ({currencyForCountry(country)}, optional)
                   </label>
                   <input
                     id="wz-budget"
@@ -619,7 +619,7 @@ export const AddWorksiteWizard: React.FC<AddWorksiteWizardProps> = ({
                 <div><span className="text-slate-500">Country / customer type:</span> {country} · {customerType}</div>
                 <div><span className="text-slate-500">Contract:</span> {startDate || "–"} to {endDate || "open"}</div>
                 <div><span className="text-slate-500">Salary revision:</span> {revisionCode || `default for ${country}`}</div>
-                <div><span className="text-slate-500">Renewal reference:</span> {renewalRef || "–"}</div>
+                <div><span className="text-slate-500" title={RENEWAL_HINT}>{RENEWAL_LABEL}:</span> {renewalRef || "–"}</div>
                 <div className="sm:col-span-2">
                   <span className="text-slate-500">Supervisors:</span>{" "}
                   {supervisorIds.length
@@ -657,7 +657,7 @@ export const AddWorksiteWizard: React.FC<AddWorksiteWizardProps> = ({
                         </td>
                         <td className="px-3 py-2">{r.draft.required_staff_count} × {r.draft.hours_per_occurrence_per_staff} h</td>
                         <td className="px-3 py-2 text-right">{fmtHours(res?.budget?.annual_hours)}</td>
-                        <td className="px-3 py-2 text-right">{fmtMoney(res?.budget?.annual_cost)}</td>
+                        <td className="px-3 py-2 text-right">{fmtMoney(res?.budget?.annual_cost, currencyForCountry(country))}</td>
                       </tr>
                     );
                   })}
@@ -666,10 +666,10 @@ export const AddWorksiteWizard: React.FC<AddWorksiteWizardProps> = ({
                   <tr>
                     <td className="px-3 py-2" colSpan={4}>
                       Contract labour budget (calculated)
-                      {budget ? <span className="font-normal text-slate-600"> · manual budget {fmtMoney(budget)}</span> : null}
+                      {budget ? <span className="font-normal text-slate-600"> · manual budget {fmtMoney(budget, currencyForCountry(country))}</span> : null}
                     </td>
                     <td className="px-3 py-2 text-right">{fmtHours(totalHours)}</td>
-                    <td className="px-3 py-2 text-right">{fmtMoney(totalCost)}</td>
+                    <td className="px-3 py-2 text-right">{fmtMoney(totalCost, currencyForCountry(country))}</td>
                   </tr>
                 </tfoot>
               </table>
