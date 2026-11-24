@@ -98,12 +98,12 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
       return;
     const fetchCounts = async () => {
       try {
-        const res = await fetch("/api/v1/approvals?status=PENDING", {
+        const res = await fetch("/api/v1/approvals/counts", {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok) {
           const data = await res.json();
-          setPendingApprovalsCount(data?.counts?.total || 0);
+          setPendingApprovalsCount(data?.total || 0);
         }
       } catch (err) {
         console.error("Failed to fetch pending approvals count", err);

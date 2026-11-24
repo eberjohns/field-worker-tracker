@@ -7,6 +7,7 @@ Base path `/api/v1`. The mobile endpoints are specified separately in `09-mobile
 - **Auth**: web login returns a 15-minute access token in the body (kept in memory) and a rotating refresh token in an httpOnly, Secure, SameSite=Strict cookie. Every endpoint enforces **role and reporting scope** server-side.
 - **Pagination** (cursor): `?limit=50&cursor=<opaque>` -> `{ "items": [...], "next_cursor": "..." | null, "total_estimate": 1234 }`. Max limit 200.
 - **Filtering and sorting**: explicit query parameters per endpoint, `sort=field` or `sort=-field`.
+- **Compression** (v1.19.0): responses of 1 KB or more are gzip-compressed for clients that send `Accept-Encoding: gzip`. The live SSE stream (`text/event-stream`), PDF and xlsx files are sent as they are. Clients that don't ask for gzip get plain responses, as before.
 - **Optimistic locking**: updates send `version`; a mismatch returns `409 VERSION_CONFLICT`.
 - **Idempotency**: create endpoints accept `Idempotency-Key`; replays return the original result.
 - **Errors** (RFC 7807):
@@ -83,14 +84,16 @@ Roles: A = Admin, E = Engineer, S = Superintendent, V = Supervisor. "scope" = li
 | POST | /job-items/{id}/generate-occurrences | A E (E in scope, else 404) | body `{ from, to }`; idempotent |
 | GET/PUT | /job-items/{id}/weekly-pattern | A E | weekday pattern; `apply_to_future_windows` flag |
 | GET | /job-items/{id}/validation | scope | declared vs computed activities/hours |
-| GET | /occurrences | scope | filters `job_item_id, worksite_id, from, to, status, understaffed` |
+| GET | /occurrences | scope | filters `job_item_id, worksite_id, from, to, status, understaffed`. DEC-57: a worksite or job item outside the caller's scope is a 404; without either filter only in-scope worksites are listed (v1.19.0) |
+| GET | /worksites/{id}/occurrences?from_date=&to_date= | scope | the worksite's occurrences whose window **overlaps** the range (at most 366 days, both dates required), plus `summary` over the whole schedule: `total_count`, `planned_hours`, `first_window_start`, `last_window_end`, `months` (YYYY-MM of due date, else window start), `roles`. 404 outside scope. The Schedule tab asks for one month (v1.19.0) |
+| GET | /job-items/{id}/occurrences?from_date=&to_date= | scope | the same for one job item (v1.19.0) |
 | PATCH | /occurrences/{id} | A E | set `due_date`, cancel |
 
 ### Scheduling
 | Method | Path | Roles | Purpose |
 |---|---|---|---|
 | GET | /roster?week_start=&supervisor_id=&engineer_id=&group_id= | scope | **weekly roster**: workers x days, each cell = site chips with hours, or a marker (SKIPPED, WEEKLY_OFF, ON_LEAVE, TO_BE_COVERED, FREE); row totals vs standard hours; `?format=xlsx` exports in the client's layout |
-| GET | /schedule/coverage?week_start=&group_id= | scope | job-centred view: worksites > items > day cells with assigned/required and TO_BE_COVERED slots |
+| GET | /schedule/coverage?week_start=&group_id= | scope | job-centred view: worksites > items > day cells with assigned/required and TO_BE_COVERED slots. DEC-57: only the worksites in the caller's scope (v1.19.0) |
 | GET/POST/PATCH | /standing-assignments | A E (write), scope (read) | year plan: worker <-> job item for a date range; `POST /standing-assignments/{id}/end` ends it from a date |
 | GET | /workers/{id}/allocation?from=&to= | scope | allocated hours per day/week/month against standard hours (feeds the side panel) |
 | GET | /schedule/employees/{id}?week_start= | scope | worker view: ordered daily assignments, weekly hours, leave taken |
@@ -106,17 +109,18 @@ Roles: A = Admin, E = Engineer, S = Superintendent, V = Supervisor. "scope" = li
 | GET | /leave-requests/template | A | Download standalone leave import Excel template (.xlsx) |
 | POST | /leave-requests/import | A | Bulk import leaves from Excel with validation reporting |
 | GET | /staffing-gaps?from=&to= | A E S V scope | gaps from leave and understaffing |
-| GET | /approvals?type=&status=PENDING | A E | **approvals inbox**: leave, reassignment requests, overtime/variation attendance rows, with counts for the badge |
+| GET | /approvals?type=&status=PENDING&limit=50&offset=0 | A E S | **approvals inbox**, one page: `type` = `leave`, `reassignments` or `attendance` fills only that list (omitted: the first page of each). `limit` 1–200 (default 50). `status` PENDING, APPROVED, REJECTED, DECIDED, ALL. `counts` are the pending badge counts; `totals` count the selected status per type, for paging. Pending reassignments whose start date has passed are expired and not listed as pending (v1.19.0) |
+| GET | /approvals/counts | A E S | pending approvals per type `{leave, reassignments, attendance, total}`: count queries only, same scope as the inbox, no side effects. Used by the badge and the Dashboard (v1.19.0) |
 | GET | /alerts | scope | active open operational alerts (COVER_NEEDED, PENDING_BOUNDARY, DOC_EXPIRY) |
 | POST | /alerts/{id}/resolve | scope | mark alert as resolved |
 
 ### Base Planner & Operational Planner
 | Method | Path | Roles | Purpose |
 |---|---|---|---|
-| GET | /base-planner/worksites | A E scope | Base blueprint master schedule: worksites with job items, contract quotas, and template assignments across Mon–Sun |
+| GET | /base-planner/worksites | A E scope | Base blueprint master schedule: worksites with job items, contract quotas, and template assignments across Mon–Sun. DEC-57: a non-Admin sees only the worksites in their scope (v1.19.0) |
 | POST | /base-planner/templates | A E | Create or replace recurring blueprint roster template for a job item with explicit daily / periodic cadence masks |
-| GET | /operational-planner/coverage?week_start= | A E scope | Live operational coverage matrix: 7 calendar days, blueprint shifts (muted), leave gaps (TO_BE_COVERED), operational covers (solid), and removals (red) |
-| GET | /operational-planner/roster?week_start= | A E scope | Live worker roster: workers x days with assigned shifts, weekly totals vs standard hours, supervisor info, and job numbers |
+| GET | /operational-planner/coverage?week_start= | A E scope | Live operational coverage matrix: 7 calendar days, blueprint shifts (muted), leave gaps (TO_BE_COVERED), operational covers (solid), and removals (red). DEC-57: only the worksites in the caller's scope (v1.19.0) |
+| GET | /operational-planner/roster?week_start= | A E scope | Live worker roster: workers x days with assigned shifts, weekly totals vs standard hours, supervisor info, and job numbers. DEC-57: a non-Admin sees the workers in their directory scope (crew plus workers on their worksites) (v1.19.0) |
 | POST | /operational-planner/shifts | A E | Assign operational shift (direct shift or leave cover) or stage base shift cancellation (status CANCELLED with override_reason) |
 | DELETE | /operational-planner/shifts/{id} | A E | Remove operational shift or restore cancelled base blueprint shift |
 

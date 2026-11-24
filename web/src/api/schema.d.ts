@@ -12,13 +12,13 @@ export interface paths {
             cookie?: never;
         };
         /** Liveness check alias */
-        get: operations["health_health_liveness_head"];
+        get: operations["health_health_liveness_get"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         /** Liveness check alias */
-        head: operations["health_health_liveness_head"];
+        head: operations["health_health_liveness_get"];
         patch?: never;
         trace?: never;
     };
@@ -30,13 +30,13 @@ export interface paths {
             cookie?: never;
         };
         /** Liveness check */
-        get: operations["health_health_head"];
+        get: operations["health_health_get"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         /** Liveness check */
-        head: operations["health_health_head"];
+        head: operations["health_health_get"];
         patch?: never;
         trace?: never;
     };
@@ -48,13 +48,13 @@ export interface paths {
             cookie?: never;
         };
         /** Readiness check alias */
-        get: operations["health_ready_health_readiness_head"];
+        get: operations["health_ready_health_readiness_get"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         /** Readiness check alias */
-        head: operations["health_ready_health_readiness_head"];
+        head: operations["health_ready_health_readiness_get"];
         patch?: never;
         trace?: never;
     };
@@ -66,13 +66,13 @@ export interface paths {
             cookie?: never;
         };
         /** Readiness check */
-        get: operations["health_ready_health_ready_head"];
+        get: operations["health_ready_health_ready_get"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         /** Readiness check */
-        head: operations["health_ready_health_ready_head"];
+        head: operations["health_ready_health_ready_get"];
         patch?: never;
         trace?: never;
     };
@@ -2487,9 +2487,52 @@ export interface paths {
         };
         /**
          * List Occurrences
-         * @description List job occurrences with filtering.
+         * @description List job occurrences with filtering, within the caller's worksites (DEC-57).
+         *
+         *     A worksite or job item outside the caller's scope is a 404, as on the worksite detail;
+         *     without either, only occurrences on in-scope worksites are listed.
          */
         get: operations["list_occurrences_api_v1_occurrences_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/worksites/{worksite_id}/occurrences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Worksite Occurrences
+         * @description A worksite's occurrences whose window overlaps the range, and its schedule summary.
+         */
+        get: operations["list_worksite_occurrences_api_v1_worksites__worksite_id__occurrences_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/job-items/{job_item_id}/occurrences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Job Item Occurrences
+         * @description A job item's occurrences whose window overlaps the range, and its schedule summary.
+         */
+        get: operations["list_job_item_occurrences_api_v1_job_items__job_item_id__occurrences_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3274,6 +3317,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/approvals/counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Approvals Counts
+         * @description Pending approvals per kind, for badges. Count queries only; same scope as the inbox.
+         */
+        get: operations["get_approvals_counts_api_v1_approvals_counts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/approvals": {
         parameters: {
             query?: never;
@@ -3283,7 +3346,10 @@ export interface paths {
         };
         /**
          * Get Approvals Inbox
-         * @description Get approvals inbox items (leave requests, reassignments, attendance) in scope with badge counts.
+         * @description One page of approvals inbox items in scope (leave, reassignments, attendance).
+         *
+         *     ``counts`` are the pending badge counts; ``totals`` the items in the selected status per
+         *     kind, for paging.
          */
         get: operations["get_approvals_inbox_api_v1_approvals_get"];
         put?: never;
@@ -4229,6 +4295,17 @@ export interface components {
         /** ApprovalsInboxResponse */
         ApprovalsInboxResponse: {
             counts: components["schemas"]["ApprovalsCounts"];
+            totals?: components["schemas"]["ApprovalsCounts"];
+            /**
+             * Limit
+             * @default 50
+             */
+            limit: number;
+            /**
+             * Offset
+             * @default 0
+             */
+            offset: number;
             /** Leave Requests */
             leave_requests?: components["schemas"]["LeaveRequestResponse"][];
             /** Reassignment Requests */
@@ -7179,6 +7256,49 @@ export interface components {
             /** Contract End */
             contract_end?: string | null;
             item: components["schemas"]["JobItemCreate"];
+        };
+        /**
+         * OccurrenceRangeResponse
+         * @description Occurrences whose window overlaps [from_date, to_date], plus the schedule summary.
+         */
+        OccurrenceRangeResponse: {
+            /**
+             * From Date
+             * Format: date
+             */
+            from_date: string;
+            /**
+             * To Date
+             * Format: date
+             */
+            to_date: string;
+            /** Occurrences */
+            occurrences: components["schemas"]["JobOccurrenceResponse"][];
+            summary: components["schemas"]["OccurrenceSummary"];
+        };
+        /**
+         * OccurrenceSummary
+         * @description Totals over the whole schedule (not just the range returned).
+         */
+        OccurrenceSummary: {
+            /**
+             * Total Count
+             * @default 0
+             */
+            total_count: number;
+            /**
+             * Planned Hours
+             * @default 0
+             */
+            planned_hours: string;
+            /** First Window Start */
+            first_window_start?: string | null;
+            /** Last Window End */
+            last_window_end?: string | null;
+            /** Months */
+            months?: string[];
+            /** Roles */
+            roles?: string[];
         };
         /** OperationalCellWorker */
         OperationalCellWorker: {
@@ -10407,7 +10527,7 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    health_health_liveness_head: {
+    health_health_liveness_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -10427,7 +10547,7 @@ export interface operations {
             };
         };
     };
-    health_health_liveness_head: {
+    health_health_liveness_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -10447,7 +10567,7 @@ export interface operations {
             };
         };
     };
-    health_health_head: {
+    health_health_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -10467,7 +10587,7 @@ export interface operations {
             };
         };
     };
-    health_health_head: {
+    health_health_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -10487,7 +10607,7 @@ export interface operations {
             };
         };
     };
-    health_ready_health_readiness_head: {
+    health_ready_health_readiness_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -10514,7 +10634,7 @@ export interface operations {
             };
         };
     };
-    health_ready_health_readiness_head: {
+    health_ready_health_readiness_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -10541,7 +10661,7 @@ export interface operations {
             };
         };
     };
-    health_ready_health_ready_head: {
+    health_ready_health_ready_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -10568,7 +10688,7 @@ export interface operations {
             };
         };
     };
-    health_ready_health_ready_head: {
+    health_ready_health_ready_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -15627,6 +15747,82 @@ export interface operations {
             };
         };
     };
+    list_worksite_occurrences_api_v1_worksites__worksite_id__occurrences_get: {
+        parameters: {
+            query: {
+                /** @description First day of the range */
+                from_date: string;
+                /** @description Last day of the range (at most 366 days) */
+                to_date: string;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                worksite_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OccurrenceRangeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_job_item_occurrences_api_v1_job_items__job_item_id__occurrences_get: {
+        parameters: {
+            query: {
+                /** @description First day of the range */
+                from_date: string;
+                /** @description Last day of the range (at most 366 days) */
+                to_date: string;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                job_item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OccurrenceRangeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     update_occurrence_api_v1_occurrences__occurrence_id__patch: {
         parameters: {
             query?: never;
@@ -17099,11 +17295,46 @@ export interface operations {
             };
         };
     };
+    get_approvals_counts_api_v1_approvals_counts_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalsCounts"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_approvals_inbox_api_v1_approvals_get: {
         parameters: {
             query?: {
                 /** @description Filter status: PENDING, APPROVED, REJECTED, DECIDED, ALL */
                 status?: string | null;
+                /** @description Fill only this list; omitted = first page of each */
+                type?: ("leave" | "reassignments" | "attendance") | null;
+                limit?: number;
+                offset?: number;
             };
             header?: {
                 authorization?: string | null;

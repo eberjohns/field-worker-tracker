@@ -141,6 +141,10 @@ from fw.rules.time_rules import (
 
 logger = structlog.get_logger(__name__)
 
+# Leave/reassignment list scope: (resolved scope, request employee ids); (None, None) = no user,
+# ids None = unrestricted.
+RequestScope = tuple[AccessScope | None, set[UUID] | None]
+
 # Table representation for employee salary without importing payroll module
 employee_salary_table = sa.table(
     "employee_salary",
@@ -155,6 +159,8 @@ class SchedulingService:
 
     def __init__(self, session: AsyncSession):
         self.session = session
+        # Settings read once per request (one service instance per request): country -> types.
+        self._budget_types_by_country: dict[str | None, set[str]] = {}
 
     # -------------------------------------------------------------------------
     # Helper: Resolve Standard Hours & Time Rules
@@ -254,8 +260,29 @@ class SchedulingService:
             adjustment_minutes=resolved.standard_hours_change_minutes,
         )
 
+    async def _in_worksite_scope(self, ws_stmt: Any, current_user: User | None) -> Any:
+        """DEC-57: limit a worksite select to the user's worksites (Admin and no user: all)."""
+        if current_user is None:
+            return ws_stmt
+        scope = await AccessScope.resolve(self.session, current_user)
+        ids = scope.worksite_filter
+        return ws_stmt if ids is None else ws_stmt.where(Worksite.id.in_(ids))
+
     async def get_budget_only_staff_types(self, country: str | None = None) -> set[str]:
-        """Fetch budget-only staff types from company settings."""
+        """Budget-only staff types from company settings, read once per country per request."""
+        cached = self._budget_types_by_country.get(country)
+        if cached is None:
+            cached = await self._load_budget_only_staff_types(country)
+            self._budget_types_by_country[country] = cached
+        return cached
+
+    async def budget_only_types_by_country(
+        self, countries: set[str | None]
+    ) -> dict[str | None, set[str]]:
+        """Resolve the budget-only staff types for every country in view, before any loop."""
+        return {c: await self.get_budget_only_staff_types(c) for c in countries}
+
+    async def _load_budget_only_staff_types(self, country: str | None) -> set[str]:
         stmt = (
             select(CompanySettingValue.value)
             .where(
@@ -1792,7 +1819,7 @@ class SchedulingService:
     # -------------------------------------------------------------------------
 
     async def get_coverage_view(
-        self, week_start: date, group_id: UUID | None = None
+        self, week_start: date, group_id: UUID | None = None, current_user: User | None = None
     ) -> CoverageResponse:
         """Fetch job-centred weekly coverage matrix (Worksites > Items > Days)."""
         week_end = week_start + timedelta(days=6)
@@ -1802,12 +1829,19 @@ class SchedulingService:
             select(Worksite)
             .where(Worksite.is_active.is_(True))
             .options(
-                selectinload(Worksite.items).selectinload(JobItem.occurrences),
+                # Only the windows that contain a day of this week are read below.
+                selectinload(Worksite.items).selectinload(
+                    JobItem.occurrences.and_(
+                        JobOccurrence.window_end >= week_start,
+                        JobOccurrence.window_start <= week_end,
+                    )
+                ),
             )
             .order_by(Worksite.job_number)
         )
         if group_id:
             ws_stmt = ws_stmt.where(Worksite.group_id == group_id)
+        ws_stmt = await self._in_worksite_scope(ws_stmt, current_user)  # DEC-57
 
         worksites = (await self.session.execute(ws_stmt)).scalars().all()
 
@@ -1856,9 +1890,14 @@ class SchedulingService:
             sw_by_item_date.setdefault(key, []).append(r)
 
         site_rows: list[CoverageWorksiteRow] = []
+        # Holidays read once per country, before the loop (Batch 9 step 2).
+        holidays_by_country = {
+            country: await self.get_public_holidays_map(country, week_start, week_end)
+            for country in {site.country for site in worksites}
+        }
 
         for site in worksites:
-            holidays_map = await self.get_public_holidays_map(site.country, week_start, week_end)
+            holidays_map = holidays_by_country[site.country]
             holidays = set(holidays_map.keys())
             item_rows: list[CoverageItemRow] = []
 
@@ -2267,8 +2306,13 @@ class SchedulingService:
     # Base Planner (Blueprint Recurring Engine)
     # -------------------------------------------------------------------------
 
-    async def get_base_planner_worksites(self, group_id: UUID | None = None) -> BasePlannerResponse:
-        """Fetch worksites and job items with active base roster templates for the Base Planner."""
+    async def get_base_planner_worksites(
+        self, group_id: UUID | None = None, current_user: User | None = None
+    ) -> BasePlannerResponse:
+        """Fetch worksites and job items with active base roster templates for the Base Planner.
+
+        DEC-57: a non-Admin sees only the worksites in their scope.
+        """
         ws_stmt = (
             select(Worksite)
             .where(Worksite.is_active.is_(True))
@@ -2279,8 +2323,12 @@ class SchedulingService:
         )
         if group_id:
             ws_stmt = ws_stmt.where(Worksite.group_id == group_id)
+        ws_stmt = await self._in_worksite_scope(ws_stmt, current_user)
 
         worksites = (await self.session.execute(ws_stmt)).scalars().all()
+        budget_by_country = await self.budget_only_types_by_country(
+            {ws.country for ws in worksites}
+        )
 
         # Collect all active job item IDs
         job_item_ids = [it.id for ws in worksites for it in ws.items if it.is_active]
@@ -2309,7 +2357,7 @@ class SchedulingService:
 
         ws_rows: list[BasePlannerWorksiteRow] = []
         for ws in worksites:
-            budget_types = await self.get_budget_only_staff_types(ws.country)
+            budget_types = budget_by_country[ws.country]
             active_items = [
                 it
                 for it in ws.items
@@ -2538,9 +2586,13 @@ class SchedulingService:
     # -------------------------------------------------------------------------
 
     async def get_operational_coverage(
-        self, week_start: date, group_id: UUID | None = None
+        self, week_start: date, group_id: UUID | None = None, current_user: User | None = None
     ) -> OperationalCoverageResponse:
-        """Fetch weekly operational coverage matrix with baseline blueprints and single-day overrides."""
+        """Fetch weekly operational coverage matrix with baseline blueprints and single-day overrides.
+
+        DEC-57: a non-Admin sees only the worksites in their scope. Only the shifts of the job
+        items in view are loaded: the week for weekly items, the wide period for the others.
+        """
         week_end = week_start + timedelta(days=6)
         mid_week = week_start + timedelta(days=3)
 
@@ -2561,10 +2613,21 @@ class SchedulingService:
         )
         if group_id:
             ws_stmt = ws_stmt.where(Worksite.group_id == group_id)
+        ws_stmt = await self._in_worksite_scope(ws_stmt, current_user)
 
         worksites = (await self.session.execute(ws_stmt)).scalars().all()
+        budget_by_country = await self.budget_only_types_by_country(
+            {ws.country for ws in worksites}
+        )
 
-        job_item_ids = [it.id for ws in worksites for it in ws.items if it.is_active]
+        active_items_all = [it for ws in worksites for it in ws.items if it.is_active]
+        job_item_ids = [it.id for it in active_items_all]
+        weekly_item_ids = [
+            it.id for it in active_items_all if (it.frequency_unit or "WEEK").upper() == "WEEK"
+        ]
+        periodic_item_ids = [
+            it.id for it in active_items_all if (it.frequency_unit or "WEEK").upper() != "WEEK"
+        ]
 
         # Load active Base Roster Templates
         templates_by_item: dict[UUID, BaseRosterTemplate] = {}
@@ -2597,17 +2660,32 @@ class SchedulingService:
                 approved_leaves_by_date[cur_l].add(lr.employee_id)
                 cur_l += timedelta(days=1)
 
-        # Load single-day operational shifts across the wide period
-        sw_stmt = (
-            select(ScheduledWork)
-            .where(
-                ScheduledWork.work_date >= wide_start,
-                ScheduledWork.work_date <= wide_end,
+        # Load single-day operational shifts of the items in view: the week for weekly items
+        # (their quota period is the week), the wide period for monthly/quarterly/yearly ones.
+        sw_windows = []
+        if weekly_item_ids:
+            sw_windows.append(
+                sa.and_(
+                    ScheduledWork.job_item_id.in_(weekly_item_ids),
+                    ScheduledWork.work_date >= week_start,
+                    ScheduledWork.work_date <= week_end,
+                )
+            )
+        if periodic_item_ids:
+            sw_windows.append(
+                sa.and_(
+                    ScheduledWork.job_item_id.in_(periodic_item_ids),
+                    ScheduledWork.work_date >= wide_start,
+                    ScheduledWork.work_date <= wide_end,
+                )
+            )
+        sw_rows: list[ScheduledWork] = []
+        if sw_windows:
+            sw_stmt = select(ScheduledWork).where(
+                or_(*sw_windows),
                 ScheduledWork.status.in_(["ACTIVE", "CANCELLED"]),
             )
-            .options(selectinload(ScheduledWork.employee))
-        )
-        sw_rows = (await self.session.execute(sw_stmt)).scalars().all()
+            sw_rows = list((await self.session.execute(sw_stmt)).scalars().all())
         sw_by_item_date: dict[tuple[UUID, date], list[ScheduledWork]] = defaultdict(list)
         sw_by_item_all: dict[UUID, list[ScheduledWork]] = defaultdict(list)
         for s in sw_rows:
@@ -2646,7 +2724,7 @@ class SchedulingService:
         ws_rows: list[OperationalWorksiteRow] = []
 
         for ws in worksites:
-            budget_types = await self.get_budget_only_staff_types(ws.country)
+            budget_types = budget_by_country[ws.country]
             active_items = [
                 it
                 for it in ws.items
@@ -2740,8 +2818,6 @@ class SchedulingService:
                 sw_by_date_in_period: dict[date, list[ScheduledWork]] = defaultdict(list)
                 for s in item_sw_in_period:
                     sw_by_date_in_period[s.work_date].append(s)
-
-                from uuid import uuid4
 
                 visit_records: list[VisitRecord] = []
                 # Blueprint visits have precedence (created at epoch)
@@ -2911,9 +2987,13 @@ class SchedulingService:
         )
 
     async def get_operational_roster(
-        self, week_start: date, group_id: UUID | None = None
+        self, week_start: date, group_id: UUID | None = None, current_user: User | None = None
     ) -> OperationalRosterResponse:
-        """Fetch weekly operational worker roster showing assignments across the week."""
+        """Fetch weekly operational worker roster showing assignments across the week.
+
+        DEC-57: a non-Admin sees the workers in their directory scope (crew plus workers on
+        their worksites), and only the shifts, templates and leave of those workers are loaded.
+        """
         week_end = week_start + timedelta(days=6)
         week_dates = [week_start + timedelta(days=i) for i in range(7)]
 
@@ -2925,14 +3005,24 @@ class SchedulingService:
             )
             .order_by(Employee.name)
         )
+        scoped = False
+        if current_user is not None:
+            scope = await AccessScope.resolve(self.session, current_user)
+            directory = await scope.directory_ids(self.session)
+            if directory is not None:
+                scoped = True
+                emp_stmt = emp_stmt.where(Employee.id.in_(directory))
         employees = (await self.session.execute(emp_stmt)).scalars().all()
         emp_map = {e.id: e for e in employees}
+        view_ids = list(emp_map)
 
         # Load supervisors for grouping
         sup_stmt = select(EmployeeReportingLine).where(
             EmployeeReportingLine.relationship == "SUPERVISOR",
             EmployeeReportingLine.is_active == True,  # noqa: E712
         )
+        if scoped:
+            sup_stmt = sup_stmt.where(EmployeeReportingLine.employee_id.in_(view_ids))
         sup_links = (await self.session.execute(sup_stmt)).scalars().all()
         sup_by_emp: dict[UUID, UUID] = {link.employee_id: link.manager_id for link in sup_links}
         mgr_ids = set(sup_by_emp.values())
@@ -2950,34 +3040,60 @@ class SchedulingService:
         holidays_by_date: dict[date, PublicHoliday] = {h.holiday_date: h for h in holiday_rows}
         holiday_dates = set(holidays_by_date.keys())
 
-        # Load single-day operational shifts (active and cancelled)
+        # Load single-day operational shifts (active and cancelled), with their job numbers
         sw_stmt = (
-            select(ScheduledWork)
+            select(ScheduledWork, Worksite.job_number)
+            .outerjoin(Worksite, Worksite.id == ScheduledWork.worksite_id)
             .where(
                 ScheduledWork.work_date >= week_start,
                 ScheduledWork.work_date <= week_end,
                 ScheduledWork.status.in_(["ACTIVE", "CANCELLED"]),
             )
-            .options(
-                selectinload(ScheduledWork.worksite),
-                selectinload(ScheduledWork.job_item),
-            )
         )
-        sw_rows = (await self.session.execute(sw_stmt)).scalars().all()
+        if scoped:
+            sw_stmt = sw_stmt.where(ScheduledWork.employee_id.in_(view_ids))
+        sw_rows: list[ScheduledWork] = []
+        sw_job_number: dict[UUID, str] = {}
+        for sw, job_number in (await self.session.execute(sw_stmt)).all():
+            sw_rows.append(sw)
+            if job_number:
+                sw_job_number[sw.id] = job_number
         sw_by_emp_date: dict[tuple[UUID, date], list[ScheduledWork]] = defaultdict(list)
         for s in sw_rows:
             sw_by_emp_date[(s.employee_id, s.work_date)].append(s)
 
-        # Load active Base Roster Templates
+        # A cover shift can name an original worker outside the view: load those names too.
+        missing_ids = {
+            s.original_employee_id
+            for s in sw_rows
+            if s.original_employee_id and s.original_employee_id not in emp_map
+        }
+        if missing_ids:
+            extra_stmt = select(Employee).where(Employee.id.in_(missing_ids))
+            extra = (await self.session.execute(extra_stmt)).scalars().all()
+            emp_map.update({e.id: e for e in extra})
+
+        # Load active Base Roster Templates (of the workers in view), with their job numbers
         tmpl_stmt = (
-            select(BaseRosterTemplate)
+            select(BaseRosterTemplate, Worksite.job_number)
+            .join(JobItem, JobItem.id == BaseRosterTemplate.job_item_id)
+            .join(Worksite, Worksite.id == JobItem.worksite_id)
             .where(BaseRosterTemplate.is_active.is_(True))
-            .options(
-                selectinload(BaseRosterTemplate.entries),
-                selectinload(BaseRosterTemplate.job_item).selectinload(JobItem.worksite),
-            )
+            .options(selectinload(BaseRosterTemplate.entries))
         )
-        active_templates = (await self.session.execute(tmpl_stmt)).scalars().all()
+        if scoped:
+            tmpl_stmt = tmpl_stmt.where(
+                BaseRosterTemplate.id.in_(
+                    select(BaseRosterEntry.template_id).where(
+                        BaseRosterEntry.employee_id.in_(view_ids)
+                    )
+                )
+            )
+        tmpl_job_number: dict[UUID, str] = {}
+        active_templates: list[BaseRosterTemplate] = []
+        for t, job_number in (await self.session.execute(tmpl_stmt)).all():
+            active_templates.append(t)
+            tmpl_job_number[t.id] = job_number
 
         # Index template entries by employee_id
         templates_by_emp: dict[UUID, list[tuple[BaseRosterTemplate, BaseRosterEntry]]] = (
@@ -2994,6 +3110,8 @@ class SchedulingService:
             LeaveRequest.from_date <= week_end,
             LeaveRequest.to_date >= week_start,
         )
+        if scoped:
+            leave_stmt = leave_stmt.where(LeaveRequest.employee_id.in_(view_ids))
         approved_leaves_rows = (await self.session.execute(leave_stmt)).scalars().all()
         leave_by_emp_date: dict[tuple[UUID, date], str] = {}
         for lr in approved_leaves_rows:
@@ -3028,8 +3146,8 @@ class SchedulingService:
                         is_cancelled = s.status == "CANCELLED"
                         if not is_cancelled:
                             day_hours += s.assigned_hours
-                            if s.worksite:
-                                assigned_jobs_set.add(s.worksite.job_number)
+                            if s.id in sw_job_number:
+                                assigned_jobs_set.add(sw_job_number[s.id])
                         cell_workers.append(
                             OperationalCellWorker(
                                 employee_id=emp.id,
@@ -3067,8 +3185,8 @@ class SchedulingService:
                     for t, e in emp_templates:
                         if e.weekday_mask in ("ALL", dow):
                             day_hours += e.assigned_hours
-                            if t.job_item and t.job_item.worksite:
-                                assigned_jobs_set.add(t.job_item.worksite.job_number)
+                            if t.id in tmpl_job_number:
+                                assigned_jobs_set.add(tmpl_job_number[t.id])
                             cell_workers.append(
                                 OperationalCellWorker(
                                     employee_id=emp.id,
@@ -3526,6 +3644,39 @@ class SchedulingService:
 
         return self._build_leave_response(leave)
 
+    async def request_scope(self, current_user: User | None) -> RequestScope:
+        """Leave and reassignment list scope (DEC-57), resolved once and passed to the queries.
+
+        Supervisors: their own crew; superintendents/engineers: crew plus workers on their
+        worksites (read-only). Decisions stay with the crew chain. ``(None, None)`` = no user.
+        """
+        if not current_user:
+            return None, None
+        scope = await AccessScope.resolve(self.session, current_user)
+        return scope, await scope.request_ids(self.session)
+
+    @staticmethod
+    def leave_request_query(
+        request_ids: set[UUID] | None,
+        employee_id: UUID | None = None,
+        statuses: list[str] | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
+    ) -> Any:
+        """The filtered leave request select; the list and the counts share it."""
+        stmt = select(LeaveRequest).where(LeaveRequest.is_active.is_(True))
+        if request_ids is not None:
+            stmt = stmt.where(LeaveRequest.employee_id.in_(request_ids))
+        if employee_id:
+            stmt = stmt.where(LeaveRequest.employee_id == employee_id)
+        if statuses:
+            stmt = stmt.where(LeaveRequest.status.in_([x.upper() for x in statuses]))
+        if from_date:
+            stmt = stmt.where(LeaveRequest.to_date >= from_date)
+        if to_date:
+            stmt = stmt.where(LeaveRequest.from_date <= to_date)
+        return stmt
+
     async def list_leave_requests(
         self,
         employee_id: UUID | None = None,
@@ -3533,37 +3684,33 @@ class SchedulingService:
         from_date: date | None = None,
         to_date: date | None = None,
         current_user: User | None = None,
+        statuses: list[str] | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+        resolved: RequestScope | None = None,
     ) -> list[LeaveRequestResponse]:
         """List leave requests filterable by employee, status, date range, and reporting scope."""
+        scope, request_ids = resolved or await self.request_scope(current_user)
         stmt = (
-            select(LeaveRequest)
-            .where(LeaveRequest.is_active.is_(True))
+            self.leave_request_query(
+                request_ids,
+                employee_id=employee_id,
+                statuses=statuses or ([status] if status else None),
+                from_date=from_date,
+                to_date=to_date,
+            )
             .options(
                 selectinload(LeaveRequest.employee),
                 selectinload(LeaveRequest.cover_employee),
                 selectinload(LeaveRequest.recorded_by),
                 selectinload(LeaveRequest.approved_by),
             )
-            .order_by(LeaveRequest.from_date.desc(), LeaveRequest.created_at.desc())
+            .order_by(
+                LeaveRequest.from_date.desc(), LeaveRequest.created_at.desc(), LeaveRequest.id
+            )
         )
-
-        scope: AccessScope | None = None
-        if current_user:
-            # DEC-57: supervisors their own crew; superintendents/engineers their crew plus
-            # workers on their worksites (read-only). Decisions stay with the crew chain.
-            scope = await AccessScope.resolve(self.session, current_user)
-            request_ids = await scope.request_ids(self.session)
-            if request_ids is not None:
-                stmt = stmt.where(LeaveRequest.employee_id.in_(request_ids))
-
-        if employee_id:
-            stmt = stmt.where(LeaveRequest.employee_id == employee_id)
-        if status:
-            stmt = stmt.where(LeaveRequest.status == status.upper())
-        if from_date:
-            stmt = stmt.where(LeaveRequest.to_date >= from_date)
-        if to_date:
-            stmt = stmt.where(LeaveRequest.from_date <= to_date)
+        if limit is not None:
+            stmt = stmt.offset(offset).limit(limit)
 
         rows = (await self.session.execute(stmt)).scalars().all()
         responses = [self._build_leave_response(item) for item in rows]
@@ -4326,18 +4473,65 @@ class SchedulingService:
             updated_at=req.updated_at,
         )
 
+    @staticmethod
+    def reassignment_request_query(
+        request_ids: set[UUID] | None,
+        statuses: list[str] | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        open_only: bool = False,
+    ) -> Any:
+        """The filtered reassignment request select; the list and the counts share it.
+
+        ``open_only`` leaves out pending requests that have already expired (start date passed,
+        ``is_reassignment_expired``), so lists, totals and badge counts agree.
+        """
+        stmt = select(ReassignmentRequest).where(ReassignmentRequest.is_active.is_(True))
+        if request_ids is not None:
+            stmt = stmt.where(
+                or_(
+                    ReassignmentRequest.original_employee_id.in_(request_ids),
+                    ReassignmentRequest.new_employee_id.in_(request_ids),
+                )
+            )
+        if statuses:
+            stmt = stmt.where(ReassignmentRequest.status.in_([x.upper() for x in statuses]))
+        if date_from:
+            stmt = stmt.where(ReassignmentRequest.date_to >= date_from)
+        if date_to:
+            stmt = stmt.where(ReassignmentRequest.date_from <= date_to)
+        if open_only:
+            stmt = stmt.where(
+                or_(
+                    ReassignmentRequest.status != "PENDING",
+                    ReassignmentRequest.date_from >= site_today(),
+                )
+            )
+        return stmt
+
     async def list_reassignment_requests(
         self,
         status: str | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
         current_user: User | None = None,
+        statuses: list[str] | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+        resolved: RequestScope | None = None,
+        open_only: bool = False,
     ) -> list[ReassignmentResponse]:
         """List reassignment requests scoped to user."""
         today = site_today()
+        scope, request_ids = resolved or await self.request_scope(current_user)
         stmt = (
-            select(ReassignmentRequest)
-            .where(ReassignmentRequest.is_active.is_(True))
+            self.reassignment_request_query(
+                request_ids,
+                statuses=statuses or ([status] if status else None),
+                date_from=date_from,
+                date_to=date_to,
+                open_only=open_only,
+            )
             .options(
                 selectinload(ReassignmentRequest.original_employee),
                 selectinload(ReassignmentRequest.new_employee),
@@ -4345,27 +4539,14 @@ class SchedulingService:
                 selectinload(ReassignmentRequest.requested_by),
                 selectinload(ReassignmentRequest.decided_by),
             )
-            .order_by(ReassignmentRequest.date_from.desc(), ReassignmentRequest.created_at.desc())
+            .order_by(
+                ReassignmentRequest.date_from.desc(),
+                ReassignmentRequest.created_at.desc(),
+                ReassignmentRequest.id,
+            )
         )
-
-        scope: AccessScope | None = None
-        if current_user:
-            scope = await AccessScope.resolve(self.session, current_user)
-            request_ids = await scope.request_ids(self.session)
-            if request_ids is not None:
-                stmt = stmt.where(
-                    or_(
-                        ReassignmentRequest.original_employee_id.in_(request_ids),
-                        ReassignmentRequest.new_employee_id.in_(request_ids),
-                    )
-                )
-
-        if status:
-            stmt = stmt.where(ReassignmentRequest.status == status.upper())
-        if date_from:
-            stmt = stmt.where(ReassignmentRequest.date_to >= date_from)
-        if date_to:
-            stmt = stmt.where(ReassignmentRequest.date_from <= date_to)
+        if limit is not None:
+            stmt = stmt.offset(offset).limit(limit)
 
         rows = (await self.session.execute(stmt)).scalars().all()
 
@@ -4824,69 +5005,119 @@ class SchedulingService:
     # Approvals Inbox & Staffing Gaps (Doc 08, D2, DEC-43)
     # -------------------------------------------------------------------------
 
+    async def count_pending_requests(
+        self, current_user: User, resolved: RequestScope | None = None
+    ) -> tuple[int, int]:
+        """Pending leave and reassignment counts in the inbox's scope, with no side effects.
+
+        A pending reassignment whose start date has passed is expired (is_reassignment_expired)
+        and not counted; the list marks such rows EXPIRED when it reads them, the count doesn't.
+        """
+        _scope, request_ids = resolved or await self.request_scope(current_user)
+        leave_q = self.leave_request_query(request_ids, statuses=["REQUESTED"])
+        reassign_q = self.reassignment_request_query(
+            request_ids, statuses=["PENDING"], open_only=True
+        )
+        return await self._count(leave_q), await self._count(reassign_q)
+
+    async def _count(self, stmt: Any) -> int:
+        return int(
+            (
+                await self.session.execute(select(func.count()).select_from(stmt.subquery()))
+            ).scalar_one()
+        )
+
     async def get_approvals_inbox(
         self,
         current_user: User,
         status: str | None = None,
+        kind: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
     ) -> ApprovalsInboxResponse:
-        """Fetch items needing approval or decided history (leave requests, reassignments) in user scope."""
+        """Leave and reassignment items in user scope, one page per kind, with totals and counts.
+
+        ``kind`` (leave | reassignments | attendance) fills only that list (attendance: neither
+        here); without it both lists get their first page. ``counts`` are always the pending badge counts; ``totals`` count the
+        selected status, for paging. Attendance rows are added by the route.
+        """
         norm_status = (status or "PENDING").upper()
+        leave_statuses = {
+            "PENDING": ["REQUESTED"],
+            "APPROVED": ["APPROVED"],
+            "REJECTED": ["REJECTED"],
+            "DECIDED": ["APPROVED", "REJECTED"],
+        }.get(norm_status)  # ALL: every status
+        reassign_statuses = {
+            "PENDING": ["PENDING"],
+            "APPROVED": ["APPROVED"],
+            "REJECTED": ["REJECTED"],
+            "DECIDED": ["APPROVED", "REJECTED"],
+        }.get(norm_status)
 
-        if norm_status == "PENDING":
-            leaves = await self.list_leave_requests(status="REQUESTED", current_user=current_user)
-            reassigns = await self.list_reassignment_requests(
-                status="PENDING", current_user=current_user
+        resolved = await self.request_scope(current_user)
+        _scope, request_ids = resolved
+        leaves: list[LeaveRequestResponse] = []
+        reassigns: list[ReassignmentResponse] = []
+        if kind in (None, "leave"):
+            leaves = await self.list_leave_requests(
+                statuses=leave_statuses, limit=limit, offset=offset, resolved=resolved
             )
-        elif norm_status == "APPROVED":
-            leaves = await self.list_leave_requests(status="APPROVED", current_user=current_user)
+        if kind in (None, "reassignments"):
+            # Expired pending requests are not listed as pending; the full reassignment list
+            # still marks them EXPIRED when it reads them (existing behaviour).
             reassigns = await self.list_reassignment_requests(
-                status="APPROVED", current_user=current_user
-            )
-        elif norm_status == "REJECTED":
-            leaves = await self.list_leave_requests(status="REJECTED", current_user=current_user)
-            reassigns = await self.list_reassignment_requests(
-                status="REJECTED", current_user=current_user
-            )
-        elif norm_status == "DECIDED":
-            all_leaves = await self.list_leave_requests(status=None, current_user=current_user)
-            all_reassigns = await self.list_reassignment_requests(
-                status=None, current_user=current_user
-            )
-            leaves = [item for item in all_leaves if item.status in ("APPROVED", "REJECTED")]
-            reassigns = [req for req in all_reassigns if req.status in ("APPROVED", "REJECTED")]
-        else:  # "ALL"
-            leaves = await self.list_leave_requests(status=None, current_user=current_user)
-            reassigns = await self.list_reassignment_requests(
-                status=None, current_user=current_user
+                statuses=reassign_statuses,
+                limit=limit,
+                offset=offset,
+                resolved=resolved,
+                open_only=norm_status == "PENDING",
             )
 
-        # Always calculate badge counts based on PENDING items
-        if norm_status == "PENDING":
-            pending_leaves_count = len(leaves)
-            pending_reassigns_count = len(reassigns)
-        else:
-            pending_l = await self.list_leave_requests(
-                status="REQUESTED", current_user=current_user
-            )
-            pending_r = await self.list_reassignment_requests(
-                status="PENDING", current_user=current_user
-            )
-            pending_leaves_count = len(pending_l)
-            pending_reassigns_count = len(pending_r)
-
-        counts = ApprovalsCounts(
-            leave=pending_leaves_count,
-            reassignments=pending_reassigns_count,
-            attendance=0,
-            total=pending_leaves_count + pending_reassigns_count,
+        pending_leaves, pending_reassigns = await self.count_pending_requests(
+            current_user, resolved=resolved
         )
-
+        totals = ApprovalsCounts(
+            leave=await self._count(self.leave_request_query(request_ids, statuses=leave_statuses)),
+            reassignments=await self._count(
+                self.reassignment_request_query(
+                    request_ids, statuses=reassign_statuses, open_only=norm_status == "PENDING"
+                )
+            ),
+        )
         return ApprovalsInboxResponse(
-            counts=counts,
+            counts=ApprovalsCounts(
+                leave=pending_leaves,
+                reassignments=pending_reassigns,
+                total=pending_leaves + pending_reassigns,
+            ),
+            totals=totals,
+            limit=limit,
+            offset=offset,
             leave_requests=leaves,
             reassignment_requests=reassigns,
             attendance_rows=[],
         )
+
+    async def _active_cover_keys(
+        self, original_ids: set[UUID], from_date: date, to_date: date
+    ) -> set[tuple[UUID, date, UUID]]:
+        """(original worker, date, job item) of every active cover shift in the range."""
+        if not original_ids:
+            return set()
+        stmt = select(
+            ScheduledWork.original_employee_id,
+            ScheduledWork.work_date,
+            ScheduledWork.job_item_id,
+        ).where(
+            ScheduledWork.original_employee_id.in_(original_ids),
+            ScheduledWork.work_date >= from_date,
+            ScheduledWork.work_date <= to_date,
+            ScheduledWork.status == "ACTIVE",
+        )
+        return {
+            (orig, d, item) for orig, d, item in (await self.session.execute(stmt)).all() if orig
+        }
 
     async def get_staffing_gaps(
         self,
@@ -4916,16 +5147,37 @@ class SchedulingService:
         gaps: list[StaffingGapSlot] = []
 
         if approved_leaves:
-            # 2. Check base roster templates for these workers
+            leave_emp_ids = {lv.employee_id for lv in approved_leaves}
+            # 2. Base roster templates of the workers on leave only, entries indexed by worker
+            # (template order, then entry order, as before).
             stmt_tmpl = (
                 select(BaseRosterTemplate)
-                .where(BaseRosterTemplate.is_active.is_(True))
+                .where(
+                    BaseRosterTemplate.is_active.is_(True),
+                    BaseRosterTemplate.id.in_(
+                        select(BaseRosterEntry.template_id).where(
+                            BaseRosterEntry.employee_id.in_(leave_emp_ids)
+                        )
+                    ),
+                )
                 .options(
                     selectinload(BaseRosterTemplate.entries),
                     selectinload(BaseRosterTemplate.job_item).selectinload(JobItem.worksite),
                 )
             )
             templates = (await self.session.execute(stmt_tmpl)).scalars().all()
+            entries_by_emp: dict[UUID, list[tuple[BaseRosterTemplate, BaseRosterEntry]]] = (
+                defaultdict(list)
+            )
+            for t in templates:
+                if not t.job_item or not t.job_item.worksite:
+                    continue
+                for e in t.entries:
+                    if e.employee_id in leave_emp_ids:
+                        entries_by_emp[e.employee_id].append((t, e))
+
+            # Existing active covers in the range, in one query.
+            leave_covers = await self._active_cover_keys(leave_emp_ids, from_date, to_date)
 
             for leave in approved_leaves:
                 emp = leave.employee
@@ -4939,40 +5191,28 @@ class SchedulingService:
                     dow = INT_TO_WEEKDAY[cur.weekday()]
 
                     # Find any template entry matching this worker
-                    for t in templates:
-                        if not t.job_item or not t.job_item.worksite:
-                            continue
-                        for e in t.entries:
-                            if e.employee_id == emp.id and e.weekday_mask in ("ALL", dow):
-                                # Check if already covered by an active operational shift
-                                sw_stmt = select(ScheduledWork).where(
-                                    ScheduledWork.original_employee_id == emp.id,
-                                    ScheduledWork.work_date == cur,
-                                    ScheduledWork.job_item_id == t.job_item_id,
-                                    ScheduledWork.status == "ACTIVE",
-                                )
-                                existing_cover = (
-                                    await self.session.execute(sw_stmt)
-                                ).scalar_one_or_none()
-                                if not existing_cover:
-                                    days_to_go = (cur - today).days
-                                    gaps.append(
-                                        StaffingGapSlot(
-                                            work_date=cur,
-                                            job_item_id=t.job_item_id,
-                                            worksite_id=t.job_item.worksite_id,
-                                            job_number=t.job_item.worksite.job_number,
-                                            job_name=t.job_item.worksite.job_name,
-                                            staff_grade_description=t.job_item.staff_grade_description,
-                                            required_hours=e.assigned_hours,
-                                            original_employee_id=emp.id,
-                                            original_employee_name=emp.name,
-                                            reason=f"Approved {leave.leave_type} Leave",
-                                            gap_type="LEAVE",
-                                            leave_id=leave.id,
-                                            days_to_go=days_to_go,
-                                        )
+                    for t, e in entries_by_emp.get(emp.id, []):
+                        if e.weekday_mask in ("ALL", dow):
+                            # Check if already covered by an active operational shift
+                            if (emp.id, cur, t.job_item_id) not in leave_covers:
+                                days_to_go = (cur - today).days
+                                gaps.append(
+                                    StaffingGapSlot(
+                                        work_date=cur,
+                                        job_item_id=t.job_item_id,
+                                        worksite_id=t.job_item.worksite_id,
+                                        job_number=t.job_item.worksite.job_number,
+                                        job_name=t.job_item.worksite.job_name,
+                                        staff_grade_description=t.job_item.staff_grade_description,
+                                        required_hours=e.assigned_hours,
+                                        original_employee_id=emp.id,
+                                        original_employee_name=emp.name,
+                                        reason=f"Approved {leave.leave_type} Leave",
+                                        gap_type="LEAVE",
+                                        leave_id=leave.id,
+                                        days_to_go=days_to_go,
                                     )
+                                )
                     cur += timedelta(days=1)
 
         # 3. Include uncovered WORKER_DEACTIVATED future cancelled shifts as staffing gaps
@@ -4994,6 +5234,9 @@ class SchedulingService:
             deact_stmt = deact_stmt.where(ScheduledWork.employee_id.in_(scoped_ids))
 
         deact_shifts = (await self.session.execute(deact_stmt)).scalars().all()
+        deact_covers = await self._active_cover_keys(
+            {ds.employee_id for ds in deact_shifts}, from_date, to_date
+        )
         for ds in deact_shifts:
             if (
                 not ds.job_item
@@ -5002,13 +5245,7 @@ class SchedulingService:
                 or not ds.worksite.is_active
             ):
                 continue
-            cov_stmt = select(ScheduledWork).where(
-                ScheduledWork.original_employee_id == ds.employee_id,
-                ScheduledWork.work_date == ds.work_date,
-                ScheduledWork.job_item_id == ds.job_item_id,
-                ScheduledWork.status == "ACTIVE",
-            )
-            if (await self.session.execute(cov_stmt)).scalar_one_or_none():
+            if (ds.employee_id, ds.work_date, ds.job_item_id) in deact_covers:
                 continue
             gaps.append(
                 StaffingGapSlot(

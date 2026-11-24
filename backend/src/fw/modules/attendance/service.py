@@ -877,13 +877,56 @@ class AttendanceService:
         )
 
     @staticmethod
+    def _attendance_review_filter(norm_status: str) -> Any:
+        from fw.modules.attendance.models import AttendanceRecord
+
+        if norm_status == "PENDING":
+            return AttendanceRecord.review_status == "PENDING_REVIEW"
+        if norm_status in ("APPROVED", "REJECTED"):
+            return AttendanceRecord.review_status == norm_status
+        if norm_status == "DECIDED":
+            return AttendanceRecord.review_status.in_(("APPROVED", "REJECTED"))
+        return None  # ALL
+
+    @staticmethod
+    async def count_attendance_reviews(
+        session: AsyncSession,
+        current_user: User,
+        status: str | None = "PENDING",
+        *,
+        scope_resolved: bool = False,
+        scoped_ids: set[UUID] | None = None,
+    ) -> int:
+        """Attendance days in the approvals inbox scope for a status (count only).
+
+        Pass ``scope_resolved=True`` with ``scoped_ids`` when the scope is already known.
+        """
+        from fw.modules.attendance.models import AttendanceRecord
+        from fw.modules.org import ScopeService
+
+        if not scope_resolved:
+            scoped_ids = await ScopeService.get_scoped_employee_ids(session, current_user)
+        q = select(func.count(AttendanceRecord.id))
+        clause = AttendanceService._attendance_review_filter((status or "PENDING").upper())
+        if clause is not None:
+            q = q.where(clause)
+        if scoped_ids is not None:
+            q = q.where(AttendanceRecord.employee_id.in_(scoped_ids))
+        return int((await session.execute(q)).scalar_one() or 0)
+
+    @staticmethod
     async def get_attendance_approvals(
         session: AsyncSession,
         current_user: User,
         status: str | None = "PENDING",
-    ) -> tuple[list[dict[str, Any]], int]:
-        from sqlalchemy.orm import selectinload
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> tuple[list[dict[str, Any]], int, int]:
+        """One page of attendance days for the approvals inbox.
 
+        Returns (rows, pending count, total in the selected status). The current calculation
+        comes from the join (no second load of the same rows).
+        """
         from fw.modules.attendance.models import AttendanceCalculation, AttendanceRecord
         from fw.modules.org import Employee, ScopeService
 
@@ -896,20 +939,17 @@ class AttendanceService:
                 AttendanceCalculation,
                 AttendanceCalculation.id == AttendanceRecord.current_calculation_id,
             )
-            .options(selectinload(AttendanceRecord.current_calculation))
         )
         if scoped_ids is not None:
             att_q = att_q.where(AttendanceRecord.employee_id.in_(scoped_ids))
+        clause = AttendanceService._attendance_review_filter(norm_status)
+        if clause is not None:
+            att_q = att_q.where(clause)
 
-        if norm_status == "PENDING":
-            att_q = att_q.where(AttendanceRecord.review_status == "PENDING_REVIEW")
-        elif norm_status in ("APPROVED", "REJECTED"):
-            att_q = att_q.where(AttendanceRecord.review_status == norm_status)
-        elif norm_status == "DECIDED":
-            att_q = att_q.where(AttendanceRecord.review_status.in_(("APPROVED", "REJECTED")))
-
-        att_res = await session.execute(att_q.order_by(desc(AttendanceRecord.work_date)))
-        att_rows_db = att_res.all()
+        att_q = att_q.order_by(desc(AttendanceRecord.work_date), AttendanceRecord.id)
+        if limit is not None:
+            att_q = att_q.offset(offset).limit(limit)
+        att_rows_db = (await session.execute(att_q)).all()
 
         attendance_rows = [
             {
@@ -928,13 +968,14 @@ class AttendanceService:
             }
             for rec, emp_name, calc in att_rows_db
         ]
-
-        count_att_q = select(func.count(AttendanceRecord.id)).where(
-            AttendanceRecord.review_status == "PENDING_REVIEW"
+        pending_att_count = await AttendanceService.count_attendance_reviews(
+            session, current_user, "PENDING", scope_resolved=True, scoped_ids=scoped_ids
         )
-        if scoped_ids is not None:
-            count_att_q = count_att_q.where(AttendanceRecord.employee_id.in_(scoped_ids))
-        count_att_res = await session.execute(count_att_q)
-        pending_att_count = int(count_att_res.scalar_one() or 0)
-
-        return attendance_rows, pending_att_count
+        total = (
+            pending_att_count
+            if norm_status == "PENDING"
+            else await AttendanceService.count_attendance_reviews(
+                session, current_user, norm_status, scope_resolved=True, scoped_ids=scoped_ids
+            )
+        )
+        return attendance_rows, pending_att_count, total

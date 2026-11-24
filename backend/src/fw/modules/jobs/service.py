@@ -17,9 +17,9 @@ from geoalchemy2.functions import (
     ST_PointOnSurface,
     ST_SetSRID,
 )
-from sqlalchemy import func, or_, select
+from sqlalchemy import distinct, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy.orm import joinedload, lazyload, selectinload
 
 from fw.core.errors import AppError
 from fw.core.events import AccommodationBoundaryChanged, WorksiteBoundaryChanged, event_bus
@@ -42,6 +42,7 @@ from fw.modules.jobs.schemas import (
     JobNumberCheck,
     JobOccurrenceResponse,
     JobOccurrenceUpdate,
+    OccurrenceSummary,
     WorksiteCreate,
     WorksiteDetailResponse,
     WorksiteResponse,
@@ -134,6 +135,8 @@ class JobsService:
             )
             .join(Group, Worksite.group_id == Group.id)
             .join(Zone, Worksite.zone_id == Zone.id)
+            # The list shows neither job items nor supervisors (Batch 9 step 2).
+            .options(lazyload(Worksite.items), lazyload(Worksite.supervisors))
         )
 
         if scoped_ids is not None:
@@ -1907,10 +1910,16 @@ class JobsService:
         from_date: date | None = None,
         to_date: date | None = None,
         status: str | None = None,
-        limit: int = 500,
+        limit: int | None = 500,
         offset: int = 0,
+        overlap: bool = False,
+        scoped_ids: set[UUID] | None = None,
     ) -> list[JobOccurrenceResponse]:
-        """List occurrences with filtering and joined item descriptors."""
+        """List occurrences with filtering and joined item descriptors.
+
+        Dates: by default a window must lie inside the range; ``overlap`` includes every window
+        that touches it. ``scoped_ids`` limits to those worksites (DEC-57; None = no limit).
+        """
         query = (
             select(JobOccurrence)
             .options(joinedload(JobOccurrence.job_item))
@@ -1921,18 +1930,26 @@ class JobsService:
             query = query.where(JobOccurrence.job_item_id == job_item_id)
         if worksite_id:
             query = query.where(JobItem.worksite_id == worksite_id)
-        if from_date:
-            query = query.where(JobOccurrence.window_start >= from_date)
-        if to_date:
-            query = query.where(JobOccurrence.window_end <= to_date)
+        if scoped_ids is not None:
+            query = query.where(JobItem.worksite_id.in_(scoped_ids))
+        if overlap:
+            if from_date:
+                query = query.where(JobOccurrence.window_end >= from_date)
+            if to_date:
+                query = query.where(JobOccurrence.window_start <= to_date)
+        else:
+            if from_date:
+                query = query.where(JobOccurrence.window_start >= from_date)
+            if to_date:
+                query = query.where(JobOccurrence.window_end <= to_date)
         if status:
             query = query.where(JobOccurrence.status == status.upper())
 
-        query = (
-            query.order_by(JobOccurrence.window_start, JobOccurrence.slot_index)
-            .offset(offset)
-            .limit(limit)
-        )
+        query = query.order_by(
+            JobOccurrence.window_start, JobOccurrence.slot_index, JobOccurrence.id
+        ).offset(offset)
+        if limit is not None:
+            query = query.limit(limit)
         rows = (await session.execute(query)).scalars().all()
         return [
             JobOccurrenceResponse(
@@ -1954,6 +1971,43 @@ class JobsService:
             )
             for r in rows
         ]
+
+    @staticmethod
+    async def occurrence_summary(
+        session: AsyncSession,
+        job_item_id: UUID | None = None,
+        worksite_id: UUID | None = None,
+    ) -> OccurrenceSummary:
+        """Totals over a worksite's or job item's whole schedule, in one aggregate query."""
+        month = func.to_char(
+            func.coalesce(JobOccurrence.due_date, JobOccurrence.window_start), "YYYY-MM"
+        )
+        query = select(
+            func.count(JobOccurrence.id),
+            func.coalesce(
+                func.sum(
+                    JobOccurrence.required_staff_count * JobOccurrence.required_hours_per_staff
+                ),
+                0,
+            ),
+            func.min(JobOccurrence.window_start),
+            func.max(JobOccurrence.window_end),
+            func.array_agg(distinct(month)),
+            func.array_agg(distinct(JobItem.staff_grade_description)),
+        ).join(JobItem, JobOccurrence.job_item_id == JobItem.id)
+        if job_item_id:
+            query = query.where(JobOccurrence.job_item_id == job_item_id)
+        if worksite_id:
+            query = query.where(JobItem.worksite_id == worksite_id)
+        count, hours, first, last, months, roles = (await session.execute(query)).one()
+        return OccurrenceSummary(
+            total_count=count or 0,
+            planned_hours=Decimal(hours or 0),
+            first_window_start=first,
+            last_window_end=last,
+            months=sorted(m for m in (months or []) if m),
+            roles=sorted(r for r in (roles or []) if r),
+        )
 
     @staticmethod
     async def update_occurrence(

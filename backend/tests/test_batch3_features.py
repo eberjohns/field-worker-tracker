@@ -19,6 +19,7 @@ from fw.main import app
 from fw.modules.audit import AuditLog
 from fw.modules.identity import AuthService, User, UserService, UserSession, hash_password
 from fw.modules.jobs import JobItem, JobOccurrence, Worksite
+from fw.modules.jobs.models import WorksiteSupervisor
 from fw.modules.org import Employee, EmployeeReportingLine, Group, Zone
 from fw.modules.scheduling import (
     BaseRosterEntry,
@@ -204,6 +205,9 @@ async def seed_batch3_context():
         )
         session.add(ws)
         await session.flush()
+        # DEC-57: the crew's supervisor is assigned to the worksite, so the planners show it
+        # to the supervisor, the superintendent and the engineer above them.
+        session.add(WorksiteSupervisor(worksite_id=ws.id, supervisor_id=sup_emp.id))
 
         ji = JobItem(
             id=uuid4(),

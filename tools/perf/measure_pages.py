@@ -83,12 +83,16 @@ PAGES = [
     PageSpec("dashboard", "/", away="/worksites"),
     PageSpec("worksites", "/worksites", marker="table tbody tr"),
     PageSpec("worksite_detail", "/worksites/{worksite_id}"),
+    # Batch 9 step 2: the Schedule tab loads the month in view only.
+    PageSpec("worksite_schedule", "/worksites/{worksite_id}?tab=schedule"),
     PageSpec("base_planner", "/base-planner"),
     PageSpec("operational_planner", "/operational-planner"),
     PageSpec("employees", "/employees", marker="table tbody tr"),
     PageSpec("attendance", "/attendance"),
     PageSpec("live_map", "/live", ignore_spinners=("Refreshing every",)),
     PageSpec("reports", "/reports"),
+    # Batch 9 step 2: the inbox page fetches one page of the active tab.
+    PageSpec("approvals", "/approvals"),
 ]
 
 

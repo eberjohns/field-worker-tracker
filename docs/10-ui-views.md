@@ -65,7 +65,7 @@ Each widget links to the filtered list.
 
 ### 3.4 Worksites and Jobs
 **Worksite list** (`/worksites`): search by job number/name; filters group, zone, country, has-boundary, active. Warning chips: "No boundary".
-**Worksite detail** (`/worksites/:id`) tabs: *Overview* (group, zone, dates, "Contract renewal no. (label only)" with a tooltip that it does not select the salary revision (BR-JB-08), **contract labour budget** (calculated from the job items, optional manual override) and a "boundary not set" warning), *Job Items* (table A/B/C...), *Boundary*, *Schedule* (this worksite's weeks), *Cost* (if authorized), *History*.
+**Worksite detail** (`/worksites/:id`) tabs: *Overview* (group, zone, dates, "Contract renewal no. (label only)" with a tooltip that it does not select the salary revision (BR-JB-08), **contract labour budget** (calculated from the job items, optional manual override) and a "boundary not set" warning), *Job Items* (table A/B/C...), *Boundary*, *Schedule* (this worksite's weeks; since v1.19.0 it loads one month at a time, when the tab is opened, and the month picker drives both the calendar and the table; the summary cards cover the whole schedule), *Cost* (if authorized), *History*.
 **Job Item editor**: structured frequency (unit + count + interval + weekday pattern), staff count, hours per worker, SGD (dropdown from the controlled list), planned grade, outdoor flag, break override. A **validation panel** shows declared vs computed activities/annual hours, expected occurrences count, and "N eligible employees for this SGD" (red if zero).
 **Boundary setup queue** (`/boundaries`, Admin and Engineer): after an import every worksite and accommodation shows **"boundary not set"**. The queue lists them with progress (n of m done); "Draw" opens the boundary editor and returns to the next item. New sites can also be created directly in the UI.
 **Boundary editor** (`/worksites/:id/boundary`): **search a place** (provider geocoding, query text only) to focus the map, then draw the polygon and save. search a job number, centre on the map (or current location), draw/edit a polygon, show area, validate (closed ring, no self-intersection), save -> sync fan-out notice ("will update N workers' phones").
@@ -127,6 +127,7 @@ The follow-up list from `12-reports.md` 3.10: filters by status, date, worksite,
 
 ### 3.16 Approvals inbox (`/approvals`)   (design: D2)
 One list for Engineers (Admin sees all): **leave requests**, **temporary reassignment requests**, **overtime and variation rows** from attendance. Tabs with counts, bulk approve for attendance rows, reason required to reject, links to the cell or the attendance timeline. Badge in the top bar.
+Since v1.19.0 the page fetches only the open tab, 50 rows at a time, with Prev/Next and "1–50 of N"; a new tab or status starts at page 1. The top-bar badge and the Dashboard read `GET /approvals/counts` (polled every 30 s) and never load the list; the Dashboard previews show the first 4 pending leave and reassignment requests, with the real counts in their headers.
 
 ### 3.17 Drivers and Transport (`/transport`)   (design: D5)
 Drivers section: driver list (with vehicle label), a day/week view of **runs** (morning and evening), each run with ordered stops and passengers per stop; suggest from schedule, copy last week, publish to the driver and workers' phones.

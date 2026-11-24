@@ -1,6 +1,24 @@
 # Changelog
 All notable changes. Format: Keep a Changelog. Mobile-contract changes are also logged in `docs/09-mobile-sync-contract.md`.
 
+## [1.19.0] - 2026-11-24
+### Changed (Batch 9 step 2: quick wins)
+Measured locally on the `fw_perf` dataset with the step 1 scripts: Operational Planner 80.8 s → 1.4 s, Base Planner 18.7 s → 0.69 s, Dashboard 12.2 s → 0.25 s, and no page over 1 s cold apart from the Operational Planner. The "After step 2" columns in `docs/reviews/performance-baseline-2026-11.md` have the details; the raw results are in `docs/reviews/perf-2026-11/after-step2/`.
+- **Approvals badge from a count.** New `GET /approvals/counts` (Admin, Engineer, Superintendent): pending leave, reassignments and attendance rows from count queries, with the inbox's scope rules, and nothing written. The top-bar badge (still polled every 30 s) and the Dashboard use it; before, they loaded the whole inbox (9.8 MB in the measuring data) to read one number.
+- **Approvals inbox paged.** `GET /approvals` takes `type` (`leave`, `reassignments`, `attendance`), `limit` (1–200, default 50) and `offset`, and returns `totals` per type for the selected status. Without `type` it returns the first page of each list (the old shape). The Approvals page fetches only the open tab, 50 rows at a time, with Prev/Next. The "All history" status now really asks for all statuses (it fell back to pending before). Attendance rows no longer load their calculation twice.
+- **Pending reassignments whose start date has passed** are left out of the pending list, its total and the badge, so the three agree. They were already shown as expired when the list was read.
+- **Occurrences are no longer loaded with job items** (`JobItem.occurrences` is loaded only where it's asked for). Every query that touched a worksite or job item used to load all their occurrences, 13 months ahead: the worksite list, destinations, both planners, the reports and the reassignment list. The worksite list also no longer loads items and supervisors it doesn't return.
+- **New `GET /worksites/{id}/occurrences` and `GET /job-items/{id}/occurrences`** with a required `from_date`/`to_date` (at most 366 days). Each returns the occurrences whose window overlaps the range, plus a `summary` of the whole schedule (count, planned hours, first and last window, months, roles); 404 outside the user's scope. The worksite Schedule tab loads one month at a time, only when it's opened, and its month picker drives the calendar and the table. Its totals now cover the whole schedule; before, they counted only the first 500 occurrences.
+- **`GET /occurrences` checks scope (DEC-57):** a worksite or job item outside the caller's scope is a 404, and without either filter only worksites in scope are listed. It had no scope check before.
+- **Planners follow DEC-57.** Base Planner, Operational Planner coverage and `/schedule/coverage` show only the worksites in the user's scope; the Operational Planner roster shows the user's directory (own crew plus workers on their worksites). Admin sees everything, as before. Reassignment destinations still list all active worksites.
+- **Planners read settings once per country** (budget-only roles and, in `/schedule/coverage`, public holidays) instead of once per worksite: 400 queries fewer per load. Coverage loads only the week's shifts of the items in view, and the month or quarter only for items that need it.
+- **Staffing gaps run a fixed number of queries**, whatever the number of leave days or gaps (one query for existing covers instead of one per day and item).
+- **Compressed responses:** gzip for responses of 1 KB or more when the client sends `Accept-Encoding: gzip` (level 6). Not for the live SSE stream, PDF or xlsx. The coverage response goes from 4.4 MB to 130 KB on the wire. Note for the mobile team in `docs/mobile-team-notes-2026-11-19.md` (no contract change).
+- **The Dashboard makes its calls in parallel**; its previews ask for 4 pending leave and 4 pending reassignment requests, with the real counts in the headers.
+- `tools/perf/measure_pages.py` also measures the worksite Schedule tab and the Approvals page.
+### Removed
+- `payroll/repository.get_worksites_and_items` (no callers).
+
 ## [1.18.0] - 2026-11-24
 ### Added (Batch 9 step 1: measuring, no speed fixes)
 - **Request timing** (`fw/core/perf.py`, settings `PERF_TIMING_ENABLED`, `PERF_SLOW_QUERY_MS`): a `Server-Timing` header (app time, DB time and query count, most repeated statement) and a `request_timing` log line per request with the route template, status, duration, queries, DB time, repeats and slow statements (SQL text only, never values, never ids). Off by default; dev and staging only, ignored when `APP_ENV=production`. The live stream is not timed.
