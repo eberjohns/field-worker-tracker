@@ -727,7 +727,11 @@ class ApprovalsCounts(BaseModel):
 
 
 class ApprovalsInboxResponse(BaseModel):
-    counts: ApprovalsCounts
+    counts: ApprovalsCounts  # pending items, for badges
+    # Items in the selected status, per kind (and their sum), for paging.
+    totals: ApprovalsCounts = Field(default_factory=ApprovalsCounts)
+    limit: int = 50
+    offset: int = 0
     leave_requests: list[LeaveRequestResponse] = Field(default_factory=list)
     reassignment_requests: list[ReassignmentResponse] = Field(default_factory=list)
     attendance_rows: list[dict[str, Any]] = Field(default_factory=list)

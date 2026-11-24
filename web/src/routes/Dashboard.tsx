@@ -37,65 +37,64 @@ export const Dashboard: React.FC = () => {
   const [pendingBoundaryCount, setPendingBoundaryCount] = useState<number>(0);
   const [pendingLeaves, setPendingLeaves] = useState<any[]>([]);
   const [pendingReassigns, setPendingReassigns] = useState<any[]>([]);
+  const [pendingCounts, setPendingCounts] = useState<{ leave: number; reassignments: number } | null>(null);
   const [myRequests, setMyRequests] = useState<any[]>([]);
 
   useEffect(() => {
     if (!token) return;
     const fetchAlertsAndBoundaries = async () => {
-      try {
-        const headers = { Authorization: `Bearer ${token}` };
-        const alertsRes = await fetch("/api/v1/alerts", { headers });
-        if (alertsRes.ok) {
-          const alertData = await alertsRes.json();
-          setAlerts(alertData || []);
+      const headers = { Authorization: `Bearer ${token}` };
+      const getJson = async (url: string) => {
+        try {
+          const res = await fetch(url, { headers });
+          return res.ok ? await res.json() : null;
+        } catch (err) {
+          console.error(`Failed to load ${url}`, err);
+          return null;
         }
+      };
+      const isApprover = user?.role === "ADMIN" || user?.role === "ENGINEER";
+      const isSupervisor = user?.role === "SUPERVISOR";
+      // All dashboard calls start together (Batch 9 step 2); none depends on another.
+      const [alertData, sumData, bData, leavePage, reassignPage, reassignList, leaveList] =
+        await Promise.all([
+          getJson("/api/v1/alerts"),
+          getJson("/api/v1/dashboard/summary"),
+          isApprover ? getJson("/api/v1/boundary-queue?status=UNSET") : null,
+          // Previews only: 4 items each, with the pending counts for the headers.
+          isApprover ? getJson("/api/v1/approvals?status=PENDING&type=leave&limit=4") : null,
+          isApprover ? getJson("/api/v1/approvals?status=PENDING&type=reassignments&limit=4") : null,
+          isSupervisor ? getJson("/api/v1/reassignment-requests") : null,
+          isSupervisor ? getJson("/api/v1/leave-requests") : null,
+        ]);
 
-        const summaryRes = await fetch("/api/v1/dashboard/summary", { headers });
-        if (summaryRes.ok) {
-          const sumData = await summaryRes.json();
-          setDashboardSummary(sumData);
-        }
-
-        if (user?.role === "ADMIN" || user?.role === "ENGINEER") {
-          const bRes = await fetch("/api/v1/boundary-queue?status=UNSET", { headers });
-          if (bRes.ok) {
-            const bData = await bRes.json();
-            setPendingBoundaryCount(bData.unset_count ?? bData.total_count ?? 0);
-          }
-          const appRes = await fetch("/api/v1/approvals?status=PENDING", { headers });
-          if (appRes.ok) {
-            const appData = await appRes.json();
-            setPendingLeaves(appData.leave_requests || []);
-            setPendingReassigns(appData.reassignment_requests || []);
-          }
-        } else if (user?.role === "SUPERVISOR") {
-          const [reassignRes, leaveRes] = await Promise.all([
-            fetch("/api/v1/reassignment-requests", { headers }),
-            fetch("/api/v1/leave-requests", { headers }),
-          ]);
-          const combined: any[] = [];
-          if (reassignRes.ok) {
-            const rData = await reassignRes.json();
-            combined.push(...(rData || []).map((item: any) => ({ ...item, category_kind: "REASSIGNMENT" })));
-          }
-          if (leaveRes.ok) {
-            const lData = await leaveRes.json();
-            combined.push(...(lData || []).map((item: any) => ({ ...item, category_kind: "LEAVE" })));
-          }
-          combined.sort(
-            (a, b) =>
-              new Date(b.created_at || b.recorded_at || 0).getTime() -
-              new Date(a.created_at || a.recorded_at || 0).getTime()
-          );
-          setMyRequests(combined.slice(0, 10));
-        }
-      } catch (err) {
-        console.error("Failed to load dashboard alerts", err);
+      setAlerts(alertData || []);
+      if (sumData) setDashboardSummary(sumData);
+      if (bData) setPendingBoundaryCount(bData.unset_count ?? bData.total_count ?? 0);
+      if (leavePage) {
+        setPendingLeaves(leavePage.leave_requests || []);
+        setPendingCounts(leavePage.counts ?? null);
+      }
+      if (reassignPage) setPendingReassigns(reassignPage.reassignment_requests || []);
+      if (isSupervisor) {
+        const combined: any[] = [
+          ...(reassignList || []).map((item: any) => ({ ...item, category_kind: "REASSIGNMENT" })),
+          ...(leaveList || []).map((item: any) => ({ ...item, category_kind: "LEAVE" })),
+        ];
+        combined.sort(
+          (a, b) =>
+            new Date(b.created_at || b.recorded_at || 0).getTime() -
+            new Date(a.created_at || a.recorded_at || 0).getTime()
+        );
+        setMyRequests(combined.slice(0, 10));
       }
     };
     fetchAlertsAndBoundaries();
   }, [token, user]);
 
+  // Header counts are the real pending totals; the lists are 4-item previews.
+  const pendingLeaveCount = pendingCounts?.leave ?? pendingLeaves.length;
+  const pendingReassignCount = pendingCounts?.reassignments ?? pendingReassigns.length;
   const coverAlerts = alerts.filter((a) => a.alert_type === "COVER_NEEDED");
   const docExpiryAlerts = alerts.filter((a) => a.alert_type === "DOC_EXPIRY");
   // DEC-57: Admin-only count of worksites nobody but Admin can see.
@@ -389,7 +388,7 @@ export const Dashboard: React.FC = () => {
             </div>
             <div className="flex items-center gap-2">
               <span className="bg-indigo-50 text-indigo-700 text-xs font-bold px-2.5 py-1 rounded-full border border-indigo-200">
-                {pendingLeaves.length + pendingReassigns.length} Decisions Pending
+                {pendingLeaveCount + pendingReassignCount} Decisions Pending
               </span>
               <Link
                 to="/approvals"
@@ -413,7 +412,7 @@ export const Dashboard: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                     <Calendar className="h-4 w-4 text-blue-600" />
-                    Leave Requests ({pendingLeaves.length})
+                    Leave Requests ({pendingLeaveCount})
                   </span>
                   <Link to="/approvals" className="text-2xs text-indigo-600 font-semibold hover:underline">
                     Manage
@@ -449,7 +448,7 @@ export const Dashboard: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                     <Clock className="h-4 w-4 text-purple-600" />
-                    Reassignment Requests ({pendingReassigns.length})
+                    Reassignment Requests ({pendingReassignCount})
                   </span>
                   <Link to="/approvals" className="text-2xs text-indigo-600 font-semibold hover:underline">
                     Manage

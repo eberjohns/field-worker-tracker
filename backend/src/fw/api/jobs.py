@@ -37,6 +37,7 @@ from fw.modules.jobs import (
     JobOccurrenceResponse,
     JobOccurrenceUpdate,
     JobsService,
+    OccurrenceRangeResponse,
     Worksite,
     WorksiteCreate,
     WorksiteDetailResponse,
@@ -1074,7 +1075,18 @@ async def list_occurrences(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> list[JobOccurrenceResponse]:
-    """List job occurrences with filtering."""
+    """List job occurrences with filtering, within the caller's worksites (DEC-57).
+
+    A worksite or job item outside the caller's scope is a 404, as on the worksite detail;
+    without either, only occurrences on in-scope worksites are listed.
+    """
+    if worksite_id:
+        await _worksite_in_scope_or_404(session, current_user, worksite_id)
+    if job_item_id:
+        await _job_item_in_scope_or_404(session, current_user, job_item_id)
+    scoped_ids = None
+    if not worksite_id and not job_item_id:
+        scoped_ids = (await AccessScope.resolve(session, current_user)).worksite_filter
     return await JobsService.list_occurrences(
         session=session,
         job_item_id=job_item_id,
@@ -1084,6 +1096,71 @@ async def list_occurrences(
         status=status,
         limit=limit,
         offset=offset,
+        scoped_ids=scoped_ids,
+    )
+
+
+MAX_OCCURRENCE_RANGE_DAYS = 366
+
+
+def _check_occurrence_range(from_date: date, to_date: date) -> None:
+    if to_date < from_date:
+        raise AppError("VALIDATION_ERROR", "to_date is before from_date.", status_code=422)
+    if (to_date - from_date).days + 1 > MAX_OCCURRENCE_RANGE_DAYS:
+        raise AppError(
+            "VALIDATION_ERROR",
+            f"The date range can be at most {MAX_OCCURRENCE_RANGE_DAYS} days.",
+            status_code=422,
+        )
+
+
+@router.get("/worksites/{worksite_id}/occurrences", response_model=OccurrenceRangeResponse)
+async def list_worksite_occurrences(
+    worksite_id: UUID,
+    from_date: date = Query(..., description="First day of the range"),
+    to_date: date = Query(..., description="Last day of the range (at most 366 days)"),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> OccurrenceRangeResponse:
+    """A worksite's occurrences whose window overlaps the range, and its schedule summary."""
+    _check_occurrence_range(from_date, to_date)
+    await _worksite_in_scope_or_404(session, current_user, worksite_id)
+    occurrences = await JobsService.list_occurrences(
+        session=session,
+        worksite_id=worksite_id,
+        from_date=from_date,
+        to_date=to_date,
+        overlap=True,
+        limit=None,
+    )
+    summary = await JobsService.occurrence_summary(session, worksite_id=worksite_id)
+    return OccurrenceRangeResponse(
+        from_date=from_date, to_date=to_date, occurrences=occurrences, summary=summary
+    )
+
+
+@router.get("/job-items/{job_item_id}/occurrences", response_model=OccurrenceRangeResponse)
+async def list_job_item_occurrences(
+    job_item_id: UUID,
+    from_date: date = Query(..., description="First day of the range"),
+    to_date: date = Query(..., description="Last day of the range (at most 366 days)"),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> OccurrenceRangeResponse:
+    """A job item's occurrences whose window overlaps the range, and its schedule summary."""
+    _check_occurrence_range(from_date, to_date)
+    await _job_item_in_scope_or_404(session, current_user, job_item_id)
+    occurrences = await JobsService.list_occurrences(
+        session=session,
+        job_item_id=job_item_id,
+        from_date=from_date,
+        to_date=to_date,
+        overlap=True,
+        limit=None,
+    )
+    summary = await JobsService.occurrence_summary(session, job_item_id=job_item_id)
+    return OccurrenceRangeResponse(
+        from_date=from_date, to_date=to_date, occurrences=occurrences, summary=summary
     )
 
 

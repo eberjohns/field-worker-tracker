@@ -1,4 +1,4 @@
-# Performance baseline (Batch 9 step 1), November 2026
+# Performance baseline (Batch 9 step 1) and after step 2, November 2026
 
 Measured 24 Nov 2026 on the code of `perf/batch9-measure`. That is v1.17.0, which includes #32, #33 and #34, plus the step 1 tooling. There are no speed fixes in this step.
 
@@ -10,6 +10,8 @@ Measured 24 Nov 2026 on the code of `perf/batch9-measure`. That is v1.17.0, whic
 `docs/runbooks/06-performance-measurement.md` describes how to measure and how to re-run.
 
 **Render:** pending, owner run. The Render columns below stay empty until the owner runs both scripts with `--read-only` (runbook 06).
+
+**After step 2:** measured 24 Nov 2026 on `perf/batch9-quickwins` (v1.19.0), same machine, same `fw_perf` dataset and the same scripts, one page per process. The result files are in `docs/reviews/perf-2026-11/after-step2/`; their `app_version` says 1.18.0 because the version is bumped by the commit, after measuring. The "After step 2" columns and the section [After step 2](#after-step-2-local) hold the new numbers.
 
 ## Summary
 
@@ -23,6 +25,43 @@ Measured 24 Nov 2026 on the code of `perf/batch9-measure`. That is v1.17.0, whic
   - The week view and the roster take 14.3 s and 12.2 s at p95, against 1.5 s.
   - Two pages have request chains 3 deep, against a maximum of 2.
 - **Nothing is cached in the browser, and nothing is compressed.** Responses are sent at full size: 9.8 MB where gzip would send 1.6 MB, and 4.2 MB where it would send 127 KB. The local numbers don't show the cost of the network; the Render run will.
+
+## After step 2 (local)
+
+**What step 2 changed:**
+1. The badge and the Dashboard use `GET /approvals/counts` (count queries only). The inbox is fetched only on the Approvals page, one tab and one page (50) at a time.
+2. Occurrences are no longer loaded with job items (`lazy="select"`); the worksite list loads neither items nor supervisors. The Schedule tab fetches only the month in view from `GET /worksites/{id}/occurrences`.
+3. The planners read settings and holidays once per country; Base Planner, coverage and roster are limited to the user's worksites (DEC-57); coverage loads only the week's shifts of the items in view (the wide period only for monthly or quarterly items); `get_staffing_gaps` runs a fixed number of queries.
+4. GZip for responses of 1 KB or more (not for the SSE stream, PDF or xlsx).
+5. The Dashboard fires its calls together.
+
+**Targets:**
+
+| Target | Baseline | After step 2 | Met |
+|---|---:|---:|---|
+| Operational Planner week view < 3 s (owner) | 80.8 s cold / 70.3 s warm | 1.4 s / 1.4 s | yes |
+| Base Planner < 2 s (owner) | 18.7 s / 18.8 s | 0.69 s / 0.48 s | yes |
+| No page over 3 s cold (owner) | 9 of 9 over | slowest is the Operational Planner, 1.4 s | yes |
+| List endpoints p95 < 300 ms (docs/14) | 6 over | every list except `/job-items/destinations` (391 ms) | all but one |
+| Week view / roster p95 < 1.5 s (docs/14) | 14.3 s / 12.2 s | coverage 1.4 s, Base Planner 0.80 s, roster 0.65 s p50 | yes, coverage only just |
+| Chain depth ≤ 2 (addendum) | Dashboard 3, Worksite detail 3 | 2 at most (every page) | yes |
+| A repeat visit < 300 ms from cache (addendum) | nothing cached | nothing cached; warm visits are fast because calls are fast | step 3 |
+
+`/job-items/destinations` (391 ms p95) returns 1,500 job items with their worksite names for the reassignment picker; it is unscoped by rule (DEC-57). It was 19.5 s. Step 3 caches it on the client.
+
+**Cause 3 re-checked (owner item 6):** requests no longer queue. In the first Operational Planner load after step 2 all 7 calls started within 27 ms of each other and overlapped: the six small ones were done by 650 ms, coverage finished at 1.65 s (server log, `api-timing` lines). The page time is now the slowest call, not the sum. No asyncio-debug run was needed, and no workers were added.
+
+What still holds the event loop is coverage's own Python work: about **0.9–1.0 s per call** (server time 1.1–1.5 s, of which the database is 0.24–0.49 s), building 1,500 items × 7 day cells and 4.4 MB of JSON for an Admin (the whole company). While it runs, other requests in that process wait. Base Planner holds the loop for about 0.37 s (1.9 MB). For a supervisor both are much smaller, because they are now scoped. Options, in order of effect, for the owner to choose (step 3/4 or a later batch):
+- the planner opens on one group or zone by default (the endpoints already take `group_id`; the web does not send it);
+- a smaller coverage payload (only the cells that have something; names once per worker instead of per cell);
+- moving the cell building off the event loop (a thread or a process pool);
+- more uvicorn workers on Render, which only spreads the cost.
+
+**Other notes:**
+- **Live Map warm** went from 94 ms to 0.56–0.80 s. The API is not the cause (slowest call 140 ms): the page asks for the boundary queue only after the map has started (`LiveMap.tsx`, effect on `mapInstance`), and the map's style and tiles come from the tile server. Unchanged code; cold is 0.95 s (was 6.2 s).
+- **Reports:** the survey runs each report once, first, on a cold database. The five reports that were slow because of the occurrence load dropped 7–19 s each (job-costing 20.2 s → 1.5 s; the app's preview is usable after 1.4 s, was 21.3 s). The attendance family showed 0.2–1.3 s more than the baseline in that single cold run, with the same queries and sizes and a higher DB time; timed again warm they were back at the baseline (daily-attendance 2.3 s, late-early-departure 1.9 s). Reports move to SQL in step 4.
+- **Approvals inbox, Attendance tab** (29,382 pending rows in this dataset): page 1 of 50 rows takes 22 ms p50 and 18 KB (the whole inbox was 5.4 s and 9.8 MB); the last page 132 ms. The badge count takes 12 ms and 62 bytes.
+- **Payroll draft** (cause 8) and the bundle (cause 9) are unchanged; they are steps 4 and 3.
 
 ## Method and environment
 
@@ -84,19 +123,23 @@ Measured 24 Nov 2026 on the code of `perf/batch9-measure`. That is v1.17.0, whic
 
 **Local:** median of 3 runs.
 
-| Page | Cold: usable | Warm: usable | API requests (cold / warm) | Chain depth (cold / warm) | API bytes, cold | Static bytes, cold | Slowest call (cold): server time, queries |
-|---|---:|---:|---:|---:|---:|---:|---|
-| Dashboard | 12.2 s | 6.5 s | 5 / 4 | 3 / 3 | 19.7 MB | 607 KB | `/approvals`: 11.5 s, 64 queries |
-| Worksites | 9.9 s | 3.6 s | 6 / 5 | 1 / 1 | 9.9 MB | 607 KB | `/approvals`: 9.6 s, 64 queries |
-| Worksite detail | 7.4 s | 172 ms | 8 / 7 | 2 / 3 | 10.1 MB | 607 KB | `/approvals`: 7.1 s, 64 queries |
-| Base Planner | 18.7 s | 18.8 s | 3 / 3 | 1 / 2 | 11.6 MB | 607 KB | `/base-planner/worksites`: 18.5 s, 411 queries |
-| Operational Planner (week) | 80.8 s | 70.3 s | 9 / 8 | 2 / 2 | 34.3 MB | 607 KB | `/operational-planner/coverage`: 77.7 s, 416 queries |
-| Employees | 10.3 s | 235 ms | 5 / 4 | 1 / 1 | 10.4 MB | 607 KB | `/approvals`: 9.8 s, 64 queries |
-| Attendance (last 7 days) | 10.0 s | 172 ms | 3 / 2 | 2 / 2 | 10.0 MB | 607 KB | `/approvals`: 9.5 s, 64 queries |
-| Live Map | 6.2 s | 94 ms | 4 / 2 | 2 / 1 | 10.4 MB | 1.1 MB | `/approvals`: 5.9 s, 64 queries |
-| Reports | 5.9 s | 31 ms | 2 / 1 | 1 / 1 | 9.9 MB | 607 KB | `/approvals`: 5.7 s, 64 queries |
+| Page | Cold: usable | Warm: usable | **After step 2: cold / warm** | API requests (cold / warm) | Chain depth (cold / warm) | API bytes, cold | Static bytes, cold | Slowest call (cold): server time, queries |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| Dashboard | 12.2 s | 6.5 s | **250 ms / 109 ms** | 5 / 4 | 3 / 3 | 19.7 MB | 607 KB | `/approvals`: 11.5 s, 64 queries |
+| Worksites | 9.9 s | 3.6 s | **281 ms / 47 ms** | 6 / 5 | 1 / 1 | 9.9 MB | 607 KB | `/approvals`: 9.6 s, 64 queries |
+| Worksite detail | 7.4 s | 172 ms | **203 ms / 62 ms** | 8 / 7 | 2 / 3 | 10.1 MB | 607 KB | `/approvals`: 7.1 s, 64 queries |
+| Base Planner | 18.7 s | 18.8 s | **688 ms / 484 ms** | 3 / 3 | 1 / 2 | 11.6 MB | 607 KB | `/base-planner/worksites`: 18.5 s, 411 queries |
+| Operational Planner (week) | 80.8 s | 70.3 s | **1.4 s / 1.4 s** | 9 / 8 | 2 / 2 | 34.3 MB | 607 KB | `/operational-planner/coverage`: 77.7 s, 416 queries |
+| Employees | 10.3 s | 235 ms | **343 ms / 203 ms** | 5 / 4 | 1 / 1 | 10.4 MB | 607 KB | `/approvals`: 9.8 s, 64 queries |
+| Attendance (last 7 days) | 10.0 s | 172 ms | **235 ms / 63 ms** | 3 / 2 | 2 / 2 | 10.0 MB | 607 KB | `/approvals`: 9.5 s, 64 queries |
+| Live Map | 6.2 s | 94 ms | **954 ms / 750 ms** | 4 / 2 | 2 / 1 | 10.4 MB | 1.1 MB | `/approvals`: 5.9 s, 64 queries |
+| Reports | 5.9 s | 31 ms | **187 ms / 32 ms** | 2 / 1 | 1 / 1 | 9.9 MB | 607 KB | `/approvals`: 5.7 s, 64 queries |
+| Worksite detail, Schedule tab (new in step 2) | | | **250 ms / 94 ms** | | | | | |
+| Approvals inbox (new in step 2) | | | **172 ms / 31 ms** | | | | | |
 
-**Report run** (Reports page, `job-costing`, 2026-10): usable 21.3 s after "Run Preview", 1 request, 13 KB.
+**Report run** (Reports page, `job-costing`, 2026-10): usable 21.3 s after "Run Preview", 1 request, 13 KB. **After step 2: 1.4 s.**
+
+**After step 2, the other columns** (cold): every page makes its calls at chain depth 1 or 2. The largest API transfers are now the Operational Planner (205 KB on the wire, 5.0 MB unpacked) and Base Planner (213 KB, 1.9 MB unpacked); every other page transfers under 60 KB. The slowest call is `/operational-planner/coverage` (1.2 s, 13 queries) on the Operational Planner, `/base-planner/worksites` (0.54 s, 10 queries) on Base Planner, and under 100 ms with at most 16 queries on every other page. Details per page and run: `after-step2/pages-localhost.json`.
 
 | Page | Render: cold | Render: warm |
 |---|---:|---:|
@@ -108,69 +151,71 @@ Measured 24 Nov 2026 on the code of `perf/batch9-measure`. That is v1.17.0, whic
 
 **Local:** replayed one at a time. Each one's target is from docs/14: lists p95 < 300 ms; week view or roster p95 < 1.5 s. A path appears more than once when pages call it with different query strings.
 
-| Endpoint | Pages | Samples | Server p50 | Server p95 | Target | DB p50 | Queries | Max repeats | Size | Gzip would send |
-|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| `/reports/job-costing` | Report run | 3 | 20.6 s | 20.8 s **over** | 300 ms | 5.5 s | 19 | 5 | 13 KB | 1 KB |
-| `/job-items/destinations` | Ops Planner | 3 | 19.2 s | 19.5 s **over** | 300 ms | 8.4 s | 10 | 6 | 396 KB | 53 KB |
-| `/operational-planner/coverage` | Ops Planner | 4 | 13.7 s | 14.3 s **over** | 1.5 s | 5.0 s | 416 | 400 | 4.2 MB | 127 KB |
-| `/base-planner/worksites` | Base Planner | 5 | 11.0 s | 12.2 s **over** | 1.5 s | 3.2 s | 411 | 400 | 1.8 MB | 206 KB |
-| `/approvals` | all 9 | 10 | 5.4 s | 5.8 s **over** | 300 ms | 2.4 s | 64 | 58 | 9.8 MB | 1.6 MB |
-| `/worksites` | Worksites | 20 | 2.7 s | 3.1 s **over** | 300 ms | 613 ms | 5 | 1 | 64 KB | 7 KB |
-| `/worksites/{id}` | Worksite detail | 20 | 43 ms | 182 ms | 300 ms | 19 ms | 13 | 2 | 10 KB | 1 KB |
-| `/live/positions` | Live Map | 20 | 44 ms | 70 ms | 300 ms | 12 ms | 6 | 1 | 546 KB | 50 KB |
-| `/dashboard/summary` | Dashboard | 20 | 50 ms | 52 ms | 300 ms | 22 ms | 16 | 2 | 449 B | 260 B |
-| `/occurrences` | Worksite detail | 20 | 22 ms | 31 ms | 300 ms | 8 ms | 2 | 1 | 219 KB | 16 KB |
-| `/employees/hierarchy` | Employees | 20 | 22 ms | 31 ms | 300 ms | 5 ms | 3 | 1 | 321 KB | 20 KB |
-| `/employees` | Employees | 20 | 20 ms | 26 ms | 300 ms | 6 ms | 2 | 1 | 291 KB | 20 KB |
-| `/employees` | Ops Planner | 20 | 18 ms | 24 ms | 300 ms | 6 ms | 2 | 1 | 243 KB | 17 KB |
-| `/attendance` | Attendance | 20 | 19 ms | 23 ms | 300 ms | 9 ms | 6 | 1 | 107 KB | 12 KB |
-| `/attendance/exceptions` | Attendance | 20 | 14 ms | 16 ms | 300 ms | 7 ms | 6 | 1 | 2 KB | 1 KB |
-| `/settings/staff-grades` | Employees | 20 | 7 ms | 10 ms | 300 ms | 3 ms | 4 | 1 | 298 B | 187 B |
-| `/boundary-queue` | Dashboard | 20 | 9 ms | 9 ms | 300 ms | 4 ms | 7 | 1 | 236 B | 108 B |
-| `/staffing-gaps` | Ops Planner | 20 | 6 ms | 8 ms | 300 ms | 2 ms | 3 | 1 | 59 B | 63 B |
-| `/salary-revisions` | Worksites, Worksite detail | 20 | 6 ms | 7 ms | 300 ms | 2 ms | 3 | 1 | 627 B | 271 B |
-| `/reassignment-requests` | Ops Planner | 20 | 6 ms | 7 ms | 300 ms | 1 ms | 2 | 1 | 2 B | 22 B |
-| `/alerts` | Dashboard | 20 | 5 ms | 6 ms | 300 ms | 2 ms | 2 | 1 | 511 B | 365 B |
-| `/employees` | Worksite detail, Base Planner, Ops Planner | 20 | 5 ms | 5 ms | 300 ms | 2 ms | 2 | 1 | 12 KB | 1 KB |
-| `/zones` | Worksites, Worksite detail | 20 | 4 ms | 5 ms | 300 ms | 1 ms | 2 | 1 | 3 KB | 957 B |
-| `/accommodations` | Worksites | 20 | 4 ms | 5 ms | 300 ms | 1 ms | 2 | 1 | 2 B | 22 B |
-| `/worksites/{id}/supervisors` | Worksite detail | 20 | 5 ms | 5 ms | 300 ms | 1 ms | 2 | 1 | 571 B | 279 B |
-| `/groups` | Worksites, Worksite detail | 20 | 4 ms | 5 ms | 300 ms | 1 ms | 2 | 1 | 2 KB | 678 B |
-| `/accommodations` | Employees | 20 | 4 ms | 5 ms | 300 ms | 1 ms | 2 | 1 | 2 B | 22 B |
-| `/reports` | Reports | 20 | 4 ms | 5 ms | 300 ms | 1 ms | 1 | 1 | 21 KB | 3 KB |
+| Endpoint | Pages | Samples | Server p50 | Server p95 | Target | DB p50 | Queries | Max repeats | Size | Gzip would send | **After step 2: server p50 / p95, queries** |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| `/reports/job-costing` | Report run | 3 | 20.6 s | 20.8 s **over** | 300 ms | 5.5 s | 19 | 5 | 13 KB | 1 KB | 959 ms / 1.0 s, 13 q |
+| `/job-items/destinations` | Ops Planner | 3 | 19.2 s | 19.5 s **over** | 300 ms | 8.4 s | 10 | 6 | 396 KB | 53 KB | 321 / 391 ms, 4 q |
+| `/operational-planner/coverage` | Ops Planner | 4 | 13.7 s | 14.3 s **over** | 1.5 s | 5.0 s | 416 | 400 | 4.2 MB | 127 KB | 1.2 s / 1.4 s, 13 q |
+| `/base-planner/worksites` | Base Planner | 5 | 11.0 s | 12.2 s **over** | 1.5 s | 3.2 s | 411 | 400 | 1.8 MB | 206 KB | 594 / 800 ms, 10 q |
+| `/approvals` | all 9 | 10 | 5.4 s | 5.8 s **over** | 300 ms | 2.4 s | 64 | 58 | 9.8 MB | 1.6 MB | replaced by `/approvals/counts`: 13 / 14 ms, 4 q, 62 B |
+| `/worksites` | Worksites | 20 | 2.7 s | 3.1 s **over** | 300 ms | 613 ms | 5 | 1 | 64 KB | 7 KB | 15 / 16 ms, 2 q |
+| `/worksites/{id}` | Worksite detail | 20 | 43 ms | 182 ms | 300 ms | 19 ms | 13 | 2 | 10 KB | 1 KB | 20 / 26 ms, 11 q |
+| `/live/positions` | Live Map | 20 | 44 ms | 70 ms | 300 ms | 12 ms | 6 | 1 | 546 KB | 50 KB | 74 / 254 ms, 6 q |
+| `/dashboard/summary` | Dashboard | 20 | 50 ms | 52 ms | 300 ms | 22 ms | 16 | 2 | 449 B | 260 B | 72 / 259 ms, 16 q |
+| `/occurrences` | Worksite detail | 20 | 22 ms | 31 ms | 300 ms | 8 ms | 2 | 1 | 219 KB | 16 KB | replaced by `/worksites/{id}/occurrences` (Schedule tab, one month): 17 / 18 ms, 3 q |
+| `/employees/hierarchy` | Employees | 20 | 22 ms | 31 ms | 300 ms | 5 ms | 3 | 1 | 321 KB | 20 KB | 34 / 48 ms, 3 q |
+| `/employees` | Employees | 20 | 20 ms | 26 ms | 300 ms | 6 ms | 2 | 1 | 291 KB | 20 KB | 34 / 44 ms, 2 q |
+| `/employees` | Ops Planner | 20 | 18 ms | 24 ms | 300 ms | 6 ms | 2 | 1 | 243 KB | 17 KB | 29 / 30 ms, 2 q |
+| `/attendance` | Attendance | 20 | 19 ms | 23 ms | 300 ms | 9 ms | 6 | 1 | 107 KB | 12 KB | 27 / 31 ms, 6 q |
+| `/attendance/exceptions` | Attendance | 20 | 14 ms | 16 ms | 300 ms | 7 ms | 6 | 1 | 2 KB | 1 KB | 15 / 18 ms, 6 q |
+| `/settings/staff-grades` | Employees | 20 | 7 ms | 10 ms | 300 ms | 3 ms | 4 | 1 | 298 B | 187 B | 9 / 9 ms, 4 q |
+| `/boundary-queue` | Dashboard | 20 | 9 ms | 9 ms | 300 ms | 4 ms | 7 | 1 | 236 B | 108 B | 13 / 15 ms, 7 q |
+| `/staffing-gaps` | Ops Planner | 20 | 6 ms | 8 ms | 300 ms | 2 ms | 3 | 1 | 59 B | 63 B | 8 / 9 ms, 3 q |
+| `/salary-revisions` | Worksites, Worksite detail | 20 | 6 ms | 7 ms | 300 ms | 2 ms | 3 | 1 | 627 B | 271 B | 8 / 9 ms, 3 q |
+| `/reassignment-requests` | Ops Planner | 20 | 6 ms | 7 ms | 300 ms | 1 ms | 2 | 1 | 2 B | 22 B | 7 / 8 ms, 2 q |
+| `/alerts` | Dashboard | 20 | 5 ms | 6 ms | 300 ms | 2 ms | 2 | 1 | 511 B | 365 B | 7 / 7 ms, 2 q |
+| `/employees` | Worksite detail, Base Planner, Ops Planner | 20 | 5 ms | 5 ms | 300 ms | 2 ms | 2 | 1 | 12 KB | 1 KB | 7 / 8 ms, 2 q |
+| `/zones` | Worksites, Worksite detail | 20 | 4 ms | 5 ms | 300 ms | 1 ms | 2 | 1 | 3 KB | 957 B | 8 / 9 ms, 2 q |
+| `/accommodations` | Worksites | 20 | 4 ms | 5 ms | 300 ms | 1 ms | 2 | 1 | 2 B | 22 B | 7 / 7 ms, 2 q |
+| `/worksites/{id}/supervisors` | Worksite detail | 20 | 5 ms | 5 ms | 300 ms | 1 ms | 2 | 1 | 571 B | 279 B | 6 / 6 ms, 2 q |
+| `/groups` | Worksites, Worksite detail | 20 | 4 ms | 5 ms | 300 ms | 1 ms | 2 | 1 | 2 KB | 678 B | 7 / 7 ms, 2 q |
+| `/accommodations` | Employees | 20 | 4 ms | 5 ms | 300 ms | 1 ms | 2 | 1 | 2 B | 22 B | 6 / 6 ms, 2 q |
+| `/reports` | Reports | 20 | 4 ms | 5 ms | 300 ms | 1 ms | 1 | 1 | 21 KB | 3 KB | 6 / 6 ms, 1 q |
 
 **Render:** pending, owner run.
 
 ### Reports (local, one run each, October 2026, AE)
 
-| Report | Server | DB | Queries | Max repeats | Total rows |
-|---|---:|---:|---:|---:|---:|
-| `job-costing` | 20.2 s | 5.7 s | 19 | 5 | 360 |
-| `project-attendance-summary` | 11.2 s | 3.0 s | 12 | 2 | 360 |
-| `employee-movement` | 10.3 s | 2.2 s | 10 | 3 | 14,182 |
-| `site-visits` | 10.1 s | 2.0 s | 9 | 3 | 14,182 |
-| `weekly-roster` | 8.6 s | 2.6 s | 9 | 2 | 580 |
-| `daily-attendance` | 2.4 s | 747 ms | 90 | 28 | 14,272 |
-| `late-early-departure` | 2.2 s | 792 ms | 61 | 28 | 14,272 |
-| `transportation-time` | 1.9 s | 622 ms | 32 | 28 | 14,272 |
-| `monthly-attendance` | 1.7 s | 614 ms | 32 | 28 | 550 |
-| `employee-utilization` | 993 ms | 451 ms | 32 | 28 | 14,272 |
-| `provisions-staff-cost` | 269 ms | 62 ms | 10 | 2 | 580 |
-| `payroll` | 144 ms | 75 ms | 10 | 2 | 580 |
-| `pending-visits` | 19 ms | 12 ms | 2 | 1 | 0 |
-| `staffing-gaps` | 13 ms | 6 ms | 4 | 1 | 6 |
-| `document-expiry` | 11 ms | 4 ms | 3 | 1 | 0 |
+| Report | Server | DB | Queries | Max repeats | Total rows | **After step 2: server, DB, queries** |
+|---|---:|---:|---:|---:|---:|---|
+| `job-costing` | 20.2 s | 5.7 s | 19 | 5 | 360 | 1.5 s, 234 ms, 13 |
+| `project-attendance-summary` | 11.2 s | 3.0 s | 12 | 2 | 360 | 1.6 s, 709 ms, 9 |
+| `employee-movement` | 10.3 s | 2.2 s | 10 | 3 | 14,182 | 1.1 s, 185 ms, 7 |
+| `site-visits` | 10.1 s | 2.0 s | 9 | 3 | 14,182 | 1.1 s, 375 ms, 6 |
+| `weekly-roster` | 8.6 s | 2.6 s | 9 | 2 | 580 | 216 ms, 75 ms, 6 |
+| `daily-attendance` | 2.4 s | 747 ms | 90 | 28 | 14,272 | 3.5 s, 1.4 s, 90 (warm re-run: 2.3 s) |
+| `late-early-departure` | 2.2 s | 792 ms | 61 | 28 | 14,272 | 2.9 s, 1.1 s, 61 (warm re-run: 1.9 s) |
+| `transportation-time` | 1.9 s | 622 ms | 32 | 28 | 14,272 | 2.2 s, 1.0 s, 32 |
+| `monthly-attendance` | 1.7 s | 614 ms | 32 | 28 | 550 | 1.9 s, 743 ms, 32 |
+| `employee-utilization` | 993 ms | 451 ms | 32 | 28 | 14,272 | 2.3 s, 754 ms, 32 (warm re-run: 1.6 s) |
+| `provisions-staff-cost` | 269 ms | 62 ms | 10 | 2 | 580 | 189 ms, 101 ms, 10 |
+| `payroll` | 144 ms | 75 ms | 10 | 2 | 580 | 205 ms, 96 ms, 10 |
+| `pending-visits` | 19 ms | 12 ms | 2 | 1 | 0 | 10 ms, 3 ms, 2 |
+| `staffing-gaps` | 13 ms | 6 ms | 4 | 1 | 6 | 14 ms, 5 ms, 4 |
+| `document-expiry` | 11 ms | 4 ms | 3 | 1 | 0 | 14 ms, 4 ms, 3 |
+
+The after-step-2 survey is one cold run per report; see [After step 2](#after-step-2-local) for why the attendance family reads higher there.
 
 **Payroll draft:** generating the October AE draft (580 employees) took **81 s** in one call, including the 11 reports the `PayrollRunCreated` listener generates. This was measured while seeding, with the same code that `POST /api/v1/payroll/runs` runs.
 
 ## Targets
 
-| Target (addendum, docs/14) | Now (local) |
-|---|---|
-| List endpoints: p95 server time < 300 ms | Over: `/approvals` 5.8 s, `/worksites` 3.1 s, `/job-items/destinations` 19.5 s. All other list endpoints are under 200 ms. |
-| Week view / roster: p95 < 1.5 s | Over: `/operational-planner/coverage` 14.3 s, `/base-planner/worksites` 12.2 s |
-| A repeat visit to a list page shows data in < 300 ms from cache | Nothing is cached. Repeat visits fetch everything again: Worksites 3.6 s, Base Planner 18.8 s, Operational Planner 70.3 s. Employees, Attendance and Live Map are under 300 ms only because their calls are fast. |
-| No page with request chains deeper than 2 | Over: Dashboard 3 (cold and warm), Worksite detail 3 (warm) |
+| Target (addendum, docs/14) | Baseline (local) | **After step 2 (local)** |
+|---|---|---|
+| List endpoints: p95 server time < 300 ms | Over: `/approvals` 5.8 s, `/worksites` 3.1 s, `/job-items/destinations` 19.5 s. All other list endpoints are under 200 ms. | Met except `/job-items/destinations` 391 ms. The badge count is 14 ms, an inbox page 23 ms, `/worksites` 16 ms. |
+| Week view / roster: p95 < 1.5 s | Over: `/operational-planner/coverage` 14.3 s, `/base-planner/worksites` 12.2 s | Met: coverage 1.4 s, Base Planner 800 ms, roster 0.65 s p50 (Admin, all 600 employees). |
+| A repeat visit to a list page shows data in < 300 ms from cache | Nothing is cached. Repeat visits fetch everything again: Worksites 3.6 s, Base Planner 18.8 s, Operational Planner 70.3 s. Employees, Attendance and Live Map are under 300 ms only because their calls are fast. | Still nothing cached (step 3). Warm visits: Worksites 47 ms, Base Planner 484 ms, Operational Planner 1.4 s. |
+| No page with request chains deeper than 2 | Over: Dashboard 3 (cold and warm), Worksite detail 3 (warm) | Met: 2 at most on every page. |
 
 ## Top 10 causes, ranked by impact
 
@@ -202,6 +247,8 @@ Measured 24 Nov 2026 on the code of `perf/batch9-measure`. That is v1.17.0, whic
 - Step 2: a count-only call for the badge, paging for the inbox, removing the duplicate load and the second Dashboard call.
 - Step 3: one shared query for the badge.
 
+**After step 2:** done. The badge is `GET /approvals/counts` (12 ms, 62 bytes); the inbox page fetches one tab, 50 rows at a time (22 ms on the Attendance tab); the duplicate calculation load is gone; the Dashboard previews ask for 4 rows each.
+
 ### 2. Loading worksites also loads every job item and every occurrence
 **Pages:** Worksites, Base Planner, Operational Planner, Reports.
 
@@ -216,6 +263,8 @@ Measured 24 Nov 2026 on the code of `perf/batch9-measure`. That is v1.17.0, whic
 **Growth:** `fw_db` has the same ratio per item, so this cost grows with every job item added.
 
 **Step:** step 2: no nested items or occurrences unless asked; load explicitly per query.
+
+**After step 2:** done. `/worksites` 16 ms p95 (was 3.1 s), destinations 391 ms (was 19.5 s), job-costing 1.0 s (was 20.8 s).
 
 ### 3. Heavy Python work on one event loop makes concurrent requests queue
 **Pages:** all, worst on the planners.
@@ -238,6 +287,8 @@ Measured 24 Nov 2026 on the code of `perf/batch9-measure`. That is v1.17.0, whic
 - Step 2: less work per request (causes 1, 2, 4 and 5).
 - Step 5: the hosting note should state the number of workers or processes on Render. One worker serialises all users.
 
+**After step 2:** calls no longer queue; see [After step 2](#after-step-2-local) for the timeline and what still holds the loop (coverage's Python work, about 0.9 s per Admin call).
+
 ### 4. The planners build the whole network in Python, with a settings query per worksite
 **Pages:** Base Planner, Operational Planner.
 
@@ -253,6 +304,8 @@ Measured 24 Nov 2026 on the code of `perf/batch9-measure`. That is v1.17.0, whic
 **Steps:**
 - Step 2: settings once per country; a default filter (group or zone) or paging; only the fields the grid shows.
 - Step 4: cache the settings.
+
+**After step 2:** settings (and, in `/schedule/coverage`, holidays) are read once per country; coverage 13 queries, Base Planner 10, `/schedule/coverage` 14 (was 412). Scoping to the user's worksites (DEC-57) shrinks both for non-Admins. A default group/zone filter and a smaller payload are still open.
 
 ### 5. No browser caching: every visit fetches everything again
 **Pages:** all.
@@ -307,6 +360,8 @@ At 20 Mbit/s, 9.8 MB takes about 4 s to transfer, and 1.6 MB under 1 s.
 
 **Step:** step 2 (`GZipMiddleware`).
 
+**After step 2:** done (1 KB minimum, level 6). Coverage sends 130 KB instead of 4.4 MB, Base Planner 211 KB instead of 1.9 MB, live positions 51 KB instead of 559 KB.
+
 ### 8. The payroll draft runs inside one request
 **Pages:** Payroll, plus every other user while it runs (cause 3).
 
@@ -334,8 +389,10 @@ At 20 Mbit/s, 9.8 MB takes about 4 s to transfer, and 1.6 MB under 1 s.
 
 **Step:** step 2 (run independent calls in parallel).
 
+**After step 2:** done. The Dashboard is at depth 1; Worksite detail at 2.
+
 ### Checked and not ranked
-- **Staffing gaps:** `get_staffing_gaps`, which runs queries in loops (a known issue in the brief), took 6.5 ms here. The mock data has only 6 gaps, so step 1 does not confirm it as a cost at this data shape. Step 2 should still fix it, because it grows with the number of gaps.
+- **Staffing gaps:** `get_staffing_gaps`, which runs queries in loops (a known issue in the brief), took 6.5 ms here. The mock data has only 6 gaps, so step 1 does not confirm it as a cost at this data shape. Step 2 should still fix it, because it grows with the number of gaps. **After step 2:** fixed; the number of queries no longer depends on the number of leave days or gaps (test `test_staffing_gaps_query_count_does_not_grow_with_leave_length`).
 - **Indexes:** none missing. The hot columns are all indexed: `job_item_id`, `review_status`, the setting key, and the date and employee columns of `scheduled_work`. The slow statements are slow because of the number of rows returned.
 - **Live positions:** 546 KB per load and per 30 s poll. Gzip (cause 7) covers most of it.
 - **Live Map polling badge:** it shows a spinner that never stops ("Refreshing every 30s"), which looks like the page is still loading. This is UI, not speed; Batch 10.

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { currencyForCountry, formatMoney } from "../features/format/money";
 import { RenewalLabel } from "../components/worksites/RenewalLabel";
 import { useParams, Link } from "@tanstack/react-router";
@@ -98,6 +98,15 @@ interface WorksiteSupervisorItem {
   assigned_at: string;
 }
 
+interface OccurrenceSummary {
+  total_count: number;
+  planned_hours: number | string;
+  first_window_start: string | null;
+  last_window_end: string | null;
+  months: string[];
+  roles: string[];
+}
+
 export const WorksiteDetail: React.FC = () => {
   const { worksiteId } = useParams({ strict: false }) as { worksiteId: string };
   const { token, user } = useAuth();
@@ -127,12 +136,18 @@ export const WorksiteDetail: React.FC = () => {
   // Occurrences View and Filter States
   const [occViewMode, setOccViewMode] = useState<"calendar" | "table">("calendar");
   const [occGradeFilter, setOccGradeFilter] = useState<string>("");
-  const [occMonthFilter, setOccMonthFilter] = useState<string>("");
   const [occStatusFilter, setOccStatusFilter] = useState<string>("");
   const [calendarMonth, setCalendarMonth] = useState<string>(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   });
+  // Batch 9 step 2: the Schedule tab loads only the month in view, and only while it is open.
+  // The summary covers the whole schedule.
+  const [occSummary, setOccSummary] = useState<OccurrenceSummary | null>(null);
+  const [occLoading, setOccLoading] = useState(false);
+  const [occReload, setOccReload] = useState(0);
+  const occMonthChecked = useRef(false);
+  const worksiteLoaded = useRef(false);
 
   // Map reference
   const [mapInstance, setMapInstance] = useState<MapLibreMap | null>(null);
@@ -330,32 +345,11 @@ export const WorksiteDetail: React.FC = () => {
         .then((revs) => setRevisions(revs))
         .catch((err) => console.error("Failed to fetch salary revisions", err));
 
-      // Fetch occurrences
-      const occRes = await fetch(`/api/v1/occurrences?worksite_id=${worksiteId}&limit=500`, { headers });
-      if (occRes.ok) {
-        const rawOccs = await occRes.json();
-        const items = data.items || data.job_items || [];
-        const itemsMap = new Map(items.map((i: any) => [i.id, i]));
-        const enriched: Occurrence[] = rawOccs.map((occ: any) => {
-          const parent = itemsMap.get(occ.job_item_id);
-          return {
-            ...occ,
-            sub_item_code: occ.sub_item_code || parent?.sub_item_code || null,
-            staff_grade_description:
-              occ.staff_grade_description || parent?.staff_grade_description || null,
-            planned_grade_code:
-              occ.planned_grade_code || parent?.planned_grade_code || null,
-          };
-        });
-        setOccurrences(enriched);
-        if (enriched.length > 0) {
-          const firstMonth = (enriched[0].due_date || enriched[0].window_start).substring(0, 7);
-          setCalendarMonth((prev) => {
-            const hasPrev = enriched.some((o) => (o.due_date || o.window_start).startsWith(prev));
-            return hasPrev ? prev : firstMonth;
-          });
-        }
-      }
+      // Occurrences: loaded by the Schedule tab for the month in view. A reload of the
+      // worksite after a change (items saved, occurrences generated) refreshes that month too;
+      // the first load doesn't, so the tab's first fetch runs alongside this one.
+      if (worksiteLoaded.current) setOccReload((n) => n + 1);
+      worksiteLoaded.current = true;
 
       // Fetch assigned supervisors
       fetch(`/api/v1/worksites/${worksiteId}/supervisors`, { headers })
@@ -503,6 +497,36 @@ export const WorksiteDetail: React.FC = () => {
       setSavingBoundary(false);
     }
   };
+
+  useEffect(() => {
+    if (activeTab !== "schedule" || !worksiteId) return;
+    let cancelled = false;
+    const [y, m] = calendarMonth.split("-").map(Number);
+    const fromDate = `${calendarMonth}-01`;
+    const toDate = `${calendarMonth}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`;
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+    setOccLoading(true);
+    fetch(`/api/v1/worksites/${worksiteId}/occurrences?from_date=${fromDate}&to_date=${toDate}`, { headers })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return;
+        setOccurrences(data.occurrences || []);
+        setOccSummary(data.summary || null);
+        // First load: if the current month has no visits, open the first month that has.
+        if (!occMonthChecked.current) {
+          occMonthChecked.current = true;
+          const months: string[] = data.summary?.months || [];
+          if (months.length > 0 && !months.includes(calendarMonth)) setCalendarMonth(months[0]);
+        }
+      })
+      .catch((err) => console.error("Failed to load occurrences", err))
+      .finally(() => {
+        if (!cancelled) setOccLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, calendarMonth, worksiteId, token, occReload]);
 
   const handleGenerateOccurrences = async (itemId?: string) => {
     if (!worksite) return;
@@ -795,7 +819,7 @@ export const WorksiteDetail: React.FC = () => {
           }`}
         >
           <Calendar className="h-4 w-4" />
-          Occurrences & Schedule ({occurrences.length})
+          Occurrences & Schedule{occSummary ? ` (${occSummary.total_count})` : ""}
         </button>
       </div>
 
@@ -1457,21 +1481,13 @@ export const WorksiteDetail: React.FC = () => {
 
       {/* Tab 4: Schedule / Occurrences */}
       {activeTab === "schedule" && (() => {
-        const totalOccurrences = occurrences.length;
-        const totalPlannedHours = occurrences.reduce(
-          (sum, o) => sum + Number(o.required_staff_count) * Number(o.required_hours_per_staff),
-          0
-        );
-        const distinctRoles = Array.from(
-          new Set(occurrences.map((o) => o.staff_grade_description).filter(Boolean))
-        ) as string[];
-
-        const distinctMonths = Array.from(
-          new Set(occurrences.map((o) => (o.due_date || o.window_start).substring(0, 7)))
-        ).sort();
-
-        const minDate = occurrences.length > 0 ? occurrences[0].window_start : "—";
-        const maxDate = occurrences.length > 0 ? occurrences[occurrences.length - 1].window_end : "—";
+        // Whole-schedule totals come from the server; the lists below hold the month in view.
+        const totalOccurrences = occSummary?.total_count ?? 0;
+        const totalPlannedHours = Number(occSummary?.planned_hours ?? 0);
+        const distinctRoles = occSummary?.roles ?? [];
+        const distinctMonths = occSummary?.months ?? [];
+        const minDate = occSummary?.first_window_start ?? "—";
+        const maxDate = occSummary?.last_window_end ?? "—";
 
         const getRoleBadgeStyle = (role: string | null) => {
           const r = (role || "").toUpperCase();
@@ -1540,7 +1556,7 @@ export const WorksiteDetail: React.FC = () => {
         // Filtered occurrences for Table View
         const tableOccurrences = occurrences.filter((o) => {
           const dStr = o.due_date || o.window_start;
-          if (occMonthFilter && !dStr.startsWith(occMonthFilter)) return false;
+          if (!dStr.startsWith(calendarMonth)) return false;
           if (occGradeFilter && o.staff_grade_description !== occGradeFilter) return false;
           if (occStatusFilter && o.status !== occStatusFilter) return false;
           return true;
@@ -1687,11 +1703,13 @@ export const WorksiteDetail: React.FC = () => {
                 {/* Table mode month filter */}
                 {occViewMode === "table" && (
                   <select
-                    value={occMonthFilter}
-                    onChange={(e) => setOccMonthFilter(e.target.value)}
+                    value={calendarMonth}
+                    onChange={(e) => setCalendarMonth(e.target.value)}
                     className="px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white text-slate-700 font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   >
-                    <option value="">All Months ({distinctMonths.length})</option>
+                    {!distinctMonths.includes(calendarMonth) && (
+                      <option value={calendarMonth}>{formatMonthTitle(calendarMonth)}</option>
+                    )}
                     {distinctMonths.map((m) => (
                       <option key={m} value={m}>
                         {formatMonthTitle(m)}
@@ -1702,6 +1720,7 @@ export const WorksiteDetail: React.FC = () => {
               </div>
 
               <div className="text-xs text-slate-500">
+                {occLoading && <span className="mr-2 text-indigo-600">Loading…</span>}
                 Showing{" "}
                 <strong className="text-slate-900 font-mono">
                   {occViewMode === "calendar" ? calendarOccurrences.length : tableOccurrences.length}

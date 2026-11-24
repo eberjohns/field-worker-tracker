@@ -216,6 +216,26 @@ class JobOccurrenceResponse(BaseModel):
     created_at: datetime
 
 
+class OccurrenceSummary(BaseModel):
+    """Totals over the whole schedule (not just the range returned)."""
+
+    total_count: int = 0
+    planned_hours: Decimal = Decimal(0)  # sum of staff x hours per staff
+    first_window_start: date | None = None
+    last_window_end: date | None = None
+    months: list[str] = Field(default_factory=list)  # YYYY-MM of due date (else window start)
+    roles: list[str] = Field(default_factory=list)  # staff grade descriptions
+
+
+class OccurrenceRangeResponse(BaseModel):
+    """Occurrences whose window overlaps [from_date, to_date], plus the schedule summary."""
+
+    from_date: date
+    to_date: date
+    occurrences: list[JobOccurrenceResponse]
+    summary: OccurrenceSummary
+
+
 class JobOccurrenceUpdate(BaseModel):
     due_date: date | None = None
     status: str | None = None

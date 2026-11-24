@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.gzip import DEFAULT_EXCLUDED_CONTENT_TYPES, GZipMiddleware
 
 from fw.api import api_v1_router
 from fw.api.health import router as health_router
@@ -44,6 +45,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         await live_position_broadcaster.stop_listener()
 
 
+GZIP_MINIMUM_SIZE = 1024
+GZIP_EXCLUDED_CONTENT_TYPES = (
+    *DEFAULT_EXCLUDED_CONTENT_TYPES,  # includes text/event-stream
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+)
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
     from fw.modules.attendance import register_attendance_listeners
@@ -80,6 +89,15 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
         expose_headers=["Server-Timing"] if timing else [],
+    )
+
+    # Compress responses of 1 KB or more for clients that accept gzip (Batch 9 step 2).
+    # The live SSE stream (text/event-stream) and already-compressed files are left alone.
+    app.add_middleware(
+        GZipMiddleware,
+        minimum_size=GZIP_MINIMUM_SIZE,
+        compresslevel=6,
+        exclude_content_types=GZIP_EXCLUDED_CONTENT_TYPES,
     )
 
     # Exception handlers (RFC 7807 problem details)

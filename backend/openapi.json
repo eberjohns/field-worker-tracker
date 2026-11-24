@@ -12,7 +12,7 @@
           "Health"
         ],
         "summary": "Liveness check alias",
-        "operationId": "health_health_liveness_head",
+        "operationId": "health_health_liveness_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -31,7 +31,7 @@
           "Health"
         ],
         "summary": "Liveness check alias",
-        "operationId": "health_health_liveness_head",
+        "operationId": "health_health_liveness_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -52,7 +52,7 @@
           "Health"
         ],
         "summary": "Liveness check",
-        "operationId": "health_health_head",
+        "operationId": "health_health_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -71,7 +71,7 @@
           "Health"
         ],
         "summary": "Liveness check",
-        "operationId": "health_health_head",
+        "operationId": "health_health_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -92,7 +92,7 @@
           "Health"
         ],
         "summary": "Readiness check alias",
-        "operationId": "health_ready_health_readiness_head",
+        "operationId": "health_ready_health_readiness_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -114,7 +114,7 @@
           "Health"
         ],
         "summary": "Readiness check alias",
-        "operationId": "health_ready_health_readiness_head",
+        "operationId": "health_ready_health_readiness_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -138,7 +138,7 @@
           "Health"
         ],
         "summary": "Readiness check",
-        "operationId": "health_ready_health_ready_head",
+        "operationId": "health_ready_health_ready_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -160,7 +160,7 @@
           "Health"
         ],
         "summary": "Readiness check",
-        "operationId": "health_ready_health_ready_head",
+        "operationId": "health_ready_health_ready_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -10155,7 +10155,7 @@
           "jobs"
         ],
         "summary": "List Occurrences",
-        "description": "List job occurrences with filtering.",
+        "description": "List job occurrences with filtering, within the caller's worksites (DEC-57).\n\nA worksite or job item outside the caller's scope is a 404, as on the worksite detail;\nwithout either, only occurrences on in-scope worksites are listed.",
         "operationId": "list_occurrences_api_v1_occurrences_get",
         "parameters": [
           {
@@ -10293,6 +10293,174 @@
                     "$ref": "#/components/schemas/JobOccurrenceResponse"
                   },
                   "title": "Response List Occurrences Api V1 Occurrences Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/worksites/{worksite_id}/occurrences": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "List Worksite Occurrences",
+        "description": "A worksite's occurrences whose window overlaps the range, and its schedule summary.",
+        "operationId": "list_worksite_occurrences_api_v1_worksites__worksite_id__occurrences_get",
+        "parameters": [
+          {
+            "name": "worksite_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Worksite Id"
+            }
+          },
+          {
+            "name": "from_date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "First day of the range",
+              "title": "From Date"
+            },
+            "description": "First day of the range"
+          },
+          {
+            "name": "to_date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "Last day of the range (at most 366 days)",
+              "title": "To Date"
+            },
+            "description": "Last day of the range (at most 366 days)"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OccurrenceRangeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/job-items/{job_item_id}/occurrences": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "List Job Item Occurrences",
+        "description": "A job item's occurrences whose window overlaps the range, and its schedule summary.",
+        "operationId": "list_job_item_occurrences_api_v1_job_items__job_item_id__occurrences_get",
+        "parameters": [
+          {
+            "name": "job_item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Job Item Id"
+            }
+          },
+          {
+            "name": "from_date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "First day of the range",
+              "title": "From Date"
+            },
+            "description": "First day of the range"
+          },
+          {
+            "name": "to_date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "Last day of the range (at most 366 days)",
+              "title": "To Date"
+            },
+            "description": "Last day of the range (at most 366 days)"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OccurrenceRangeResponse"
                 }
               }
             }
@@ -13351,13 +13519,63 @@
         }
       }
     },
+    "/api/v1/approvals/counts": {
+      "get": {
+        "tags": [
+          "scheduling"
+        ],
+        "summary": "Get Approvals Counts",
+        "description": "Pending approvals per kind, for badges. Count queries only; same scope as the inbox.",
+        "operationId": "get_approvals_counts_api_v1_approvals_counts_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalsCounts"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/approvals": {
       "get": {
         "tags": [
           "scheduling"
         ],
         "summary": "Get Approvals Inbox",
-        "description": "Get approvals inbox items (leave requests, reassignments, attendance) in scope with badge counts.",
+        "description": "One page of approvals inbox items in scope (leave, reassignments, attendance).\n\n``counts`` are the pending badge counts; ``totals`` the items in the selected status per\nkind, for paging.",
         "operationId": "get_approvals_inbox_api_v1_approvals_get",
         "parameters": [
           {
@@ -13378,6 +13596,52 @@
               "title": "Status"
             },
             "description": "Filter status: PENDING, APPROVED, REJECTED, DECIDED, ALL"
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "leave",
+                    "reassignments",
+                    "attendance"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Fill only this list; omitted = first page of each",
+              "title": "Type"
+            },
+            "description": "Fill only this list; omitted = first page of each"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
           },
           {
             "name": "authorization",
@@ -17020,6 +17284,19 @@
         "properties": {
           "counts": {
             "$ref": "#/components/schemas/ApprovalsCounts"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/ApprovalsCounts"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit",
+            "default": 50
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset",
+            "default": 0
           },
           "leave_requests": {
             "items": {
@@ -24708,6 +24985,94 @@
         ],
         "title": "NewWorksiteBudgetPreview",
         "description": "Budget preview for a job item of a worksite that is not saved yet (Add Worksite form)."
+      },
+      "OccurrenceRangeResponse": {
+        "properties": {
+          "from_date": {
+            "type": "string",
+            "format": "date",
+            "title": "From Date"
+          },
+          "to_date": {
+            "type": "string",
+            "format": "date",
+            "title": "To Date"
+          },
+          "occurrences": {
+            "items": {
+              "$ref": "#/components/schemas/JobOccurrenceResponse"
+            },
+            "type": "array",
+            "title": "Occurrences"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/OccurrenceSummary"
+          }
+        },
+        "type": "object",
+        "required": [
+          "from_date",
+          "to_date",
+          "occurrences",
+          "summary"
+        ],
+        "title": "OccurrenceRangeResponse",
+        "description": "Occurrences whose window overlaps [from_date, to_date], plus the schedule summary."
+      },
+      "OccurrenceSummary": {
+        "properties": {
+          "total_count": {
+            "type": "integer",
+            "title": "Total Count",
+            "default": 0
+          },
+          "planned_hours": {
+            "type": "string",
+            "title": "Planned Hours",
+            "default": "0"
+          },
+          "first_window_start": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Window Start"
+          },
+          "last_window_end": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Window End"
+          },
+          "months": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Months"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Roles"
+          }
+        },
+        "type": "object",
+        "title": "OccurrenceSummary",
+        "description": "Totals over the whole schedule (not just the range returned)."
       },
       "OperationalCellWorker": {
         "properties": {

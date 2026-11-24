@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from fw.modules.attendance.models import AttendanceCalculation, AttendanceRecord
-from fw.modules.jobs.models import JobItem, JobOccurrence, Worksite
+from fw.modules.jobs.models import JobItem, JobOccurrence
 from fw.modules.org.models import Employee
 from fw.modules.payroll.models import (
     EmployeeSalary,
@@ -386,24 +386,6 @@ class PayrollRepository:
             )
             .options(selectinload(ScheduledWork.occurrence))
         )
-        res = await session.execute(stmt)
-        return list(res.scalars().all())
-
-    @staticmethod
-    async def get_worksites_and_items(
-        session: AsyncSession,
-        country: str | None = None,
-    ) -> list[Worksite]:
-        stmt = (
-            select(Worksite)
-            .where(Worksite.is_active == True)  # noqa: E712
-            .options(
-                selectinload(Worksite.items).selectinload(JobItem.occurrences),
-            )
-            .order_by(Worksite.job_number.asc())
-        )
-        if country:
-            stmt = stmt.where(Worksite.country == country)
         res = await session.execute(stmt)
         return list(res.scalars().all())
 

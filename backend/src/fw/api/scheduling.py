@@ -3,7 +3,7 @@
 import email
 from datetime import date
 from email import policy
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fw.core.db import get_db
 from fw.modules.identity import User, get_current_user, require_role
 from fw.modules.scheduling import (
+    ApprovalsCounts,
     ApprovalsInboxResponse,
     BasePlannerResponse,
     BaseRosterTemplateCreate,
@@ -108,7 +109,9 @@ async def get_schedule_coverage(
 ) -> CoverageResponse:
     """Job-centred coverage view: worksites > items > daily staffing and TO_BE_COVERED slots."""
     service = SchedulingService(session)
-    return await service.get_coverage_view(week_start=week_start, group_id=group_id)
+    return await service.get_coverage_view(
+        week_start=week_start, group_id=group_id, current_user=current_user
+    )
 
 
 # -------------------------------------------------------------------------
@@ -318,7 +321,7 @@ async def get_base_planner_worksites(
 ) -> BasePlannerResponse:
     """Fetch worksites and items with base roster templates for Base Planner."""
     service = SchedulingService(session)
-    return await service.get_base_planner_worksites(group_id=group_id)
+    return await service.get_base_planner_worksites(group_id=group_id, current_user=current_user)
 
 
 @router.get("/base-planner/templates/{job_item_id}", response_model=BaseRosterTemplateRead | None)
@@ -361,7 +364,9 @@ async def get_operational_coverage(
 ) -> OperationalCoverageResponse:
     """Fetch weekly operational coverage matrix (job items x 7 days) with base blueprint & overrides."""
     service = SchedulingService(session)
-    return await service.get_operational_coverage(week_start=week_start, group_id=group_id)
+    return await service.get_operational_coverage(
+        week_start=week_start, group_id=group_id, current_user=current_user
+    )
 
 
 @router.get("/operational-planner/roster", response_model=OperationalRosterResponse)
@@ -373,7 +378,9 @@ async def get_operational_roster(
 ) -> OperationalRosterResponse:
     """Fetch weekly operational worker roster (workers x 7 days)."""
     service = SchedulingService(session)
-    return await service.get_operational_roster(week_start=week_start, group_id=group_id)
+    return await service.get_operational_roster(
+        week_start=week_start, group_id=group_id, current_user=current_user
+    )
 
 
 @router.post(
@@ -724,25 +731,71 @@ async def cancel_reassignment_request(
 # -------------------------------------------------------------------------
 
 
+@router.get("/approvals/counts", response_model=ApprovalsCounts)
+async def get_approvals_counts(
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERINTENDENT")),
+    session: AsyncSession = Depends(get_db),
+) -> ApprovalsCounts:
+    """Pending approvals per kind, for badges. Count queries only; same scope as the inbox."""
+    from fw.modules.attendance import AttendanceService
+
+    service = SchedulingService(session)
+    leave, reassignments = await service.count_pending_requests(current_user)
+    attendance = await AttendanceService.count_attendance_reviews(session, current_user, "PENDING")
+    return ApprovalsCounts(
+        leave=leave,
+        reassignments=reassignments,
+        attendance=attendance,
+        total=leave + reassignments + attendance,
+    )
+
+
 @router.get("/approvals", response_model=ApprovalsInboxResponse)
 async def get_approvals_inbox(
     status: str | None = Query(
         "PENDING", description="Filter status: PENDING, APPROVED, REJECTED, DECIDED, ALL"
     ),
+    kind: Literal["leave", "reassignments", "attendance"] | None = Query(
+        None, alias="type", description="Fill only this list; omitted = first page of each"
+    ),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERINTENDENT")),
     session: AsyncSession = Depends(get_db),
 ) -> ApprovalsInboxResponse:
-    """Get approvals inbox items (leave requests, reassignments, attendance) in scope with badge counts."""
+    """One page of approvals inbox items in scope (leave, reassignments, attendance).
+
+    ``counts`` are the pending badge counts; ``totals`` the items in the selected status per
+    kind, for paging.
+    """
     from fw.modules.attendance import AttendanceService
 
     service = SchedulingService(session)
-    res = await service.get_approvals_inbox(current_user=current_user, status=status)
-    att_rows, att_pending_count = await AttendanceService.get_attendance_approvals(
-        session=session, current_user=current_user, status=status
+    res = await service.get_approvals_inbox(
+        current_user=current_user,
+        status=status,
+        kind=kind,
+        limit=limit,
+        offset=offset,
     )
-    res.attendance_rows = att_rows
-    res.counts.attendance = att_pending_count
-    res.counts.total = res.counts.leave + res.counts.reassignments + att_pending_count
+    if kind in (None, "attendance"):
+        att_rows, att_pending, att_total = await AttendanceService.get_attendance_approvals(
+            session=session, current_user=current_user, status=status, limit=limit, offset=offset
+        )
+        res.attendance_rows = att_rows
+    else:
+        att_pending = await AttendanceService.count_attendance_reviews(
+            session, current_user, "PENDING"
+        )
+        att_total = (
+            att_pending
+            if (status or "PENDING").upper() == "PENDING"
+            else await AttendanceService.count_attendance_reviews(session, current_user, status)
+        )
+    res.counts.attendance = att_pending
+    res.counts.total = res.counts.leave + res.counts.reassignments + att_pending
+    res.totals.attendance = att_total
+    res.totals.total = res.totals.leave + res.totals.reassignments + att_total
     return res
 
 

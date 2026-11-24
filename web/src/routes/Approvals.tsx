@@ -90,6 +90,8 @@ interface ApprovalsCounts {
   total: number;
 }
 
+const PAGE_SIZE = 50;
+
 export const Approvals: React.FC = () => {
   const { token, user } = useAuth();
   const canApprove =
@@ -101,6 +103,9 @@ export const Approvals: React.FC = () => {
   const [attendanceRows, setAttendanceRows] = useState<AttendanceInboxRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>("PENDING");
+  // Batch 9 step 2: the active tab is fetched one page at a time.
+  const [page, setPage] = useState(0);
+  const [totals, setTotals] = useState<ApprovalsCounts>({ leave: 0, reassignments: 0, attendance: 0, total: 0 });
 
   // Decision Modal State
   const [decisionModal, setDecisionModal] = useState<{
@@ -125,11 +130,17 @@ export const Approvals: React.FC = () => {
     setLoading(true);
     try {
       const headers = { Authorization: `Bearer ${token}` };
-      const statusParam = statusFilter === "ALL" ? "" : `?status=${statusFilter}`;
-      const res = await fetch(`/api/v1/approvals${statusParam}`, { headers });
+      const params = new URLSearchParams({
+        status: statusFilter,
+        type: activeTab,
+        limit: String(PAGE_SIZE),
+        offset: String(page * PAGE_SIZE),
+      });
+      const res = await fetch(`/api/v1/approvals?${params}`, { headers });
       if (res.ok) {
         const data = await res.json();
         setCounts(data.counts || { leaves: 0, reassignments: 0, attendance: 0, total: 0 });
+        setTotals(data.totals || { leave: 0, reassignments: 0, attendance: 0, total: 0 });
         setLeaves(data.leave_requests || []);
         setReassignments(data.reassignment_requests || []);
         setAttendanceRows(data.attendance_rows || []);
@@ -143,7 +154,22 @@ export const Approvals: React.FC = () => {
 
   useEffect(() => {
     fetchInbox();
-  }, [token, statusFilter]);
+  }, [token, statusFilter, activeTab, page]);
+
+  // A new tab or status starts from the first page (set together: one fetch).
+  const selectTab = (tab: "leave" | "reassignments" | "attendance") => {
+    setActiveTab(tab);
+    setPage(0);
+  };
+  const selectStatus = (st: string) => {
+    setStatusFilter(st);
+    setPage(0);
+  };
+
+  const tabTotal =
+    activeTab === "leave" ? (totals.leave ?? 0) : activeTab === "reassignments" ? totals.reassignments : totals.attendance;
+  const pageStart = tabTotal === 0 ? 0 : page * PAGE_SIZE + 1;
+  const pageEnd = Math.min((page + 1) * PAGE_SIZE, tabTotal);
 
   const handleOpenDecision = (
     type: "LEAVE" | "REASSIGNMENT" | "REASSIGNMENT_BATCH" | "ATTENDANCE",
@@ -233,7 +259,7 @@ export const Approvals: React.FC = () => {
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
             <button
-              onClick={() => setStatusFilter("PENDING")}
+              onClick={() => selectStatus("PENDING")}
               className={`px-3 py-1 text-xs font-semibold rounded-md transition cursor-pointer ${
                 statusFilter === "PENDING"
                   ? "bg-white text-indigo-700 shadow-2xs"
@@ -243,7 +269,7 @@ export const Approvals: React.FC = () => {
               Pending ({counts.total})
             </button>
             <button
-              onClick={() => setStatusFilter("APPROVED")}
+              onClick={() => selectStatus("APPROVED")}
               className={`px-3 py-1 text-xs font-semibold rounded-md transition cursor-pointer ${
                 statusFilter === "APPROVED"
                   ? "bg-white text-emerald-700 shadow-2xs"
@@ -253,7 +279,7 @@ export const Approvals: React.FC = () => {
               Approved History
             </button>
             <button
-              onClick={() => setStatusFilter("ALL")}
+              onClick={() => selectStatus("ALL")}
               className={`px-3 py-1 text-xs font-semibold rounded-md transition cursor-pointer ${
                 statusFilter === "ALL"
                   ? "bg-white text-slate-900 shadow-2xs"
@@ -277,7 +303,7 @@ export const Approvals: React.FC = () => {
       {/* Tabs */}
       <div className="border-b border-slate-200 flex gap-6">
         <button
-          onClick={() => setActiveTab("leave")}
+          onClick={() => selectTab("leave")}
           className={`pb-3 text-sm font-semibold flex items-center gap-2 border-b-2 transition ${
             activeTab === "leave"
               ? "border-indigo-600 text-indigo-600"
@@ -294,7 +320,7 @@ export const Approvals: React.FC = () => {
         </button>
 
         <button
-          onClick={() => setActiveTab("reassignments")}
+          onClick={() => selectTab("reassignments")}
           className={`pb-3 text-sm font-semibold flex items-center gap-2 border-b-2 transition ${
             activeTab === "reassignments"
               ? "border-indigo-600 text-indigo-600"
@@ -311,7 +337,7 @@ export const Approvals: React.FC = () => {
         </button>
 
         <button
-          onClick={() => setActiveTab("attendance")}
+          onClick={() => selectTab("attendance")}
           className={`pb-3 text-sm font-semibold flex items-center gap-2 border-b-2 transition ${
             activeTab === "attendance"
               ? "border-indigo-600 text-indigo-600"
@@ -805,6 +831,31 @@ export const Approvals: React.FC = () => {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Pager for the active tab */}
+      {tabTotal > PAGE_SIZE && (
+        <div className="flex items-center justify-between text-xs text-slate-600">
+          <span>
+            {pageStart}–{pageEnd} of {tabTotal}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={loading || page === 0}
+              className="px-3 py-1.5 rounded-lg border border-slate-200 font-semibold hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Prev
+            </button>
+            <button
+              onClick={() => setPage((p) => p + 1)}
+              disabled={loading || pageEnd >= tabTotal}
+              className="px-3 py-1.5 rounded-lg border border-slate-200 font-semibold hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Next
+            </button>
+          </div>
         </div>
       )}
 

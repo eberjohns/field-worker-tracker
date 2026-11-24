@@ -128,7 +128,10 @@ class JobItem(ModelBase):
         "JobOccurrence",
         back_populates="job_item",
         cascade="all, delete-orphan",
-        lazy="selectin",
+        # Not eager (Batch 9 step 2): a job item can have thousands of occurrences, and the
+        # worksite/job item queries don't show them. Load explicitly where needed, or use the
+        # date-range occurrence endpoints.
+        lazy="select",
         order_by="JobOccurrence.window_start, JobOccurrence.slot_index",
     )
 
