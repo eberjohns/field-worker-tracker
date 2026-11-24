@@ -112,6 +112,8 @@ export const WorksiteDetail: React.FC = () => {
   const [activeTab, setActiveTab] = useState<"overview" | "items" | "boundary" | "schedule">(initialTab);
   const [loading, setLoading] = useState(true);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  // Just created in the Add Worksite wizard (Batch 5.1 B): offer to draw the boundary.
+  const [justCreated, setJustCreated] = useState(searchParams.get("created") === "1");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Assigned supervisors state
@@ -690,6 +692,40 @@ export const WorksiteDetail: React.FC = () => {
       </div>
 
       {/* Notifications */}
+      {justCreated && worksite && !worksite.has_boundary && (
+        <div
+          className="p-3 bg-indigo-50 border border-indigo-200 rounded-lg flex flex-wrap items-center justify-between gap-2 text-xs text-indigo-900"
+          role="status"
+        >
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-indigo-600 shrink-0" />
+            <span>
+              Worksite {worksite.job_number} created
+              {itemsList.length ? ` with ${itemsList.length} job item${itemsList.length > 1 ? "s" : ""}` : ""}. It has no boundary yet.
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab("boundary");
+                setJustCreated(false);
+              }}
+              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-semibold"
+            >
+              Draw boundary now
+            </button>
+            <button
+              type="button"
+              onClick={() => setJustCreated(false)}
+              className="px-2 py-1.5 text-indigo-700 hover:underline"
+            >
+              Later
+            </button>
+          </div>
+        </div>
+      )}
+
       {statusMessage && (
         <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center justify-between text-xs text-emerald-800">
           <div className="flex items-center gap-2">
@@ -1962,9 +1998,10 @@ export const WorksiteDetail: React.FC = () => {
           setEditingItem(null);
         }}
         worksiteId={worksite.id}
+        worksiteCountry={worksite.country}
         worksiteStartDate={worksite.start_date}
-        salaryRevisionCode={worksite.salary_revision_code}
         initialData={editingItem}
+        existingCodes={itemsList.map((it: { sub_item_code: string }) => it.sub_item_code)}
         onSuccess={() => {
           setStatusMessage("Job item saved and occurrences updated.");
           fetchData();

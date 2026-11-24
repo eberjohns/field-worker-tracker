@@ -1,9 +1,9 @@
 {
-  "version": "1.14.1",
+  "version": "1.15.0",
   "major": 1,
-  "minor": 14,
-  "patch": 1,
-  "last_branch": "fix/test-db-isolation-and-lists",
-  "last_commit": "7020315",
-  "updated_at": "2026-11-23T15:14:37.681392+00:00"
+  "minor": 15,
+  "patch": 0,
+  "last_branch": "feat/batch5.1b-worksite-wizard",
+  "last_commit": "a9f2b16",
+  "updated_at": "2026-11-23T16:13:55.817558+00:00"
 }

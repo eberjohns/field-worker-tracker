@@ -1,6 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { useNewWorksiteBudgetPreview } from "../features/budget/useBudgetPreview";
-import { fmtHours, fmtMoney } from "../features/budget/budgetFormat";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -20,13 +18,11 @@ import {
   ArrowUpDown,
   Edit2,
   PowerOff,
-  Trash2,
 } from "lucide-react";
 import { MapContainer, PolygonEditor, PlaceSearch } from "../features/map";
 import { Map as MapLibreMap } from "maplibre-gl";
 import SupervisorProposalsModal from "../components/jobs/SupervisorProposalsModal";
-import { LookupSelect } from "../components/lookups/LookupSelect";
-import { GroupZoneSelect } from "../components/org/GroupZoneSelect";
+import { AddWorksiteWizard } from "../components/worksites/AddWorksiteWizard";
 
 interface Worksite {
   id: string;
@@ -78,65 +74,6 @@ interface Zone {
   is_active?: boolean;
 }
 
-/** Live man-hours (and, for Admin, cost) of one Add Worksite item row (DEC-59). */
-const InlineItemBudget: React.FC<{
-  token: string | null | undefined;
-  country: string;
-  isAdmin: boolean;
-  item: InitialJobItem;
-}> = ({ token, country, isAdmin, item }) => {
-  const ready =
-    item.sub_item_code.trim() &&
-    item.staff_grade_description &&
-    item.planned_grade_code &&
-    item.start_date &&
-    item.hours_per_occurrence_per_staff > 0;
-  const { budget, error } = useNewWorksiteBudgetPreview(
-    token,
-    country,
-    ready
-      ? {
-          sub_item_code: item.sub_item_code.trim(),
-          staff_grade_description: item.staff_grade_description,
-          planned_grade_code: item.planned_grade_code,
-          start_date: item.start_date,
-          end_date: item.end_date || null,
-          frequency_unit: item.frequency_unit,
-          occurrences_per_period: item.occurrences_per_period,
-          period_interval: item.period_interval || 1,
-          required_staff_count: item.required_staff_count,
-          hours_per_occurrence_per_staff: item.hours_per_occurrence_per_staff,
-          deployment_type: item.deployment_type,
-        }
-      : null,
-  );
-  if (!ready) return null;
-  return (
-    <div className="text-[11px] text-indigo-800 pt-1">
-      ≈ {fmtHours(budget?.annual_hours)} this year
-      {isAdmin && budget?.annual_cost != null && <> · {fmtMoney(budget.annual_cost)}</>}
-      {budget?.warnings.map((w, i) => (
-        <span key={i} className="block text-amber-700">{w.message}</span>
-      ))}
-      {error && <span className="block text-rose-700">{error}</span>}
-    </div>
-  );
-};
-
-interface InitialJobItem {
-  sub_item_code: string;
-  staff_grade_description: string;
-  planned_grade_code: string;
-  start_date: string;
-  end_date: string;
-  required_staff_count: number;
-  hours_per_occurrence_per_staff: number;
-  frequency_unit: string;
-  occurrences_per_period: number;
-  period_interval: number;
-  deployment_type: string;
-}
-
 export const Worksites: React.FC = () => {
   const navigate = useNavigate();
   const { token, user } = useAuth();
@@ -175,17 +112,6 @@ export const Worksites: React.FC = () => {
 
   // Create Modal
   const [modalOpen, setModalOpen] = useState(false);
-  const [createLoading, setCreateLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
-  const [formNumber, setFormNumber] = useState("");
-  const [formName, setFormName] = useState("");
-  const [formGroupId, setFormGroupId] = useState("");
-  const [formZoneId, setFormZoneId] = useState("");
-  const [formCountry, setFormCountry] = useState("AE");
-  const [formCustomerType, setFormCustomerType] = useState("Direct");
-  const [formRenewalRef, setFormRenewalRef] = useState("");
-  const [formBudget, setFormBudget] = useState("");
-  const [initialJobItems, setInitialJobItems] = useState<InitialJobItem[]>([]);
   const [exporting, setExporting] = useState(false);
 
   const handleExport = async () => {
@@ -302,98 +228,6 @@ export const Worksites: React.FC = () => {
     }
   };
 
-  const handleCreateWorksite = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg("");
-
-    // Regex check: 2 digits + letter (A/B/C) + 5 digits
-    const cleanedNumber = formNumber.trim().toUpperCase();
-    if (!/^\d{2}[ABC]\d{5}$/.test(cleanedNumber)) {
-      setErrorMsg(
-        "Job number format must be 2 digits + letter (A outdoor, B indoor, C water feature) + 5 digits (e.g. 12A14301)."
-      );
-      return;
-    }
-
-    // No pre-filled defaults (handover 6.1 A): every inline job item needs both fields.
-    const incomplete = initialJobItems.find(
-      (it) => it.sub_item_code.trim() && (!it.staff_grade_description || !it.planned_grade_code)
-    );
-    if (incomplete) {
-      setErrorMsg(
-        `Job item ${incomplete.sub_item_code}: choose a Staff Designation and a Planned Grade.`
-      );
-      return;
-    }
-
-    setCreateLoading(true);
-    try {
-      const res = await fetch("/api/v1/worksites", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          job_number: cleanedNumber,
-          job_name: formName.trim(),
-          group_id: formGroupId,
-          zone_id: formZoneId,
-          country: formCountry,
-          customer_type: formCustomerType || null,
-          renewal_reference: formRenewalRef.trim() || null,
-          budget_amount: user?.role === "ADMIN" && formBudget ? parseFloat(formBudget) : null,
-        }),
-      });
-
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.detail || "Failed to create worksite");
-      }
-
-      const createdWs = await res.json();
-
-      // Create initial job items if added
-      for (const item of initialJobItems) {
-        if (!item.sub_item_code.trim()) continue;
-        await fetch(`/api/v1/worksites/${createdWs.id}/job-items`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify({
-            sub_item_code: item.sub_item_code.trim(),
-            staff_grade_description: item.staff_grade_description,
-            planned_grade_code: item.planned_grade_code,
-            start_date: item.start_date || new Date().toISOString().slice(0, 10),
-            end_date: item.end_date || null,
-            frequency_unit: item.frequency_unit,
-            occurrences_per_period: item.occurrences_per_period,
-            period_interval: item.period_interval,
-            required_staff_count: item.required_staff_count,
-            hours_per_occurrence_per_staff: item.hours_per_occurrence_per_staff,
-            deployment_type: item.deployment_type,
-          }),
-        });
-      }
-
-      setModalOpen(false);
-      setFormNumber("");
-      setFormName("");
-      setFormGroupId("");
-      setFormZoneId("");
-      setFormRenewalRef("");
-      setFormBudget("");
-      setInitialJobItems([]);
-      fetchData();
-    } catch (err: any) {
-      setErrorMsg(err.message || "Failed to create worksite");
-    } finally {
-      setCreateLoading(false);
-    }
-  };
-
   const handleSaveAccommodation = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingAccommodation) return;
@@ -444,6 +278,7 @@ export const Worksites: React.FC = () => {
   };
 
   const isAdminOrEngineer = user?.role === "ADMIN" || user?.role === "ENGINEER";
+  const isAdmin = user?.role === "ADMIN";
 
   const filteredAccommodations = accommodations.filter((acc) => {
     if (search) {
@@ -516,14 +351,16 @@ export const Worksites: React.FC = () => {
                 {exporting ? "Exporting..." : "Export"}
               </button>
 
-              <Link
-                to="/imports"
-                className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 bg-white text-slate-700 rounded-md text-sm font-medium hover:bg-slate-50 transition shadow-xs"
-                title="Import Worksites from Excel"
-              >
-                <Upload className="h-4 w-4 text-slate-500" />
-                Import
-              </Link>
+              {isAdmin && (
+                <Link
+                  to="/imports"
+                  className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 bg-white text-slate-700 rounded-md text-sm font-medium hover:bg-slate-50 transition shadow-xs"
+                  title="Import Worksites from Excel (Admin)"
+                >
+                  <Upload className="h-4 w-4 text-slate-500" />
+                  Import
+                </Link>
+              )}
             </>
           )}
 
@@ -535,12 +372,9 @@ export const Worksites: React.FC = () => {
             Boundary Setup Queue
           </Link>
 
-          {isAdminOrEngineer && (
+          {isAdmin && (
             <button
-              onClick={() => {
-                setErrorMsg("");
-                setModalOpen(true);
-              }}
+              onClick={() => setModalOpen(true)}
               className="flex items-center gap-2 px-4 py-2 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium shadow-sm transition"
             >
               <Plus className="h-4 w-4" />
@@ -972,6 +806,7 @@ export const Worksites: React.FC = () => {
                               Edit
                             </button>
 
+                            {isAdmin && (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -987,6 +822,7 @@ export const Worksites: React.FC = () => {
                               <PowerOff className="h-3 w-3" />
                               {acc.is_active ? "Deactivate" : "Activate"}
                             </button>
+                            )}
                           </>
                         )}
                       </td>
@@ -1043,323 +879,24 @@ export const Worksites: React.FC = () => {
         </div>
       )}
 
-      {/* Create Worksite Modal */}
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-2xl w-full p-6 space-y-4 my-8 max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between border-b pb-3">
-              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <Building2 className="h-5 w-5 text-indigo-600" />
-                Create New Worksite
-              </h2>
-              <button
-                type="button"
-                onClick={() => setModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            {errorMsg && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded text-xs text-red-700 flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 shrink-0 text-red-500" />
-                {errorMsg}
-              </div>
-            )}
-
-            <form onSubmit={handleCreateWorksite} className="space-y-4 flex-1 overflow-y-auto pr-1">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Job Number *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. 12A14301"
-                    value={formNumber}
-                    onChange={(e) => setFormNumber(e.target.value.toUpperCase())}
-                    className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm font-mono focus:ring-1 focus:ring-indigo-500"
-                  />
-                  <p className="text-[10px] text-slate-400 mt-0.5">2 digits + letter (A/B/C) + 5 digits</p>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Country *
-                  </label>
-                  <select
-                    value={formCountry}
-                    onChange={(e) => setFormCountry(e.target.value)}
-                    className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-indigo-500 bg-white"
-                  >
-                    <option value="AE">AE (United Arab Emirates)</option>
-                    <option value="SA">SA (Saudi Arabia)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">
-                  Job Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Dubai Marina Promenade"
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                  className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-indigo-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Customer Group *
-                  </label>
-                  <GroupZoneSelect
-                    kind="group"
-                    required
-                    value={formGroupId}
-                    onChange={setFormGroupId}
-                    items={groups}
-                    onCreated={(u) => setGroups((prev) => [...prev, u])}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Zone *
-                  </label>
-                  <GroupZoneSelect
-                    kind="zone"
-                    required
-                    value={formZoneId}
-                    onChange={setFormZoneId}
-                    items={zones}
-                    onCreated={(u) => setZones((prev) => [...prev, u])}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Customer Type
-                  </label>
-                  <select
-                    value={formCustomerType}
-                    onChange={(e) => setFormCustomerType(e.target.value)}
-                    className="w-full px-2 py-1.5 border border-slate-300 rounded text-xs bg-white"
-                  >
-                    <option value="Direct">Direct</option>
-                    <option value="Indirect">Indirect</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Renewal Ref
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="R1, R2..."
-                    value={formRenewalRef}
-                    onChange={(e) => setFormRenewalRef(e.target.value)}
-                    className="w-full px-2 py-1.5 border border-slate-300 rounded text-xs"
-                  />
-                </div>
-
-                {user?.role === "ADMIN" && (
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">
-                      Labour Budget (AED)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      placeholder="e.g. 50000"
-                      value={formBudget}
-                      onChange={(e) => setFormBudget(e.target.value)}
-                      className="w-full px-2 py-1.5 border border-slate-300 rounded text-xs"
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Inline Job Items Section */}
-              <div className="border-t border-slate-200 pt-3 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-xs font-bold text-slate-900">Job Items (Staff Requirements)</h3>
-                    <p className="text-[11px] text-slate-500">Optional: Add staffing lines directly with this worksite.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const nextNum = String(initialJobItems.length + 1).padStart(2, "0");
-                      setInitialJobItems((prev) => [
-                        ...prev,
-                        {
-                          sub_item_code: nextNum,
-                          staff_grade_description: "",
-                          planned_grade_code: "",
-                          start_date: new Date().toISOString().slice(0, 10),
-                          end_date: "",
-                          required_staff_count: 1,
-                          hours_per_occurrence_per_staff: 8.0,
-                          frequency_unit: "MONTH",
-                          occurrences_per_period: 26,
-                          period_interval: 1,
-                          deployment_type: "SCHEDULED",
-                        },
-                      ]);
-                    }}
-                    className="flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded text-xs font-semibold transition"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    Add Job Item
-                  </button>
-                </div>
-
-                {initialJobItems.map((item, idx) => (
-                  <div key={idx} className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-slate-700">Item #{idx + 1} ({item.sub_item_code})</span>
-                      <button
-                        type="button"
-                        onClick={() => setInitialJobItems((prev) => prev.filter((_, i) => i !== idx))}
-                        className="text-red-500 hover:text-red-700 p-0.5"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      <div>
-                        <label className="block text-[10px] text-slate-500 mb-0.5">Sub-Item Code</label>
-                        <input
-                          type="text"
-                          required
-                          value={item.sub_item_code}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setInitialJobItems((prev) => prev.map((it, i) => i === idx ? { ...it, sub_item_code: val } : it));
-                          }}
-                          className="w-full p-1 border rounded bg-white text-xs font-mono"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] text-slate-500 mb-0.5">Staff Designation</label>
-                        <LookupSelect
-                          listKey="staff_grade_description"
-                          value={item.staff_grade_description}
-                          onChange={(val) =>
-                            setInitialJobItems((prev) => prev.map((it, i) => (i === idx ? { ...it, staff_grade_description: val } : it)))
-                          }
-                          placeholder="Select…"
-                          inputClassName="w-full p-1 border rounded bg-white text-xs"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] text-slate-500 mb-0.5">Planned Grade</label>
-                        <LookupSelect
-                          listKey="grade_code"
-                          value={item.planned_grade_code}
-                          onChange={(val) =>
-                            setInitialJobItems((prev) => prev.map((it, i) => (i === idx ? { ...it, planned_grade_code: val } : it)))
-                          }
-                          placeholder="Select…"
-                          inputClassName="w-full p-1 border rounded bg-white text-xs font-mono"
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-4 gap-2">
-                      <div>
-                        <label className="block text-[10px] text-slate-500 mb-0.5">Start Date</label>
-                        <input
-                          type="date"
-                          required
-                          value={item.start_date}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setInitialJobItems((prev) => prev.map((it, i) => i === idx ? { ...it, start_date: val } : it));
-                          }}
-                          className="w-full p-1 border rounded bg-white text-[11px]"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] text-slate-500 mb-0.5">Staff Count</label>
-                        <input
-                          type="number"
-                          min="1"
-                          value={item.required_staff_count}
-                          onChange={(e) => {
-                            const val = Number(e.target.value) || 1;
-                            setInitialJobItems((prev) => prev.map((it, i) => i === idx ? { ...it, required_staff_count: val } : it));
-                          }}
-                          className="w-full p-1 border rounded bg-white text-xs"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] text-slate-500 mb-0.5">Hours / Staff</label>
-                        <input
-                          type="number"
-                          step="0.5"
-                          min="0.5"
-                          value={item.hours_per_occurrence_per_staff}
-                          onChange={(e) => {
-                            const val = Number(e.target.value) || 8;
-                            setInitialJobItems((prev) => prev.map((it, i) => i === idx ? { ...it, hours_per_occurrence_per_staff: val } : it));
-                          }}
-                          className="w-full p-1 border rounded bg-white text-xs"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] text-slate-500 mb-0.5">Occurrences / Period</label>
-                        <input
-                          type="number"
-                          min="1"
-                          value={item.occurrences_per_period}
-                          onChange={(e) => {
-                            const val = Number(e.target.value) || 1;
-                            setInitialJobItems((prev) => prev.map((it, i) => i === idx ? { ...it, occurrences_per_period: val } : it));
-                          }}
-                          className="w-full p-1 border rounded bg-white text-xs"
-                        />
-                      </div>
-                    </div>
-                    <InlineItemBudget
-                      token={token}
-                      country={formCountry}
-                      isAdmin={user?.role === "ADMIN"}
-                      item={item}
-                    />
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setModalOpen(false)}
-                  className="px-4 py-2 border border-slate-300 rounded text-xs font-medium text-slate-700 hover:bg-slate-50 transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={createLoading}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-medium shadow-sm transition disabled:opacity-50"
-                >
-                  {createLoading ? "Creating..." : "Save Worksite"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Add Worksite wizard (Batch 5.1 B; Admin only, DEC-61) */}
+      <AddWorksiteWizard
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        groups={groups}
+        zones={zones}
+        onGroupCreated={(u) => setGroups((prev) => [...prev, u])}
+        onZoneCreated={(u) => setZones((prev) => [...prev, u])}
+        revisions={revisions}
+        onCreated={(id) => {
+          setModalOpen(false);
+          navigate({
+            to: "/worksites/$worksiteId",
+            params: { worksiteId: id },
+            search: { created: "1" } as any,
+          });
+        }}
+      />
 
       {/* Edit Accommodation Modal */}
       {editingAccommodation && (

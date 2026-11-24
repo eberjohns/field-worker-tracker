@@ -1769,15 +1769,17 @@ export const OperationalPlanner: React.FC = () => {
               {exportingRoster ? "Exporting..." : "Export Roster"}
             </button>
 
-            {/* Import Schedule */}
-            <Link
-              to="/imports"
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 shadow-2xs transition cursor-pointer"
-              title="Import roster or shift schedule"
-            >
-              <Upload className="h-3.5 w-3.5 text-slate-500" />
-              Import Schedule
-            </Link>
+            {/* Import Schedule: Master Data Import is Admin only (DEC-61) */}
+            {user?.role === "ADMIN" && (
+              <Link
+                to="/imports"
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 shadow-2xs transition cursor-pointer"
+                title="Master Data Import (Admin)"
+              >
+                <Upload className="h-3.5 w-3.5 text-slate-500" />
+                Import Schedule
+              </Link>
+            )}
           </div>
         </div>
 

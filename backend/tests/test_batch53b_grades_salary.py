@@ -16,7 +16,7 @@ from fw.core.db import async_session_factory
 from fw.core.errors import AppError
 from fw.main import create_app
 from fw.modules.budget import BudgetService
-from fw.modules.imports import ImportRow, generate_import_template_bytes
+from fw.modules.imports import generate_import_template_bytes
 from fw.modules.jobs.models import JobItem
 from fw.modules.org.models import EmployeeAttributeHistory
 from fw.modules.payroll.models import EmployeeSalary, SalaryRevision, SalaryRevisionLine
@@ -300,7 +300,8 @@ def _workbook_with_salary_and_settings() -> bytes:
 
 @db_required
 @pytest.mark.asyncio
-async def test_engineer_cannot_see_or_write_salary_and_money_settings() -> None:
+async def test_salary_sheets_stay_admin_only_by_role() -> None:
+    """Imports are Admin-only (DEC-61), so an Engineer never reaches the salary sheets."""
     admin_headers = await _admin_headers()
     async with async_session_factory() as session:
         _, eng_token = await _person(session, "ENGINEER", "Eng53b")
@@ -318,61 +319,37 @@ async def test_engineer_cannot_see_or_write_salary_and_money_settings() -> None:
             r = await c.get(f"/api/v1/salary-revisions/{code}/export-template", headers=eng)
             assert r.status_code == 403
 
-        # Engineer template has no salary sheets.
-        t = await c.get("/api/v1/imports/template", headers=eng)
-        names = openpyxl.load_workbook(io.BytesIO(t.content)).sheetnames
-        assert not {"Employee_Salary", "Salary_Revisions", "Salary_Revision_Lines"} & set(names)
-        t = await c.get("/api/v1/imports/template", headers=admin_headers)
-        assert "Salary_Revision_Lines" in openpyxl.load_workbook(io.BytesIO(t.content)).sheetnames
-
-        # Engineer upload: salary sheet rows and money settings are skipped, values not stored.
+        # Every import endpoint refuses an Engineer: no template, no upload, no batch list.
+        assert (await c.get("/api/v1/imports/template", headers=eng)).status_code == 403
         up = await c.post("/api/v1/imports", headers=eng, files={"file": ("e.xlsx", content, XLSX)})
-        assert up.status_code == 201, up.text
-        batch = up.json()["batch_id"]
-        rows = (await c.get(f"/api/v1/imports/{batch}/preview?limit=500", headers=eng)).json()[
-            "rows"
-        ]
-        sal = [r for r in rows if r["sheet"] == "Salary_Revisions"]
-        assert sal and all(r["action"] == "SKIPPED" for r in sal)
-        assert all(r["codes"] == ["SHEET_ADMIN_ONLY"] and r["normalized"] == {} for r in sal)
-        cs = {r["natural_key"]: r for r in rows if r["sheet"] == "Company_Settings"}
-        for key in ("provision_visa", "ot1_multiplier"):
-            assert cs[key]["codes"] == ["SETTING_ADMIN_ONLY"]
-            assert cs[key]["normalized"] == {}
-        # Nothing of the values is stored for the Engineer's batch.
-        async with async_session_factory() as session:
-            stored = (
-                (
-                    await session.execute(
-                        select(ImportRow).where(
-                            ImportRow.batch_id == batch,
-                            ImportRow.sheet.in_(["Salary_Revisions", "Company_Settings"]),
-                            ImportRow.action == "SKIPPED",
-                        )
-                    )
-                )
-                .scalars()
-                .all()
-            )
-        assert stored
-        for row in stored:
-            assert set(row.raw_row) <= {"setting_key"}
-            assert "999" not in str(row.raw_row) and "9" != row.raw_row.get("value")
+        assert up.status_code == 403
+        assert (await c.get("/api/v1/imports", headers=eng)).status_code == 403
 
-        # Admin uploads the same file: the engineer sees none of its salary rows and cannot commit.
+        # Admin: the template has the salary sheets and their rows are read, not skipped.
+        t = await c.get("/api/v1/imports/template", headers=admin_headers)
+        names = set(openpyxl.load_workbook(io.BytesIO(t.content)).sheetnames)
+        assert {"Employee_Salary", "Salary_Revisions", "Salary_Revision_Lines"} <= names
         up = await c.post(
             "/api/v1/imports", headers=admin_headers, files={"file": ("a.xlsx", content, XLSX)}
         )
+        assert up.status_code == 201, up.text
         batch = up.json()["batch_id"]
-        rows = (await c.get(f"/api/v1/imports/{batch}/preview?limit=500", headers=eng)).json()[
-            "rows"
-        ]
-        assert not [r for r in rows if r["sheet"] == "Salary_Revisions"]
-        assert not [
-            r for r in rows if r["sheet"] == "Company_Settings" and "provision" in r["natural_key"]
-        ]
-        commit = await c.post(f"/api/v1/imports/{batch}/commit", headers=eng)
-        assert commit.status_code == 422
+        rows = (
+            await c.get(f"/api/v1/imports/{batch}/preview?limit=500", headers=admin_headers)
+        ).json()["rows"]
+        sal = [r for r in rows if r["sheet"] == "Salary_Revisions"]
+        assert sal and all(r["action"] != "SKIPPED" for r in sal)
+        cs = {r["natural_key"].split(":")[0]: r for r in rows if r["sheet"] == "Company_Settings"}
+        assert cs["provision_visa"]["action"] != "SKIPPED"
+
+        # The Admin's batch is out of an Engineer's reach as well.
+        for method, url in (
+            ("GET", f"/api/v1/imports/{batch}/preview"),
+            ("POST", f"/api/v1/imports/{batch}/commit"),
+            ("POST", f"/api/v1/imports/{batch}/rollback"),
+            ("GET", f"/api/v1/imports/{batch}/errors.xlsx"),
+        ):
+            assert (await c.request(method, url, headers=eng)).status_code == 403, url
 
 
 # --- profile-details --------------------------------------------------------------------------
@@ -452,91 +429,6 @@ async def test_missing_money_setting_stops_with_setting_missing() -> None:
                 session, "provision_does_not_exist", "AE", site_today("AE")
             )
     assert exc.value.code == "SETTING_MISSING"
-
-
-# --- default_password is Admin only in Company_Settings (owner, 23 Nov) ------------------------
-
-
-def test_default_password_is_admin_only_setting() -> None:
-    from fw.rules.imports import is_admin_only_row, is_admin_only_setting
-
-    assert is_admin_only_setting("default_password")
-    assert is_admin_only_row("Company_Settings", "default_password")
-    assert not is_admin_only_setting("grace_period_minutes")
-
-
-@db_required
-@pytest.mark.asyncio
-async def test_engineer_import_skips_default_password() -> None:
-    async with async_session_factory() as session:
-        _, eng_token = await _person(session, "ENGINEER", "EngPwd53b")
-        await session.commit()
-    eng = {"Authorization": f"Bearer {eng_token}"}
-
-    wb = openpyxl.load_workbook(io.BytesIO(generate_import_template_bytes()))
-    _fill(
-        wb,
-        "Company_Settings",
-        {"setting_key": "default_password", "value": "Leak@12345", "effective_from": "2026-01-01"},
-    )
-    _fill(
-        wb,
-        "Company_Settings",
-        {"setting_key": "grace_period_minutes", "value": "12", "effective_from": "2026-01-01"},
-        row=6,
-    )
-    for name in wb.sheetnames:
-        if name not in ("README", "Company_Settings"):
-            ws = wb[name]
-            for r in range(5, ws.max_row + 1):
-                ws.cell(r, 1, value="#")
-    out = io.BytesIO()
-    wb.save(out)
-
-    async with AsyncClient(transport=ASGITransport(app=create_app()), base_url="http://t") as c:
-        t = await c.get("/api/v1/imports/template", headers=eng)
-        # Exact key only: default_password_max_days is not a credential and stays.
-        assert b"'default_password'" not in _sheet_text(t.content, "Company_Settings")
-        assert b"'default_password_max_days'" in _sheet_text(t.content, "Company_Settings")
-
-        up = await c.post(
-            "/api/v1/imports", headers=eng, files={"file": ("p.xlsx", out.getvalue(), XLSX)}
-        )
-        assert up.status_code == 201, up.text
-        batch = up.json()["batch_id"]
-        rows = (await c.get(f"/api/v1/imports/{batch}/preview?limit=500", headers=eng)).json()[
-            "rows"
-        ]
-    cs = {r["natural_key"].split(":")[0]: r for r in rows if r["sheet"] == "Company_Settings"}
-    # Same as the money settings: shown as skipped, with no value.
-    assert cs["default_password"]["action"] == "SKIPPED"
-    assert cs["default_password"]["codes"] == ["SETTING_ADMIN_ONLY"]
-    assert cs["default_password"]["normalized"] == {}
-    assert cs["grace_period_minutes"]["action"] != "SKIPPED"
-
-    async with async_session_factory() as session:
-        stored = (
-            (
-                await session.execute(
-                    select(ImportRow).where(
-                        ImportRow.batch_id == batch, ImportRow.sheet == "Company_Settings"
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        )
-    pwd = [r for r in stored if str(r.natural_key).startswith("default_password")]
-    assert pwd and all(r.action == "SKIPPED" for r in pwd)
-    assert all(r.raw_row == {"setting_key": "default_password"} for r in pwd)
-    assert "Leak@12345" not in str([r.raw_row for r in stored])
-
-
-def _sheet_text(xlsx: bytes, sheet: str) -> bytes:
-    wb = openpyxl.load_workbook(io.BytesIO(xlsx))
-    if sheet not in wb.sheetnames:
-        return b""
-    return str([[c.value for c in row] for row in wb[sheet].iter_rows()]).encode()
 
 
 # --- Reset database re-seeds default settings (owner, 23 Nov) ----------------------------------

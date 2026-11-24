@@ -5607,7 +5607,7 @@
           "imports"
         ],
         "summary": "Download Import Template",
-        "description": "Download the import template. Engineers get it without the salary sheets (DEC-47).\n\nThe Lists sheet carries the current staff type and grade lists (DEC-60).",
+        "description": "Download the import template (Admin only, DEC-61).\n\nThe Lists sheet carries the current staff type and grade lists (DEC-60).",
         "operationId": "download_import_template_api_v1_imports_template_get",
         "parameters": [
           {
@@ -8149,7 +8149,7 @@
           "jobs"
         ],
         "summary": "Create Worksite",
-        "description": "Create a worksite record (Admin only).",
+        "description": "Create a worksite, with its job items and supervisors if given, in one transaction.\n\nAdmin only (DEC-61). A failing item or supervisor saves nothing; the error names the row.",
         "operationId": "create_worksite_api_v1_worksites_post",
         "parameters": [
           {
@@ -8240,6 +8240,127 @@
                     "$ref": "#/components/schemas/WorksiteSupervisorProposal"
                   },
                   "title": "Response List Worksite Supervisor Proposals Api V1 Worksites Supervisor Proposals Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/worksites/job-number-check": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Check Job Number",
+        "description": "Live format and uniqueness check for the Add Worksite wizard (Admin, DEC-61).",
+        "operationId": "check_job_number_api_v1_worksites_job_number_check_get",
+        "parameters": [
+          {
+            "name": "job_number",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 20,
+              "title": "Job Number"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobNumberCheck"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/job-items/validation-preview": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Preview Job Item Checks",
+        "description": "Validation panel for a job item that is not saved yet (wizard rows). Saves nothing.",
+        "operationId": "preview_job_item_checks_api_v1_job_items_validation_preview_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobItemChecksRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobItemChecks"
                 }
               }
             }
@@ -8664,7 +8785,7 @@
           "jobs"
         ],
         "summary": "Assign Worksite Supervisor",
-        "description": "Assign a supervisor to a worksite (Admin & Engineer only).",
+        "description": "Assign a supervisor to a worksite (Admin; Engineer on worksites in scope).",
         "operationId": "assign_worksite_supervisor_api_v1_worksites__worksite_id__supervisors_post",
         "parameters": [
           {
@@ -8734,7 +8855,7 @@
           "jobs"
         ],
         "summary": "Remove Worksite Supervisor",
-        "description": "Unassign a supervisor from a worksite (Admin & Engineer only).",
+        "description": "Unassign a supervisor from a worksite (Admin; Engineer on worksites in scope).",
         "operationId": "remove_worksite_supervisor_api_v1_worksites__worksite_id__supervisors__supervisor_id__delete",
         "parameters": [
           {
@@ -9204,7 +9325,7 @@
           "jobs"
         ],
         "summary": "Import Boundaries",
-        "description": "Bulk import boundaries with row-level validation and skip reporting.",
+        "description": "Bulk import boundaries with row-level validation and skip reporting (Admin, DEC-61).",
         "operationId": "import_boundaries_api_v1_boundaries_import_post",
         "parameters": [
           {
@@ -22004,6 +22125,67 @@
         "title": "JobItemBudget",
         "description": "Planned man-hours and cost of one job item for a period (default: current contract year)."
       },
+      "JobItemChecks": {
+        "properties": {
+          "calculated_activities_per_year": {
+            "type": "string",
+            "title": "Calculated Activities Per Year"
+          },
+          "calculated_annual_hours": {
+            "type": "string",
+            "title": "Calculated Annual Hours"
+          },
+          "expected_occurrences_count": {
+            "type": "integer",
+            "title": "Expected Occurrences Count"
+          },
+          "days_per_occurrence": {
+            "type": "integer",
+            "title": "Days Per Occurrence"
+          },
+          "daily_hours_split": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Daily Hours Split"
+          },
+          "eligible_workers_count": {
+            "type": "integer",
+            "title": "Eligible Workers Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "calculated_activities_per_year",
+          "calculated_annual_hours",
+          "expected_occurrences_count",
+          "days_per_occurrence",
+          "daily_hours_split",
+          "eligible_workers_count"
+        ],
+        "title": "JobItemChecks",
+        "description": "The job item validation panel for an unsaved item (BR-JB-06, BR-JB-12)."
+      },
+      "JobItemChecksRequest": {
+        "properties": {
+          "country": {
+            "type": "string",
+            "pattern": "^(AE|SA)$",
+            "title": "Country"
+          },
+          "item": {
+            "$ref": "#/components/schemas/JobItemCreate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "country",
+          "item"
+        ],
+        "title": "JobItemChecksRequest",
+        "description": "Checks for a job item that is not saved yet (Add Worksite wizard rows)."
+      },
       "JobItemCreate": {
         "properties": {
           "sub_item_code": {
@@ -22675,6 +22857,63 @@
           "difference_note"
         ],
         "title": "JobItemValidationResponse"
+      },
+      "JobNumberCheck": {
+        "properties": {
+          "job_number": {
+            "type": "string",
+            "title": "Job Number"
+          },
+          "valid": {
+            "type": "boolean",
+            "title": "Valid"
+          },
+          "exists": {
+            "type": "boolean",
+            "title": "Exists",
+            "default": false
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "is_outdoor": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Outdoor"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_number",
+          "valid"
+        ],
+        "title": "JobNumberCheck",
+        "description": "Live check of a job number for the Add Worksite wizard (format and uniqueness)."
       },
       "JobOccurrenceResponse": {
         "properties": {
@@ -31758,6 +31997,22 @@
               }
             ],
             "title": "Budget Amount"
+          },
+          "job_items": {
+            "items": {
+              "$ref": "#/components/schemas/JobItemCreate"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Job Items"
+          },
+          "supervisor_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Supervisor Ids"
           }
         },
         "type": "object",
@@ -31768,7 +32023,8 @@
           "zone_id",
           "country"
         ],
-        "title": "WorksiteCreate"
+        "title": "WorksiteCreate",
+        "description": "A worksite, optionally with its job items and supervisors (Batch 5.1 B wizard).\n\nEverything is created in one transaction: if any item or supervisor fails, nothing is saved."
       },
       "WorksiteDetailResponse": {
         "properties": {

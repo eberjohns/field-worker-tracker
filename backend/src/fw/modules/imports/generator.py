@@ -14,23 +14,21 @@ from fw.modules.imports.registry import (
     ALL_SHEET_NAMES,
     SHEET_REGISTRY,
 )
-from fw.rules.imports import ADMIN_ONLY_SHEETS, is_admin_only_row
 from fw.rules.lookups import GRADE_CODE, SEED_STAFF_TYPES, STAFF_GRADE_DESCRIPTION, sort_values
 
 
 def generate_import_template_bytes(
-    include_admin_only: bool = True,
     staff_types: Iterable[str] | None = None,
     grade_codes: Iterable[str] | None = None,
 ) -> bytes:
     """Generate the XLSX import template as bytes.
 
-    ``include_admin_only=False`` (Engineers, DEC-47) leaves out the salary sheets and the
-    money/rate example rows of Company_Settings. ``staff_types`` and ``grade_codes`` fill the
+    Imports are Admin-only (DEC-61), so the template always has every sheet. ``staff_types``
+    and ``grade_codes`` fill the
     Lists sheet from the managed lists (DEC-60); without them the seed staff types are used and
     the grade column is left out.
     """
-    sheet_names = [s for s in ALL_SHEET_NAMES if include_admin_only or s not in ADMIN_ONLY_SHEETS]
+    sheet_names = list(ALL_SHEET_NAMES)
     wb = openpyxl.Workbook()
     # Remove default sheet
     wb.remove(wb.active)  # type: ignore
@@ -108,8 +106,6 @@ def generate_import_template_bytes(
         ("Company_Settings", "Effective-dated company settings & provisions (Phase 03)."),
         ("Time_Rules", "Planned shift hours and break rules (Phase 03)."),
     ]
-    if not include_admin_only:
-        readme_rows = [r for r in readme_rows if r[0] not in ADMIN_ONLY_SHEETS]
     for r_idx, (col1, col2) in enumerate(readme_rows, start=4):
         ws_readme.cell(row=r_idx, column=1, value=col1).font = (
             font_bold
@@ -161,11 +157,7 @@ def generate_import_template_bytes(
             c.alignment = Alignment(horizontal="center")
 
         # Row 5+: Examples
-        examples = [
-            ex
-            for ex in sheet_def.examples
-            if include_admin_only or not is_admin_only_row(sheet_name, ex.get("setting_key"))
-        ]
+        examples = list(sheet_def.examples)
         for e_idx, ex in enumerate(examples, start=5):
             c_ex = ws.cell(row=e_idx, column=1, value="EXAMPLE")
             c_ex.font = font_example

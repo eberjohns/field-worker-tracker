@@ -52,7 +52,7 @@ const navItems: NavItem[] = [
   { label: "Attendance", to: "/attendance", icon: Clock },
   { label: "Payroll", to: "/payroll", icon: DollarSign, roles: ["ADMIN"] },
   { label: "Salary Structures", to: "/salary-structures", icon: Banknote, roles: ["ADMIN"] },
-  { label: "Master Data Import", to: "/imports", icon: UploadCloud, roles: ["ADMIN", "ENGINEER"] },
+  { label: "Master Data Import", to: "/imports", icon: UploadCloud, roles: ["ADMIN"] },
   { label: "Devices", to: "/devices", icon: Smartphone, roles: ["ADMIN", "ENGINEER", "SUPERINTENDENT"] },
   { label: "Reports", to: "/reports", icon: FileBarChart },
   { label: "Generated Reports", to: "/reports/generated", icon: History },
