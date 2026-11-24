@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import { RENEWAL_HINT, RENEWAL_LABEL } from "../components/worksites/RenewalLabel";
+import { currencyForCountry, formatMoney } from "../features/format/money";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -633,13 +635,15 @@ export const Worksites: React.FC = () => {
                         <div className="flex items-center gap-1.5">
                           <span>{ws.job_name}</span>
                           {ws.renewal_reference && (
-                            <span className="text-xs text-slate-400">({ws.renewal_reference})</span>
+                            <span className="text-xs text-slate-400" title={`${RENEWAL_LABEL}. ${RENEWAL_HINT}`}>
+                              ({ws.renewal_reference})
+                            </span>
                           )}
                         </div>
                         <div className="text-[11px] text-slate-500 flex items-center gap-2 mt-0.5 font-normal">
                           <span>Period: {ws.start_date || "Start N/A"} – {ws.end_date || "Ongoing"}</span>
                           {ws.budget_amount != null && user?.role === "ADMIN" && (
-                            <span>• Budget: {Number(ws.budget_amount).toLocaleString()} AED/yr</span>
+                            <span>• Budget: {formatMoney(ws.budget_amount, currencyForCountry(ws.country))}/yr</span>
                           )}
                         </div>
                       </td>

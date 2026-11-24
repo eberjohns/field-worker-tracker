@@ -1,6 +1,11 @@
 """Public interface for payroll module."""
 
 from fw.modules.payroll.api import router as payroll_router
+from fw.modules.payroll.breakdown import (
+    SALARY_COMPONENTS,
+    salary_components,
+    salary_rows_for_records,
+)
 from fw.modules.payroll.models import (
     EmployeeSalary,
     JobCostAllocation,
@@ -33,6 +38,9 @@ from fw.modules.payroll.schemas import (
 from fw.modules.payroll.service import PayrollSalaryService, PayrollService
 
 __all__ = [
+    "SALARY_COMPONENTS",
+    "salary_components",
+    "salary_rows_for_records",
     "EmployeeSalary",
     "EmployeeSalaryCreate",
     "EmployeeSalaryHistoryResponse",

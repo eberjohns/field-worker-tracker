@@ -2379,6 +2379,7 @@ class SchedulingService:
                     start_date=ws.start_date,
                     end_date=ws.end_date,
                     budget_amount=ws.budget_amount,
+                    country=ws.country,
                     items=item_rows,
                 )
             )
@@ -2898,6 +2899,7 @@ class SchedulingService:
                     start_date=ws.start_date,
                     end_date=ws.end_date,
                     budget_amount=ws.budget_amount,
+                    country=ws.country,
                     items=item_rows,
                 )
             )

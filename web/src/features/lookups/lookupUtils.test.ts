@@ -4,9 +4,11 @@ import {
   addOutcome,
   canManageLists,
   displayGrade,
+  isBudgetOnly,
   optionsWithCurrent,
   selectOptions,
   sortValues,
+  splitBudgetOnly,
   valueKey,
 } from "./lookupUtils.ts";
 
@@ -71,5 +73,24 @@ describe("managed list helpers (DEC-60)", () => {
   it("formats the revision display suffix", () => {
     assert.equal(displayGrade("G3C", "2026"), "G3C-2026");
     assert.equal(displayGrade("G3C", null), "G3C");
+  });
+});
+
+describe("budget-only staff types (v1.16.0)", () => {
+  const list = ["Gardener Helper", "Project Manager", "HSE Engineer"];
+
+  it("flags saved values that are not in the staff type list", () => {
+    const { inList, notInList } = splitBudgetOnly(
+      ["Project Manager", "QA/QC Engineer", "hse  engineer"],
+      list,
+    );
+    assert.deepEqual(inList, ["Project Manager", "hse  engineer"]);
+    assert.deepEqual(notInList, ["QA/QC Engineer"]);
+  });
+
+  it("matches ignoring case and spaces", () => {
+    assert.ok(isBudgetOnly(["HSE Engineer"], "hse engineer"));
+    assert.ok(!isBudgetOnly(["HSE Engineer"], "QA/QC Engineer"));
+    assert.deepEqual(splitBudgetOnly([], list), { inList: [], notInList: [] });
   });
 });

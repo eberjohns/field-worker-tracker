@@ -18375,6 +18375,17 @@
             ],
             "title": "Budget Amount"
           },
+          "country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/BasePlannerItemRow"
@@ -25317,6 +25328,17 @@
             ],
             "title": "Budget Amount"
           },
+          "country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/OperationalJobItemRow"
@@ -25920,6 +25942,17 @@
             "format": "date-time",
             "title": "Updated At"
           },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
           "records": {
             "items": {
               "$ref": "#/components/schemas/PayrollRecordRead"
@@ -26097,6 +26130,17 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
           }
         },
         "type": "object",
@@ -26180,6 +26224,17 @@
             "type": "boolean",
             "title": "Treat Leaves As Paid",
             "default": false
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
           }
         },
         "type": "object",

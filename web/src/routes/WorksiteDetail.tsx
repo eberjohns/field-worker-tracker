@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import { currencyForCountry, formatMoney } from "../features/format/money";
+import { RenewalLabel } from "../components/worksites/RenewalLabel";
 import { useParams, Link } from "@tanstack/react-router";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -883,9 +885,7 @@ export const WorksiteDetail: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label className="block font-semibold text-slate-700 mb-1">
-                      Renewal Reference
-                    </label>
+                    <RenewalLabel className="block font-semibold text-slate-700 mb-1" />
                     <input
                       type="text"
                       value={editRenewalRef}
@@ -898,7 +898,7 @@ export const WorksiteDetail: React.FC = () => {
                   {user?.role === "ADMIN" ? (
                     <div>
                       <label className="block font-semibold text-slate-700 mb-1">
-                        Annual Operating Budget (AED / year)
+                        Annual Operating Budget ({currencyForCountry(worksite.country)} / year)
                       </label>
                       <input
                         type="number"
@@ -956,7 +956,7 @@ export const WorksiteDetail: React.FC = () => {
                     <span className="text-slate-400 block mb-0.5">Annual Operating Budget</span>
                     <span className="font-semibold text-slate-800">
                       {worksite.budget_amount != null
-                        ? `${Number(worksite.budget_amount).toLocaleString()} AED / year`
+                        ? `${formatMoney(worksite.budget_amount, currencyForCountry(worksite.country))} / year`
                         : "Not Specified"}
                     </span>
                   </div>
@@ -974,7 +974,7 @@ export const WorksiteDetail: React.FC = () => {
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block mb-0.5">Renewal Reference</span>
+                  <RenewalLabel className="text-slate-400 block mb-0.5" />
                   <span className="font-semibold text-slate-800">
                     {worksite.renewal_reference || "None"}
                   </span>
@@ -1289,7 +1289,7 @@ export const WorksiteDetail: React.FC = () => {
                     </td>
                     {user?.role === "ADMIN" && (
                       <td className="px-4 py-3 text-right font-mono text-slate-800">
-                        {fmtMoney(item.budget?.annual_cost)}
+                        {fmtMoney(item.budget?.annual_cost, currencyForCountry(worksite.country))}
                       </td>
                     )}
                     <td className="px-4 py-3 text-center">
@@ -1394,7 +1394,7 @@ export const WorksiteDetail: React.FC = () => {
                     </td>
                     {user?.role === "ADMIN" && (
                       <td className="px-4 py-3 text-right font-mono">
-                        {fmtMoney(worksite.budget_totals.total_cost)}
+                        {fmtMoney(worksite.budget_totals.total_cost, currencyForCountry(worksite.country))}
                       </td>
                     )}
                     <td />
@@ -1408,6 +1408,7 @@ export const WorksiteDetail: React.FC = () => {
             worksiteId={worksite.id}
             isAdmin={user?.role === "ADMIN"}
             token={token}
+            currency={currencyForCountry(worksite.country)}
           />
         </div>
       )}

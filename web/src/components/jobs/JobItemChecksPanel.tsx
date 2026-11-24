@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { currencyForCountry } from "../../features/format/money";
 import { AlertCircle, Calculator, Info } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -113,7 +114,7 @@ export const JobItemChecksPanel: React.FC<{
             <span className="text-slate-500 block text-[10px]">
               Annual cost{budget?.revision_code ? ` (${budget.revision_code})` : ""}
             </span>
-            <span className="font-bold text-slate-900 text-sm">{fmtMoney(budget?.annual_cost)}</span>
+            <span className="font-bold text-slate-900 text-sm">{fmtMoney(budget?.annual_cost, currencyForCountry(country))}</span>
           </div>
         )}
       </div>

@@ -1,5 +1,7 @@
 /** Job budget display helpers (DEC-59). Money fields are null for non-Admin roles. */
 
+import { formatAmount, formatMoney } from "../format/money.ts";
+
 export interface BudgetWarning {
   code: string;
   job_item_id?: string | null;
@@ -90,12 +92,9 @@ export function fmtHours(v: number | string | null | undefined): string {
     : `${n.toLocaleString(undefined, { maximumFractionDigits: 1 })} h`;
 }
 
-/** "12,345.67" (no currency: the worksite's country decides AED/SAR) or "–". */
-export function fmtMoney(v: number | string | null | undefined): string {
-  const n = num(v);
-  return n === null || Number.isNaN(n)
-    ? "–"
-    : n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/** "AED 12,345.67" with a currency, "12,345.67" without one, or "–" (shared formatter). */
+export function fmtMoney(v: number | string | null | undefined, currency?: string | null): string {
+  return currency ? formatMoney(v, currency) : formatAmount(v);
 }
 
 /** "+12.5%" / "-3.0%" or "–" when nothing was planned. */

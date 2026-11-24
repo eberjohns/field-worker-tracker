@@ -1,6 +1,18 @@
 # Changelog
 All notable changes. Format: Keep a Changelog. Mobile-contract changes are also logged in `docs/09-mobile-sync-contract.md`.
 
+## [1.16.0] - 2026-11-24
+### Fixed
+- **Payroll record breakdown showed Basic, Special Allowance, Fixed OT and Bonus as 0.00.** A run stored only `basic_salary` (nested under `snapshot.salary`) while the record read top-level keys, and the other components were not stored. A run now stores all six components (basic, special allowance, fixed OT, bonus, telephone, housing/transport) that add up to `salary_portion`, and the record returns them. Older runs fall back to the nested basic and then to the salary row the run used (`salary_id`), else the employee's row in effect at the end of the period. The record view shows all six (telephone and housing/transport are new) and no longer reads the snapshot itself.
+- The payroll report read the same snapshot with wrong keys (`bonus_amount`, `housing_allowance`, basic falling back to `salary_portion`), and the provisions report read `provisions_breakdown` while runs store `settings.provisions`, so each provision was 0. Both now use the same reader.
+- **Viewing a payroll run regenerated its 11 month-end reports** (files and DRAFT rows, even for an approved run): the run detail read published `PayrollRunCreated`. The event is now published once when a draft is created or re-run.
+- The payroll run cards (Gross, Net, Employer Cost) read fields the API never returned and showed 0; they read the run's totals now.
+- **Money shows the currency, never "$".** Payroll runs have `currency` (the country's `currency` setting, stored with the run; AED for AE, SAR for SA). One web formatter (`features/format/money.ts`) shows "AED 1,234.56" on the payroll screens (runs, records, record breakdown, revision lines, budget vs actual), salary structures, the employee salary cards and create form, worksite budgets (list, detail, planners) and the budget panels (job item checks, Add Worksite review, planned vs actual). The planner worksite rows carry `country` for this.
+### Changed
+- The worksite renewal reference is labelled **"Contract renewal no. (label only)"** with a tooltip that it does not select the salary revision (BR-JB-08), in the Add Worksite wizard, its review, the worksite page and the Worksites list.
+- **Settings > Budget-Only Roles** takes its options from the staff type list (active values, `GET /lookups/staff_grade_description`) instead of the deprecated `/settings/staff-grades`, which mixed in values not in the list. A saved value not in the list (e.g. "QA/QC Engineer" from a settings import) is flagged "Not in the staff type list" with **Add to list** (Admin; near matches ask first) and **Remove**. Matching ignores case and spaces, like the list.
+- `test_mobile_sync`'s base-planner test creates its own worksite and job item; it used the first active worksite left by other tests and failed when that one had no job item scheduled today.
+
 ## [1.15.0] - 2026-11-23
 ### Added
 - **Batch 5.1 B: Add Worksite wizard** (handover 6.1 B; regression 5). Three steps: worksite, job items, review. Nothing is saved until "Create worksite", which sends one `POST /worksites` with `job_items[]` (0-50) and `supervisor_ids[]`; the worksite, its supervisors and its items (with occurrences and audit entries) are saved in one transaction or not at all.

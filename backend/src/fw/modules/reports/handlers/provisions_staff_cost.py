@@ -54,7 +54,10 @@ async def fetch_provisions_staff_cost(
     for rec in records:
         emp = rec.employee
         snap = rec.snapshot or {}
-        prov_snap = snap.get("provisions_breakdown", {})
+        # The run stores the provisions it used under settings.provisions.
+        prov_snap = (snap.get("settings") or {}).get("provisions") or snap.get(
+            "provisions_breakdown", {}
+        )
 
         visa_p = Decimal(str(prov_snap.get("visa", "0.00")))
         air_p = Decimal(str(prov_snap.get("air_ticket", "0.00")))

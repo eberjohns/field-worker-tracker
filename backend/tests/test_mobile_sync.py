@@ -16,6 +16,7 @@ from fw.modules.org import Employee, RegisteredDevice
 from fw.modules.settings import CompanySettingValue
 from fw.modules.sync.models import SyncChange
 from fw.modules.sync.service import SyncService
+from tests.ids import unique_job_number
 
 
 def is_db_available() -> bool:
@@ -434,13 +435,42 @@ async def test_mobile_sync_snapshot_includes_base_planner_blueprint():
         )
         session.add(device)
 
-        # 2. Find or use active worksite + job item
-        ws = (
-            (await session.execute(select(Worksite).where(Worksite.is_active.is_(True))))
-            .scalars()
-            .first()
+        # 2. Its own worksite and job item (it used to pick "the first active worksite" left by
+        #    other tests, which failed whenever that one had no job item scheduled today).
+        from fw.modules.org import Group, Zone
+
+        grp = Group(code=f"M{uuid4().hex[:6]}", name=f"Sync Group {uuid4().hex[:6]}")
+        zn = Zone(code=f"M{uuid4().hex[:6]}", name=f"Sync Zone {uuid4().hex[:6]}")
+        session.add_all([grp, zn])
+        await session.flush()
+        ws = Worksite(
+            job_number=unique_job_number("12A"),
+            job_name="Blueprint sync site",
+            group_id=grp.id,
+            zone_id=zn.id,
+            country="AE",
+            start_date=today - timedelta(days=30),
+            is_active=True,
         )
-        assert ws is not None, "At least one worksite required in test db"
+        session.add(ws)
+        await session.flush()
+        ji = JobItem(
+            worksite_id=ws.id,
+            sub_item_code="A",
+            staff_grade_description="Gardener Helper",
+            planned_grade_code="G1A",
+            frequency_unit="WEEK",
+            occurrences_per_period=Decimal("7"),
+            period_interval=1,
+            weekday_pattern=["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"],
+            required_staff_count=1,
+            hours_per_occurrence_per_staff=Decimal("8"),
+            start_date=today - timedelta(days=30),
+            deployment_type="PERMANENT",
+            is_active=True,
+        )
+        session.add(ji)
+        await session.flush()
 
         # Ensure boundary exists on worksite
         polygon_geojson = {
@@ -461,17 +491,6 @@ async def test_mobile_sync_snapshot_includes_base_planner_blueprint():
             geojson_dict=polygon_geojson,
             actor_role="ADMIN",
         )
-
-        ji = (
-            (
-                await session.execute(
-                    select(JobItem).where(JobItem.worksite_id == ws.id, JobItem.is_active.is_(True))
-                )
-            )
-            .scalars()
-            .first()
-        )
-        assert ji is not None, "At least one job item required"
 
         # 3. Create Base Planner Blueprint Template + Entry (NO ScheduledWork!)
         tmpl = BaseRosterTemplate(

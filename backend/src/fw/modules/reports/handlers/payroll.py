@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from fw.modules.payroll.breakdown import salary_components, salary_rows_for_records
 from fw.modules.payroll.models import PayrollRecord, PayrollRun
 from fw.modules.reports.schemas import ReportFilterParams
 from fw.modules.scheduling import AccessScope
@@ -50,16 +51,18 @@ async def fetch_payroll(
     rec_res = await session.execute(rec_stmt)
     records = rec_res.scalars().all()
 
+    salary_rows = await salary_rows_for_records(session, records, payroll_run.period_end)
     rows: list[dict[str, Any]] = []
     for rec in records:
         emp = rec.employee
-        snap = rec.snapshot or {}
-        basic = Decimal(str(snap.get("basic_salary", rec.salary_portion)))
-        special = Decimal(str(snap.get("special_allowance", "0.00")))
-        fot = Decimal(str(snap.get("fixed_ot_amount", "0.00")))
-        bonus = Decimal(str(snap.get("bonus_amount", "0.00")))
-        tel = Decimal(str(snap.get("telephone_allowance", "0.00")))
-        housing = Decimal(str(snap.get("housing_allowance", "0.00")))
+        # The six components the run stored (or, for older runs, the salary row it used).
+        parts = salary_components(rec.snapshot, salary_rows.get(rec.id))
+        basic = parts["basic_salary"]
+        special = parts["special_allowance"]
+        fot = parts["fixed_ot_amount"]
+        bonus = parts["bonus"]
+        tel = parts["telephone_allowance"]
+        housing = parts["housing_transport_allowance"]
 
         rows.append(
             {

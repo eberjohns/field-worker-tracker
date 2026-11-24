@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { currencyForCountry } from "../features/format/money";
 import { Link } from "@tanstack/react-router";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -2096,7 +2097,9 @@ export const Employees: React.FC = () => {
                     </p>
                     <div className="grid grid-cols-3 gap-2">
                       <div>
-                        <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Basic Salary (AED)</label>
+                        <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">
+                          Basic Salary ({currencyForCountry(createFormData.country)})
+                        </label>
                         <input
                           type="number"
                           step="0.01"

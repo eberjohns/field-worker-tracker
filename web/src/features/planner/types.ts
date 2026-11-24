@@ -240,6 +240,7 @@ export interface BasePlannerWorksiteRow {
   start_date?: string | null;
   end_date?: string | null;
   budget_amount?: number | string | null;
+  country?: string | null;
   items: BasePlannerItemRow[];
 }
 
@@ -306,6 +307,7 @@ export interface OperationalWorksiteRow {
   start_date?: string | null;
   end_date?: string | null;
   budget_amount?: number | string | null;
+  country?: string | null;
   items: OperationalJobItemRow[];
 }
 

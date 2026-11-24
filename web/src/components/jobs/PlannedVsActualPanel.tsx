@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { formatMoney } from "../../features/format/money";
 import { AlertCircle, BarChart3 } from "lucide-react";
 import {
   diffClass,
@@ -12,16 +13,16 @@ import type { PlannedActualFigures, WorksitePlannedVsActual } from "../../featur
 
 interface Props {
   worksiteId: string;
+  /** The worksite's currency (AED / SAR). */
+  currency?: string | null;
   isAdmin: boolean;
   token: string | null | undefined;
 }
 
 const hoursFmt = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 1 });
-const moneyFmt = (n: number) =>
-  n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /** Planned vs actual for one worksite (DEC-59). Hours for every role; money for Admin only. */
-export const PlannedVsActualPanel: React.FC<Props> = ({ worksiteId, isAdmin, token }) => {
+export const PlannedVsActualPanel: React.FC<Props> = ({ worksiteId, isAdmin, token, currency }) => {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [data, setData] = useState<WorksitePlannedVsActual | null>(null);
@@ -67,10 +68,10 @@ export const PlannedVsActualPanel: React.FC<Props> = ({ worksiteId, isAdmin, tok
       </td>
       {isAdmin && (
         <>
-          <td className="px-3 py-2 text-right font-mono">{fmtMoney(f.planned_cost)}</td>
-          <td className="px-3 py-2 text-right font-mono">{fmtMoney(f.actual_cost)}</td>
+          <td className="px-3 py-2 text-right font-mono">{fmtMoney(f.planned_cost, currency)}</td>
+          <td className="px-3 py-2 text-right font-mono">{fmtMoney(f.actual_cost, currency)}</td>
           <td className={`px-3 py-2 text-right font-mono ${diffClass(f.cost_diff)}`}>
-            {fmtDiff(f.cost_diff, moneyFmt)} <span className="text-[10px]">{fmtPct(f.cost_diff_pct)}</span>
+            {fmtDiff(f.cost_diff, (n) => formatMoney(n, currency))} <span className="text-[10px]">{fmtPct(f.cost_diff_pct)}</span>
           </td>
         </>
       )}

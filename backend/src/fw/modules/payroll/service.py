@@ -20,6 +20,13 @@ from fw.core.events import PayrollRunApproved, PayrollRunCreated, event_bus
 from fw.modules.audit import AuditService
 from fw.modules.lookups import LookupService
 from fw.modules.org import Employee
+from fw.modules.payroll.breakdown import (
+    SALARY_COMPONENTS,
+    default_currency,
+    salary_components,
+    salary_rows_for_records,
+    salary_snapshot,
+)
 from fw.modules.payroll.models import (
     EmployeeSalary,
     JobCostAllocation,
@@ -1026,6 +1033,13 @@ class PayrollService:
             accommodation=accom_prov,
             medical=medical_prov,
         )
+        # The run's currency: the country's `currency` setting (AED / SAR).
+        currency = str(
+            await SettingsService.get_setting(
+                session, "currency", country=payload.country, as_of=payload.period_end
+            )
+            or default_currency(payload.country)
+        )
 
         # 3. Create PayrollRun header
         run = PayrollRun(
@@ -1215,6 +1229,7 @@ class PayrollService:
                     "ot2_multiplier": str(ot2_multiplier),
                     "hr_overhead_rate": str(hr_oh_rate),
                     "treat_leaves_as_paid": payload.treat_leaves_as_paid,
+                    "currency": currency,
                     "provisions": {
                         "visa": str(visa_prov),
                         "air_ticket": str(air_prov),
@@ -1225,7 +1240,8 @@ class PayrollService:
                 },
                 "salary": {
                     "standard_hours": str(std_hours),
-                    "basic_salary": str(basic_sal),
+                    # The six components that add up to salary_portion (v1.16.0).
+                    **salary_snapshot(salary),
                     "salary_portion": str(salary_portion),
                 },
                 "attendance_calculation_ids": source_calc_ids,
@@ -1317,6 +1333,7 @@ class PayrollService:
             "total_staff_cost_total": str(t_staff_cost),
             "final_total_staff_cost_total": str(t_final_cost),
             "treat_leaves_as_paid": payload.treat_leaves_as_paid,
+            "currency": currency,
         }
         run.totals_snapshot = totals_dict
         await session.flush()
@@ -1329,6 +1346,17 @@ class PayrollService:
             entity_id=str(run.id),
             diff={"run_no": run.run_no, "country": run.country, "totals": totals_dict},
             reason=f"Draft payroll run #{run.run_no} generated",
+        )
+
+        # Month-end draft reports, once per created or re-run draft (not on every read).
+        await event_bus.publish(
+            PayrollRunCreated(
+                payroll_run_id=run.id,
+                country=run.country,
+                is_draft=True,
+                actor_user_id=run.created_by_user_id,
+            ),
+            session=session,
         )
 
         return await PayrollService.get_payroll_run_detail(session, run.id)
@@ -1347,10 +1375,12 @@ class PayrollService:
             session, run_id, scoped_employee_ids=scoped_employee_ids
         )
 
+        salary_rows = await salary_rows_for_records(session, records, run.period_end)
         record_reads: list[PayrollRecordRead] = []
         for r in records:
             emp = r.employee
             snap = r.snapshot or {}
+            components = salary_components(snap, salary_rows.get(r.id))
             std_daily = r.standard_hours
             std_monthly = round_money(std_daily * Decimal("26"))
             missed_h = round_money(r.unpaid_leave_hours + r.shortfall_hours)
@@ -1377,14 +1407,7 @@ class PayrollService:
                     ot1_hours=r.ot1_hours,
                     ot2_hours=r.ot2_hours,
                     salary_portion=r.salary_portion,
-                    basic_salary=Decimal(str(snap.get("basic_salary", 0))),
-                    special_allowance=Decimal(str(snap.get("special_allowance", 0))),
-                    fixed_ot_amount=Decimal(str(snap.get("fixed_ot_amount", 0))),
-                    bonus=Decimal(str(snap.get("bonus", 0))),
-                    telephone_allowance=Decimal(str(snap.get("telephone_allowance", 0))),
-                    housing_transport_allowance=Decimal(
-                        str(snap.get("housing_transport_allowance", 0))
-                    ),
+                    **{key: components[key] for key in SALARY_COMPONENTS},
                     ot1_rate=Decimal(str(snap.get("ot1_rate", 0))),
                     ot2_rate=Decimal(str(snap.get("ot2_rate", 0))),
                     ot1_amount=r.ot1_amount,
@@ -1407,16 +1430,6 @@ class PayrollService:
                     created_at=r.created_at,
                 )
             )
-
-        await event_bus.publish(
-            PayrollRunCreated(
-                payroll_run_id=run.id,
-                country=run.country,
-                is_draft=True,
-                actor_user_id=run.created_by_user_id,
-            ),
-            session=session,
-        )
 
         return PayrollRunDetailRead(
             id=run.id,

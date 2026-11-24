@@ -1,9 +1,9 @@
 {
-  "version": "1.15.0",
+  "version": "1.16.0",
   "major": 1,
-  "minor": 15,
+  "minor": 16,
   "patch": 0,
-  "last_branch": "feat/batch5.1b-worksite-wizard",
-  "last_commit": "a9f2b16",
-  "updated_at": "2026-11-23T16:13:55.817558+00:00"
+  "last_branch": "fix/payroll-breakdown-labels",
+  "last_commit": "6d981e8",
+  "updated_at": "2026-11-24T03:13:40.862245+00:00"
 }

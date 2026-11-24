@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { currencyForCountry, formatAmount, formatMoney } from "../features/format/money";
 import { useAuth } from "../context/AuthContext";
 import {
   Search,
@@ -289,6 +290,11 @@ export const SalaryStructures: React.FC = () => {
     return true;
   });
 
+  // The salary history modal shows the worker's country currency.
+  const historyCurrency = currencyForCountry(
+    salaries.find((x) => x.employee_id === selectedWorkerId)?.country,
+  );
+
   const sortedAndFiltered = [...filtered].sort((a, b) => {
     const valA = a[sortBy];
     const valB = b[sortBy];
@@ -386,6 +392,9 @@ export const SalaryStructures: React.FC = () => {
                       <ArrowUpDown className="h-3 w-3 text-slate-400" />
                     </div>
                   </th>
+                  <th className="py-3 px-2 whitespace-nowrap" title="Amounts in this row are in this currency">
+                    Currency
+                  </th>
                   <th
                     onClick={() => handleSort("basic_salary")}
                     className="py-3 px-2 text-right cursor-pointer hover:bg-slate-100 whitespace-nowrap"
@@ -465,44 +474,45 @@ export const SalaryStructures: React.FC = () => {
                     <td className="py-2.5 px-3 font-sans font-medium text-slate-900 whitespace-nowrap">
                       {s.name}
                     </td>
+                    <td className="py-2.5 px-2 text-slate-500">{currencyForCountry(s.country)}</td>
                     <td className="py-2.5 px-2 text-right text-slate-800">
-                      {Number(s.basic_salary).toFixed(2)}
+                      {formatAmount(s.basic_salary)}
                     </td>
                     <td className="py-2.5 px-2 text-right text-slate-500">
-                      {Number(s.special_allowance).toFixed(2)}
+                      {formatAmount(s.special_allowance)}
                     </td>
                     <td className="py-2.5 px-2 text-right text-slate-500">
-                      {Number(s.fixed_ot_amount).toFixed(2)}
+                      {formatAmount(s.fixed_ot_amount)}
                     </td>
                     <td className="py-2.5 px-2 text-right text-slate-500">
-                      {Number(s.bonus).toFixed(2)}
+                      {formatAmount(s.bonus)}
                     </td>
                     <td className="py-2.5 px-2 text-right text-slate-500">
-                      {Number(s.telephone_allowance).toFixed(2)}
+                      {formatAmount(s.telephone_allowance)}
                     </td>
                     <td className="py-2.5 px-2 text-right text-slate-500">
-                      {Number(s.housing_transport_allowance).toFixed(2)}
+                      {formatAmount(s.housing_transport_allowance)}
                     </td>
                     <td className="py-2.5 px-2.5 text-right font-bold text-indigo-700 bg-indigo-50/30">
-                      {Number(s.salary_portion).toFixed(2)}
+                      {formatAmount(s.salary_portion)}
                     </td>
                     <td className="py-2.5 px-2 text-right text-slate-600">
-                      {Number(s.gratuity).toFixed(2)}
+                      {formatAmount(s.gratuity)}
                     </td>
                     <td className="py-2.5 px-2 text-right text-slate-600">
-                      {Number(s.leave_salary).toFixed(2)}
+                      {formatAmount(s.leave_salary)}
                     </td>
                     <td className="py-2.5 px-2 text-right text-slate-700 font-medium">
-                      {Number(s.per_month_provision).toFixed(2)}
+                      {formatAmount(s.per_month_provision)}
                     </td>
                     <td className="py-2.5 px-2 text-right font-semibold text-slate-900">
-                      {Number(s.total_staff_cost).toFixed(2)}
+                      {formatAmount(s.total_staff_cost)}
                     </td>
                     <td className="py-2.5 px-2 text-right text-slate-600">
-                      {Number(s.hr_oh).toFixed(2)}
+                      {formatAmount(s.hr_oh)}
                     </td>
                     <td className="py-2.5 px-2.5 text-right font-bold text-emerald-700 bg-emerald-50/30">
-                      {Number(s.final_cost).toFixed(2)}
+                      {formatAmount(s.final_cost)}
                     </td>
                     <td className="py-2.5 px-2.5 text-center text-slate-600 font-sans whitespace-nowrap text-[10px]">
                       {s.standard_hours}h / {s.break_minutes ?? 60}m
@@ -639,23 +649,24 @@ export const SalaryStructures: React.FC = () => {
                           </div>
                           <div>
                             <span className="text-slate-400 block">Basic Salary:</span>
-                            <span className="font-semibold">{rec.basic_salary}</span>
+                            <span className="font-semibold">{formatMoney(rec.basic_salary, historyCurrency)}</span>
                           </div>
                           <div>
                             <span className="text-slate-400 block">Allowances:</span>
                             <span className="font-semibold">
-                              {(
+                              {formatMoney(
                                 Number(rec.special_allowance) +
-                                Number(rec.fixed_ot_amount) +
-                                Number(rec.bonus) +
-                                Number(rec.telephone_allowance) +
-                                Number(rec.housing_transport_allowance)
-                              ).toFixed(2)}
+                                  Number(rec.fixed_ot_amount) +
+                                  Number(rec.bonus) +
+                                  Number(rec.telephone_allowance) +
+                                  Number(rec.housing_transport_allowance),
+                                historyCurrency,
+                              )}
                             </span>
                           </div>
                           <div>
                             <span className="text-slate-400 block">Total Fixed Pay:</span>
-                            <span className="font-bold text-indigo-700">{rec.salary_portion}</span>
+                            <span className="font-bold text-indigo-700">{formatMoney(rec.salary_portion, historyCurrency)}</span>
                           </div>
                         </div>
                       </div>

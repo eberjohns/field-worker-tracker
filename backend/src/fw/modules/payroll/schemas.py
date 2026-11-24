@@ -4,7 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class EmployeeSalaryRead(BaseModel):
@@ -250,6 +250,9 @@ class PayrollRecordRead(BaseModel):
     created_at: datetime
 
 
+COUNTRY_CURRENCY = {"AE": "AED", "SA": "SAR"}
+
+
 class PayrollTotalsSnapshot(BaseModel):
     worker_count: int = 0
     scheduled_hours_total: Decimal = Decimal("0.00")
@@ -264,6 +267,7 @@ class PayrollTotalsSnapshot(BaseModel):
     total_staff_cost_total: Decimal = Decimal("0.00")
     final_total_staff_cost_total: Decimal = Decimal("0.00")
     treat_leaves_as_paid: bool = False
+    currency: str | None = None
 
 
 class PayrollRunRead(BaseModel):
@@ -285,6 +289,19 @@ class PayrollRunRead(BaseModel):
     record_count: int = 0
     created_at: datetime
     updated_at: datetime
+    # The run's currency (the country's `currency` setting when the run was made); runs made
+    # before v1.16.0 fall back to the country's default (AE -> AED, SA -> SAR).
+    currency: str | None = None
+
+    @model_validator(mode="after")
+    def _fill_currency(self) -> "PayrollRunRead":
+        if not self.currency:
+            snap = self.totals_snapshot
+            stored = (
+                snap.get("currency") if isinstance(snap, dict) else getattr(snap, "currency", None)
+            )
+            self.currency = str(stored) if stored else COUNTRY_CURRENCY.get(self.country, "AED")
+        return self
 
 
 class PayrollRunDetailRead(PayrollRunRead):

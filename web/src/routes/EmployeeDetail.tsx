@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { currencyForCountry, formatMoney } from "../features/format/money";
 import { useParams, Link } from "@tanstack/react-router";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -1183,36 +1184,31 @@ export const EmployeeDetail: React.FC = () => {
                 <div className="bg-white p-3 rounded-lg border border-indigo-100">
                   <span className="text-xs text-slate-400 block mb-1">Basic Salary</span>
                   <span className="text-base font-bold text-slate-900">
-                    {Number(salaryHistory.current_salary.basic_salary).toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                    })}
+                    {formatMoney(salaryHistory.current_salary.basic_salary, currencyForCountry(employee?.country))}
                   </span>
                 </div>
                 <div className="bg-white p-3 rounded-lg border border-indigo-100">
                   <span className="text-xs text-slate-400 block mb-1">Special Allowance</span>
                   <span className="text-base font-bold text-slate-900">
-                    {Number(salaryHistory.current_salary.special_allowance).toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                    })}
+                    {formatMoney(salaryHistory.current_salary.special_allowance, currencyForCountry(employee?.country))}
                   </span>
                 </div>
                 <div className="bg-white p-3 rounded-lg border border-indigo-100">
                   <span className="text-xs text-slate-400 block mb-1">Other Allowances</span>
                   <span className="text-base font-bold text-slate-900">
-                    {(
+                    {formatMoney(
                       Number(salaryHistory.current_salary.fixed_ot_amount) +
-                      Number(salaryHistory.current_salary.bonus) +
-                      Number(salaryHistory.current_salary.telephone_allowance) +
-                      Number(salaryHistory.current_salary.housing_transport_allowance)
-                    ).toFixed(2)}
+                        Number(salaryHistory.current_salary.bonus) +
+                        Number(salaryHistory.current_salary.telephone_allowance) +
+                        Number(salaryHistory.current_salary.housing_transport_allowance),
+                      currencyForCountry(employee?.country),
+                    )}
                   </span>
                 </div>
                 <div className="bg-white p-3 rounded-lg border border-indigo-200">
                   <span className="text-xs text-indigo-700 block mb-1 font-semibold">Total Fixed Portion</span>
                   <span className="text-base font-extrabold text-indigo-600">
-                    {Number(salaryHistory.current_salary.salary_portion).toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                    })}
+                    {formatMoney(salaryHistory.current_salary.salary_portion, currencyForCountry(employee?.country))}
                   </span>
                 </div>
               </div>

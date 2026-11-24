@@ -355,6 +355,7 @@ class BasePlannerWorksiteRow(BaseModel):
     start_date: date | None = None
     end_date: date | None = None
     budget_amount: Decimal | None = None
+    country: str | None = None  # the budget's currency follows the country (AED / SAR)
     items: list[BasePlannerItemRow]
 
 
@@ -432,6 +433,7 @@ class OperationalWorksiteRow(BaseModel):
     start_date: date | None = None
     end_date: date | None = None
     budget_amount: Decimal | None = None
+    country: str | None = None  # the budget's currency follows the country (AED / SAR)
     items: list[OperationalJobItemRow]
 
 
