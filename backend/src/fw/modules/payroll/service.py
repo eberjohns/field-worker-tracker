@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -1252,6 +1252,8 @@ class PayrollService:
             }
 
             rec = PayrollRecord(
+                # Set now: the job cost allocations below point at it before the flush.
+                id=uuid4(),
                 payroll_run_id=run.id,
                 employee_id=emp.id,
                 salary_id=salary_id,

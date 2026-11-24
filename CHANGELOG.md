@@ -1,6 +1,10 @@
 # Changelog
 All notable changes. Format: Keep a Changelog. Mobile-contract changes are also logged in `docs/09-mobile-sync-contract.md`.
 
+## [1.17.0] - 2026-11-24
+### Fixed
+- **A payroll draft failed with a 500 when any employee had scheduled work in the month.** `generate_draft_run` built each record's job cost allocations while the record had no id yet, so `job_cost_allocations.payroll_record_id` was null. Every ACTIVE scheduled work row linked to an occurrence (all standing assignments) triggers it, so the demo's October payroll would have failed. The record gets its id up front. Present since phase 11; found while seeding the Batch 9 measuring dataset. Test: two worksites, 3 and 1 days of scheduled work, the cost is split 3:1 and adds up to the record's final staff cost.
+
 ## [1.16.0] - 2026-11-24
 ### Fixed
 - **Payroll record breakdown showed Basic, Special Allowance, Fixed OT and Bonus as 0.00.** A run stored only `basic_salary` (nested under `snapshot.salary`) while the record read top-level keys, and the other components were not stored. A run now stores all six components (basic, special allowance, fixed OT, bonus, telephone, housing/transport) that add up to `salary_portion`, and the record returns them. Older runs fall back to the nested basic and then to the salary row the run used (`salary_id`), else the employee's row in effect at the end of the period. The record view shows all six (telephone and housing/transport are new) and no longer reads the snapshot itself.

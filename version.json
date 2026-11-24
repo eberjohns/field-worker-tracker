@@ -1,9 +1,9 @@
 {
-  "version": "1.16.0",
+  "version": "1.17.0",
   "major": 1,
-  "minor": 16,
+  "minor": 17,
   "patch": 0,
-  "last_branch": "fix/payroll-breakdown-labels",
-  "last_commit": "6d981e8",
-  "updated_at": "2026-11-24T03:13:40.862245+00:00"
+  "last_branch": "fix/payroll-cost-allocation",
+  "last_commit": "2c2293c",
+  "updated_at": "2026-11-24T05:49:11.439454+00:00"
 }
