@@ -65,6 +65,11 @@ class Settings(BaseSettings):
 
     LOG_LEVEL: str = "INFO"
 
+    # Speed measuring (Batch 9): Server-Timing header and a request_timing log line per request.
+    # Dev and staging only; ignored when APP_ENV is production (fw/core/perf.py).
+    PERF_TIMING_ENABLED: bool = False
+    PERF_SLOW_QUERY_MS: int = 100
+
 
 @lru_cache
 def get_settings() -> Settings:

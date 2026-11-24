@@ -1,6 +1,7 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
+import structlog
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,6 +18,7 @@ from fw.core.errors import (
     validation_exception_handler,
 )
 from fw.core.logging import setup_logging
+from fw.core.perf import perf_timing_active
 
 
 @asynccontextmanager
@@ -63,6 +65,10 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    timing = perf_timing_active(settings)
+    if settings.PERF_TIMING_ENABLED and not timing:
+        structlog.get_logger("fw.perf").warning("perf_timing_ignored", app_env=settings.APP_ENV)
+
     # CORS configuration
     app.add_middleware(
         CORSMiddleware,
@@ -73,6 +79,7 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["Server-Timing"] if timing else [],
     )
 
     # Exception handlers (RFC 7807 problem details)
@@ -84,6 +91,13 @@ def create_app() -> FastAPI:
     # Register routers
     app.include_router(health_router)
     app.include_router(api_v1_router)
+
+    if timing:
+        # Added last, so it is the outermost middleware and times everything.
+        from fw.core.db import engine
+        from fw.core.perf import install_perf_timing
+
+        install_perf_timing(app, engine, slow_ms=settings.PERF_SLOW_QUERY_MS)
 
     return app
 

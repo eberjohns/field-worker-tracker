@@ -1,6 +1,14 @@
 # Changelog
 All notable changes. Format: Keep a Changelog. Mobile-contract changes are also logged in `docs/09-mobile-sync-contract.md`.
 
+## [1.18.0] - 2026-11-24
+### Added (Batch 9 step 1: measuring, no speed fixes)
+- **Request timing** (`fw/core/perf.py`, settings `PERF_TIMING_ENABLED`, `PERF_SLOW_QUERY_MS`): a `Server-Timing` header (app time, DB time and query count, most repeated statement) and a `request_timing` log line per request with the route template, status, duration, queries, DB time, repeats and slow statements (SQL text only, never values, never ids). Off by default; dev and staging only, ignored when `APP_ENV=production`. The live stream is not timed.
+- **Scaled mock dataset** (`tools/perf/seed_perf_dataset.py`) in a separate local database `fw_perf`: 600 employees, 400 worksites, 1,500 job items, 339k occurrences, 238k scheduled work rows, about 41k attendance days, 426k phone events and an October payroll draft. Mock names and Tally IDs only; refuses any database not named `*_perf`, any non-local host and production.
+- **Measuring scripts** (`tools/perf/measure_pages.py`, `measure_api.py`, `run_api.py`): Chromium page loads (cold and warm) with request counts, chain depth, bytes, slowest endpoint and time to usable; an endpoint replay with p50/p95 against docs/14. `--read-only` for deployed sites (only GETs and the login leave the client; refused without it for a non-local URL); host, region, network and start time recorded; credentials only from `FW_PERF_USER` / `FW_PERF_PASSWORD` and never written.
+- **Baseline report** `docs/reviews/performance-baseline-2026-11.md` with the raw results in `docs/reviews/perf-2026-11/`, and runbook `docs/runbooks/06-performance-measurement.md`.
+- Dev-only dependency: Python `playwright` 1.65.2 in a separate uv group `perf` (not installed by CI or the app).
+
 ## [1.17.0] - 2026-11-24
 ### Fixed
 - **A payroll draft failed with a 500 when any employee had scheduled work in the month.** `generate_draft_run` built each record's job cost allocations while the record had no id yet, so `job_cost_allocations.payroll_record_id` was null. Every ACTIVE scheduled work row linked to an occurrence (all standing assignments) triggers it, so the demo's October payroll would have failed. The record gets its id up front. Present since phase 11; found while seeding the Batch 9 measuring dataset. Test: two worksites, 3 and 1 days of scheduled work, the cost is split 3:1 and adds up to the record's final staff cost.

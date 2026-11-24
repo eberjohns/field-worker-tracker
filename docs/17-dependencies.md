@@ -20,6 +20,7 @@ Status: **VERIFIED** (checked), **GATE** (checked, but a compatibility test is r
 | Backend | PyJWT, argon2-cffi, structlog | VERIFIED | 2026-11-02 | PyJWT 2.15.x / argon2-cffi 25.1.x / structlog 26.1.x; secure hashing & JSON logging; pinned in uv.lock |
 | Backend | openpyxl, XlsxWriter | VERIFIED | 2026-11-02 | openpyxl 3.1.5 (MIT, read-only import workbook parsing); XlsxWriter 3.3.1 (BSD, active, report export streaming) |
 | Backend | cryptography | VERIFIED | 2026-11-16 | cryptography 50.0.x (Apache-2.0 / BSD, active PyCA); AES-256-GCM / Fernet archive encryption |
+| Measuring (dev only) | playwright (Python) 1.65.2 | VERIFIED | 2026-11-24 | Released 14 Nov 2026 (monthly releases; repo active, last push 23 Nov); Apache-2.0; Python >=3.10. In the separate uv group `perf`, so CI and the app never install it; drives Chromium for `tools/perf/measure_pages.py` (Batch 9). Browser downloaded once with `playwright install chromium` |
 | Backend tooling | uv, ruff, pyright, import-linter | VERIFIED | 2026-11-02 | uv 0.13.x / ruff 0.17.x / pyright 1.1.414 / import-linter 2.15; fast packaging & modular layer enforcement |
 | Frontend | React 18, Vite 5, TypeScript 5 | VERIFIED | 2026-11-02 | React 18.3.1 pinned for map & UI ecosystem stability; Vite 5.4.x; TypeScript 5.9.x; pinned in pnpm-lock.yaml |
 | Frontend | TanStack Router/Query/Table | VERIFIED | 2026-11-02 | Router 1.170.x / Query 5.105.x / Table 8.21.x; active, MIT; typed client-side routing & caching |
