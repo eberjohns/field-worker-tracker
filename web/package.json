@@ -1,13 +1,14 @@
 {
   "name": "field-worker-tracker-web",
   "private": true,
-  "version": "1.20.0",
+  "version": "1.21.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "lint": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test src/**/*.test.ts",
+    "lint": "tsc --noEmit && node scripts/check-ui-rules.mjs",
+    "check:ui": "node scripts/check-ui-rules.mjs",
+    "test": "node --import ./scripts/register-ts.mjs --test \"src/**/*.test.ts\" \"src/**/*.test.tsx\" \"scripts/*.test.mjs\"",
     "codegen:api": "openapi-typescript ../backend/openapi.json -o src/api/schema.d.ts"
   },
   "dependencies": {

@@ -10,6 +10,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete, or_, select
 
+from fw.core.clock import site_today
 from fw.core.db import async_session_factory, engine
 from fw.main import app
 from fw.modules.identity import AuthService, User
@@ -306,7 +307,7 @@ async def get_test_data():
 async def test_reassignment_request_under_3_days_refused_any_role():
     """Checklist item 1: A request under 3 days is refused (any role)."""
     data = await get_test_data()
-    today = date.today()
+    today = site_today()
 
     admin_token = AuthService.create_access_token(data["admin"])
     sup_token = AuthService.create_access_token(data["sup1"])
@@ -359,7 +360,7 @@ async def test_reassignment_request_under_3_days_refused_any_role():
 async def test_leave_approval_creates_to_be_covered_and_alerts():
     """Checklist item 3: Leave approval creates uncovered slots and alerts."""
     data = await get_test_data()
-    today = date.today()
+    today = site_today()
     leave_start = today + timedelta(days=10)
     leave_end = today + timedelta(days=12)
 
@@ -414,7 +415,7 @@ async def test_leave_approval_creates_to_be_covered_and_alerts():
 async def test_overlapping_leave_refused_and_cancelling_restores_slots():
     """Checklist item 4: Overlapping leave refused; cancelling restores slots."""
     data = await get_test_data()
-    today = date.today()
+    today = site_today()
     leave_start = today + timedelta(days=20)
     leave_end = today + timedelta(days=25)
 
@@ -494,7 +495,7 @@ async def test_overlapping_leave_refused_and_cancelling_restores_slots():
 async def test_rejection_needs_reason_and_approval_materializes_exceptions():
     """Checklist item 2: Approval writes rows and keeps originals; rejection needs a reason."""
     data = await get_test_data()
-    today = date.today()
+    today = site_today()
     date_target = today + timedelta(days=8)
 
     sup_token = AuthService.create_access_token(data["sup1"])
@@ -617,7 +618,7 @@ async def test_approvals_inbox_filtering_and_recorded_at():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         # Create leave request
-        from_dt = date.today() + timedelta(days=20)
+        from_dt = site_today() + timedelta(days=20)
         to_dt = from_dt + timedelta(days=2)
         leave_res = await ac.post(
             "/api/v1/leave-requests",
@@ -679,7 +680,7 @@ async def test_operational_shift_cover_resolves_alert_and_deduplicates():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         # 1. Create a 1-day leave request
-        from_dt = date.today() + timedelta(days=30)
+        from_dt = site_today() + timedelta(days=30)
         leave_res = await ac.post(
             "/api/v1/leave-requests",
             json={

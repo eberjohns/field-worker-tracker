@@ -4,6 +4,13 @@ React + Vite + TypeScript. Desktop-first (tablet usable). English first; layout 
 The scope and role rules in `02-roles-and-permissions.md` apply to every screen: hide what a role cannot do **and** rely on the API to enforce it.
 
 ## 1. Shell and shared patterns
+- **Building blocks** (ADR-031): pages are built from `web/src/ui` only. That covers Modal, ConfirmDialog, toasts and AlertBanner, DatePicker, DateRangePicker, Calendar, ScrollArea, TextField, NumberField, Select, LookupSelect, Tabs, Menu, Tooltip, Badge, EmptyState, Skeleton and PageHeader.
+  - **Tokens:** colours, spacing, radii, type and shadows are in `ui/tokens.css` (`fw-*` in Tailwind).
+  - **Gallery:** `/dev/ui` shows every component and state (development builds only).
+  - **Confirmations and messages:** `useDialogs().confirm/prompt` and `useToast()`, never `window.alert/confirm/prompt`. An error toast shows the server's message, and for a 422 one line per field.
+  - **Dates:** one DatePicker. Dates show as "25 Nov 2026"; typing is day-first ("25/11/2026"); values are ISO.
+  - **Scrolling:** one ScrollArea per region (thin scrollbar on hover), so panels never scroll twice.
+  - **The check:** `pnpm run lint` refuses new browser dialogs, native date inputs, hand-made overlays and direct imports of libraries the ui layer wraps. The existing ones are listed in `web/scripts/ui-rules-baseline.json` until Batch 10 B removes them.
 - **Layout**: left navigation (collapsible), top bar with search, alerts bell, user menu. Navigation items depend on role (see section 2).
 - **Lists**: server-side filtering, sorting and cursor pagination; saved filter chips; column chooser; CSV/XLSX export where the report catalog allows.
 - **Detail pages**: header with key facts and status chips, tabs for sections, "History" tab showing audit entries for that record.
@@ -136,4 +143,4 @@ Drivers section: driver list (with vehicle label), a day/week view of **runs** (
 Every month-end and on-demand file with its name, period, country, version and generated time; filter and download again; shows who may see it. Month-end files appear automatically after the draft run.
 
 ## 4. Front-end stack (see ADR-002, ADR-006 and 13-architecture)
-React, TypeScript, Vite; TanStack Router/Query/Table; Tailwind + shadcn/ui; react-hook-form + zod; Recharts; API client generated from OpenAPI (`openapi-typescript`); maps: MapLibre GL JS 6.x + `react-map-gl` (MapLibre entry) + Terra Draw + Turf modules (ADR-006; Terra Draw/MapLibre v6 compatibility is a gate in M3). Exact versions are verified and pinned per `17-dependencies.md`; Leaflet is rejected.
+React, TypeScript, Vite; TanStack Router/Query/Table; Tailwind with our own component layer `web/src/ui` (ADR-031; shadcn/ui was not adopted); react-hook-form + zod; Recharts; API client generated from OpenAPI (`openapi-typescript`); maps: MapLibre GL JS 6.x + `react-map-gl` (MapLibre entry) + Terra Draw + Turf modules (ADR-006; Terra Draw/MapLibre v6 compatibility is a gate in M3). Exact versions are verified and pinned per `17-dependencies.md`; Leaflet is rejected.

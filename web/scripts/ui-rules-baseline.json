@@ -1,0 +1,128 @@
+{
+  "src/components/jobs/CopyBoundaryModal.tsx": {
+    "no-custom-overlay": 1
+  },
+  "src/components/jobs/JobItemFields.tsx": {
+    "no-native-date-input": 2
+  },
+  "src/components/jobs/JobItemModal.tsx": {
+    "no-custom-overlay": 1
+  },
+  "src/components/jobs/JobItemValidationModal.tsx": {
+    "no-custom-overlay": 1
+  },
+  "src/components/jobs/PlannedVsActualPanel.tsx": {
+    "no-native-date-input": 2
+  },
+  "src/components/jobs/SupervisorProposalsModal.tsx": {
+    "no-custom-overlay": 1
+  },
+  "src/components/worksites/AddWorksiteWizard.tsx": {
+    "no-custom-overlay": 1,
+    "no-native-date-input": 2
+  },
+  "src/features/admin/ArchiveSettings.tsx": {
+    "no-browser-dialogs": 2,
+    "no-custom-overlay": 1
+  },
+  "src/features/attendance/RecalculateModal.tsx": {
+    "no-custom-overlay": 1,
+    "no-native-date-input": 2
+  },
+  "src/features/map/PolygonEditor.tsx": {
+    "no-browser-dialogs": 3,
+    "no-custom-overlay": 1
+  },
+  "src/features/planner/AssignModal.tsx": {
+    "no-custom-overlay": 1
+  },
+  "src/features/planner/YearPlanView.tsx": {
+    "no-custom-overlay": 1,
+    "no-native-date-input": 1
+  },
+  "src/features/reports/GeneratedReports.tsx": {
+    "no-browser-dialogs": 1
+  },
+  "src/features/reports/ReportsHub.tsx": {
+    "no-native-date-input": 2
+  },
+  "src/routes/Approvals.tsx": {
+    "no-custom-overlay": 1
+  },
+  "src/routes/Attendance.tsx": {
+    "no-native-date-input": 2
+  },
+  "src/routes/BasePlanner.tsx": {
+    "no-browser-dialogs": 3,
+    "no-custom-overlay": 1
+  },
+  "src/routes/Boundaries.tsx": {
+    "no-custom-overlay": 2
+  },
+  "src/routes/Devices.tsx": {
+    "no-browser-dialogs": 1
+  },
+  "src/routes/Documents.tsx": {
+    "no-browser-dialogs": 1
+  },
+  "src/routes/EmployeeDetail.tsx": {
+    "no-browser-dialogs": 8,
+    "no-custom-overlay": 6,
+    "no-native-date-input": 2
+  },
+  "src/routes/Employees.tsx": {
+    "no-browser-dialogs": 2,
+    "no-custom-overlay": 3,
+    "no-native-date-input": 3
+  },
+  "src/routes/Imports.tsx": {
+    "no-browser-dialogs": 6
+  },
+  "src/routes/LeaveManagement.tsx": {
+    "no-browser-dialogs": 4,
+    "no-custom-overlay": 3,
+    "no-native-date-input": 2
+  },
+  "src/routes/LiveMap.tsx": {
+    "no-native-date-input": 1
+  },
+  "src/routes/OperationalPlanner.tsx": {
+    "no-browser-dialogs": 3,
+    "no-custom-overlay": 4,
+    "no-native-date-input": 4
+  },
+  "src/routes/Payroll.tsx": {
+    "no-browser-dialogs": 15,
+    "no-custom-overlay": 5,
+    "no-native-date-input": 5
+  },
+  "src/routes/PendingVisits.tsx": {
+    "no-custom-overlay": 3,
+    "no-native-date-input": 1
+  },
+  "src/routes/Planner.tsx": {
+    "no-browser-dialogs": 1
+  },
+  "src/routes/SalaryStructures.tsx": {
+    "no-browser-dialogs": 5,
+    "no-custom-overlay": 3,
+    "no-native-date-input": 2
+  },
+  "src/routes/Settings.tsx": {
+    "no-browser-dialogs": 3,
+    "no-custom-overlay": 6,
+    "no-native-date-input": 6
+  },
+  "src/routes/Users.tsx": {
+    "no-browser-dialogs": 1
+  },
+  "src/routes/WorksiteDetail.tsx": {
+    "no-browser-dialogs": 1,
+    "no-custom-overlay": 1,
+    "no-native-date-input": 3
+  },
+  "src/routes/Worksites.tsx": {
+    "no-browser-dialogs": 5,
+    "no-custom-overlay": 2
+  }
+}
