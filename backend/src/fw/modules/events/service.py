@@ -6,7 +6,7 @@ import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from fw.core.clock import get_country_timezone
+from fw.core.clock import get_country_timezone, get_system_clock
 from fw.modules.events.models import EmployeeLastPosition, LiveLocationAccessLog, MobileEventLog
 from fw.modules.events.schemas import (
     EventBatchRequest,
@@ -33,7 +33,9 @@ class EventsService:
         device_id: UUID,
         batch: EventBatchRequest,
     ) -> list[EventResultItem]:
-        now = datetime.now(UTC)
+        # The app clock (the system clock in production) is "now" for the 5-minute and
+        # 7-day checks and for server_received_at, so a frozen clock replays a past day.
+        now = get_system_clock().now()
         results: list[EventResultItem] = []
         accepted_event_ids: list[UUID] = []
 

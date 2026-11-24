@@ -60,3 +60,4 @@ Field Worker Tracker follows semantic versioning `v<MAJOR>.<MINOR>.<PATCH>`:
 | **v1.17.0** | 2026-11-24 | `fix/payroll-cost-allocation` | `2c2293c` | New branch 'fix/payroll-cost-allocation' |
 | **v1.18.0** | 2026-11-24 | `perf/batch9-measure` | `60363ba` | New branch 'perf/batch9-measure' |
 | **v1.19.0** | 2026-11-24 | `perf/batch9-quickwins` | `5bedefb` | New branch 'perf/batch9-quickwins' |
+| **v1.20.0** | 2026-11-24 | `feat/demo-activity-generator` | `bc183ef` | New branch 'feat/demo-activity-generator' |

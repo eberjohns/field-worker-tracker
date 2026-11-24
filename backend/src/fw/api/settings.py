@@ -451,6 +451,25 @@ async def reset_database(
             status_code=403,
         )
 
+    await reset_to_bootstrap_state(session)
+
+    await session.commit()
+    return {
+        "status": "success",
+        "message": (
+            "Database reset to clean bootstrap state. Only ADMIN001 is retained; "
+            "default company settings re-seeded."
+        ),
+    }
+
+
+async def reset_to_bootstrap_state(session: AsyncSession) -> None:
+    """Clear every master and transactional table and re-create the bootstrap state: ADMIN001
+    (a standalone Admin user, no employee row), the default company settings and managed lists.
+
+    Used by ``POST /settings/reset-database`` (after its RESET and password checks) and by
+    ``tools/reset_database.py``. The caller commits.
+    """
     # 1. Nullify user reference in audit logs and bypass event immutability for bootstrap reset
     await session.execute(text("UPDATE audit_logs SET actor_user_id = NULL;"))
     await session.execute(text("SET LOCAL fwt.bypass_immutability = 'on';"))
@@ -535,12 +554,3 @@ async def reset_database(
         value=default_pwd,
         effective_from=date(2026, 1, 1),
     )
-
-    await session.commit()
-    return {
-        "status": "success",
-        "message": (
-            "Database reset to clean bootstrap state. Only ADMIN001 is retained; "
-            "default company settings re-seeded."
-        ),
-    }
