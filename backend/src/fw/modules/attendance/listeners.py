@@ -11,6 +11,7 @@ async def handle_events_ingested(event: EventsIngested, session: AsyncSession) -
     if not event.employee_id or not event.event_ids:
         return
 
+    from fw.modules.attendance.pending_visits import PendingVisitsService
     from fw.modules.attendance.service import AttendanceService
 
     for w_date in event.affected_work_dates:
@@ -38,6 +39,11 @@ async def handle_events_ingested(event: EventsIngested, session: AsyncSession) -
             employee_id=event.employee_id,
             work_date=w_date,
             reason="NEW_EVENTS",
+        )
+
+        # 4. A late upload can confirm a visit after day close: close its pending visits.
+        await PendingVisitsService.close_confirmed_late(
+            session=session, employee_id=event.employee_id, work_date=w_date
         )
 
 

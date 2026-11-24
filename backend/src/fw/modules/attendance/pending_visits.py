@@ -8,7 +8,7 @@ import structlog
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from fw.core.clock import site_today
+from fw.core.clock import get_system_clock, site_today
 from fw.core.errors import AppError
 from fw.modules.attendance.models import (
     AttendanceComment,
@@ -124,6 +124,74 @@ class PendingVisitsService:
 
         await session.flush()
         return detected_count
+
+    @staticmethod
+    async def close_confirmed_late(
+        session: AsyncSession,
+        employee_id: UUID,
+        work_date: date,
+        min_visit_minutes: int = 10,
+    ) -> int:
+        """Close the worker's OPEN pending visits for ``work_date`` whose site now has a counted
+        visit, after a delayed batch upload (DEC-32, closed reason VISIT_CONFIRMED_LATE), and
+        resolve their reminder alerts.
+
+        Day-close detection only runs for the day just closed, so without this a late upload
+        recalculated the day but left its pending visits open. This never creates a pending
+        visit: detection stays the day-close job's. Returns the number closed.
+        """
+        open_rows = list(
+            (
+                await session.execute(
+                    select(PendingVisit).where(
+                        PendingVisit.employee_id == employee_id,
+                        PendingVisit.due_date == work_date,
+                        PendingVisit.status == "OPEN",
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if not open_rows:
+            return 0
+        visited = set(
+            (
+                await session.execute(
+                    select(SiteVisit.worksite_id).where(
+                        SiteVisit.employee_id == employee_id,
+                        SiteVisit.work_date == work_date,
+                        or_(
+                            SiteVisit.counts_as_completed.is_(True),
+                            SiteVisit.duration_minutes >= min_visit_minutes,
+                        ),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        now = get_system_clock().now()
+        closed = 0
+        for pv in open_rows:
+            if pv.worksite_id not in visited:
+                continue
+            pv.status = "CLOSED"
+            pv.closed_reason = "VISIT_CONFIRMED_LATE"
+            pv.closed_at = now
+            await NotificationService.resolve_alerts_for_ref(
+                session=session, ref_type="PENDING_VISIT", ref_id=pv.id
+            )
+            closed += 1
+        if closed:
+            await session.flush()
+            logger.info(
+                "pending_visits_closed_late",
+                employee_id=str(employee_id),
+                work_date=str(work_date),
+                closed=closed,
+            )
+        return closed
 
     @staticmethod
     async def explain_pending_visit(

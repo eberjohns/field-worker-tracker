@@ -1,6 +1,24 @@
 # Changelog
 All notable changes. Format: Keep a Changelog. Mobile-contract changes are also logged in `docs/09-mobile-sync-contract.md`.
 
+## [1.20.0] - 2026-11-25
+### Added (demo activity generator)
+- **`tools/seed_demo_activity.py`** fills the demo import with activity from 1 Oct 2026 to yesterday, through the real pipeline. It never writes attendance, site visit, pending visit or payroll rows itself. In order:
+  - Base Planner templates, then Operational Planner shifts (each validated first, 30 days ahead);
+  - one `DEMO-<tally>` phone per worker through the mobile login, and consent;
+  - each worker-day's phone events uploaded through the batch upload service, with the app clock at that evening;
+  - the day close (attendance for every planned worker, then pending visits and reminders);
+  - engineer 2901's approvals for days older than 7 days;
+  - the October payroll draft, not approved.
+  
+  The planted scenarios P1–P12 come from `tools/demo_data/demo-data-generator-prompt.md`. Options: `--from`, `--to`, `--seed` (deterministic), `--dry-run`, `--reset-generated`. Refused for production and for a database not on this machine. The demo's three leave rows go through the Admin leave import, because the master import doesn't read the Leave sheet yet.
+- **Runbook** `docs/runbooks/07-demo-data.md`: reset → import → generate → passwords → simulator.
+### Fixed
+- **Late arrival / early departure report:** it compared the UTC clock time of the first entry and last exit with the planned site times. In Dubai that meant nobody was ever late and everyone left about four hours early. It now converts to the employee's country time zone first.
+- **Pending visits closed by a late upload (DEC-32):** day-close detection only runs for the day just closed, so a phone batch uploaded later recalculated the day but left its pending visits OPEN (and escalating). After recalculating, the event listener now closes the worker's OPEN pending visits for that day whose site has a counted visit (`VISIT_CONFIRMED_LATE`) and resolves their reminder alerts. It never opens new ones.
+- **`tools/reset_database.py`** failed on the current schema: since 0017 the Admin has no employee row. It now runs the same reset as Settings > Reset database (shared `reset_to_bootstrap_state`) and refuses production.
+- **Phone event upload uses the app clock** (`get_system_clock()`) for the 5-minute and 7-day checks and for `server_received_at`, like the rest of the backend. In production that is the system clock, so nothing changes there; a frozen clock can now replay a past day.
+
 ## [1.19.0] - 2026-11-24
 ### Changed (Batch 9 step 2: quick wins)
 Measured locally on the `fw_perf` dataset with the step 1 scripts: Operational Planner 80.8 s → 1.4 s, Base Planner 18.7 s → 0.69 s, Dashboard 12.2 s → 0.25 s, and no page over 1 s cold apart from the Operational Planner. The "After step 2" columns in `docs/reviews/performance-baseline-2026-11.md` have the details; the raw results are in `docs/reviews/perf-2026-11/after-step2/`.
