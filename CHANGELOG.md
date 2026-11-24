@@ -14,6 +14,7 @@ All notable changes. Format: Keep a Changelog. Mobile-contract changes are also 
 - **Payroll:** approved ABSENT days are deducted at basic / 208 (DEC-30). Absences still pending review are not deducted and appear as `PENDING_ABSENCE` issues ("n absences pending review" on the payroll page).
 - **The master import reads the Leave sheet.** New optional `status` column (APPROVED by default, or PENDING). Validated like the Admin leave import (worker, leave type, dates), plus to ≥ from and no overlap with open leave or another row; re-importing the same leave is UNCHANGED. Approved leave takes the worker off the materialised roster and raises the usual cover alert.
 ### Fixed
+- **Payroll deducted approved leave days twice.** The engine records an approved leave day's planned hours as shortfall, and payroll counted that shortfall as well as the leave itself: unpaid leave was deducted twice, and paid leave once, unless the run treated leave as paid. Found by the demo re-run, where October's draft for worker 2023 had 24 h of unpaid leave plus 26.1 h of shortfall. Payroll now never counts shortfall on an approved leave day; the leave lines decide (DEC-30).
 - **Restoring a removed base worker** left the cancellation in place; it now restores the worker.
 - **Coverage and roster** skipped public holidays for template workers and did not skip their weekly off; they now match the materialised rows.
 - **Reset database** (Settings) clears the new manual-times table.

@@ -413,7 +413,7 @@ class AttendanceService:
             extra_flags.append("NO_WEEKLY_OFF_DAY")
         if manual is not None:
             extra_flags.append(MANUAL_TIMES_FLAG)
-        elif assignments and not day_events:
+        elif assignments and not day_events and not has_approved_leave:
             extra_flags.append(NO_ATTENDANCE_EVENTS_FLAG)
 
         # 10. Run pure engine calculation

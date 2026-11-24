@@ -1149,18 +1149,23 @@ class PayrollService:
                 worked_m = Decimal(str(calc.worked_minutes or 0))
                 worked_hours += round_money(worked_m / Decimal("60"))
 
-                # Shortfall minutes (skip leave days if run treats leaves as paid). An ABSENT day
-                # (planned, nothing recorded) counts only once its review is APPROVED (owner,
-                # 25 Nov 2026); a pending one is listed in the run issues, a rejected one is not
-                # deducted.
+                # Shortfall minutes (DEC-30). Approved leave days never count here: the leave
+                # lines below already pay or deduct them (counting the leave day's shortfall too
+                # deducted unpaid leave twice and paid leave once). An ABSENT day (planned,
+                # nothing recorded) counts only once its review is APPROVED (owner, 25 Nov 2026);
+                # a pending one is listed in the run issues, a rejected one is not deducted.
                 absent_unapproved = (
                     calc.business_status == "ABSENT" and rec.review_status != "APPROVED"
                 )
-                if calc.shortfall_minutes and calc.shortfall_minutes > 0 and not absent_unapproved:
-                    if not (payload.treat_leaves_as_paid and rec.work_date in approved_leave_dates):
-                        shortfall_hours += round_money(
-                            Decimal(str(calc.shortfall_minutes)) / Decimal("60")
-                        )
+                if (
+                    calc.shortfall_minutes
+                    and calc.shortfall_minutes > 0
+                    and not absent_unapproved
+                    and rec.work_date not in approved_leave_dates
+                ):
+                    shortfall_hours += round_money(
+                        Decimal(str(calc.shortfall_minutes)) / Decimal("60")
+                    )
 
                 # Overtime: ONLY calculate if approved
                 # (review_status == 'APPROVED' or auto-approved when review_reasons is empty)

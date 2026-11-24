@@ -303,7 +303,8 @@ async def test_payroll_deducts_approved_absence_only(db_session: AsyncSession) -
     await _cleanup_period(db_session, period_start, period_end)
     item = await _item(db_session)
     approved_day, pending_day = date(2026, 2, 10), date(2026, 2, 11)
-    emp = await _employee(db_session, "FRIDAY")  # 10 and 11 Feb 2026 are Tue and Wed
+    leave_day = date(2026, 2, 12)
+    emp = await _employee(db_session, "FRIDAY")  # 10, 11 and 12 Feb 2026 are Tue, Wed, Thu
     db_session.add(
         EmployeeSalary(
             employee_id=emp.id,
@@ -319,6 +320,35 @@ async def test_payroll_deducts_approved_absence_only(db_session: AsyncSession) -
     await db_session.commit()
     admin = await UserService.get_or_create_system_admin(db_session)
     await db_session.commit()
+    # An approved unpaid leave day on planned work: calculated (as by a recalculation), never
+    # flagged "No attendance data", and deducted once, as leave, not again as shortfall.
+    await _plan(db_session, emp, item, leave_day)
+    db_session.add(
+        LeaveRequest(
+            employee_id=emp.id,
+            leave_type="UNPAID",
+            from_date=leave_day,
+            to_date=leave_day,
+            reason="Personal",
+            status="APPROVED",
+            recorded_by_user_id=admin.id,
+            approved_by_user_id=admin.id,
+        )
+    )
+    await db_session.commit()
+    assert await DayCloseService.close_day(db_session, leave_day, "AE") == {
+        "absent": 0,
+        "calculated_other": 0,
+        "skipped_leave": 1,
+        "skipped_weekly_off": 0,
+    }
+    leave_rec = await AttendanceService.recalculate_day(
+        session=db_session, employee_id=emp.id, work_date=leave_day, reason="RECALC"
+    )
+    await db_session.commit()
+    assert leave_rec is not None and leave_rec.business_status == "ON_LEAVE"
+    (leave_calc,) = await _calcs(db_session, leave_rec)
+    assert "NO_ATTENDANCE_EVENTS" not in (leave_calc.flags or [])
     approved_rec = await _record(db_session, emp, approved_day)
     assert approved_rec is not None and approved_rec.business_status == "ABSENT"
     await AttendanceService.record_decision(
@@ -344,9 +374,10 @@ async def test_payroll_deducts_approved_absence_only(db_session: AsyncSession) -
         assert r.status_code == 201, r.text
         run = r.json()
         rec = next(x for x in run["records"] if x["employee_id"] == str(emp.id))
-        # Only the approved absence: 8 h x 2080 / 208 = 80.00.
+        # The approved absence (8 h) and the unpaid leave day (8 h), each once: 16 x 10 = 160.
         assert Decimal(str(rec["shortfall_hours"])) == Decimal("8")
-        assert Decimal(str(rec["missed_hours_deduction"])) == Decimal("80.00")
+        assert Decimal(str(rec["unpaid_leave_hours"])) == Decimal("8")
+        assert Decimal(str(rec["missed_hours_deduction"])) == Decimal("160.00")
 
         issues = (await c.get(f"/api/v1/payroll/runs/{run['id']}/issues", headers=headers)).json()
     mine = [
