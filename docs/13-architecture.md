@@ -133,6 +133,14 @@ Selected by configuration (`PUSH_BACKEND`, `EMAIL_BACKEND`, `FILE_STORAGE_BACKEN
 | `pending_visit_reminders` | hourly | remind while OPEN |
 | `send_push`, `send_email` | on demand | via ports |
 | `import_commit`, `report_export`, `payroll_preview` | on demand | long operations |
+| `payroll_draft` | on demand (`POST /payroll/runs/jobs`) | builds the draft run and its 11 month-end reports, with progress (Batch 9 step 4) |
+
+**On-demand jobs in the API process (Batch 9 step 4).** Jobs a user starts and waits for (first: `payroll_draft`) run as an asyncio task in the API process that received the request, not in the worker: the hosting may run no worker, and these jobs take seconds. The `tasks` module (`background_jobs` table) stores the status, progress and a heartbeat every 10 s; the page polls `GET /background-jobs/{id}`.
+- The job's work runs in one session and commits only when it finishes, so a failure leaves nothing behind (as the in-request call did).
+- Progress is reported through `fw.core.progress.report_progress`, which does nothing outside a job; long loops call `yield_to_loop()`, and the Excel files are written in a thread, so the API keeps answering other requests.
+- One active job per key (country and month for payroll), enforced by a partial unique index.
+- A deploy or crash stops the heartbeat: the job is stored as INTERRUPTED within 2 minutes and can be started again. Shutdown cancels running jobs and stores INTERRUPTED at once.
+- `fw.modules.tasks` sits just above `fw.core` in the layers contract, so any module can start a job.
 
 ## 8. Configuration (env, via pydantic-settings)
 `APP_ENV`, `DEPLOYMENT_COUNTRY` (AE or SA), `DATABASE_URL`, `JWT_SECRET` (or key paths), `ACCESS_TOKEN_MINUTES`, `REFRESH_TOKEN_DAYS`, `CORS_ORIGINS`, `PUSH_BACKEND`, `FCM_CREDENTIALS`, `EMAIL_BACKEND`, `SMTP_*`, `FILE_STORAGE_BACKEND`, `S3_*`, `MAP_STYLE_STREETS_URL`, `MAP_STYLE_SATELLITE_URL`, `MAP_API_KEY` (public, domain-restricted, used by the web build), `LOG_LEVEL`. Secrets come from the environment/secret manager, never the repository. Settings that business users change (alarm time, grace...) live in the database (`company_settings`), not env.

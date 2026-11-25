@@ -1,4 +1,4 @@
-# Performance baseline (Batch 9 step 1) and after steps 2 and 3, November 2026
+# Performance baseline (Batch 9 step 1) and after steps 2, 3 and 4, November 2026
 
 Measured 24 Nov 2026 on the code of `perf/batch9-measure`. That is v1.17.0, which includes #32, #33 and #34, plus the step 1 tooling. There are no speed fixes in this step.
 
@@ -14,6 +14,8 @@ Measured 24 Nov 2026 on the code of `perf/batch9-measure`. That is v1.17.0, whic
 **After step 2:** measured 24 Nov 2026 on `perf/batch9-quickwins` (v1.19.0), same machine, same `fw_perf` dataset and the same scripts, one page per process. The result files are in `docs/reviews/perf-2026-11/after-step2/`; their `app_version` says 1.18.0 because the version is bumped by the commit, after measuring. The "After step 2" columns and the section [After step 2](#after-step-2-local) hold the new numbers.
 
 **After step 3:** measured 25 Nov 2026 on `perf/batch9-cache-split` (v1.24.0; the file says 1.23.2, for the same reason), same machine, dataset and scripts, one page per process. The perf API ran on port 8020 (`FW_PERF_API_PORT`), because 8000 was in use. Results: `docs/reviews/perf-2026-11/after-step3/`; see [After step 3](#after-step-3-local).
+
+**After step 4:** measured 25 Nov 2026 on `perf/batch9-reports-sql` (v1.25.0), same machine, dataset and scripts. The cold pages were measured twice, one page per process. The draft and the reports were also timed with scratchpad scripts on `fw_perf`, rolled back. Results: `docs/reviews/perf-2026-11/after-step4/`; see [After step 4](#after-step-4-local).
 
 ## Summary
 
@@ -91,7 +93,7 @@ What still holds the event loop is coverage's own Python work: about **0.9–1.0
 
 **How to read it:**
 - **Warm 0 ms:** the page drew from the cache with no request and no spinner, so the script's "usable" moment is the navigation itself. Worksites and Employees show 109–125 ms because the script also waits for the table rows to render; Employees still asks for 3 small lists that aren't cached (hierarchy, accommodations, staff grades).
-- **Cold is 30–450 ms higher than after step 2, but not because of the web app.** The first API call starts as early as before: Dashboard at 112 ms (was 129 ms), the Operational Planner at 218 ms (was 189 ms; the page chunk adds one local round trip). The difference is server time in this run: `/dashboard/summary` 212 ms (was 97 ms), `/operational-planner/coverage` 1.59 s (was 1.2 s). Step 3 changes no backend code; this run had migration 0026 applied to `fw_perf` and the owner's own apps running.
+- **Cold is 30–450 ms higher than after step 2** (the cause given here was wrong; see "After step 4" for the measured causes). The first API call starts as early as before: Dashboard at 112 ms (was 129 ms), the Operational Planner at 218 ms (was 189 ms; the page chunk adds one local round trip). The difference is server time in this run: `/dashboard/summary` 212 ms (was 97 ms), `/operational-planner/coverage` 1.59 s (was 1.2 s). Step 3 changes no backend code; this run had migration 0026 applied to `fw_perf` and the owner's own apps running.
 - **The Dashboard makes 9 calls cold** (was 6), for Batch 10 B's nine sections; they still start together (chain depth 1).
 - **Live Map** keeps live positions out of the cache on purpose, and asks for the boundary queue once the map has started (see after step 2), so its warm visit isn't faster.
 - **Bundle:** the first load is now 366 KB of JavaScript (115 KB gzipped), was 2.4 MB (597 KB). Each page's chunk is 5–91 KB; the map library is about 1 MB and loads only with a map.
@@ -106,6 +108,94 @@ What still holds the event loop is coverage's own Python work: about **0.9–1.0
 | Chain depth ≤ 2 (addendum) | 2 at most | yes |
 
 **Not re-measured:** the endpoint replay and the report survey (`measure_api.py`): step 3 changes no endpoint, so their after-step-2 numbers stand. Reports in SQL and the payroll draft as a background job are step 4.
+
+## After step 4 (local)
+
+**What step 4 changed:**
+1. **Reports read only the columns they show.**
+   - The five attendance reports (daily, monthly, utilization, transportation, late/early) share one query (`reports/handlers/_attendance_days.py`): records joined to employees and their current calculation, plus the latest comment, in one statement. Before, they loaded whole ORM rows, then the calculations in `selectinload` chunks of 500, then every employee again.
+   - Movement, site visits, project summary and job costing select columns instead of ORM rows. Loading `Worksite` rows also loaded each site's job items.
+   - Large results are read in parts of 1,000 rows (`fetch_rows_in_parts`), and the row-building loops give other requests a turn every 1,000 rows.
+   - **Same output:** each of the 15 reports was run before and after for October (AE, 580 employees) and the rows compared as JSON. All 15 are identical.
+2. **Payroll draft:**
+   - Salaries and allocated worksite minutes are loaded in two queries, not two per employee. The draft's own queries went from 1,206 to 48. The records and allocations are byte-identical (all 580 records compared).
+   - The draft is a **background job** (`POST /payroll/runs/jobs`, 202). The page shows progress ("Calculating employees 120 / 580", then "Writing month-end reports 4 / 11") and polls `GET /background-jobs/{id}`. It survives a reload; a second start for the same month gets 409 and the running job.
+   - Each month-end Excel file is written in a thread.
+   - At startup the API freezes its long-lived objects (`gc.freeze()`), and the draft releases the period's attendance before the reports run. Together these shorten the garbage collector's pauses.
+
+**Payroll draft, October AE (580 employees, 14,272 attendance days):**
+
+| | Step 1 (baseline) | After step 4 |
+|---|---:|---:|
+| Draft + 11 month-end reports | 27.8–29.7 s, 1,501 queries | **16.9–20.2 s, 98 queries** |
+| of which the draft | 4.9–6.2 s, 1,206 queries | 3.6–4.6 s, 48 queries |
+| of which the reports | 21.5 s, 295 queries | 14–16 s, 50 queries (about 10 s of it writing Excel) |
+| What the user waits on | one request, no feedback | a progress bar; the page stays usable and can be left |
+| Longest time the API can't answer other requests during a draft | not measured (the whole request ran on the event loop) | **about 200 ms** (was 1.25 s before the parts and the gc changes in this step); p99 under 55 ms |
+
+**Report survey** (`measure_api.py`, each report once for October through the API, server time):
+
+| Report | Step 1 | After step 2 | **After step 4** | Queries (step 2 → 4) |
+|---|---:|---:|---:|---:|
+| Daily Attendance | 2.4 s | 3.5 s | **1.18 s** | 90 → 2 |
+| Job Costing | 20.2 s | 1.46 s | **1.11 s** | 13 → 11 |
+| Employee Movement | 10.3 s | 1.08 s | **1.05 s** | 7 → 5 |
+| Site Visits | 10.1 s | 1.15 s | **0.80 s** | 6 → 4 |
+| Late / Early | 2.2 s | 2.9 s | **0.65 s** | 61 → 2 |
+| Monthly Attendance | 1.7 s | 1.9 s | **0.65 s** | 32 → 2 |
+| Transportation Time | 1.9 s | 2.2 s | **0.62 s** | 32 → 2 |
+| Employee Utilization | 1.0 s | 2.3 s | **0.58 s** | 32 → 2 |
+| Project Attendance Summary | 11.2 s | 1.64 s | **0.55 s** | 9 → 7 |
+| Payroll, Weekly Roster, Provisions | 0.14–8.6 s | 0.19–0.22 s | 0.15–0.22 s | unchanged |
+
+Every report is now under the 2 s target for a month of 580 employees. The heaviest is still Daily Attendance. The rest of its time is building 14,000 rows of 25 columns in Python. Job Costing's time is the budget plan per worksite (`BudgetService.planned_vs_actual`), which is out of scope here.
+
+**Cold page loads, measured twice (owner's request): the step 3 increase is real.**
+
+| Page | After step 2 | After step 3 | Step 4, run 1 | Step 4, run 2 |
+|---|---:|---:|---:|---:|
+| Dashboard | 250 ms | 359 ms | 390 ms | 359 ms |
+| Worksites | 281 ms | 391 ms | 343 ms | 312 ms |
+| Worksite detail | 203 ms | 296 ms | 296 ms | 297 ms |
+| Worksite detail, Schedule tab | 250 ms | 359 ms | 375 ms | 359 ms |
+| Base Planner | 688 ms | 735 ms | 656 ms | 703 ms |
+| Operational Planner (week) | 1.4 s | 1.8 s | 1.58 s | 1.72 s |
+| Employees | 343 ms | 375 ms | 390 ms | 375 ms |
+| Attendance | 235 ms | 219 ms | 250 ms | 203 ms |
+| Live Map | 954 ms | 547 ms | 407 ms | 407 ms |
+| Reports | 187 ms | 203 ms | 203 ms | 187 ms |
+| Approvals inbox | 172 ms | 188 ms | 188 ms | 204 ms |
+
+Warm visits are unchanged from step 3: 0 ms for most pages, 109–141 ms for Worksites and Employees.
+
+**What causes it.** The step 3 explanation ("server variance") was wrong; corrected here. The timelines and a side-by-side test give three causes:
+1. **The page chunk (step 3, by design).** Every page except the Dashboard is now its own file, fetched after the app starts. The first API call starts 30–45 ms later than in step 2: Worksites 132–143 → 163–176 ms, Worksite detail 125 → 157–170 ms. On a local machine that is one extra round trip. It buys a first load of 366 KB instead of 2.4 MB, which matters far more on a phone network.
+2. **The Dashboard makes 9 calls, not 6 (Batch 10 B, 25 Nov).** Its new sections (pending visits, worksites, a third approvals list) start together with the others in the same single-worker API process, so they share its event loop. Fired together, the 9 calls take 228–232 ms; without the new ones, 157–159 ms. That is about +70 ms of the Dashboard's +110 ms; the rest is the first cause.
+3. **Not the backend code of steps 3–4.** The step 2 backend was run next to the current one on the same `fw_perf` database (a temporary worktree on port 8021), with each page's calls fired at both, alternately, 7 rounds each:
+
+| A page's calls fired together | Step 2 code | Current code |
+|---|---:|---:|
+| Operational Planner (7 calls) | 1,480–1,492 ms | 1,287–1,330 ms |
+| Dashboard (9 calls) | 216–243 ms | 228–232 ms |
+| Worksite detail (7 calls) | 80–91 ms | 77–80 ms |
+
+   Today, the step 2 code takes 1.48 s for the planner's calls, slower than its own 1.13–1.35 s on 24 Nov. So the planner's remaining +200–300 ms comes from the machine and database state on the day (the owner's apps, the database's cache), not from a code change. The current code is the faster of the two.
+
+**Targets after step 4:**
+
+| Target | After step 4 | Met |
+|---|---|---|
+| No page over 3 s cold (owner) | slowest is the Operational Planner, 1.58–1.72 s | yes |
+| Operational Planner < 3 s, Base Planner < 2 s (owner) | 1.58–1.72 s, 0.66–0.70 s | yes |
+| Reports: a month in < 2 s (addendum) | slowest 1.18 s | yes |
+| Payroll draft doesn't block (addendum: background job with progress) | 202 at once; progress polled; other requests wait at most about 200 ms | yes |
+| A repeat visit < 300 ms from cache | unchanged from step 3: 0–141 ms | yes |
+
+**Files:** `after-step4/pages-run1.json` and `pages-run2.json` (the two cold runs), and `after-step4/api-localhost.json` (the four pages' endpoints measured alone, plus the report survey).
+
+**Still open:**
+- Writing the month-end Excel files is now most of a draft's time: about 10 s of 17–20 s. xlsxwriter's `constant_memory` mode was tried and is no faster. The work is in a thread and the page shows progress, so it no longer blocks anything.
+- `/operational-planner/coverage` (1.2 s alone) and `/job-items/destinations` (0.25 s) are still the slowest page calls. The options are in "After step 2" and still need the owner's choice.
 
 ## Method and environment
 

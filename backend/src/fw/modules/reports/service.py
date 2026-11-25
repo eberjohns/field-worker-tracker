@@ -1,5 +1,6 @@
 """Reports service handling query dispatch, background export jobs, and month-end report archiving."""
 
+import asyncio
 import re
 from datetime import UTC, date, datetime
 from typing import Any
@@ -11,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.adapters.storage import get_file_storage
 from fw.core.errors import AppError
+from fw.core.progress import report_progress
 from fw.modules.identity.models import User
 from fw.modules.notifications import NotificationService
 from fw.modules.payroll.models import PayrollRun
@@ -287,7 +289,9 @@ class ReportService:
         created_reports: list[GeneratedReport] = []
         storage = get_file_storage()
 
-        for key in MONTH_END_REPORT_KEYS:
+        total_reports = len(MONTH_END_REPORT_KEYS)
+        for report_no, key in enumerate(MONTH_END_REPORT_KEYS):
+            await report_progress("reports", report_no, total_reports)
             spec = get_report_definition(key)
             handler = HANDLERS[key]
 
@@ -320,7 +324,11 @@ class ReportService:
                 "status": status_tag,
             }
 
-            xlsx_bytes = generate_excel_report(spec.columns, rows, applied_filters, title=spec.name)
+            # Writing the workbook is CPU-bound (about 3 s for a 14,000-row month); a thread keeps
+            # the API answering other requests meanwhile (Batch 9 step 4).
+            xlsx_bytes = await asyncio.to_thread(
+                generate_excel_report, spec.columns, rows, applied_filters, title=spec.name
+            )
 
             rel_path = f"reports/{country}/{period_str}/{file_name}"
             file_ref, size_bytes, sha256_hash = await storage.save(rel_path, xlsx_bytes)
@@ -353,6 +361,7 @@ class ReportService:
             created_reports.append(gen_rep)
 
         await session.flush()
+        await report_progress("reports", total_reports, total_reports)
 
         # Send in-app notification to Admin (and Engineers)
         notif_title = (

@@ -1,14 +1,11 @@
 """Handler for Employee Utilization Report (DEC-28)."""
 
 from typing import Any
-from uuid import UUID
 
-from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from fw.modules.attendance.models import AttendanceCalculation, AttendanceRecord
-from fw.modules.org.models import Employee
+from fw.core.progress import yield_every
+from fw.modules.reports.handlers._attendance_days import load_attendance_days
 from fw.modules.reports.schemas import ReportFilterParams
 from fw.modules.scheduling import AccessScope
 
@@ -19,47 +16,27 @@ async def fetch_employee_utilization(
     scope: AccessScope | None,
 ) -> list[dict[str, Any]]:
     """Query productive vs travel vs idle time breakdown per worker (DEC-28)."""
-    stmt = (
-        select(AttendanceRecord)
-        .join(Employee, AttendanceRecord.employee_id == Employee.id)
-        .options(selectinload(AttendanceRecord.current_calculation))
-        .order_by(AttendanceRecord.work_date.desc(), Employee.name.asc())
+    days = await load_attendance_days(
+        session,
+        filters,
+        scope,
+        record_fields=("work_date",),
+        calc_fields=(
+            "shift_span_minutes",
+            "productive_minutes",
+            "transit_minutes",
+            "idle_minutes",
+            "break_minutes_used",
+            "standard_hours_minutes",
+            "worked_minutes",
+        ),
+        employee_fields=("tally_id", "name"),
     )
-
-    conditions = []
-    # DEC-57 site-day rule: employee-days scheduled on my worksites (+ crew for Supt/Eng)
-    conditions_scope = (
-        scope.operations_clause(AttendanceRecord.employee_id, AttendanceRecord.work_date)
-        if scope
-        else None
-    )
-    if conditions_scope is not None:
-        conditions.append(conditions_scope)
-    if filters.employee_id:
-        conditions.append(AttendanceRecord.employee_id == filters.employee_id)
-    if filters.date_from:
-        conditions.append(AttendanceRecord.work_date >= filters.date_from)
-    if filters.date_to:
-        conditions.append(AttendanceRecord.work_date <= filters.date_to)
-    if filters.country:
-        conditions.append(Employee.country == filters.country)
-
-    if conditions:
-        stmt = stmt.where(and_(*conditions))
-
-    result = await session.execute(stmt)
-    records = result.scalars().all()
-
-    emp_ids = {r.employee_id for r in records}
-    emp_map: dict[UUID, Employee] = {}
-    if emp_ids:
-        eres = await session.execute(select(Employee).where(Employee.id.in_(emp_ids)))
-        emp_map = {e.id: e for e in eres.scalars().all()}
 
     rows: list[dict[str, Any]] = []
-    for r in records:
-        emp = emp_map.get(r.employee_id)
-        calc: AttendanceCalculation | None = r.current_calculation
+    for day_no, day in enumerate(days):
+        await yield_every(day_no)
+        r, calc, emp = day.rec, day.calc, day.emp
         if not calc:
             continue
 

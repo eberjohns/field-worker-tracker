@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { describeJobProgress, isActiveJob, jobPercent, pollJob, type BackgroundJob } from "../api/backgroundJobs";
 import { currencyForCountry, formatMoney } from "../features/format/money";
 import { diffClass, fmtDiff, fmtHours, fmtMoney, fmtPct } from "../features/budget/budgetFormat";
 import {
@@ -211,6 +212,10 @@ export const Payroll: React.FC = () => {
   const [genNotes, setGenNotes] = useState("");
   const [genTreatLeavesAsPaid, setGenTreatLeavesAsPaid] = useState(false);
   const [generating, setGenerating] = useState(false);
+  // Draft runs are built by a background job (Batch 9 step 4); this is the one in progress.
+  const [draftJob, setDraftJob] = useState<BackgroundJob | null>(null);
+  const draftJobAbort = useRef<AbortController | null>(null);
+  const draftJobActive = draftJob !== null && isActiveJob(draftJob);
 
   // Approve modal
   const [approveModalOpen, setApproveModalOpen] = useState(false);
@@ -382,35 +387,95 @@ export const Payroll: React.FC = () => {
     }
   }, [activeTab, countryBudgetFilter, budgetFrom, budgetTo]);
 
+  // Follow a draft job until it ends, then show the new run (or the reason it failed).
+  const followDraftJob = async (jobId: string) => {
+    draftJobAbort.current?.abort();
+    const ctrl = new AbortController();
+    draftJobAbort.current = ctrl;
+    try {
+      const done = await pollJob(jobId, token, setDraftJob, { signal: ctrl.signal });
+      if (!done) return;
+      if (done.status === "SUCCEEDED") {
+        await fetchRuns();
+        const runId = done.result?.payroll_run_id;
+        if (typeof runId === "string") setSelectedRunId(runId);
+        toast.success("Payroll draft ready", `Run #${String(done.result?.run_no ?? "")}`);
+      } else {
+        toast.error(done.error_message || "Payroll draft failed.");
+      }
+    } catch (err) {
+      console.error("Failed to follow payroll draft job", err);
+      toast.error("Lost track of the payroll draft. Refresh the page to see its result.");
+    } finally {
+      if (draftJobAbort.current === ctrl) {
+        draftJobAbort.current = null;
+        setDraftJob(null);
+      }
+    }
+  };
+
+  // Start a draft job; true when it started (or one for the same month was already running).
+  const startDraftJob = async (body: Record<string, unknown>, failMessage: string): Promise<boolean> => {
+    const res = await fetch("/api/v1/payroll/runs/jobs", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (res.status === 202) {
+      setDraftJob(data as BackgroundJob);
+      void followDraftJob((data as BackgroundJob).id);
+      return true;
+    }
+    if (res.status === 409 && typeof data?.job_id === "string") {
+      toast.info("This month's draft is already being generated", "Showing its progress.");
+      void followDraftJob(data.job_id);
+      return true;
+    }
+    toast.error(data, failMessage);
+    return false;
+  };
+
+  // A draft started earlier (another tab, or before a reload) is still running: show it.
+  useEffect(() => {
+    if (!isAdmin || !token) return;
+    let cancelled = false;
+    fetch("/api/v1/background-jobs?kind=payroll_draft&active=true&limit=1", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((jobs: BackgroundJob[]) => {
+        if (!cancelled && jobs.length > 0) {
+          setDraftJob(jobs[0]);
+          void followDraftJob(jobs[0].id);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+      draftJobAbort.current?.abort();
+    };
+  }, [isAdmin, token]);
+
   // Actions
   const handleGenerateDraft = async () => {
     if (!genPeriodStart || !genPeriodEnd) return;
     setGenerating(true);
     try {
-      const res = await fetch("/api/v1/payroll/runs", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+      const started = await startDraftJob(
+        {
           period_start: genPeriodStart,
           period_end: genPeriodEnd,
           country: genCountry,
           notes: genNotes.trim() || undefined,
           treat_leaves_as_paid: genTreatLeavesAsPaid,
-        }),
-      });
-      if (res.ok) {
-        const newRun = await res.json();
+        },
+        "Failed to generate payroll draft.",
+      );
+      if (started) {
         setGenerateModalOpen(false);
         setGenNotes("");
         setGenTreatLeavesAsPaid(false);
-        await fetchRuns();
-        setSelectedRunId(newRun.id);
-      } else {
-        const errData = await res.json();
-        toast.error(errData, "Failed to generate payroll draft.");
       }
     } catch (err) {
       console.error("Failed to generate draft", err);
@@ -425,34 +490,20 @@ export const Payroll: React.FC = () => {
     if (!(await dialogs.confirm({ title: "Re-run payroll draft?", message: `Re-run draft for ${selectedRunDetail.run.period_start} to ${selectedRunDetail.run.period_end}? This will increment Run No and recalculate with latest approved attendance.`, confirmLabel: "Re-run draft" }))) {
       return;
     }
-    setRunsLoading(true);
     try {
-      const res = await fetch("/api/v1/payroll/runs", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+      await startDraftJob(
+        {
           period_start: selectedRunDetail.run.period_start,
           period_end: selectedRunDetail.run.period_end,
           country: selectedRunDetail.run.country,
           notes: `Re-run from Run #${selectedRunDetail.run.run_no}`,
           treat_leaves_as_paid: Boolean(selectedRunDetail.run.totals_snapshot?.treat_leaves_as_paid),
-        }),
-      });
-      if (res.ok) {
-        const newRun = await res.json();
-        await fetchRuns();
-        setSelectedRunId(newRun.id);
-      } else {
-        const err = await res.json();
-        toast.error(err, "Failed to re-run draft.");
-      }
+        },
+        "Failed to re-run draft.",
+      );
     } catch (err) {
       console.error("Failed to re-run draft", err);
-    } finally {
-      setRunsLoading(false);
+      toast.error("Error re-running draft.");
     }
   };
 
@@ -680,7 +731,8 @@ export const Payroll: React.FC = () => {
                 setGenPeriodEnd(lastDay.toISOString().split("T")[0]);
                 setGenerateModalOpen(true);
               }}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-indigo-700 shadow-xs transition"
+              disabled={draftJobActive}
+              className="disabled:opacity-50 inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-indigo-700 shadow-xs transition"
             >
               <Calendar className="w-4 h-4" />
               Generate Draft Run
@@ -697,6 +749,21 @@ export const Payroll: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {draftJobActive && draftJob && (
+        <div role="status" aria-live="polite" className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-xs text-indigo-900">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="font-semibold">
+              Generating payroll draft {String(draftJob.params.country ?? "")} {String(draftJob.params.period_start ?? "").slice(0, 7)}
+            </span>
+            <span>{describeJobProgress(draftJob)}</span>
+          </div>
+          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-indigo-100">
+            <div className="h-full bg-indigo-600 transition-all" style={{ width: `${jobPercent(draftJob)}%` }} />
+          </div>
+          <p className="mt-1.5 text-indigo-700">You can leave this page; the draft keeps going and appears in the runs list when it is ready.</p>
+        </div>
+      )}
 
       {/* Tabs Navigation */}
       <div className="flex border-b border-slate-200 gap-6 text-sm font-semibold text-slate-600">
@@ -837,7 +904,8 @@ export const Payroll: React.FC = () => {
                       <>
                         <button
                           onClick={handleRerunDraft}
-                          className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition"
+                          disabled={draftJobActive}
+                          className="disabled:opacity-50 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition"
                           title="Re-run draft to recalculate attendance and pick up newly approved overtime"
                         >
                           <RefreshCw className="w-3.5 h-3.5" />
@@ -1583,10 +1651,10 @@ export const Payroll: React.FC = () => {
                 </button>
                 <button
                   onClick={handleGenerateDraft}
-                  disabled={generating}
+                  disabled={generating || draftJobActive}
                   className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold disabled:opacity-50"
                 >
-                  {generating ? "Calculating..." : "Generate Draft"}
+                  {generating ? "Starting..." : "Generate Draft"}
                 </button>
             </div>
           }

@@ -7,6 +7,7 @@ from uuid import UUID
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fw.core.progress import fetch_rows_in_parts, yield_every
 from fw.modules.attendance.models import SiteVisit, TrackingGap
 from fw.modules.jobs.models import Worksite
 from fw.modules.org.models import Accommodation, Employee
@@ -20,7 +21,19 @@ async def fetch_employee_movement(
     scope: AccessScope | None,
 ) -> list[dict[str, Any]]:
     """Reconstruct daily chronological movement trail for workers."""
-    visit_stmt = select(SiteVisit).order_by(SiteVisit.work_date.asc(), SiteVisit.entry_at.asc())
+    # Only the columns the trail shows (Batch 9 step 4): no ORM rows, and no Worksite load
+    # (which would also load each site's job items).
+    visit_stmt = select(
+        SiteVisit.employee_id,
+        SiteVisit.work_date,
+        SiteVisit.worksite_id,
+        SiteVisit.accommodation_id,
+        SiteVisit.place_type,
+        SiteVisit.entry_at,
+        SiteVisit.exit_at,
+        SiteVisit.duration_minutes,
+        SiteVisit.exit_inferred,
+    ).order_by(SiteVisit.work_date.asc(), SiteVisit.entry_at.asc())
     visit_conds = []
     # DEC-57 site-day rule: employee-days scheduled on my worksites (+ crew for Supt/Eng)
     visit_conds_scope = (
@@ -38,10 +51,11 @@ async def fetch_employee_movement(
     if visit_conds:
         visit_stmt = visit_stmt.where(and_(*visit_conds))
 
-    visit_res = await session.execute(visit_stmt)
-    visits = visit_res.scalars().all()
+    visits = await fetch_rows_in_parts(session, visit_stmt)
 
-    gap_stmt = select(TrackingGap).order_by(TrackingGap.work_date.asc())
+    gap_stmt = select(
+        TrackingGap.employee_id, TrackingGap.work_date, TrackingGap.created_at
+    ).order_by(TrackingGap.work_date.asc())
     gap_conds = []
     # DEC-57 site-day rule: employee-days scheduled on my worksites (+ crew for Supt/Eng)
     gap_conds_scope = (
@@ -59,30 +73,38 @@ async def fetch_employee_movement(
     if gap_conds:
         gap_stmt = gap_stmt.where(and_(*gap_conds))
 
-    gap_res = await session.execute(gap_stmt)
-    gaps = gap_res.scalars().all()
+    gaps = await fetch_rows_in_parts(session, gap_stmt)
 
     emp_ids = {v.employee_id for v in visits} | {g.employee_id for g in gaps}
-    emp_map: dict[UUID, Employee] = {}
+    emp_map: dict[UUID, Any] = {}
     if emp_ids:
-        eres = await session.execute(select(Employee).where(Employee.id.in_(emp_ids)))
-        emp_map = {e.id: e for e in eres.scalars().all()}
+        eres = await session.execute(
+            select(Employee.id, Employee.tally_id, Employee.name).where(Employee.id.in_(emp_ids))
+        )
+        emp_map = {e.id: e for e in eres.all()}
 
     site_ids = {v.worksite_id for v in visits if v.worksite_id}
-    site_map: dict[UUID, Worksite] = {}
+    site_map: dict[UUID, Any] = {}
     if site_ids:
-        sres = await session.execute(select(Worksite).where(Worksite.id.in_(site_ids)))
-        site_map = {s.id: s for s in sres.scalars().all()}
+        sres = await session.execute(
+            select(Worksite.id, Worksite.job_number, Worksite.job_name).where(
+                Worksite.id.in_(site_ids)
+            )
+        )
+        site_map = {s.id: s for s in sres.all()}
 
     acc_ids = {v.accommodation_id for v in visits if v.accommodation_id}
-    acc_map: dict[UUID, Accommodation] = {}
+    acc_map: dict[UUID, Any] = {}
     if acc_ids:
-        ares = await session.execute(select(Accommodation).where(Accommodation.id.in_(acc_ids)))
-        acc_map = {a.id: a for a in ares.scalars().all()}
+        ares = await session.execute(
+            select(Accommodation.id, Accommodation.name).where(Accommodation.id.in_(acc_ids))
+        )
+        acc_map = {a.id: a for a in ares.all()}
 
     day_events: dict[tuple[UUID, date], list[dict[str, Any]]] = {}
 
-    for v in visits:
+    for v_no, v in enumerate(visits):
+        await yield_every(v_no)
         key = (v.employee_id, v.work_date)
         if key not in day_events:
             day_events[key] = []
@@ -132,6 +154,7 @@ async def fetch_employee_movement(
     for (emp_id, w_date), evts in sorted(day_events.items(), key=lambda x: (x[0][1], str(x[0][0]))):
         emp = emp_map.get(emp_id)
         evts.sort(key=lambda x: x["timestamp"])
+        await yield_every(len(rows), 1000, 0)
         for seq, e in enumerate(evts, start=1):
             rows.append(
                 {

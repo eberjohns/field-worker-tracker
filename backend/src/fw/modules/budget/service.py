@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.core.clock import site_today
 from fw.core.errors import AppError
+from fw.core.progress import yield_every
 from fw.modules.budget.repository import BudgetRepository
 from fw.modules.budget.schemas import (
     PlannedActualFigures,
@@ -640,7 +641,9 @@ class BudgetService:
                 alloc_ws_month[(ws_id, month_key(m_from))] += amount * days / run_days
 
         out: list[WorksiteBudgetVsActualItem] = []
-        for site in sites:
+        for site_no, site in enumerate(sites):
+            # Planning a site takes 2-5 ms; a turn every 10 lets other requests run (Batch 9).
+            await yield_every(site_no, 10)
             assert site.id is not None
             r_from, r_to = ranges[site.id]
             plan = _plan_site(ctx, site, r_from, r_to, with_money=is_admin, strict=is_admin)

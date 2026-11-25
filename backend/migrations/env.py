@@ -22,6 +22,7 @@ import fw.modules.reports.models  # noqa: F401
 import fw.modules.scheduling.models  # noqa: F401
 import fw.modules.settings.models  # noqa: F401
 import fw.modules.sync.models  # noqa: F401
+import fw.modules.tasks.models  # noqa: F401
 from fw.core.config import get_settings
 from fw.core.db import Base
 

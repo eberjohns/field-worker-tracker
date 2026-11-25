@@ -6,6 +6,7 @@ from uuid import UUID
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fw.core.progress import fetch_rows_in_parts, yield_every
 from fw.modules.attendance.models import SiteVisit
 from fw.modules.jobs.models import Worksite
 from fw.modules.org.models import Employee
@@ -19,8 +20,19 @@ async def fetch_site_visits(
     scope: AccessScope | None,
 ) -> list[dict[str, Any]]:
     """Query verified site visits grouped by worker."""
+    # Only the columns the report shows (Batch 9 step 4); no Worksite ORM load.
     stmt = (
-        select(SiteVisit)
+        select(
+            SiteVisit.employee_id,
+            SiteVisit.work_date,
+            SiteVisit.worksite_id,
+            SiteVisit.entry_at,
+            SiteVisit.exit_at,
+            SiteVisit.duration_minutes,
+            SiteVisit.exit_inferred,
+            SiteVisit.counts_as_completed,
+            SiteVisit.flags,
+        )
         .where(SiteVisit.place_type == "SITE")
         .order_by(SiteVisit.work_date.desc(), SiteVisit.entry_at.desc())
     )
@@ -44,23 +56,29 @@ async def fetch_site_visits(
     if conditions:
         stmt = stmt.where(and_(*conditions))
 
-    result = await session.execute(stmt)
-    visits = result.scalars().all()
+    visits = await fetch_rows_in_parts(session, stmt)
 
     emp_ids = {v.employee_id for v in visits}
-    emp_map: dict[UUID, Employee] = {}
+    emp_map: dict[UUID, Any] = {}
     if emp_ids:
-        eres = await session.execute(select(Employee).where(Employee.id.in_(emp_ids)))
-        emp_map = {e.id: e for e in eres.scalars().all()}
+        eres = await session.execute(
+            select(Employee.id, Employee.tally_id, Employee.name).where(Employee.id.in_(emp_ids))
+        )
+        emp_map = {e.id: e for e in eres.all()}
 
     site_ids = {v.worksite_id for v in visits if v.worksite_id}
-    site_map: dict[UUID, Worksite] = {}
+    site_map: dict[UUID, Any] = {}
     if site_ids:
-        sres = await session.execute(select(Worksite).where(Worksite.id.in_(site_ids)))
-        site_map = {s.id: s for s in sres.scalars().all()}
+        sres = await session.execute(
+            select(Worksite.id, Worksite.job_number, Worksite.job_name).where(
+                Worksite.id.in_(site_ids)
+            )
+        )
+        site_map = {s.id: s for s in sres.all()}
 
     rows: list[dict[str, Any]] = []
-    for v in visits:
+    for v_no, v in enumerate(visits):
+        await yield_every(v_no)
         emp = emp_map.get(v.employee_id)
         ws = site_map.get(v.worksite_id) if v.worksite_id else None
 

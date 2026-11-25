@@ -5,12 +5,10 @@ from datetime import date
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from fw.modules.attendance.models import AttendanceRecord
-from fw.modules.org.models import Employee
+from fw.core.progress import yield_every
+from fw.modules.reports.handlers._attendance_days import load_attendance_days
 from fw.modules.reports.schemas import ReportFilterParams
 from fw.modules.scheduling import AccessScope
 
@@ -30,47 +28,30 @@ async def fetch_monthly_attendance(
         target_from = date(filters.year, filters.month, 1)
         target_to = date(filters.year, filters.month, last_day)
 
-    stmt = (
-        select(AttendanceRecord)
-        .join(Employee, AttendanceRecord.employee_id == Employee.id)
-        .options(selectinload(AttendanceRecord.current_calculation))
-        .order_by(AttendanceRecord.work_date.asc())
+    days = await load_attendance_days(
+        session,
+        filters,
+        scope,
+        record_fields=("employee_id", "work_date", "business_status", "review_status"),
+        calc_fields=(
+            "shortfall_minutes",
+            "grace_applied",
+            "worked_minutes",
+            "ot1_minutes",
+            "ot2_minutes",
+        ),
+        date_from=target_from,
+        date_to=target_to,
+        newest_first=False,
     )
-
-    conditions = []
-    # DEC-57 site-day rule: employee-days scheduled on my worksites (+ crew for Supt/Eng)
-    conditions_scope = (
-        scope.operations_clause(AttendanceRecord.employee_id, AttendanceRecord.work_date)
-        if scope
-        else None
-    )
-    if conditions_scope is not None:
-        conditions.append(conditions_scope)
-    if filters.employee_id:
-        conditions.append(AttendanceRecord.employee_id == filters.employee_id)
-    if target_from:
-        conditions.append(AttendanceRecord.work_date >= target_from)
-    if target_to:
-        conditions.append(AttendanceRecord.work_date <= target_to)
-    if filters.country:
-        conditions.append(Employee.country == filters.country)
-
-    if conditions:
-        stmt = stmt.where(and_(*conditions))
-
-    result = await session.execute(stmt)
-    records = result.scalars().all()
-
-    # Preload employees
-    emp_ids = {r.employee_id for r in records}
-    emp_map: dict[UUID, Employee] = {}
-    if emp_ids:
-        emp_res = await session.execute(select(Employee).where(Employee.id.in_(emp_ids)))
-        emp_map = {e.id: e for e in emp_res.scalars().all()}
+    emp_map = {d.rec.employee_id: d.emp for d in days}
 
     # Group by (employee_id, YYYY-MM)
-    grouped: dict[tuple[UUID, str], list[AttendanceRecord]] = defaultdict(list)
-    for rec in records:
+    grouped: dict[tuple[UUID, str], list[Any]] = defaultdict(list)
+    for day_no, day in enumerate(days):
+        await yield_every(day_no)
+        rec = day.rec
+        rec.current_calculation = day.calc
         month_str = rec.work_date.strftime("%Y-%m")
         grouped[(rec.employee_id, month_str)].append(rec)
 
