@@ -1,9 +1,9 @@
 {
-  "version": "1.28.0",
+  "version": "1.29.0",
   "major": 1,
-  "minor": 28,
+  "minor": 29,
   "patch": 0,
-  "last_branch": "docs/mobile-handover-v1",
-  "last_commit": "34d8c27",
-  "updated_at": "2026-11-25T14:11:12.329582+00:00"
+  "last_branch": "chore/render-blueprint",
+  "last_commit": "ad1b241",
+  "updated_at": "2026-11-25T14:19:44.401520+00:00"
 }

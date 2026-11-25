@@ -1,6 +1,29 @@
 # Changelog
 All notable changes. Format: Keep a Changelog. Mobile-contract changes are also logged in `docs/09-mobile-sync-contract.md`.
 
+## [1.29.0] - 2026-11-25
+### Added (chore: Render Blueprint)
+- **`render.yaml`** describes the current Render setup. The owner applies it; nothing calls Render.
+  - **Web static site** `field-worker-tracker-1`:
+    - the CI build (pnpm, frozen lockfile), published from `web/dist`;
+    - rewrites in order: `/api/*` to the backend, then `/*` to `/index.html`;
+    - `VITE_GOOGLE_MAPS_API_KEY` and `VITE_GOOGLE_MAPS_MAP_ID` listed with `sync: false`;
+    - no `VITE_API_URL`, since the rewrite makes it unnecessary.
+  - **Backend** (Docker, `backend/Dockerfile`):
+    - migrations on every deploy (`preDeployCommand: uv run alembic upgrade head`), with the free-plan alternative in a comment;
+    - a health check;
+    - every variable `sync: false`, with no values.
+  - Nothing for push, email, MapTiler or Nominatim.
+- **Runbook 09:**
+  - checking names, the URL and the build against Render first;
+  - applying the Blueprint and deleting leftover variables;
+  - why the rewrite order matters;
+  - `VITE_` values need a rebuild;
+  - migrations on deploy, paid and free;
+  - what to do when a deploy fails (`alembic current` / `heads`).
+- **Runbooks 01 and 08** point to it. Runbook 01 no longer lists a push key.
+- **`web/vercel.json`** is unchanged: it already has the same two rules in the same order.
+
 ## [1.28.0] - 2026-11-25
 ### Added (docs: mobile handover)
 - **`docs/mobile-handover-v1.md`:** one standalone document for the mobile team. It covers:

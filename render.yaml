@@ -1,0 +1,79 @@
+# Render Blueprint for Field Worker Tracker (runbook: docs/runbooks/09-render-blueprint.md).
+#
+# Applied by the owner in the Render dashboard (New > Blueprint, or the service's Blueprint
+# sync). Nothing in this repository calls Render. Every environment variable is listed with
+# `sync: false` and no value: Render asks for it once and never reads it from this file.
+# Never put a secret value here.
+#
+# CHECK AGAINST RENDER before applying: the service names and the backend URL below come
+# from web/vercel.json and must match the existing services exactly, or Render creates new
+# ones instead of updating them.
+
+services:
+  # --- Web dashboard: static site ------------------------------------------------------------
+  - type: web
+    name: field-worker-tracker-1
+    runtime: static
+    # Same steps as CI (.github/workflows): pnpm pinned like CI, frozen lockfile, tsc + vite.
+    buildCommand: npm install -g pnpm@12.16.1 && cd web && pnpm install --frozen-lockfile && pnpm run build
+    staticPublishPath: web/dist
+    # Order matters: the first matching rule wins. /api/* must come before the SPA catch-all,
+    # or API calls would get index.html.
+    routes:
+      - type: rewrite
+        source: /api/*
+        destination: https://fwt-backend.onrender.com/api/* # CHECK AGAINST RENDER
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      # Read at build time (Vite); a change needs a new deploy (rebuild). Runbook 08.
+      - key: VITE_GOOGLE_MAPS_API_KEY
+        sync: false
+      - key: VITE_GOOGLE_MAPS_MAP_ID
+        sync: false
+      # VITE_API_URL is deliberately absent: with the /api rewrite the app calls its own
+      # origin. Delete it on Render if it is still set.
+
+  # --- Backend API: FastAPI in the repo's Dockerfile ------------------------------------------
+  - type: web
+    name: fwt-backend # CHECK AGAINST RENDER (from web/vercel.json)
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    # Start command: the Dockerfile's CMD
+    #   uv run uvicorn fw.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health/liveness
+    # Migrations on every deploy, before the new version takes traffic. Runs in the image's
+    # /app folder, which holds alembic.ini. A failure stops the deploy; the old version keeps
+    # running.
+    # NOT AVAILABLE ON RENDER'S FREE PLAN. On free, delete preDeployCommand and use instead:
+    #   dockerCommand: sh -c "uv run alembic upgrade head && uv run uvicorn fw.main:app --host 0.0.0.0 --port $PORT"
+    preDeployCommand: uv run alembic upgrade head
+    envVars:
+      - key: APP_ENV # production (or staging)
+        sync: false
+      - key: DEPLOYMENT_COUNTRY # AE or SA
+        sync: false
+      - key: DATABASE_URL # app role, postgresql+asyncpg://...
+        sync: false
+      - key: DATABASE_MIGRATOR_URL # migrator role used by alembic; falls back to DATABASE_URL
+        sync: false
+      - key: JWT_SECRET # secret, 32+ bytes
+        sync: false
+      - key: ARCHIVE_ENCRYPTION_KEY # secret, 32+ chars
+        sync: false
+      - key: CORS_ORIGINS # JSON list, e.g. ["https://field-worker-tracker-1.onrender.com"]
+        sync: false
+      - key: ACCESS_TOKEN_MINUTES
+        sync: false
+      - key: REFRESH_TOKEN_DAYS
+        sync: false
+      - key: FILE_STORAGE_BACKEND
+        sync: false
+      - key: LOCAL_STORAGE_PATH
+        sync: false
+      - key: ARCHIVE_STORAGE_PATH
+        sync: false
+      - key: LOG_LEVEL
+        sync: false

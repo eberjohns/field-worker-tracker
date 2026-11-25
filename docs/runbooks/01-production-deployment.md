@@ -1,7 +1,7 @@
 # Runbook 01 - Production Deployment (UAE Stack)
 
 ## 1. Overview and Architecture
-This runbook defines the operational procedure for deploying and updating Field Worker Tracker (FWT) in the primary production environment (UAE Stack) per **ADR-009** and **docs/14-nonfunctional.md**.
+This runbook defines the operational procedure for deploying and updating Field Worker Tracker (FWT) in the primary production environment (UAE Stack) per **ADR-009** and **docs/14-nonfunctional.md**. The Render deployment used today is described by `render.yaml`; see **runbook 09**.
 
 ### Infrastructure Topology
 - **Cloud Provider**: Microsoft Azure
@@ -25,7 +25,6 @@ All production secrets must be retrieved from **Azure Key Vault** at startup or 
 | `DATABASE_MIGRATOR_URL` | Schema migration credentials (`fw_migrator`) | 90 days / staff change |
 | `JWT_SECRET` | HS256 JWT access and refresh token signing key | Annual / on breach |
 | `ARCHIVE_ENCRYPTION_KEY` | AES-256-GCM master key for yearly archive packages | Master KMS key |
-| `PUSH_SERVER_KEY` | FCM / APNs credentials for mobile notifications | Annual |
 
 ---
 
