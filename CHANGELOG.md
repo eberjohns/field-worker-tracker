@@ -1,6 +1,26 @@
 # Changelog
 All notable changes. Format: Keep a Changelog. Mobile-contract changes are also logged in `docs/09-mobile-sync-contract.md`.
 
+## [1.23.0] - 2026-11-25
+### Changed (Batch 10 B: the UI uses the component layer everywhere)
+- **No browser dialogs, native date inputs or hand-made overlays are left.** The ui-rules baseline is empty, so `pnpm run lint` now refuses every new one.
+  - **Dialogs:** `alert/confirm/prompt` became toasts and `useDialogs()` confirmations. Each confirmation has a title and a clear button ("Delete holiday?", "Roll back"); destructive ones are red and focus Cancel.
+  - **Errors:** they show the server's message. A 422 lists each field, through `ensureOk`/`toast.error(err)`, instead of a generic "failed".
+  - **Modals:** all 44 hand-made overlays became `Modal`: one header, a footer for the buttons, only the body scrolls, and Escape and focus behave the same everywhere. That includes the job item, copy boundary, assign and approvals dialogs.
+  - **Dates:** every date field is the DatePicker.
+- **Menu grouped by area:** Overview · Planning · Workforce · Sites · Time & Pay · Reports · Admin.
+  - Items and groups a role can't use are hidden.
+  - New entries: Staffing Gaps (the Operational Planner's gap list) and Accommodations (the Worksites tab).
+- **Sidebar:** the collapse button moved to the sidebar footer, so it no longer covers the logo, and the collapsed state is remembered.
+- **Favicon and titles:** a favicon from the app logo (SVG, 32 px PNG, apple-touch-icon), and a page title per route in the browser tab.
+- **Dashboard: pending actions and alerts grouped by type.** Each section has a count, the 5 most recent items and "View all". The sections are: document expiry, cover needed, leave, reassignment and attendance approvals, pending visits, boundary queue, unassigned worksites (Admin) and device/tracking alerts, each shown only to the roles that can act on it. "View all" opens the right Approvals tab (`?tab=`).
+- **Scrolling:**
+  - one thin, hover-only scrollbar style for every scroll area;
+  - the Operational Planner roster scrolls once, inside the table, with a sticky header;
+  - the job page boundary map no longer captures the page's scroll (cooperative gestures) and fits the window;
+  - the Reports pages show an EmptyState instead of an empty scroll box.
+- **API:** `GET /pending-visits` takes an optional `limit`, used by the dashboard preview. Without it, the response is unchanged.
+
 ## [1.22.0] - 2026-11-25
 ### Added (owner decisions of 25 Nov 2026)
 - **Base Planner templates become scheduled work** (ADR-032). From tomorrow to `roster_materialise_weeks` ahead (new company setting, default 4), each template produces real `scheduled_work` rows with `source = TEMPLATE`.

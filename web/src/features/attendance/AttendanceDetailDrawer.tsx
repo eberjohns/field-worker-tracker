@@ -20,6 +20,7 @@ import {
 } from "./formatters";
 import { useAuth } from "../../context/AuthContext";
 import { ManualTimesModal } from "./ManualTimesModal";
+import { problemFromBody } from "../../ui";
 
 interface AttendanceDetailDrawerProps {
   record: AttendanceRecord | null;
@@ -159,7 +160,7 @@ export const AttendanceDetailDrawer: React.FC<AttendanceDetailDrawerProps> = ({
         onRecordUpdated();
       } else {
         const errData = await res.json();
-        setDecisionError(errData.detail || "Failed to record approval decision.");
+        setDecisionError(problemFromBody(null, errData, "Failed to record approval decision.").message);
       }
     } catch (err) {
       setDecisionError("Network error recording decision.");

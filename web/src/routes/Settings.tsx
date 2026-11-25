@@ -25,6 +25,7 @@ import { ArchiveSettings } from "../features/admin/ArchiveSettings";
 import { ManagedListsPanel } from "../features/lookups/ManagedListsPanel";
 import { addLookupValue, lookupLoaded, useLookup } from "../features/lookups/useLookup";
 import { isBudgetOnly, splitBudgetOnly, valueKey } from "../features/lookups/lookupUtils";
+import { ApiError, DatePicker, Modal, problemFromBody, useDialogs } from "../ui";
 
 interface SettingItem {
   id: string;
@@ -119,6 +120,7 @@ interface ResolvedSchedule {
 }
 
 export const Settings: React.FC = () => {
+  const dialogs = useDialogs();
   const { token, user } = useAuth();
   const [activeTab, setActiveTab] = useState<
     "company" | "timerules" | "checktool" | "holidays" | "budget" | "lists" | "password" | "consent" | "database" | "archive"
@@ -411,7 +413,7 @@ export const Settings: React.FC = () => {
   };
 
   const handleDeleteTimeRule = async (id: string, name: string) => {
-    if (!window.confirm(`Deactivate time rule '${name}'?`)) return;
+    if (!(await dialogs.confirm({ title: "Deactivate time rule?", message: `Deactivate time rule '${name}'?`, confirmLabel: "Deactivate", variant: "destructive" }))) return;
     setStatusMessage(null);
     setErrorMessage(null);
 
@@ -486,7 +488,7 @@ export const Settings: React.FC = () => {
   };
 
   const handleDeleteHoliday = async (id: string, name: string) => {
-    if (!window.confirm(`Delete holiday '${name}'?`)) return;
+    if (!(await dialogs.confirm({ title: "Delete holiday?", message: `Delete holiday '${name}'?`, confirmLabel: "Delete", variant: "destructive" }))) return;
     try {
       const res = await fetch(`/api/v1/public-holidays/${id}`, {
         method: "DELETE",
@@ -559,7 +561,7 @@ export const Settings: React.FC = () => {
         setStatusMessage(`"${outcome.value}" added to the staff type list.`);
       } else if (outcome.kind === "near") {
         const hint = outcome.suggestions.length ? ` Similar: ${outcome.suggestions.join(", ")}.` : "";
-        if (window.confirm(`${outcome.message}${hint}\n\nAdd "${value}" to the staff type list anyway?`)) {
+        if ((await dialogs.confirm({ title: "Add this staff type?", message: `${outcome.message}${hint}\n\nAdd "${value}" to the staff type list anyway?`, confirmLabel: "Add anyway" }))) {
           await handleAddBudgetValueToList(value, true);
         }
       } else if (outcome.kind === "exists") {
@@ -603,7 +605,7 @@ export const Settings: React.FC = () => {
         await fetchSettings();
       } else {
         const err = await res.json().catch(() => ({}));
-        setErrorMessage(err.detail || "Failed to update budget-only roles.");
+        setErrorMessage(problemFromBody(null, err, "Failed to update budget-only roles.").message);
       }
     } catch (err: any) {
       setErrorMessage(err.message || "Failed to update budget-only roles.");
@@ -614,6 +616,14 @@ export const Settings: React.FC = () => {
     const hrs = Math.floor(m / 60);
     const mins = m % 60;
     return `${hrs.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}`;
+  };
+
+  const closeResetModal = () => {
+    setResetModalOpen(false);
+    setResetConfirmText("");
+    setResetAdminPassword("");
+    setShowResetPassword(false);
+    setResetModalError(null);
   };
 
   const handleResetDatabase = async () => {
@@ -636,7 +646,7 @@ export const Settings: React.FC = () => {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || err.message || "Failed to reset database.");
+        throw new ApiError(problemFromBody(null, err, "Failed to reset database."));
       }
       const data = await res.json();
       setStatusMessage(data.message || "Database reset to clean bootstrap state successfully.");
@@ -692,11 +702,11 @@ export const Settings: React.FC = () => {
 
           <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg p-1 text-xs">
             <span className="px-2 font-medium text-slate-500">As Of:</span>
-            <input
-              type="date"
+            <DatePicker
+              aria-label="As of date"
               value={asOfDate}
-              onChange={(e) => setAsOfDate(e.target.value)}
-              className="px-2 py-1 border border-slate-200 rounded text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              onChange={(iso) => setAsOfDate(iso)}
+              size="sm"
             />
           </div>
         </div>
@@ -991,12 +1001,11 @@ export const Settings: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Work Date</label>
-                <input
-                  type="date"
+                <DatePicker
+                  label="Work Date"
                   value={checkDate}
-                  onChange={(e) => setCheckDate(e.target.value)}
-                  className="w-full text-xs border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-indigo-500"
+                  onChange={(iso) => setCheckDate(iso)}
+                  size="sm"
                 />
               </div>
 
@@ -1484,17 +1493,14 @@ export const Settings: React.FC = () => {
 
       {/* MODAL: Edit Setting */}
       {editSettingModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4 animate-in fade-in zoom-in-95">
-            <div className="border-b border-slate-100 pb-3">
-              <h3 className="text-base font-bold text-slate-900">
-                Update Setting: {editSettingModal.setting_key}
-              </h3>
-              <p className="text-xs text-slate-500">
-                Country: {editSettingModal.country || "Global"}
-              </p>
-            </div>
-
+        <Modal
+          open
+          onClose={() => setEditSettingModal(null)}
+          size="md"
+          title={<>Update Setting: {editSettingModal.setting_key}</>}
+          description={<>Country: {editSettingModal.country || "Global"}</>}
+        >
+          <div className="space-y-4">
             <div className="space-y-3 text-xs">
               <div>
                 <label className="block font-medium text-slate-700 mb-1">New Value</label>
@@ -1507,12 +1513,11 @@ export const Settings: React.FC = () => {
               </div>
 
               <div>
-                <label className="block font-medium text-slate-700 mb-1">Effective From Date</label>
-                <input
-                  type="date"
+                <DatePicker
+                  label="Effective From Date"
                   value={settingEffectiveFrom}
-                  onChange={(e) => setSettingEffectiveFrom(e.target.value)}
-                  className="w-full border border-slate-200 rounded-lg p-2 text-xs focus:ring-1 focus:ring-indigo-500"
+                  onChange={(iso) => setSettingEffectiveFrom(iso)}
+                  size="sm"
                 />
               </div>
 
@@ -1539,67 +1544,57 @@ export const Settings: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* MODAL: Setting History */}
       {historyKey && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-xl space-y-4 max-h-[85vh] flex flex-col">
-            <div className="border-b border-slate-100 pb-3 flex justify-between items-center">
-              <div>
-                <h3 className="text-base font-bold text-slate-900">Audit History: {historyKey}</h3>
-                <p className="text-xs text-slate-500">Chronological effective-dated record versions</p>
-              </div>
-              <button
-                onClick={() => setHistoryKey(null)}
-                className="text-xs text-slate-400 hover:text-slate-600"
+        <Modal
+          open
+          onClose={() => setHistoryKey(null)}
+          size="lg"
+          title={<span className="inline-flex items-center gap-2">Audit History: {historyKey}</span>}
+          description="Chronological effective-dated record versions"
+        >
+          <div className="space-y-2 pr-1">
+            {historyItems.map((h, i) => (
+              <div
+                key={h.id}
+                className={`p-3 rounded-lg border text-xs space-y-1 ${
+                  i === 0
+                    ? "bg-indigo-50 border-indigo-200 text-indigo-900"
+                    : "bg-slate-50 border-slate-200 text-slate-600"
+                }`}
               >
-                Close
-              </button>
-            </div>
-
-            <div className="overflow-y-auto space-y-2 flex-1 pr-1">
-              {historyItems.map((h, i) => (
-                <div
-                  key={h.id}
-                  className={`p-3 rounded-lg border text-xs space-y-1 ${
-                    i === 0
-                      ? "bg-indigo-50 border-indigo-200 text-indigo-900"
-                      : "bg-slate-50 border-slate-200 text-slate-600"
-                  }`}
-                >
-                  <div className="flex justify-between font-medium">
-                    <span>
-                      Range: <strong>{h.effective_from}</strong> to{" "}
-                      <strong>{h.effective_to || "Current"}</strong>
-                    </span>
-                    <span className="font-mono">
-                      {h.country ? `[${h.country}]` : "[Global]"}
-                    </span>
-                  </div>
-                  <div className="font-mono font-bold text-slate-900">
-                    Value: {typeof h.value === "object" ? JSON.stringify(h.value) : String(h.value)}{" "}
-                    {h.unit || ""}
-                  </div>
+                <div className="flex justify-between font-medium">
+                  <span>
+                    Range: <strong>{h.effective_from}</strong> to{" "}
+                    <strong>{h.effective_to || "Current"}</strong>
+                  </span>
+                  <span className="font-mono">
+                    {h.country ? `[${h.country}]` : "[Global]"}
+                  </span>
                 </div>
-              ))}
-            </div>
+                <div className="font-mono font-bold text-slate-900">
+                  Value: {typeof h.value === "object" ? JSON.stringify(h.value) : String(h.value)}{" "}
+                  {h.unit || ""}
+                </div>
+              </div>
+            ))}
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* MODAL: New Time Rule */}
       {showNewRuleModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl space-y-4 my-8">
-            <div className="border-b border-slate-100 pb-3">
-              <h3 className="text-base font-bold text-slate-900">Create Time Rule</h3>
-              <p className="text-xs text-slate-500">
-                Define 5-point planned hours, break, and standard hours adjustment.
-              </p>
-            </div>
-
+        <Modal
+          open
+          onClose={() => setShowNewRuleModal(false)}
+          size="md"
+          title="Create Time Rule"
+          description="Define 5-point planned hours, break, and standard hours adjustment."
+        >
+          <div className="space-y-4">
             <form onSubmit={handleCreateTimeRule} className="space-y-3 text-xs">
               <div>
                 <label className="block font-medium text-slate-700 mb-1">Rule Name</label>
@@ -1671,26 +1666,20 @@ export const Settings: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-medium text-slate-700 mb-1">Start Date</label>
-                  <input
-                    type="date"
+                  <DatePicker
+                    label="Start Date"
                     required
                     value={newRuleForm.start_date}
-                    onChange={(e) =>
-                      setNewRuleForm({ ...newRuleForm, start_date: e.target.value })
-                    }
-                    className="w-full border border-slate-200 rounded-lg p-2"
+                    onChange={(iso) => setNewRuleForm({ ...newRuleForm, start_date: iso })}
+                    size="sm"
                   />
                 </div>
                 <div>
-                  <label className="block font-medium text-slate-700 mb-1">End Date (optional)</label>
-                  <input
-                    type="date"
+                  <DatePicker
+                    label="End Date (optional)"
                     value={newRuleForm.end_date}
-                    onChange={(e) =>
-                      setNewRuleForm({ ...newRuleForm, end_date: e.target.value })
-                    }
-                    className="w-full border border-slate-200 rounded-lg p-2"
+                    onChange={(iso) => setNewRuleForm({ ...newRuleForm, end_date: iso })}
+                    size="sm"
                   />
                 </div>
               </div>
@@ -1789,14 +1778,18 @@ export const Settings: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* MODAL: Holiday */}
       {showHolidayModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl space-y-4">
-            <h3 className="text-base font-bold text-slate-900">Add Public Holiday</h3>
+        <Modal
+          open
+          onClose={() => setShowHolidayModal(false)}
+          size="sm"
+          title="Add Public Holiday"
+        >
+          <div className="space-y-4">
             <form onSubmit={handleCreateHoliday} className="space-y-3 text-xs">
               <div>
                 <label className="block font-medium text-slate-700 mb-1">Holiday Name</label>
@@ -1810,13 +1803,12 @@ export const Settings: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="block font-medium text-slate-700 mb-1">Date</label>
-                <input
-                  type="date"
+                <DatePicker
+                  label="Date"
                   required
                   value={newHoliday.holiday_date}
-                  onChange={(e) => setNewHoliday({ ...newHoliday, holiday_date: e.target.value })}
-                  className="w-full border border-slate-200 rounded-lg p-2"
+                  onChange={(iso) => setNewHoliday({ ...newHoliday, holiday_date: iso })}
+                  size="sm"
                 />
               </div>
               <div>
@@ -1847,14 +1839,18 @@ export const Settings: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* MODAL: Consent Policy */}
       {showConsentModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl space-y-4">
-            <h3 className="text-base font-bold text-slate-900">Publish Consent Notice Version</h3>
+        <Modal
+          open
+          onClose={() => setShowConsentModal(false)}
+          size="md"
+          title="Publish Consent Notice Version"
+        >
+          <div className="space-y-4">
             <form onSubmit={handleCreateConsentPolicy} className="space-y-3 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -1925,17 +1921,19 @@ export const Settings: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* MODAL: Confirm Database Reset */}
       {resetModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-red-100 animate-in fade-in zoom-in-95">
-            <div className="flex items-center gap-3 text-red-600">
-              <AlertCircle className="w-6 h-6 flex-shrink-0" />
-              <h3 className="text-lg font-bold text-slate-900">Confirm Complete Database Reset</h3>
-            </div>
+        <Modal
+          open
+          onClose={closeResetModal}
+          dismissible={!resetting}
+          size="md"
+          title="Confirm Complete Database Reset"
+        >
+          <div className="space-y-4">
             <p className="text-xs text-slate-600 leading-relaxed">
               This action cannot be undone. All imported worksites, employees, attendance occurrences, and salaries will be permanently deleted.
             </p>
@@ -1986,13 +1984,7 @@ export const Settings: React.FC = () => {
             <div className="flex items-center justify-end gap-3 pt-2">
               <button
                 type="button"
-                onClick={() => {
-                  setResetModalOpen(false);
-                  setResetConfirmText("");
-                  setResetAdminPassword("");
-                  setShowResetPassword(false);
-                  setResetModalError(null);
-                }}
+                onClick={closeResetModal}
                 disabled={resetting}
                 className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition"
               >
@@ -2009,7 +2001,7 @@ export const Settings: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

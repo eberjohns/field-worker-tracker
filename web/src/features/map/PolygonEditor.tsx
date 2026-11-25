@@ -10,7 +10,8 @@ import { TerraDrawMapLibreGLAdapter } from "terra-draw-maplibre-gl-adapter";
 import area from "@turf/area";
 import booleanValid from "@turf/boolean-valid";
 import kinks from "@turf/kinks";
-import { CheckCircle2, AlertCircle, Trash2, Save, MousePointer, Hexagon, Info, Clipboard, X, Crosshair } from "lucide-react";
+import { CheckCircle2, AlertCircle, Trash2, Save, MousePointer, Hexagon, Info, Clipboard, Crosshair } from "lucide-react";
+import { Modal, useToast } from "../../ui";
 
 interface PolygonEditorProps {
   map: MapLibreMap | null;
@@ -282,6 +283,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   isSaving = false,
   className = "w-full",
 }) => {
+  const toast = useToast();
   const drawRef = useRef<TerraDraw | null>(null);
   const currentPolygonRef = useRef<GeoJSON.Polygon | null>(initialPolygon || null);
   const [currentMode, setCurrentMode] = useState<string>("select");
@@ -295,7 +297,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
 
   const handleLocateMe = () => {
     if (!navigator.geolocation) {
-      alert("Geolocation is not supported by your browser");
+      toast.warning("Geolocation is not supported by your browser");
       return;
     }
     setLocating(true);
@@ -313,7 +315,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
       },
       (err) => {
         setLocating(false);
-        alert(`Could not get GPS location: ${err.message}`);
+        toast.error(err, "Could not get GPS location");
       },
       { enableHighAccuracy: true, timeout: 10000 }
     );
@@ -733,7 +735,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   const handleApplyPastedPolygon = () => {
     const polygon = parsePolygonInput(pasteInput);
     if (!polygon) {
-      alert("Invalid polygon format. Please paste valid GeoJSON coordinates or WKT POLYGON((lng lat, ...)).");
+      toast.error("Invalid polygon format. Please paste valid GeoJSON coordinates or WKT POLYGON((lng lat, ...)).");
       return;
     }
     if (!drawRef.current || !map) return;
@@ -910,24 +912,38 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
 
       {/* Paste Polygon Modal */}
       {showPasteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-lg w-full p-5 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Clipboard className="h-5 w-5 text-indigo-600" />
-                <h3 className="text-sm font-bold text-slate-900">Paste Boundary Polygon</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
+        <Modal
+          open
+          onClose={() => {
                   setShowPasteModal(false);
                   setPasteInput("");
                 }}
-                className="text-slate-400 hover:text-slate-600 p-1"
-              >
-                <X className="h-4 w-4" />
-              </button>
+          size="md"
+          title="Paste Boundary Polygon"
+          footer={
+            <div className="flex w-full flex-wrap items-center justify-end gap-2">
+              <button
+                  type="button"
+                  onClick={() => {
+                    setShowPasteModal(false);
+                    setPasteInput("");
+                  }}
+                  className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={!pasteInput.trim()}
+                  onClick={handleApplyPastedPolygon}
+                  className="px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg disabled:opacity-50 transition"
+                >
+                  Apply Boundary
+                </button>
             </div>
+          }
+        >
+          <div className="space-y-4">
             <p className="text-xs text-slate-500">
               Paste a <strong>GeoJSON Polygon</strong> or <strong>WKT string</strong> (e.g. copied from the Mobile Tester Proxy) to load and save as this boundary.
             </p>
@@ -938,28 +954,8 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
               placeholder="Paste GeoJSON: [[ [55.38, 25.13], ... ]] or WKT: POLYGON((55.38 25.13, ...))"
               className="w-full font-mono text-xs p-3 rounded-lg border border-slate-300 focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 bg-slate-50"
             />
-            <div className="flex items-center justify-end gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowPasteModal(false);
-                  setPasteInput("");
-                }}
-                className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-800"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={!pasteInput.trim()}
-                onClick={handleApplyPastedPolygon}
-                className="px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg disabled:opacity-50 transition"
-              >
-                Apply Boundary
-              </button>
-            </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

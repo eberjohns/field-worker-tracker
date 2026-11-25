@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext";
-import { X, AlertCircle } from "lucide-react";
+import { AlertBanner, Button, Modal } from "../../ui";
 import { formatApiError, buildJobItemPayload } from "./jobItemUtils";
 import {
   WORKING_WEEK,
@@ -154,57 +154,34 @@ export const JobItemModal: React.FC<JobItemModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-3xl bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden max-h-[90vh] flex flex-col">
-        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-          <div>
-            <h2 className="text-lg font-bold text-slate-900">
-              {initialData ? "Edit Job Item" : "Add Job Item"}
-            </h2>
-            <p className="text-xs text-slate-500">
-              Frequency, staffing, dates and hours. Occurrences are generated automatically.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/60"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+    <Modal
+      open
+      onClose={onClose}
+      dismissible={!loading}
+      size="xl"
+      title={initialData ? "Edit Job Item" : "Add Job Item"}
+      description="Frequency, staffing, dates and hours. Occurrences are generated automatically."
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={loading}>
+            Cancel
+          </Button>
+          <Button type="submit" form="job-item-form" loading={loading}>
+            {initialData ? "Save Changes" : "Create Job Item"}
+          </Button>
+        </>
+      }
+    >
+      <form id="job-item-form" onSubmit={handleSubmit} className="space-y-5">
+        {errorMsg && (
+          <AlertBanner tone="error">
+            <span className="whitespace-pre-line">{errorMsg}</span>
+          </AlertBanner>
+        )}
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto flex-1">
-          {errorMsg && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2 text-xs text-red-700 whitespace-pre-line">
-              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-              <span>{errorMsg}</span>
-            </div>
-          )}
-
-          <JobItemFields draft={draft} onChange={patch} breakMode="edit" idPrefix="modal" />
-          <JobItemChecksPanel draft={draft} country={worksiteCountry} worksiteId={worksiteId} />
-
-          <div className="pt-2 flex justify-end gap-3 border-t border-slate-200">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={loading}
-              className="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-            >
-              {loading ? "Saving..." : initialData ? "Save Changes" : "Create Job Item"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <JobItemFields draft={draft} onChange={patch} breakMode="edit" idPrefix="modal" />
+        <JobItemChecksPanel draft={draft} country={worksiteCountry} worksiteId={worksiteId} />
+      </form>
+    </Modal>
   );
 };

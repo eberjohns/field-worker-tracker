@@ -1,5 +1,6 @@
 import React from "react";
 import { LookupSelect } from "../lookups/LookupSelect";
+import { DatePicker } from "../../ui";
 import { WEEKDAY_CODES, type FrequencyUnit, type JobItemDraft } from "./jobItemUtils";
 
 /**
@@ -114,31 +115,24 @@ export const JobItemFields: React.FC<JobItemFieldsProps> = ({
             <option value="REMOTE">Remote (dispatched team)</option>
           </select>
         </div>
-        <div>
-          <label className={label} htmlFor={`${idPrefix}-start`}>
-            Start Date *
-          </label>
-          <input
-            id={`${idPrefix}-start`}
-            type="date"
-            required
-            value={draft.start_date}
-            onChange={(e) => onChange({ start_date: e.target.value })}
-            className={ring("start_date")}
-          />
-        </div>
-        <div>
-          <label className={label} htmlFor={`${idPrefix}-end`}>
-            End Date
-          </label>
-          <input
-            id={`${idPrefix}-end`}
-            type="date"
-            value={draft.end_date}
-            onChange={(e) => onChange({ end_date: e.target.value })}
-            className={ring("end_date")}
-          />
-        </div>
+        <DatePicker
+          id={`${idPrefix}-start`}
+          label="Start Date"
+          required
+          size="sm"
+          value={draft.start_date}
+          onChange={(iso) => onChange({ start_date: iso })}
+          error={errorField === "start_date" ? "Check the start date" : undefined}
+        />
+        <DatePicker
+          id={`${idPrefix}-end`}
+          label="End Date"
+          size="sm"
+          value={draft.end_date}
+          min={draft.start_date || undefined}
+          onChange={(iso) => onChange({ end_date: iso })}
+          error={errorField === "end_date" ? "Check the end date" : undefined}
+        />
       </div>
 
       <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-3">

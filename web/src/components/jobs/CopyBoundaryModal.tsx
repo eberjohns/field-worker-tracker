@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext";
-import { X, Copy, AlertCircle, Search } from "lucide-react";
+import { Copy, Search } from "lucide-react";
+import { AlertBanner, Button, Modal, ScrollArea, describeError, ensureOk, type FieldError } from "../../ui";
 
 interface WorksiteOption {
   id: string;
@@ -48,6 +49,7 @@ export const CopyBoundaryModal: React.FC<CopyBoundaryModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [errorFields, setErrorFields] = useState<FieldError[]>([]);
   const [copiedFormat, setCopiedFormat] = useState<string | null>(null);
 
   const handleCopyGeoJson = () => {
@@ -75,13 +77,12 @@ export const CopyBoundaryModal: React.FC<CopyBoundaryModalProps> = ({
         const res = await fetch("/api/v1/worksites?limit=200", {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
-        if (res.ok) {
-          const all: WorksiteOption[] = await res.json();
-          // Filter out current worksite
-          setWorksites(all.filter((w) => w.id !== worksiteId));
-        }
-      } catch (err: any) {
-        setErrorMsg("Failed to load candidate worksites.");
+        await ensureOk(res, "Failed to load candidate worksites.");
+        const all: WorksiteOption[] = await res.json();
+        // Filter out current worksite
+        setWorksites(all.filter((w) => w.id !== worksiteId));
+      } catch (err: unknown) {
+        setErrorMsg(describeError(err, "Failed to load candidate worksites.").message);
       } finally {
         setFetching(false);
       }
@@ -120,6 +121,7 @@ export const CopyBoundaryModal: React.FC<CopyBoundaryModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
+    setErrorFields([]);
 
     if (mode === "COPY_FROM" && !selectedSourceId) {
       setErrorMsg("Please select a source worksite to copy from.");
@@ -152,49 +154,43 @@ export const CopyBoundaryModal: React.FC<CopyBoundaryModalProps> = ({
         body: JSON.stringify(body),
       });
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || "Failed to copy boundary.");
-      }
+      await ensureOk(res, "Failed to copy boundary.");
 
       onSuccess();
       onClose();
-    } catch (err: any) {
-      setErrorMsg(err.message || "An error occurred.");
+    } catch (err: unknown) {
+      const info = describeError(err, "Failed to copy boundary.");
+      setErrorMsg(info.message);
+      setErrorFields(info.fields);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-lg bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden max-h-[85vh] flex flex-col">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-          <div>
-            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <Copy className="h-5 w-5 text-indigo-600" />
-              {mode === "COPY_FROM" ? "Copy Boundary From Worksite" : "Copy Boundary To Worksites"}
-            </h2>
-            <p className="text-xs text-slate-500">
-              Worksite {worksiteJobNumber} &bull; Shared boundary assignment
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/60"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        {/* Body */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
+    <Modal
+      open={isOpen}
+      onClose={onClose}
+      dismissible={!loading}
+      size="md"
+      title={mode === "COPY_FROM" ? "Copy Boundary From Worksite" : "Copy Boundary To Worksites"}
+      description={`Worksite ${worksiteJobNumber} \u2022 Shared boundary assignment`}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={loading}>
+            Cancel
+          </Button>
+          <Button type="submit" form="copy-boundary-form" loading={loading}>
+            {mode === "COPY_FROM" ? "Copy to This Worksite" : `Copy to ${selectedTargetIds.length} Worksite(s)`}
+          </Button>
+        </>
+      }
+    >
+        <form id="copy-boundary-form" onSubmit={handleSubmit} className="space-y-4 text-xs">
           {errorMsg && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded text-red-700 flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>{errorMsg}</span>
-            </div>
+            <AlertBanner tone="error" fields={errorFields}>
+              {errorMsg}
+            </AlertBanner>
           )}
 
           {/* Format Copy Section */}
@@ -251,7 +247,7 @@ export const CopyBoundaryModal: React.FC<CopyBoundaryModalProps> = ({
             <div className="py-8 text-center text-slate-400">Loading worksites...</div>
           ) : mode === "COPY_FROM" ? (
             /* Radio list for source */
-            <div className="space-y-1.5 max-h-60 overflow-y-auto border border-slate-200 rounded-lg p-2">
+            <ScrollArea maxHeight={240} className="space-y-1.5 border border-slate-200 rounded-lg p-2">
               {filtered
                 .filter((w) => w.has_boundary)
                 .map((w) => (
@@ -287,7 +283,7 @@ export const CopyBoundaryModal: React.FC<CopyBoundaryModalProps> = ({
                   No other worksites with boundaries found.
                 </div>
               )}
-            </div>
+            </ScrollArea>
           ) : (
             /* Checkbox list for targets */
             <div className="space-y-2">
@@ -304,7 +300,7 @@ export const CopyBoundaryModal: React.FC<CopyBoundaryModalProps> = ({
                 </button>
               </div>
 
-              <div className="space-y-1.5 max-h-60 overflow-y-auto border border-slate-200 rounded-lg p-2">
+              <ScrollArea maxHeight={240} className="space-y-1.5 border border-slate-200 rounded-lg p-2">
                 {filtered.map((w) => {
                   const isChecked = selectedTargetIds.includes(w.id);
                   return (
@@ -340,34 +336,10 @@ export const CopyBoundaryModal: React.FC<CopyBoundaryModalProps> = ({
                     </label>
                   );
                 })}
-              </div>
+              </ScrollArea>
             </div>
           )}
-
-          {/* Footer Actions */}
-          <div className="pt-3 border-t border-slate-200 flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={loading}
-              className="px-4 py-1.5 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
-            >
-              {loading
-                ? "Copying..."
-                : mode === "COPY_FROM"
-                ? "Copy to This Worksite"
-                : `Copy to ${selectedTargetIds.length} Worksite(s)`}
-            </button>
-          </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 };

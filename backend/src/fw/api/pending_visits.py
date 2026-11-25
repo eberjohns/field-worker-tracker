@@ -34,6 +34,9 @@ async def list_pending_visits(
     worksite_id: UUID | None = Query(None, description="Filter by worksite"),
     supervisor_id: UUID | None = Query(None, description="Filter by supervisor"),
     employee_id: UUID | None = Query(None, description="Filter by employee"),
+    limit: int | None = Query(
+        None, ge=1, le=500, description="Return at most this many items; counts cover all"
+    ),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> PendingVisitListResponse:
@@ -47,6 +50,7 @@ async def list_pending_visits(
         worksite_id=worksite_id,
         supervisor_id=supervisor_id,
         employee_id=employee_id,
+        limit=limit,
     )
 
 

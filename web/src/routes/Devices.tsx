@@ -10,6 +10,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { ensureOk, useDialogs } from "../ui";
 
 interface DeviceStatus {
   device_id: string;
@@ -31,6 +32,7 @@ interface DeviceStatus {
 
 export const Devices: React.FC = () => {
   const { user } = useAuth();
+  const dialogs = useDialogs();
   const isAdmin = user?.role === "ADMIN";
 
   const [devices, setDevices] = useState<DeviceStatus[]>([]);
@@ -63,13 +65,13 @@ export const Devices: React.FC = () => {
   }, []);
 
   const handleResetBinding = async (deviceId: string, employeeName: string) => {
-    if (
-      !window.confirm(
-        `Are you sure you want to reset the device binding for ${employeeName}? They will be able to bind a new device on their next login.`
-      )
-    ) {
-      return;
-    }
+    const ok = await dialogs.confirm({
+      title: "Reset device binding?",
+      message: `${employeeName} will be able to bind a new device on their next login.`,
+      confirmLabel: "Reset binding",
+      variant: "destructive",
+    });
+    if (!ok) return;
 
     try {
       setResettingId(deviceId);
@@ -79,10 +81,7 @@ export const Devices: React.FC = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.detail || "Failed to reset device binding");
-      }
+      await ensureOk(res, "Failed to reset device binding");
 
       setMessage({
         type: "success",

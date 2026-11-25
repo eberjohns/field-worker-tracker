@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../context/AuthContext";
+import { problemFromBody, problemFromResponse } from "../ui";
 import {
   Search,
   RefreshCw,
@@ -55,7 +56,7 @@ export const Documents: React.FC = () => {
         setTotalCount(data.total_count || 0);
       } else {
         const err = await res.json().catch(() => ({}));
-        setErrorMsg(err.detail || "Failed to load employee documents.");
+        setErrorMsg(problemFromBody(null, err, "Failed to load employee documents.").message);
       }
     } catch (err) {
       console.error(err);
@@ -82,11 +83,11 @@ export const Documents: React.FC = () => {
       });
       if (res.ok) {
         const data = await res.json();
-        setAlertResult(`Checked expiry dates: ${data.created_alerts_count} new alert(s) raised.`);
+        const n = data.created_alerts_count;
+        setAlertResult(`Checked expiry dates: ${n} new expiry ${n === 1 ? "warning" : "warnings"} raised.`);
         fetchDocuments();
       } else {
-        const err = await res.json().catch(() => ({}));
-        setErrorMsg(err.detail || "Failed to check document alerts.");
+        setErrorMsg((await problemFromResponse(res, "Failed to check document alerts.")).message);
       }
     } catch (err) {
       console.error(err);

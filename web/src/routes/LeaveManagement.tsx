@@ -9,11 +9,11 @@ import {
   AlertCircle,
   CheckCircle2,
   AlertTriangle,
-  X,
   HelpCircle,
   Users,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { DatePicker, Modal, problemFromBody, useDialogs, useToast } from "../ui";
 
 interface LeaveRequestItem {
   id: string;
@@ -66,6 +66,8 @@ interface EmployeeOption {
 }
 
 export const LeaveManagement: React.FC = () => {
+  const toast = useToast();
+  const dialogs = useDialogs();
   const { token, user } = useAuth();
   const [year, setYear] = useState<number>(new Date().getFullYear());
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
@@ -211,7 +213,7 @@ export const LeaveManagement: React.FC = () => {
 
       if (!res.ok) {
         const err = await res.json();
-        const msg = err?.detail?.message || err?.detail || "Failed to record leave";
+        const msg = problemFromBody(null, err, "Failed to record leave").message;
         setRecordError(String(msg));
         return;
       }
@@ -251,7 +253,7 @@ export const LeaveManagement: React.FC = () => {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        setBulkCoverError(String(err?.detail?.message || err?.detail || "Failed to bulk cover leave."));
+        setBulkCoverError(String(problemFromBody(null, err, "Failed to bulk cover leave.").message));
         return;
       }
       const data = await res.json();
@@ -271,7 +273,7 @@ export const LeaveManagement: React.FC = () => {
   };
 
   const handleCancelLeave = async (leaveId: string) => {
-    if (!window.confirm("Are you sure you want to cancel this leave? This will restore schedule slots.")) {
+    if (!(await dialogs.confirm({ title: "Cancel this leave?", message: "Are you sure you want to cancel this leave? This will restore schedule slots.", confirmLabel: "Cancel leave", variant: "destructive" }))) {
       return;
     }
 
@@ -285,10 +287,10 @@ export const LeaveManagement: React.FC = () => {
         await fetchLeavesAndSummaries();
       } else {
         const err = await res.json();
-        alert(err?.detail?.message || err?.detail || "Failed to cancel leave");
+        toast.error(err, "Failed to cancel leave");
       }
     } catch (err: any) {
-      alert("Error: " + err.message);
+      toast.error(err);
     }
   };
 
@@ -306,7 +308,7 @@ export const LeaveManagement: React.FC = () => {
       a.click();
       a.remove();
     } catch (err: any) {
-      alert("Failed to download template: " + err.message);
+      toast.error(err, "Failed to download template");
     }
   };
 
@@ -334,7 +336,7 @@ export const LeaveManagement: React.FC = () => {
 
       const data = await res.json();
       if (!res.ok) {
-        const msg = data?.detail?.message || data?.detail || "Import failed";
+        const msg = problemFromBody(null, data, "Import failed").message;
         setImportError(String(msg));
         return;
       }
@@ -652,207 +654,187 @@ export const LeaveManagement: React.FC = () => {
 
       {/* Record Leave Modal */}
       {recordModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 space-y-4 border border-slate-100">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-indigo-600" />
-                Record Leave Request
-              </h3>
-              <button
-                onClick={() => setRecordModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600"
+        <Modal
+          open
+          onClose={() => setRecordModalOpen(false)}
+          size="md"
+          title={<span className="inline-flex items-center gap-2"><Calendar className="h-5 w-5 text-indigo-600" /> Record Leave Request</span>}
+        >
+          <form onSubmit={handleRecordSubmit} className="space-y-4 text-xs">
+            <div className="space-y-1">
+              <label className="font-semibold text-slate-700">Worker *</label>
+              <select
+                required
+                value={recordForm.employee_id}
+                onChange={(e) => setRecordForm({ ...recordForm, employee_id: e.target.value })}
+                className="w-full p-2.5 rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
               >
-                <X className="h-5 w-5" />
-              </button>
+                <option value="">Select worker...</option>
+                {employees.map((emp) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.name} ({emp.tally_id})
+                  </option>
+                ))}
+              </select>
             </div>
 
-            <form onSubmit={handleRecordSubmit} className="space-y-4 text-xs">
+            <div className="space-y-1">
+              <label className="font-semibold text-slate-700">Leave Type *</label>
+              <select
+                required
+                value={recordForm.leave_type}
+                onChange={(e) => setRecordForm({ ...recordForm, leave_type: e.target.value })}
+                className="w-full p-2.5 rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="ANNUAL">Annual Leave</option>
+                <option value="SICK">Sick Leave</option>
+                <option value="UNPAID">Unpaid Leave</option>
+                <option value="EMERGENCY">Emergency Leave</option>
+                <option value="OTHER">Other Leave</option>
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <label className="font-semibold text-slate-700">Worker *</label>
-                <select
+                <DatePicker
+                  label="From Date"
                   required
-                  value={recordForm.employee_id}
-                  onChange={(e) => setRecordForm({ ...recordForm, employee_id: e.target.value })}
-                  className="w-full p-2.5 rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="">Select worker...</option>
-                  {employees.map((emp) => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.name} ({emp.tally_id})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-semibold text-slate-700">Leave Type *</label>
-                <select
-                  required
-                  value={recordForm.leave_type}
-                  onChange={(e) => setRecordForm({ ...recordForm, leave_type: e.target.value })}
-                  className="w-full p-2.5 rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="ANNUAL">Annual Leave</option>
-                  <option value="SICK">Sick Leave</option>
-                  <option value="UNPAID">Unpaid Leave</option>
-                  <option value="EMERGENCY">Emergency Leave</option>
-                  <option value="OTHER">Other Leave</option>
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="font-semibold text-slate-700">From Date *</label>
-                  <input
-                    type="date"
-                    required
-                    value={recordForm.from_date}
-                    onChange={(e) => setRecordForm({ ...recordForm, from_date: e.target.value })}
-                    className="w-full p-2.5 rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="font-semibold text-slate-700">To Date *</label>
-                  <input
-                    type="date"
-                    required
-                    value={recordForm.to_date}
-                    onChange={(e) => setRecordForm({ ...recordForm, to_date: e.target.value })}
-                    className="w-full p-2.5 rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-              </div>
-
-              {isUrgentLeaveType && (
-                <div className="p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
-                  <span className="text-xs">
-                    Emergency and Sick leaves are exempt from the 3-day advance notice requirement.
-                  </span>
-                </div>
-              )}
-
-              {getNoticeWarning() && (
-                <div className="space-y-2">
-                  <div className="p-2.5 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
-                    <span className="text-xs">{getNoticeWarning()}</span>
-                  </div>
-                  {user?.role === "ADMIN" && (
-                    <label className="flex items-center gap-2 text-xs font-semibold text-amber-900 bg-amber-50/70 p-2.5 rounded-lg border border-amber-200 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={bypassNotice}
-                        onChange={(e) => setBypassNotice(e.target.checked)}
-                        className="rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4"
-                      />
-                      <span>Emergency / Short-notice leave (Confirm Admin bypass)</span>
-                    </label>
-                  )}
-                </div>
-              )}
-
-              <div className="space-y-1">
-                <label className="font-semibold text-slate-700">
-                  Cover Worker <span className="font-normal text-slate-400">(Optional — auto-covers all shifts on approval)</span>
-                </label>
-                <select
-                  value={recordForm.cover_employee_id}
-                  onChange={(e) => setRecordForm({ ...recordForm, cover_employee_id: e.target.value })}
-                  className="w-full p-2.5 rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="">No pre-assigned cover worker</option>
-                  {employees
-                    .filter((emp) => emp.id !== recordForm.employee_id && emp.role !== "ADMIN")
-                    .map((emp) => (
-                      <option key={emp.id} value={emp.id}>
-                        {emp.name} ({emp.tally_id}){emp.weekly_off_day ? ` — Off: ${emp.weekly_off_day}` : ""}
-                      </option>
-                    ))}
-                </select>
-                {(() => {
-                  const origEmp = employees.find((e) => e.id === recordForm.employee_id);
-                  const covEmp = employees.find((e) => e.id === recordForm.cover_employee_id);
-                  if (
-                    origEmp &&
-                    covEmp &&
-                    (origEmp.weekly_off_day || "").toUpperCase() !== (covEmp.weekly_off_day || "").toUpperCase()
-                  ) {
-                    return (
-                      <div className="mt-1.5 p-2.5 bg-amber-50 border border-amber-200 text-amber-900 rounded-lg flex items-start gap-2">
-                        <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
-                        <span>
-                          <strong>Weekly Off Day Mismatch:</strong> {origEmp.name}'s off day is{" "}
-                          <strong>{origEmp.weekly_off_day || "Unset"}</strong>, while {covEmp.name}'s off day is{" "}
-                          <strong>{covEmp.weekly_off_day || "Unset"}</strong>. On approval, {covEmp.name} will still
-                          be assigned to cover all working days of {origEmp.name}, with a clear{" "}
-                          <strong>Weekly Off (Covering)</strong> indicator on {covEmp.weekly_off_day || "their off day"}.
-                        </span>
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-semibold text-slate-700">Reason / Notes *</label>
-                <textarea
-                  required
-                  rows={3}
-                  value={recordForm.reason}
-                  onChange={(e) => setRecordForm({ ...recordForm, reason: e.target.value })}
-                  placeholder="Enter reason for leave..."
-                  className="w-full p-2.5 rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                  value={recordForm.from_date}
+                  onChange={(iso) => setRecordForm({ ...recordForm, from_date: iso })}
+                  size="sm"
                 />
               </div>
-
-              {recordError && (
-                <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
-                  {recordError}
-                </div>
-              )}
-
-              <div className="flex items-center justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setRecordModalOpen(false)}
-                  className="px-4 py-2 border border-slate-300 text-slate-700 hover:bg-slate-100 rounded-lg font-medium transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={recordSubmitting}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition"
-                >
-                  {recordSubmitting ? "Submitting..." : "Submit Leave Request"}
-                </button>
+              <div className="space-y-1">
+                <DatePicker
+                  label="To Date"
+                  required
+                  value={recordForm.to_date}
+                  onChange={(iso) => setRecordForm({ ...recordForm, to_date: iso })}
+                  size="sm"
+                />
               </div>
-            </form>
-          </div>
-        </div>
+            </div>
+
+            {isUrgentLeaveType && (
+              <div className="p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                <span className="text-xs">
+                  Emergency and Sick leaves are exempt from the 3-day advance notice requirement.
+                </span>
+              </div>
+            )}
+
+            {getNoticeWarning() && (
+              <div className="space-y-2">
+                <div className="p-2.5 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+                  <span className="text-xs">{getNoticeWarning()}</span>
+                </div>
+                {user?.role === "ADMIN" && (
+                  <label className="flex items-center gap-2 text-xs font-semibold text-amber-900 bg-amber-50/70 p-2.5 rounded-lg border border-amber-200 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={bypassNotice}
+                      onChange={(e) => setBypassNotice(e.target.checked)}
+                      className="rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+                    />
+                    <span>Emergency / Short-notice leave (Confirm Admin bypass)</span>
+                  </label>
+                )}
+              </div>
+            )}
+
+            <div className="space-y-1">
+              <label className="font-semibold text-slate-700">
+                Cover Worker <span className="font-normal text-slate-400">(Optional — auto-covers all shifts on approval)</span>
+              </label>
+              <select
+                value={recordForm.cover_employee_id}
+                onChange={(e) => setRecordForm({ ...recordForm, cover_employee_id: e.target.value })}
+                className="w-full p-2.5 rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="">No pre-assigned cover worker</option>
+                {employees
+                  .filter((emp) => emp.id !== recordForm.employee_id && emp.role !== "ADMIN")
+                  .map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.name} ({emp.tally_id}){emp.weekly_off_day ? ` — Off: ${emp.weekly_off_day}` : ""}
+                    </option>
+                  ))}
+              </select>
+              {(() => {
+                const origEmp = employees.find((e) => e.id === recordForm.employee_id);
+                const covEmp = employees.find((e) => e.id === recordForm.cover_employee_id);
+                if (
+                  origEmp &&
+                  covEmp &&
+                  (origEmp.weekly_off_day || "").toUpperCase() !== (covEmp.weekly_off_day || "").toUpperCase()
+                ) {
+                  return (
+                    <div className="mt-1.5 p-2.5 bg-amber-50 border border-amber-200 text-amber-900 rounded-lg flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+                      <span>
+                        <strong>Weekly Off Day Mismatch:</strong> {origEmp.name}'s off day is{" "}
+                        <strong>{origEmp.weekly_off_day || "Unset"}</strong>, while {covEmp.name}'s off day is{" "}
+                        <strong>{covEmp.weekly_off_day || "Unset"}</strong>. On approval, {covEmp.name} will still
+                        be assigned to cover all working days of {origEmp.name}, with a clear{" "}
+                        <strong>Weekly Off (Covering)</strong> indicator on {covEmp.weekly_off_day || "their off day"}.
+                      </span>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-semibold text-slate-700">Reason / Notes *</label>
+              <textarea
+                required
+                rows={3}
+                value={recordForm.reason}
+                onChange={(e) => setRecordForm({ ...recordForm, reason: e.target.value })}
+                placeholder="Enter reason for leave..."
+                className="w-full p-2.5 rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+
+            {recordError && (
+              <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
+                {recordError}
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setRecordModalOpen(false)}
+                className="px-4 py-2 border border-slate-300 text-slate-700 hover:bg-slate-100 rounded-lg font-medium transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={recordSubmitting}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition"
+              >
+                {recordSubmitting ? "Submitting..." : "Submit Leave Request"}
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
 
       {/* Bulk Cover Approved Leave Modal */}
       {bulkCoverLeave && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4 border border-slate-100">
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <Users className="h-5 w-5 text-emerald-600" />
-                Cover All Uncovered Slots
-              </h3>
-              <button
-                onClick={() => setBulkCoverLeave(null)}
-                className="text-slate-400 hover:text-slate-600"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
+        <Modal
+          open
+          onClose={() => setBulkCoverLeave(null)}
+          size="md"
+          title={<span className="inline-flex items-center gap-2"><Users className="h-5 w-5 text-emerald-600" /> Cover All Uncovered Slots</span>}
+        >
+          <div className="space-y-4">
             <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs space-y-1">
               <div>
                 <span className="font-semibold text-slate-700">Worker on Leave:</span>{" "}
@@ -866,7 +848,7 @@ export const LeaveManagement: React.FC = () => {
                 {bulkCoverLeave.from_date} to {bulkCoverLeave.to_date} ({bulkCoverLeave.leave_type})
               </div>
             </div>
-
+  
             <form onSubmit={handleBulkCoverSubmit} className="space-y-3 text-xs">
               <div className="space-y-1">
                 <label className="font-semibold text-slate-700">Select Cover Worker *</label>
@@ -886,7 +868,7 @@ export const LeaveManagement: React.FC = () => {
                     ))}
                 </select>
               </div>
-
+  
               {(() => {
                 const covEmp = employees.find((e) => e.id === bulkCoverEmpId);
                 if (
@@ -908,21 +890,21 @@ export const LeaveManagement: React.FC = () => {
                 }
                 return null;
               })()}
-
+  
               {bulkCoverError && (
                 <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg flex items-center gap-2">
                   <AlertCircle className="h-4 w-4 shrink-0" />
                   {bulkCoverError}
                 </div>
               )}
-
+  
               {bulkCoverResult && (
                 <div className="p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4 shrink-0" />
                   {bulkCoverResult}
                 </div>
               )}
-
+  
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
@@ -941,26 +923,18 @@ export const LeaveManagement: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Standalone Leave Import Modal */}
       {importModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 space-y-4 border border-slate-100">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <UploadCloud className="h-5 w-5 text-indigo-600" />
-                Import Leaves from Excel
-              </h3>
-              <button
-                onClick={() => setImportModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
+        <Modal
+          open
+          onClose={() => setImportModalOpen(false)}
+          size="md"
+          title={<span className="inline-flex items-center gap-2"><UploadCloud className="h-5 w-5 text-indigo-600" /> Import Leaves from Excel</span>}
+        >
+          <div className="space-y-4">
             <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2 text-xs">
               <div className="font-semibold text-slate-800">Download Template First</div>
               <p className="text-slate-500">
@@ -975,7 +949,7 @@ export const LeaveManagement: React.FC = () => {
                 Download Template (.xlsx)
               </button>
             </div>
-
+  
             <form onSubmit={handleImportSubmit} className="space-y-4 text-xs">
               <div className="space-y-1">
                 <label className="font-semibold text-slate-700">Select Completed Excel File (.xlsx)</label>
@@ -987,14 +961,14 @@ export const LeaveManagement: React.FC = () => {
                   className="w-full p-2.5 rounded-lg border border-slate-300 focus:outline-hidden"
                 />
               </div>
-
+  
               {importError && (
                 <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg flex items-center gap-2">
                   <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
                   {importError}
                 </div>
               )}
-
+  
               {importResult && (
                 <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg space-y-1">
                   <div className="font-bold flex items-center gap-1.5">
@@ -1004,7 +978,7 @@ export const LeaveManagement: React.FC = () => {
                   <div>Committed: {importResult.committed_count} leave requests</div>
                 </div>
               )}
-
+  
               <div className="flex items-center justify-end gap-3 pt-2">
                 <button
                   type="button"
@@ -1023,7 +997,7 @@ export const LeaveManagement: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

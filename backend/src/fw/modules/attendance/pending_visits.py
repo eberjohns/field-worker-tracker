@@ -409,8 +409,13 @@ class PendingVisitsService:
         worksite_id: UUID | None = None,
         supervisor_id: UUID | None = None,
         employee_id: UUID | None = None,
+        limit: int | None = None,
     ) -> PendingVisitListResponse:
-        """Query pending visits with filtering, scoping, and escalation indicators."""
+        """Query pending visits with filtering, scoping, and escalation indicators.
+
+        `limit` caps the returned items (newest due date first); the counts, including
+        `total_count`, still cover every matching visit (dashboard preview, Batch 10 B).
+        """
         today = datetime.now(UTC).date()
 
         # 1. Resolve escalation days setting
@@ -559,12 +564,13 @@ class PendingVisitsService:
                 )
             )
 
+        total_count = len(items)
         return PendingVisitListResponse(
-            items=items,
+            items=items if limit is None else items[:limit],
             open_count=open_count,
             explained_count=explained_count,
             rescheduled_count=rescheduled_count,
             closed_count=closed_count,
             escalated_count=escalated_count,
-            total_count=len(items),
+            total_count=total_count,
         )

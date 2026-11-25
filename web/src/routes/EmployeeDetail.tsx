@@ -25,11 +25,11 @@ import {
   Eye,
   EyeOff,
   AlertTriangle,
-  X,
   Loader2,
   Truck,
 } from "lucide-react";
 import { LookupSelect } from "../components/lookups/LookupSelect";
+import { ApiError, Button, DatePicker, ensureOk, Modal, problemFromBody, useDialogs, useToast } from "../ui";
 
 interface AttributeHistoryItem {
   id: string;
@@ -45,6 +45,8 @@ interface AttributeHistoryItem {
 }
 
 export const EmployeeDetail: React.FC = () => {
+  const toast = useToast();
+  const dialogs = useDialogs();
   const { employeeId } = useParams({ strict: false }) as { employeeId: string };
   const { token, user } = useAuth();
 
@@ -206,7 +208,7 @@ export const EmployeeDetail: React.FC = () => {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(data?.detail?.message || data?.detail || "Failed to change Tally ID");
+        throw new ApiError(problemFromBody(null, data, "Failed to change Tally ID"));
       }
       setTallyModalOpen(false);
       setNewTallyId("");
@@ -243,7 +245,7 @@ export const EmployeeDetail: React.FC = () => {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(data?.detail?.message || data?.detail || "Failed to deactivate employee");
+        throw new ApiError(problemFromBody(null, data, "Failed to deactivate employee"));
       }
       setDeactivateModalOpen(false);
       setDeactivateReason("");
@@ -277,7 +279,7 @@ export const EmployeeDetail: React.FC = () => {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(data?.detail?.message || data?.detail || "Failed to reactivate employee");
+        throw new ApiError(problemFromBody(null, data, "Failed to reactivate employee"));
       }
       setReactivateModalOpen(false);
       setReactivateReason("");
@@ -317,7 +319,7 @@ export const EmployeeDetail: React.FC = () => {
   };
 
   const handleWithdrawConsent = async () => {
-    const reason = window.prompt("Enter reason for consent withdrawal (e.g. Employee request, Contract review):");
+    const reason = (await dialogs.prompt({ title: "Withdraw consent", input: { label: "Reason (e.g. employee request, contract review)", required: true, multiline: true }, confirmLabel: "Withdraw consent", variant: "destructive" }));
     if (!reason) return;
     setWithdrawingConsent(true);
     try {
@@ -329,10 +331,7 @@ export const EmployeeDetail: React.FC = () => {
         },
         body: JSON.stringify({ reason }),
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || "Failed to withdraw consent");
-      }
+      await ensureOk(res, "Failed to withdraw consent");
       setStatusMessage("Consent withdrawn successfully. Mobile tracking events will now be rejected with HTTP 403.");
       fetchData();
     } catch (err: any) {
@@ -438,7 +437,7 @@ export const EmployeeDetail: React.FC = () => {
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || err.message || "Save failed");
+        throw new ApiError(problemFromBody(null, err, "Save failed"));
       }
 
       const updated = await res.json();
@@ -450,7 +449,7 @@ export const EmployeeDetail: React.FC = () => {
   };
 
   const handleResetPassword = async () => {
-    if (!window.confirm("Reset this worker's password to company default?")) return;
+    if (!(await dialogs.confirm({ title: "Reset password?", message: "Reset this worker's password to company default?", confirmLabel: "Reset password", variant: "destructive" }))) return;
     setStatusMessage(null);
     setErrorMessage(null);
 
@@ -460,7 +459,7 @@ export const EmployeeDetail: React.FC = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || data.detail || "Failed to reset password");
+      if (!res.ok) throw new ApiError(problemFromBody(null, data, "Failed to reset password"));
 
       setStatusMessage(data.message || "Password reset to company default successfully.");
     } catch (err: any) {
@@ -469,7 +468,7 @@ export const EmployeeDetail: React.FC = () => {
   };
 
   const handleRevokeDevice = async (deviceId: string) => {
-    if (!window.confirm("Revoke this device binding?")) return;
+    if (!(await dialogs.confirm({ title: "Revoke device binding?", message: "Revoke this device binding?", confirmLabel: "Revoke", variant: "destructive" }))) return;
     try {
       const res = await fetch(`/api/v1/devices/${deviceId}/revoke`, {
         method: "POST",
@@ -490,7 +489,7 @@ export const EmployeeDetail: React.FC = () => {
 
     const mgr = allManagers.find((m) => m.id === newManagerId);
     const mgrLabel = mgr ? `${mgr.name} (${mgr.role})` : "selected leader";
-    if (!window.confirm(`Are you sure you want to assign direct reporting line to ${mgrLabel} as ${newRelType}?`)) {
+    if (!(await dialogs.confirm({ title: "Assign reporting line?", message: `Are you sure you want to assign direct reporting line to ${mgrLabel} as ${newRelType}?`, confirmLabel: "Assign" }))) {
       return;
     }
 
@@ -519,7 +518,7 @@ export const EmployeeDetail: React.FC = () => {
           );
           if (!delRes.ok) {
             const err = await delRes.json().catch(() => ({}));
-            throw new Error(err.detail || err.message || "Failed to replace existing supervisor.");
+            throw new ApiError(problemFromBody(null, err, "Failed to replace existing supervisor."));
           }
         }
       }
@@ -534,7 +533,7 @@ export const EmployeeDetail: React.FC = () => {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || err.message || "Failed to assign reporting line.");
+        throw new ApiError(problemFromBody(null, err, "Failed to assign reporting line."));
       }
 
       setNewManagerId("");
@@ -550,7 +549,7 @@ export const EmployeeDetail: React.FC = () => {
   const handleSaveProfileDetails = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!detailReason.trim()) {
-      alert("A reason for this change is required for audit compliance.");
+      toast.warning("A reason for this change is required for audit compliance.");
       return;
     }
     setSavingDetails(true);
@@ -569,10 +568,7 @@ export const EmployeeDetail: React.FC = () => {
           reason: detailReason.trim(),
         }),
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail?.message || err.detail || "Failed to update profile details.");
-      }
+      await ensureOk(res, "Failed to update profile details.");
       setEditDetailsModalOpen(false);
       setStatusMessage("Employee designation, grade, and driver status updated.");
       await fetchData();
@@ -603,7 +599,7 @@ export const EmployeeDetail: React.FC = () => {
   };
 
   const handleRemoveReportingLine = async (lineId: string, managerLabel: string) => {
-    if (!window.confirm(`Remove direct reporting line to ${managerLabel}?`)) return;
+    if (!(await dialogs.confirm({ title: "Remove reporting line?", message: `Remove direct reporting line to ${managerLabel}?`, confirmLabel: "Remove", variant: "destructive" }))) return;
     setSavingHierarchy(true);
     setStatusMessage(null);
     setErrorMessage(null);
@@ -614,7 +610,7 @@ export const EmployeeDetail: React.FC = () => {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || err.message || "Failed to remove reporting line.");
+        throw new ApiError(problemFromBody(null, err, "Failed to remove reporting line."));
       }
       setStatusMessage("Reporting line removed.");
       await fetchData();
@@ -642,7 +638,7 @@ export const EmployeeDetail: React.FC = () => {
   };
 
   const handleDeactivateViolation = async (lineId: string) => {
-    if (!window.confirm("Are you sure you want to deactivate this reporting line?")) return;
+    if (!(await dialogs.confirm({ title: "Deactivate reporting line?", message: "Are you sure you want to deactivate this reporting line?", confirmLabel: "Deactivate", variant: "destructive" }))) return;
     setActionInProgress(lineId);
     try {
       const res = await fetch(`/api/v1/employees/hierarchy-violations/${lineId}/deactivate`, {
@@ -651,7 +647,7 @@ export const EmployeeDetail: React.FC = () => {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || err.message || "Failed to deactivate line");
+        throw new ApiError(problemFromBody(null, err, "Failed to deactivate line"));
       }
       setStatusMessage("Reporting line deactivated.");
       await fetchHierarchyViolations();
@@ -664,7 +660,7 @@ export const EmployeeDetail: React.FC = () => {
   };
 
   const handleMoveViolationToSupervisor = async (lineId: string) => {
-    if (!window.confirm("Move this leadership link to the worker's supervisor and deactivate the worker's direct link?")) return;
+    if (!(await dialogs.confirm({ title: "Move leadership link?", message: "Move this leadership link to the worker's supervisor and deactivate the worker's direct link?", confirmLabel: "Move link" }))) return;
     setActionInProgress(lineId);
     try {
       const res = await fetch(`/api/v1/employees/hierarchy-violations/${lineId}/move-to-supervisor`, {
@@ -673,7 +669,7 @@ export const EmployeeDetail: React.FC = () => {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || err.message || "Failed to move line");
+        throw new ApiError(problemFromBody(null, err, "Failed to move line"));
       }
       setStatusMessage("Reporting line moved to supervisor.");
       await fetchHierarchyViolations();
@@ -1559,13 +1555,12 @@ export const EmployeeDetail: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Expiry Date</label>
-                <input
-                  type="date"
+                <DatePicker
+                  label="Expiry Date"
                   required
                   value={newDocExpiry}
-                  onChange={(e) => setNewDocExpiry(e.target.value)}
-                  className="border border-slate-300 rounded-lg p-2 text-sm"
+                  onChange={(iso) => setNewDocExpiry(iso)}
+                  size="sm"
                 />
               </div>
 
@@ -1675,749 +1670,654 @@ export const EmployeeDetail: React.FC = () => {
 
       {/* Change Tally ID Modal (Admin Only) */}
       {tallyModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
-          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <Pencil className="h-4 w-4 text-indigo-600" />
-                  Change Tally ID
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Current Tally ID: <span className="font-mono font-bold text-slate-800">{employee.tally_id}</span>
+        <Modal
+          open
+          onClose={() => setTallyModalOpen(false)}
+          size="md"
+          title={<span className="inline-flex items-center gap-2"><Pencil className="h-4 w-4 text-indigo-600" /> Change Tally ID</span>}
+          description={<>Current Tally ID: <span className="font-mono font-bold text-slate-800">{employee.tally_id}</span></>}
+        >
+          <form onSubmit={handleChangeTallyId} className="p-6 space-y-4">
+            <div className="p-3 rounded-lg bg-indigo-50/70 border border-indigo-200 text-xs text-indigo-900 space-y-1">
+              <div className="font-semibold">How Tally ID changes work:</div>
+              <ul className="list-disc pl-4 space-y-0.5 text-[11px]">
+                <li>All historical shifts, attendance, payroll, and GPS records remain linked automatically via internal UUID.</li>
+                <li>The linked login username updates to the new Tally ID immediately; the employee will use it on their next login.</li>
+                <li>The previous Tally ID is preserved in the Audit Trail only.</li>
+              </ul>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                New Tally ID <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={newTallyId}
+                onChange={(e) => {
+                  setNewTallyId(e.target.value);
+                  setConfirmReuse(false);
+                }}
+                placeholder="e.g. PERM-1042"
+                className="w-full px-3 py-2 text-sm font-mono border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              {checkingTally && (
+                <p className="text-[11px] text-slate-400 mt-1 flex items-center gap-1">
+                  <Loader2 className="h-3 w-3 animate-spin" /> Checking Tally ID history...
                 </p>
+              )}
+            </div>
+
+            {tallyCheck && !tallyCheck.available && (
+              <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+                <div>
+                  <strong>Already in use</strong> by {tallyCheck.in_use_by_name || "another employee"}. Choose a different Tally ID.
+                </div>
               </div>
+            )}
+
+            {tallyCheck && tallyCheck.available && tallyCheck.previously_used && (
+              <div className="p-3 rounded-lg bg-amber-50 border border-amber-300 text-xs text-amber-900 space-y-2">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <strong>Previously Used Tally ID Guardrail:</strong> This Tally ID was previously assigned to:
+                    <ul className="list-disc pl-4 mt-1 space-y-0.5 text-[11px]">
+                      {(tallyCheck.previous_uses || []).map((h: any, idx: number) => (
+                        <li key={idx}>
+                          <strong>{h.employee_name || h.employee_id}</strong> (changed to{" "}
+                          <span className="font-mono">{h.new_tally_id || "another ID"}</span>
+                          {h.changed_at ? ` on ${new Date(h.changed_at).toLocaleDateString()}` : ""})
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="text-[11px] mt-1">
+                      System data stays separated by UUID, but reusing a retired Tally ID may confuse external Tally/Excel exports.
+                    </p>
+                  </div>
+                </div>
+                <label className="flex items-center gap-2 pt-1 font-semibold cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={confirmReuse}
+                    onChange={(e) => setConfirmReuse(e.target.checked)}
+                    className="rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+                  />
+                  <span>I understand this Tally ID was previously used and confirm reuse</span>
+                </label>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Reason for Change <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={tallyReason}
+                onChange={(e) => setTallyReason(e.target.value)}
+                placeholder="e.g. Probation completed — assigned permanent Tally ID"
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+
+            {tallyModalError && (
+              <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-800">
+                {tallyModalError}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setTallyModalOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 cursor-pointer"
+                className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
               >
-                <X className="h-5 w-5" />
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={
+                  submittingTally ||
+                  !newTallyId.trim() ||
+                  !tallyReason.trim() ||
+                  (tallyCheck !== null && !tallyCheck.available) ||
+                  (Boolean(tallyCheck?.previously_used) && !confirmReuse)
+                }
+                className="px-4 py-2 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white flex items-center gap-1.5 cursor-pointer"
+              >
+                {submittingTally && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Update Tally ID
               </button>
             </div>
-
-            <form onSubmit={handleChangeTallyId} className="p-6 space-y-4">
-              <div className="p-3 rounded-lg bg-indigo-50/70 border border-indigo-200 text-xs text-indigo-900 space-y-1">
-                <div className="font-semibold">How Tally ID changes work:</div>
-                <ul className="list-disc pl-4 space-y-0.5 text-[11px]">
-                  <li>All historical shifts, attendance, payroll, and GPS records remain linked automatically via internal UUID.</li>
-                  <li>The linked login username updates to the new Tally ID immediately; the employee will use it on their next login.</li>
-                  <li>The previous Tally ID is preserved in the Audit Trail only.</li>
-                </ul>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  New Tally ID <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={newTallyId}
-                  onChange={(e) => {
-                    setNewTallyId(e.target.value);
-                    setConfirmReuse(false);
-                  }}
-                  placeholder="e.g. PERM-1042"
-                  className="w-full px-3 py-2 text-sm font-mono border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-                {checkingTally && (
-                  <p className="text-[11px] text-slate-400 mt-1 flex items-center gap-1">
-                    <Loader2 className="h-3 w-3 animate-spin" /> Checking Tally ID history...
-                  </p>
-                )}
-              </div>
-
-              {tallyCheck && !tallyCheck.available && (
-                <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-start gap-2">
-                  <AlertCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
-                  <div>
-                    <strong>Already in use</strong> by {tallyCheck.in_use_by_name || "another employee"}. Choose a different Tally ID.
-                  </div>
-                </div>
-              )}
-
-              {tallyCheck && tallyCheck.available && tallyCheck.previously_used && (
-                <div className="p-3 rounded-lg bg-amber-50 border border-amber-300 text-xs text-amber-900 space-y-2">
-                  <div className="flex items-start gap-2">
-                    <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                    <div>
-                      <strong>Previously Used Tally ID Guardrail:</strong> This Tally ID was previously assigned to:
-                      <ul className="list-disc pl-4 mt-1 space-y-0.5 text-[11px]">
-                        {(tallyCheck.previous_uses || []).map((h: any, idx: number) => (
-                          <li key={idx}>
-                            <strong>{h.employee_name || h.employee_id}</strong> (changed to{" "}
-                            <span className="font-mono">{h.new_tally_id || "another ID"}</span>
-                            {h.changed_at ? ` on ${new Date(h.changed_at).toLocaleDateString()}` : ""})
-                          </li>
-                        ))}
-                      </ul>
-                      <p className="text-[11px] mt-1">
-                        System data stays separated by UUID, but reusing a retired Tally ID may confuse external Tally/Excel exports.
-                      </p>
-                    </div>
-                  </div>
-                  <label className="flex items-center gap-2 pt-1 font-semibold cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={confirmReuse}
-                      onChange={(e) => setConfirmReuse(e.target.checked)}
-                      className="rounded border-amber-400 text-amber-600 focus:ring-amber-500"
-                    />
-                    <span>I understand this Tally ID was previously used and confirm reuse</span>
-                  </label>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Reason for Change <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={tallyReason}
-                  onChange={(e) => setTallyReason(e.target.value)}
-                  placeholder="e.g. Probation completed — assigned permanent Tally ID"
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-
-              {tallyModalError && (
-                <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-800">
-                  {tallyModalError}
-                </div>
-              )}
-
-              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setTallyModalOpen(false)}
-                  className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={
-                    submittingTally ||
-                    !newTallyId.trim() ||
-                    !tallyReason.trim() ||
-                    (tallyCheck !== null && !tallyCheck.available) ||
-                    (Boolean(tallyCheck?.previously_used) && !confirmReuse)
-                  }
-                  className="px-4 py-2 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white flex items-center gap-1.5 cursor-pointer"
-                >
-                  {submittingTally && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  Update Tally ID
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+          </form>
+        </Modal>
       )}
 
       {/* Deactivate Employee Modal (Admin Only) */}
       {deactivateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
-          <div className="bg-white rounded-xl shadow-2xl border border-rose-200 w-full max-w-lg max-h-[92vh] flex flex-col overflow-hidden">
-            <div className="px-6 py-4 border-b border-rose-200 bg-rose-50 flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-bold text-rose-900 flex items-center gap-2">
-                  <PowerOff className="h-5 w-5 text-rose-600" />
-                  Deactivate Employee
-                </h3>
-                <p className="text-xs text-rose-700 mt-0.5">
-                  {employee.name} ({employee.tally_id}) · {employee.role}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setDeactivateModalOpen(false)}
-                className="p-1.5 rounded-lg text-rose-400 hover:text-rose-700 hover:bg-rose-100 cursor-pointer"
-              >
-                <X className="h-5 w-5" />
-              </button>
+        <Modal
+          open
+          onClose={() => setDeactivateModalOpen(false)}
+          size="md"
+          title={<span className="inline-flex items-center gap-2"><PowerOff className="h-5 w-5 text-rose-600" /> Deactivate Employee</span>}
+          description={<>{employee.name} ({employee.tally_id}) · {employee.role}</>}
+        >
+          <form onSubmit={handleDeactivateEmployee} className="space-y-4">
+            <div>
+              <DatePicker
+                label="Effective Date (Optional — defaults to Today)"
+                value={deactivateEffectiveDate}
+                onChange={(iso) => setDeactivateEffectiveDate(iso)}
+                size="sm"
+              />
+              <p className="text-[11px] text-slate-500 mt-1">
+                Only schedules on or after this date will be cancelled and marked as <strong>Needs Cover</strong>. Past attendance and payroll stay untouched.
+              </p>
             </div>
 
-            <form onSubmit={handleDeactivateEmployee} className="flex-1 overflow-y-auto p-6 space-y-4">
+            {/* Impact Preview */}
+            <div className="p-3.5 rounded-lg bg-amber-50 border border-amber-200 text-xs space-y-2">
+              <div className="font-bold text-amber-950 flex items-center justify-between">
+                <span>Deactivation Impact Preview</span>
+                {loadingImpact && <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-700" />}
+              </div>
+              {deactivateImpact ? (
+                <ul className="space-y-1 text-[11px] text-amber-900">
+                  <li>
+                    • <strong>Login Access:</strong> Web &amp; mobile account (if linked) will be disabled immediately and all active sessions revoked.
+                  </li>
+                  <li>
+                    • <strong>Base Roster Slots:</strong> {deactivateImpact.base_roster_slots ?? 0} recurring slot(s) removed (future days flagged Needs Cover).
+                  </li>
+                  <li>
+                    • <strong>Scheduled Shifts (≥ {deactivateImpact.effective_date}):</strong> {deactivateImpact.future_active_shifts ?? 0} shift(s) cancelled &amp; flagged Needs Cover.
+                  </li>
+                  <li>
+                    • <strong>Standing Assignments:</strong> {deactivateImpact.active_standing_assignments ?? 0} active assignment(s) ended.
+                  </li>
+                  <li>
+                    • <strong>Pending Requests:</strong> {deactivateImpact.pending_leave_requests ?? 0} leave(s) and {deactivateImpact.pending_reassignment_requests ?? 0} reassignment(s) cancelled.
+                  </li>
+                  {(deactivateImpact.active_direct_reports ?? 0) > 0 && (
+                    <li className="text-rose-800 font-semibold">
+                      • Direct Reports: {deactivateImpact.active_direct_reports} employee(s) report to this manager — remember to reassign their supervisor.
+                    </li>
+                  )}
+                </ul>
+              ) : (
+                <p className="text-[11px] text-amber-700">Calculating impact...</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Reason for Deactivation <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={deactivateReason}
+                onChange={(e) => setDeactivateReason(e.target.value)}
+                placeholder="e.g. Resigned / Contract ended / Transferred"
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Effective Date (Optional — defaults to Today)
-                </label>
-                <input
-                  type="date"
-                  value={deactivateEffectiveDate}
-                  onChange={(e) => setDeactivateEffectiveDate(e.target.value)}
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
-                />
-                <p className="text-[11px] text-slate-500 mt-1">
-                  Only schedules on or after this date will be cancelled and marked as <strong>Needs Cover</strong>. Past attendance and payroll stay untouched.
-                </p>
-              </div>
-
-              {/* Impact Preview */}
-              <div className="p-3.5 rounded-lg bg-amber-50 border border-amber-200 text-xs space-y-2">
-                <div className="font-bold text-amber-950 flex items-center justify-between">
-                  <span>Deactivation Impact Preview</span>
-                  {loadingImpact && <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-700" />}
-                </div>
-                {deactivateImpact ? (
-                  <ul className="space-y-1 text-[11px] text-amber-900">
-                    <li>
-                      • <strong>Login Access:</strong> Web &amp; mobile account (if linked) will be disabled immediately and all active sessions revoked.
-                    </li>
-                    <li>
-                      • <strong>Base Roster Slots:</strong> {deactivateImpact.base_roster_slots ?? 0} recurring slot(s) removed (future days flagged Needs Cover).
-                    </li>
-                    <li>
-                      • <strong>Scheduled Shifts (≥ {deactivateImpact.effective_date}):</strong> {deactivateImpact.future_active_shifts ?? 0} shift(s) cancelled &amp; flagged Needs Cover.
-                    </li>
-                    <li>
-                      • <strong>Standing Assignments:</strong> {deactivateImpact.active_standing_assignments ?? 0} active assignment(s) ended.
-                    </li>
-                    <li>
-                      • <strong>Pending Requests:</strong> {deactivateImpact.pending_leave_requests ?? 0} leave(s) and {deactivateImpact.pending_reassignment_requests ?? 0} reassignment(s) cancelled.
-                    </li>
-                    {(deactivateImpact.active_direct_reports ?? 0) > 0 && (
-                      <li className="text-rose-800 font-semibold">
-                        • Direct Reports: {deactivateImpact.active_direct_reports} employee(s) report to this manager — remember to reassign their supervisor.
-                      </li>
-                    )}
-                  </ul>
-                ) : (
-                  <p className="text-[11px] text-amber-700">Calculating impact...</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Reason for Deactivation <span className="text-rose-500">*</span>
+                  Type <span className="font-mono font-bold text-rose-700">DEACTIVATE</span> to confirm <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
                   required
-                  value={deactivateReason}
-                  onChange={(e) => setDeactivateReason(e.target.value)}
-                  placeholder="e.g. Resigned / Contract ended / Transferred"
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
+                  value={deactivateConfirmText}
+                  onChange={(e) => setDeactivateConfirmText(e.target.value)}
+                  placeholder="DEACTIVATE"
+                  className="w-full px-3 py-2 text-xs font-mono border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
                 />
               </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Type <span className="font-mono font-bold text-rose-700">DEACTIVATE</span> to confirm <span className="text-rose-500">*</span>
-                  </label>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Admin Password <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
                   <input
-                    type="text"
+                    type={showDeactivatePassword ? "text" : "password"}
                     required
-                    value={deactivateConfirmText}
-                    onChange={(e) => setDeactivateConfirmText(e.target.value)}
-                    placeholder="DEACTIVATE"
-                    className="w-full px-3 py-2 text-xs font-mono border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
+                    value={deactivatePassword}
+                    onChange={(e) => setDeactivatePassword(e.target.value)}
+                    placeholder="Enter your password"
+                    className="w-full px-3 py-2 pr-9 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
                   />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Admin Password <span className="text-rose-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showDeactivatePassword ? "text" : "password"}
-                      required
-                      value={deactivatePassword}
-                      onChange={(e) => setDeactivatePassword(e.target.value)}
-                      placeholder="Enter your password"
-                      className="w-full px-3 py-2 pr-9 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowDeactivatePassword((p) => !p)}
-                      className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                    >
-                      {showDeactivatePassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowDeactivatePassword((p) => !p)}
+                    className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    {showDeactivatePassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
                 </div>
               </div>
+            </div>
 
-              {deactivateError && (
-                <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-800">
-                  {deactivateError}
-                </div>
-              )}
-
-              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setDeactivateModalOpen(false)}
-                  className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={
-                    submittingDeactivate ||
-                    deactivateConfirmText.trim() !== "DEACTIVATE" ||
-                    !deactivateReason.trim() ||
-                    !deactivatePassword
-                  }
-                  className="px-4 py-2 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white flex items-center gap-1.5 cursor-pointer"
-                >
-                  {submittingDeactivate && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  Confirm Deactivation
-                </button>
+            {deactivateError && (
+              <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-800">
+                {deactivateError}
               </div>
-            </form>
-          </div>
-        </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setDeactivateModalOpen(false)}
+                className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={
+                  submittingDeactivate ||
+                  deactivateConfirmText.trim() !== "DEACTIVATE" ||
+                  !deactivateReason.trim() ||
+                  !deactivatePassword
+                }
+                className="px-4 py-2 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white flex items-center gap-1.5 cursor-pointer"
+              >
+                {submittingDeactivate && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Confirm Deactivation
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
 
       {/* Reactivate Employee Modal (Option A — Clean, Admin Only) */}
       {reactivateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
-          <div className="bg-white rounded-xl shadow-2xl border border-emerald-200 w-full max-w-lg overflow-hidden">
-            <div className="px-6 py-4 border-b border-emerald-200 bg-emerald-50 flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-bold text-emerald-900 flex items-center gap-2">
-                  <RotateCcw className="h-5 w-5 text-emerald-600" />
-                  Reactivate Employee (Clean)
-                </h3>
-                <p className="text-xs text-emerald-700 mt-0.5">
-                  {employee.name} ({employee.tally_id})
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setReactivateModalOpen(false)}
-                className="p-1.5 rounded-lg text-emerald-500 hover:text-emerald-700 hover:bg-emerald-100 cursor-pointer"
-              >
-                <X className="h-5 w-5" />
-              </button>
+        <Modal
+          open
+          onClose={() => setReactivateModalOpen(false)}
+          size="md"
+          title={<span className="inline-flex items-center gap-2"><RotateCcw className="h-5 w-5 text-emerald-600" /> Reactivate Employee (Clean)</span>}
+          description={<>{employee.name} ({employee.tally_id})</>}
+        >
+          <form onSubmit={handleReactivateEmployee} className="p-6 space-y-4">
+            <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 space-y-1">
+              <div className="font-bold">Clean Reactivation (Option A):</div>
+              <p className="text-[11px]">
+                This restores the employee&apos;s active status, visibility across pages, and login access. <strong>No previously cancelled schedules or base roster slots are restored</strong>, preventing any double-booking with cover workers. Assign new shifts manually in the Base or Operational Planner.
+              </p>
             </div>
 
-            <form onSubmit={handleReactivateEmployee} className="p-6 space-y-4">
-              <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 space-y-1">
-                <div className="font-bold">Clean Reactivation (Option A):</div>
-                <p className="text-[11px]">
-                  This restores the employee&apos;s active status, visibility across pages, and login access. <strong>No previously cancelled schedules or base roster slots are restored</strong>, preventing any double-booking with cover workers. Assign new shifts manually in the Base or Operational Planner.
-                </p>
-              </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Reason for Reactivation <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={reactivateReason}
+                onChange={(e) => setReactivateReason(e.target.value)}
+                placeholder="e.g. Rehired / Returned from extended absence"
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
 
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Reason for Reactivation <span className="text-rose-500">*</span>
+                  Type <span className="font-mono font-bold text-emerald-700">REACTIVATE</span> <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
                   required
-                  value={reactivateReason}
-                  onChange={(e) => setReactivateReason(e.target.value)}
-                  placeholder="e.g. Rehired / Returned from extended absence"
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  value={reactivateConfirmText}
+                  onChange={(e) => setReactivateConfirmText(e.target.value)}
+                  placeholder="REACTIVATE"
+                  className="w-full px-3 py-2 text-xs font-mono border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Type <span className="font-mono font-bold text-emerald-700">REACTIVATE</span> <span className="text-rose-500">*</span>
-                  </label>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Admin Password <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
                   <input
-                    type="text"
+                    type={showReactivatePassword ? "text" : "password"}
                     required
-                    value={reactivateConfirmText}
-                    onChange={(e) => setReactivateConfirmText(e.target.value)}
-                    placeholder="REACTIVATE"
-                    className="w-full px-3 py-2 text-xs font-mono border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    value={reactivatePassword}
+                    onChange={(e) => setReactivatePassword(e.target.value)}
+                    placeholder="Enter your password"
+                    className="w-full px-3 py-2 pr-9 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Admin Password <span className="text-rose-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showReactivatePassword ? "text" : "password"}
-                      required
-                      value={reactivatePassword}
-                      onChange={(e) => setReactivatePassword(e.target.value)}
-                      placeholder="Enter your password"
-                      className="w-full px-3 py-2 pr-9 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowReactivatePassword((p) => !p)}
-                      className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                    >
-                      {showReactivatePassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowReactivatePassword((p) => !p)}
+                    className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    {showReactivatePassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
                 </div>
               </div>
+            </div>
 
-              {reactivateError && (
-                <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-800">
-                  {reactivateError}
-                </div>
-              )}
-
-              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setReactivateModalOpen(false)}
-                  className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={
-                    submittingReactivate ||
-                    reactivateConfirmText.trim() !== "REACTIVATE" ||
-                    !reactivateReason.trim() ||
-                    !reactivatePassword
-                  }
-                  className="px-4 py-2 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white flex items-center gap-1.5 cursor-pointer"
-                >
-                  {submittingReactivate && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  Confirm Reactivation
-                </button>
+            {reactivateError && (
+              <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-800">
+                {reactivateError}
               </div>
-            </form>
-          </div>
-        </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setReactivateModalOpen(false)}
+                className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={
+                  submittingReactivate ||
+                  reactivateConfirmText.trim() !== "REACTIVATE" ||
+                  !reactivateReason.trim() ||
+                  !reactivatePassword
+                }
+                className="px-4 py-2 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white flex items-center gap-1.5 cursor-pointer"
+              >
+                {submittingReactivate && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Confirm Reactivation
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
 
       {/* Batch 4: Hierarchy Violations Modal (Admin only) */}
       {violationsModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-xl border border-slate-200 space-y-4 max-h-[85vh] flex flex-col">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div>
-                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5 text-amber-600" />
-                  Hierarchy Violations Audit (DEC-10)
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Active reporting lines that violate the fixed crew hierarchy (worker direct supt/eng links or non-supervisor managers).
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleExportViolationsExcel}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 transition"
-                  title="Export violations to Excel"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  Export Excel (.xlsx)
-                </button>
-                <button
+        <Modal
+          open
+          onClose={() => setViolationsModalOpen(false)}
+          size="xl"
+          title={<span className="inline-flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-amber-600" /> Hierarchy Violations Audit (DEC-10)</span>}
+          description="Active reporting lines that violate the fixed crew hierarchy (worker direct supt/eng links or non-supervisor managers)."
+          footer={
+            <div className="flex w-full flex-wrap items-center justify-end gap-2">
+              <Button variant="secondary" icon={<Download className="h-3.5 w-3.5" />} onClick={handleExportViolationsExcel}>
+                Export Excel (.xlsx)
+              </Button>
+              <button
                   type="button"
                   onClick={() => setViolationsModalOpen(false)}
-                  className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition"
                 >
-                  <X className="h-5 w-5" />
+                  Close
                 </button>
-              </div>
             </div>
-
-            <div className="flex-1 overflow-y-auto">
-              {loadingViolations ? (
-                <div className="flex items-center justify-center py-12 text-slate-500 text-xs gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />
-                  Scanning active reporting lines...
-                </div>
-              ) : hierarchyViolations.length === 0 ? (
-                <div className="p-8 text-center bg-emerald-50/50 border border-emerald-100 rounded-xl space-y-2">
-                  <CheckCircle className="h-8 w-8 text-emerald-600 mx-auto" />
-                  <p className="text-sm font-semibold text-emerald-900">
-                    No Hierarchy Violations Found
-                  </p>
-                  <p className="text-xs text-emerald-700">
-                    All active reporting lines cleanly adhere to the fixed crew hierarchy structure.
-                  </p>
-                </div>
-              ) : (
-                <div className="border border-slate-200 rounded-xl overflow-hidden">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
-                      <tr>
-                        <th className="p-3">Employee (Subordinate)</th>
-                        <th className="p-3">Direct Manager</th>
-                        <th className="p-3">Relationship</th>
-                        <th className="p-3">Violation Details</th>
-                        <th className="p-3 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {hierarchyViolations.map((v) => (
-                        <tr key={v.reporting_line_id} className="hover:bg-slate-50/80 transition">
-                          <td className="p-3">
-                            <div className="font-semibold text-slate-900">{v.employee_name}</div>
-                            <div className="text-2xs text-slate-500 font-mono">Tally: {v.employee_tally_id} ({v.employee_role})</div>
-                          </td>
-                          <td className="p-3">
-                            <div className="font-semibold text-slate-900">{v.manager_name}</div>
-                            <div className="text-2xs text-slate-500 font-mono">Tally: {v.manager_tally_id} ({v.manager_role})</div>
-                          </td>
-                          <td className="p-3">
-                            <span className="px-2 py-0.5 rounded text-2xs font-mono font-medium border bg-amber-50 text-amber-700 border-amber-200">
-                              {v.relationship}
-                            </span>
-                          </td>
-                          <td className="p-3 text-slate-600 max-w-xs">
-                            <div className="font-medium text-amber-900">{v.violation_code}</div>
-                            <div className="text-2xs mt-0.5">{v.violation_message}</div>
-                            {v.supervisor_name && (
-                              <div className="text-2xs text-slate-500 mt-1">
-                                Worker's Supervisor: <span className="font-medium text-slate-700">{v.supervisor_name} ({v.supervisor_tally_id})</span>
-                                {v.supervisor_already_has_manager && " (Already linked)"}
-                              </div>
-                            )}
-                          </td>
-                          <td className="p-3 text-right space-x-1.5 whitespace-nowrap">
-                            {v.can_move_to_supervisor && (
-                              <button
-                                type="button"
-                                disabled={actionInProgress === v.reporting_line_id}
-                                onClick={() => handleMoveViolationToSupervisor(v.reporting_line_id)}
-                                className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-2xs font-semibold disabled:opacity-40 transition"
-                                title="Add link to supervisor and deactivate direct link on worker"
-                              >
-                                {actionInProgress === v.reporting_line_id ? "Moving..." : "Move to Supervisor"}
-                              </button>
-                            )}
+          }
+        >
+          <div>
+            {loadingViolations ? (
+              <div className="flex items-center justify-center py-12 text-slate-500 text-xs gap-2">
+                <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />
+                Scanning active reporting lines...
+              </div>
+            ) : hierarchyViolations.length === 0 ? (
+              <div className="p-8 text-center bg-emerald-50/50 border border-emerald-100 rounded-xl space-y-2">
+                <CheckCircle className="h-8 w-8 text-emerald-600 mx-auto" />
+                <p className="text-sm font-semibold text-emerald-900">
+                  No Hierarchy Violations Found
+                </p>
+                <p className="text-xs text-emerald-700">
+                  All active reporting lines cleanly adhere to the fixed crew hierarchy structure.
+                </p>
+              </div>
+            ) : (
+              <div className="border border-slate-200 rounded-xl overflow-hidden">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
+                    <tr>
+                      <th className="p-3">Employee (Subordinate)</th>
+                      <th className="p-3">Direct Manager</th>
+                      <th className="p-3">Relationship</th>
+                      <th className="p-3">Violation Details</th>
+                      <th className="p-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {hierarchyViolations.map((v) => (
+                      <tr key={v.reporting_line_id} className="hover:bg-slate-50/80 transition">
+                        <td className="p-3">
+                          <div className="font-semibold text-slate-900">{v.employee_name}</div>
+                          <div className="text-2xs text-slate-500 font-mono">Tally: {v.employee_tally_id} ({v.employee_role})</div>
+                        </td>
+                        <td className="p-3">
+                          <div className="font-semibold text-slate-900">{v.manager_name}</div>
+                          <div className="text-2xs text-slate-500 font-mono">Tally: {v.manager_tally_id} ({v.manager_role})</div>
+                        </td>
+                        <td className="p-3">
+                          <span className="px-2 py-0.5 rounded text-2xs font-mono font-medium border bg-amber-50 text-amber-700 border-amber-200">
+                            {v.relationship}
+                          </span>
+                        </td>
+                        <td className="p-3 text-slate-600 max-w-xs">
+                          <div className="font-medium text-amber-900">{v.violation_code}</div>
+                          <div className="text-2xs mt-0.5">{v.violation_message}</div>
+                          {v.supervisor_name && (
+                            <div className="text-2xs text-slate-500 mt-1">
+                              Worker's Supervisor: <span className="font-medium text-slate-700">{v.supervisor_name} ({v.supervisor_tally_id})</span>
+                              {v.supervisor_already_has_manager && " (Already linked)"}
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-3 text-right space-x-1.5 whitespace-nowrap">
+                          {v.can_move_to_supervisor && (
                             <button
                               type="button"
                               disabled={actionInProgress === v.reporting_line_id}
-                              onClick={() => handleDeactivateViolation(v.reporting_line_id)}
-                              className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg text-2xs font-semibold disabled:opacity-40 transition"
-                              title="Deactivate non-conforming reporting line"
+                              onClick={() => handleMoveViolationToSupervisor(v.reporting_line_id)}
+                              className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-2xs font-semibold disabled:opacity-40 transition"
+                              title="Add link to supervisor and deactivate direct link on worker"
                             >
-                              {actionInProgress === v.reporting_line_id ? "Deactivating..." : "Deactivate"}
+                              {actionInProgress === v.reporting_line_id ? "Moving..." : "Move to Supervisor"}
                             </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-end pt-2 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setViolationsModalOpen(false)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition"
-              >
-                Close
-              </button>
-            </div>
+                          )}
+                          <button
+                            type="button"
+                            disabled={actionInProgress === v.reporting_line_id}
+                            onClick={() => handleDeactivateViolation(v.reporting_line_id)}
+                            className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg text-2xs font-semibold disabled:opacity-40 transition"
+                            title="Deactivate non-conforming reporting line"
+                          >
+                            {actionInProgress === v.reporting_line_id ? "Deactivating..." : "Deactivate"}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Edit Role / Grade / Driver Details Modal */}
       {editDetailsModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-md w-full p-6 space-y-4">
-            <div className="flex items-center justify-between border-b pb-3">
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <Pencil className="h-5 w-5 text-indigo-600" />
-                Edit Profile Details ({employee.tally_id})
-              </h3>
+        <Modal
+          open
+          onClose={() => setEditDetailsModalOpen(false)}
+          size="md"
+          title={<span className="inline-flex items-center gap-2"><Pencil className="h-5 w-5 text-indigo-600" /> Edit Profile Details ({employee.tally_id})</span>}
+        >
+          <form onSubmit={handleSaveProfileDetails} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Staff Grade Description (Designation)
+              </label>
+              {employee.role === "SUPERVISOR" || employee.role === "SUPERINTENDENT" ? (
+                <input
+                  type="text"
+                  disabled
+                  value={employee.role === "SUPERVISOR" ? "Supervisor" : "Superintendent"}
+                  className="w-full border border-slate-200 bg-slate-50 text-slate-500 rounded-lg p-2 text-xs font-medium cursor-not-allowed"
+                />
+              ) : employee.role === "ENGINEER" ? (
+                // Locked for staff roles (client meeting 19 Nov; the server refuses a change).
+                <input
+                  type="text"
+                  disabled
+                  value={detailDesig || "—"}
+                  className="w-full border border-slate-200 bg-slate-50 text-slate-500 rounded-lg p-2 text-xs font-medium cursor-not-allowed"
+                />
+              ) : (
+                <LookupSelect
+                  listKey="staff_grade_description"
+                  value={detailDesig}
+                  onChange={setDetailDesig}
+                  placeholder="None / Unassigned"
+                  inputClassName="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Grade Code
+              </label>
+              <LookupSelect
+                listKey="grade_code"
+                value={detailGrade}
+                onChange={setDetailGrade}
+                placeholder="None / Unassigned"
+                inputClassName="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Authorized Company Driver
+              </label>
+              <select
+                value={detailDriver ? "true" : "false"}
+                onChange={(e) => setDetailDriver(e.target.value === "true")}
+                className="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="false">No (Non-Driver)</option>
+                <option value="true">Yes (Authorized Driver)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Reason for Change <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="e.g. Annual promotion, DL renewal, role reassignment"
+                value={detailReason}
+                onChange={(e) => setDetailReason(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t">
               <button
                 type="button"
                 onClick={() => setEditDetailsModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1"
+                className="px-4 py-2 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-50 transition"
               >
-                <X className="h-5 w-5" />
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={savingDetails}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-xs transition disabled:opacity-50"
+              >
+                {savingDetails ? "Saving..." : "Save Changes"}
               </button>
             </div>
-
-            <form onSubmit={handleSaveProfileDetails} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Staff Grade Description (Designation)
-                </label>
-                {employee.role === "SUPERVISOR" || employee.role === "SUPERINTENDENT" ? (
-                  <input
-                    type="text"
-                    disabled
-                    value={employee.role === "SUPERVISOR" ? "Supervisor" : "Superintendent"}
-                    className="w-full border border-slate-200 bg-slate-50 text-slate-500 rounded-lg p-2 text-xs font-medium cursor-not-allowed"
-                  />
-                ) : employee.role === "ENGINEER" ? (
-                  // Locked for staff roles (client meeting 19 Nov; the server refuses a change).
-                  <input
-                    type="text"
-                    disabled
-                    value={detailDesig || "—"}
-                    className="w-full border border-slate-200 bg-slate-50 text-slate-500 rounded-lg p-2 text-xs font-medium cursor-not-allowed"
-                  />
-                ) : (
-                  <LookupSelect
-                    listKey="staff_grade_description"
-                    value={detailDesig}
-                    onChange={setDetailDesig}
-                    placeholder="None / Unassigned"
-                    inputClassName="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                )}
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Grade Code
-                </label>
-                <LookupSelect
-                  listKey="grade_code"
-                  value={detailGrade}
-                  onChange={setDetailGrade}
-                  placeholder="None / Unassigned"
-                  inputClassName="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Authorized Company Driver
-                </label>
-                <select
-                  value={detailDriver ? "true" : "false"}
-                  onChange={(e) => setDetailDriver(e.target.value === "true")}
-                  className="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="false">No (Non-Driver)</option>
-                  <option value="true">Yes (Authorized Driver)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Reason for Change <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Annual promotion, DL renewal, role reassignment"
-                  value={detailReason}
-                  onChange={(e) => setDetailReason(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2 border-t">
-                <button
-                  type="button"
-                  onClick={() => setEditDetailsModalOpen(false)}
-                  className="px-4 py-2 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-50 transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={savingDetails}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-xs transition disabled:opacity-50"
-                >
-                  {savingDetails ? "Saving..." : "Save Changes"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+          </form>
+        </Modal>
       )}
 
       {/* Attribute History Modal */}
       {attributeHistoryModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-2xl w-full p-6 space-y-4 max-h-[85vh] flex flex-col">
-            <div className="flex items-center justify-between border-b pb-3">
-              <div>
-                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <History className="h-5 w-5 text-indigo-600" />
-                  Attribute Change History ({employee.name} - {employee.tally_id})
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Immutable audit trail of designation, grade, and driver status modifications.
-                </p>
+        <Modal
+          open
+          onClose={() => setAttributeHistoryModalOpen(false)}
+          size="lg"
+          title={<span className="inline-flex items-center gap-2"><History className="h-5 w-5 text-indigo-600" /> Attribute Change History ({employee.name} - {employee.tally_id})</span>}
+          description="Immutable audit trail of designation, grade, and driver status modifications."
+          footer={
+            <div className="flex w-full flex-wrap items-center justify-end gap-2">
+              <button
+                  type="button"
+                  onClick={() => setAttributeHistoryModalOpen(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition"
+                >
+                  Close
+                </button>
+            </div>
+          }
+        >
+          <div>
+            {historyLoading ? (
+              <div className="flex items-center justify-center py-12 text-slate-500 text-xs gap-2">
+                <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />
+                Loading history logs...
               </div>
-              <button
-                type="button"
-                onClick={() => setAttributeHistoryModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto">
-              {historyLoading ? (
-                <div className="flex items-center justify-center py-12 text-slate-500 text-xs gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />
-                  Loading history logs...
-                </div>
-              ) : attributeHistory.length === 0 ? (
-                <div className="p-8 text-center bg-slate-50 border border-slate-200 rounded-xl text-slate-500 text-xs">
-                  No attribute changes recorded for this employee yet.
-                </div>
-              ) : (
-                <div className="border border-slate-200 rounded-xl overflow-hidden">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
-                      <tr>
-                        <th className="p-3">Attribute</th>
-                        <th className="p-3">Previous</th>
-                        <th className="p-3">New Value</th>
-                        <th className="p-3">Effective Date</th>
-                        <th className="p-3">Reason / Author</th>
+            ) : attributeHistory.length === 0 ? (
+              <div className="p-8 text-center bg-slate-50 border border-slate-200 rounded-xl text-slate-500 text-xs">
+                No attribute changes recorded for this employee yet.
+              </div>
+            ) : (
+              <div className="border border-slate-200 rounded-xl overflow-hidden">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
+                    <tr>
+                      <th className="p-3">Attribute</th>
+                      <th className="p-3">Previous</th>
+                      <th className="p-3">New Value</th>
+                      <th className="p-3">Effective Date</th>
+                      <th className="p-3">Reason / Author</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {attributeHistory.map((item) => (
+                      <tr key={item.id} className="hover:bg-slate-50 transition">
+                        <td className="p-3 font-semibold text-slate-900 capitalize">
+                          {item.attribute_name.replace(/_/g, " ")}
+                        </td>
+                        <td className="p-3 text-slate-500 font-mono">
+                          {item.old_value || "—"}
+                        </td>
+                        <td className="p-3 font-mono font-bold text-indigo-700">
+                          {item.new_value}
+                        </td>
+                        <td className="p-3 text-slate-600">
+                          {item.effective_from}
+                        </td>
+                        <td className="p-3 text-slate-600">
+                          <div className="font-medium text-slate-800">{item.reason}</div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">
+                            by {item.actor_role} • {new Date(item.created_at).toLocaleString()}
+                          </div>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {attributeHistory.map((item) => (
-                        <tr key={item.id} className="hover:bg-slate-50 transition">
-                          <td className="p-3 font-semibold text-slate-900 capitalize">
-                            {item.attribute_name.replace(/_/g, " ")}
-                          </td>
-                          <td className="p-3 text-slate-500 font-mono">
-                            {item.old_value || "—"}
-                          </td>
-                          <td className="p-3 font-mono font-bold text-indigo-700">
-                            {item.new_value}
-                          </td>
-                          <td className="p-3 text-slate-600">
-                            {item.effective_from}
-                          </td>
-                          <td className="p-3 text-slate-600">
-                            <div className="font-medium text-slate-800">{item.reason}</div>
-                            <div className="text-[10px] text-slate-400 mt-0.5">
-                              by {item.actor_role} • {new Date(item.created_at).toLocaleString()}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-end pt-2 border-t">
-              <button
-                type="button"
-                onClick={() => setAttributeHistoryModalOpen(false)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition"
-              >
-                Close
-              </button>
-            </div>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

@@ -13,9 +13,19 @@ import {
   TrendingUp,
   Radio,
   FileText,
+  Smartphone,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { mapDashboardSummary, type DashboardSummaryApi } from "../features/dashboard/summary";
+import { ActionSection, type ActionRow } from "../features/dashboard/ActionSection";
+import {
+  ACTION_SECTIONS,
+  DEVICE_ALERT_TYPES,
+  PREVIEW_SIZE,
+  newest,
+  sectionsForRole,
+  type ActionSectionKey,
+} from "../features/dashboard/actionSections";
 
 interface AlertItem {
   id: string;
@@ -34,15 +44,24 @@ export const Dashboard: React.FC = () => {
   const { token, user } = useAuth();
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [dashboardSummary, setDashboardSummary] = useState<DashboardSummaryApi | null>(null);
-  const [pendingBoundaryCount, setPendingBoundaryCount] = useState<number>(0);
+  const [boundaryQueue, setBoundaryQueue] = useState<{ count: number; items: any[] }>({ count: 0, items: [] });
+  const [approvalCounts, setApprovalCounts] = useState<{ leave: number; reassignments: number; attendance: number }>({
+    leave: 0,
+    reassignments: 0,
+    attendance: 0,
+  });
   const [pendingLeaves, setPendingLeaves] = useState<any[]>([]);
   const [pendingReassigns, setPendingReassigns] = useState<any[]>([]);
-  const [pendingCounts, setPendingCounts] = useState<{ leave: number; reassignments: number } | null>(null);
+  const [attendanceRows, setAttendanceRows] = useState<any[]>([]);
+  const [visits, setVisits] = useState<{ count: number; items: any[] }>({ count: 0, items: [] });
+  const [unassignedList, setUnassignedList] = useState<any[]>([]);
   const [myRequests, setMyRequests] = useState<any[]>([]);
+
+  const sections = new Set(sectionsForRole(user?.role));
 
   useEffect(() => {
     if (!token) return;
-    const fetchAlertsAndBoundaries = async () => {
+    const load = async () => {
       const headers = { Authorization: `Bearer ${token}` };
       const getJson = async (url: string) => {
         try {
@@ -53,29 +72,35 @@ export const Dashboard: React.FC = () => {
           return null;
         }
       };
-      const isApprover = user?.role === "ADMIN" || user?.role === "ENGINEER";
+      const has = (k: Parameters<typeof sections.has>[0]) => sections.has(k);
       const isSupervisor = user?.role === "SUPERVISOR";
+      const n = PREVIEW_SIZE;
       // All dashboard calls start together (Batch 9 step 2); none depends on another.
-      const [alertData, sumData, bData, leavePage, reassignPage, reassignList, leaveList] =
+      const [alertData, sumData, bData, leavePage, reassignPage, attPage, visitPage, unassigned, reassignList, leaveList] =
         await Promise.all([
           getJson("/api/v1/alerts"),
           getJson("/api/v1/dashboard/summary"),
-          isApprover ? getJson("/api/v1/boundary-queue?status=UNSET") : null,
-          // Previews only: 4 items each, with the pending counts for the headers.
-          isApprover ? getJson("/api/v1/approvals?status=PENDING&type=leave&limit=4") : null,
-          isApprover ? getJson("/api/v1/approvals?status=PENDING&type=reassignments&limit=4") : null,
+          has("boundary") ? getJson(`/api/v1/boundary-queue?status=UNSET&limit=${n}`) : null,
+          // Previews: 5 items each; the counts come with the first page.
+          has("leave") ? getJson(`/api/v1/approvals?status=PENDING&type=leave&limit=${n}`) : null,
+          has("reassignment") ? getJson(`/api/v1/approvals?status=PENDING&type=reassignments&limit=${n}`) : null,
+          has("attendance") ? getJson(`/api/v1/approvals?status=PENDING&type=attendance&limit=${n}`) : null,
+          has("pendingVisits") ? getJson(`/api/v1/pending-visits?status=OPEN&limit=${n}`) : null,
+          has("unassigned") ? getJson(`/api/v1/worksites?unassigned=true&limit=${n}`) : null,
           isSupervisor ? getJson("/api/v1/reassignment-requests") : null,
           isSupervisor ? getJson("/api/v1/leave-requests") : null,
         ]);
 
       setAlerts(alertData || []);
       if (sumData) setDashboardSummary(sumData);
-      if (bData) setPendingBoundaryCount(bData.unset_count ?? bData.total_count ?? 0);
-      if (leavePage) {
-        setPendingLeaves(leavePage.leave_requests || []);
-        setPendingCounts(leavePage.counts ?? null);
-      }
+      if (bData) setBoundaryQueue({ count: bData.unset_count ?? bData.total_count ?? 0, items: bData.items || [] });
+      const counts = leavePage?.counts ?? reassignPage?.counts ?? attPage?.counts;
+      if (counts) setApprovalCounts({ leave: counts.leave, reassignments: counts.reassignments, attendance: counts.attendance });
+      if (leavePage) setPendingLeaves(leavePage.leave_requests || []);
       if (reassignPage) setPendingReassigns(reassignPage.reassignment_requests || []);
+      if (attPage) setAttendanceRows(attPage.attendance_rows || []);
+      if (visitPage) setVisits({ count: visitPage.open_count ?? 0, items: visitPage.items || [] });
+      if (unassigned) setUnassignedList(unassigned);
       if (isSupervisor) {
         const combined: any[] = [
           ...(reassignList || []).map((item: any) => ({ ...item, category_kind: "REASSIGNMENT" })),
@@ -89,17 +114,164 @@ export const Dashboard: React.FC = () => {
         setMyRequests(combined.slice(0, 10));
       }
     };
-    fetchAlertsAndBoundaries();
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, user]);
 
-  // Header counts are the real pending totals; the lists are 4-item previews.
-  const pendingLeaveCount = pendingCounts?.leave ?? pendingLeaves.length;
-  const pendingReassignCount = pendingCounts?.reassignments ?? pendingReassigns.length;
   const coverAlerts = alerts.filter((a) => a.alert_type === "COVER_NEEDED");
   const docExpiryAlerts = alerts.filter((a) => a.alert_type === "DOC_EXPIRY");
+  const deviceAlerts = alerts.filter((a) => DEVICE_ALERT_TYPES.has(a.alert_type));
   // DEC-57: Admin-only count of worksites nobody but Admin can see.
   const cards = mapDashboardSummary(dashboardSummary);
   const unassignedWorksites = cards.unassignedWorksites;
+
+  const alertRows = (list: AlertItem[]): ActionRow[] =>
+    newest(list).map((a) => ({
+      id: a.id,
+      primary: a.title,
+      secondary: a.message,
+      meta: new Date(a.created_at).toLocaleDateString(),
+    }));
+
+  const icon = (I: React.ComponentType<{ className?: string }>, cls: string) => <I className={`h-4 w-4 ${cls}`} />;
+
+  const sectionNodes: Record<ActionSectionKey, React.ReactNode> = {
+    docExpiry: (
+      <ActionSection
+        title="Document expiry"
+        icon={icon(FileText, "text-amber-600")}
+        count={docExpiryAlerts.length}
+        rows={newest(docExpiryAlerts).map((a) => {
+          const daysLeft = Number(a.details?.days_left ?? 0);
+          return {
+            id: a.id,
+            primary: a.title,
+            secondary: `Expiry: ${a.details?.expiry_date || "N/A"}`,
+            meta: (
+              <span className={daysLeft < 0 ? "font-bold text-rose-700" : "font-semibold text-amber-700"}>
+                {daysLeft < 0 ? `Expired ${Math.abs(daysLeft)}d ago` : `${daysLeft}d left`}
+              </span>
+            ),
+          };
+        })}
+        viewAll={{ to: "/documents" }}
+        emptyText="No documents expiring soon."
+      />
+    ),
+    cover: (
+      <ActionSection
+        title="Cover needed"
+        tone="rose"
+        icon={icon(Users, "text-rose-600")}
+        count={coverAlerts.length}
+        rows={alertRows(coverAlerts)}
+        viewAll={{ to: "/operational-planner", hash: "staffing-gaps" }}
+        emptyText="No leave shifts need cover."
+      />
+    ),
+    leave: (
+      <ActionSection
+        title="Leave approval"
+        tone="indigo"
+        icon={icon(Calendar, "text-blue-600")}
+        count={approvalCounts.leave}
+        rows={pendingLeaves.map((l: any) => ({
+          id: l.id,
+          primary: l.employee_name || l.employee_id,
+          secondary: `${l.from_date} to ${l.to_date} · ${l.leave_type}`,
+        }))}
+        viewAll={{ to: "/approvals", search: { tab: "leave" } }}
+        emptyText="No leave requests waiting."
+      />
+    ),
+    reassignment: (
+      <ActionSection
+        title="Reassignment approval"
+        tone="indigo"
+        icon={icon(Clock, "text-purple-600")}
+        count={approvalCounts.reassignments}
+        rows={pendingReassigns.map((r: any) => ({
+          id: r.id,
+          primary:
+            r.reassignment_type === "REPLACE"
+              ? `${r.original_employee_name} → ${r.new_employee_name}`
+              : r.new_employee_name || r.original_employee_name,
+          secondary: `${r.date_from === r.date_to ? r.date_from : `${r.date_from} to ${r.date_to}`} · ${
+            r.target_job_name || r.target_job_number || "Job"
+          }`,
+          meta: r.reassignment_type,
+        }))}
+        viewAll={{ to: "/approvals", search: { tab: "reassignments" } }}
+        emptyText="No reassignments waiting."
+      />
+    ),
+    attendance: (
+      <ActionSection
+        title="Attendance review"
+        tone="indigo"
+        icon={icon(CheckSquare, "text-indigo-600")}
+        count={approvalCounts.attendance}
+        rows={attendanceRows.map((r: any) => ({
+          id: r.id,
+          primary: r.employee_name || r.employee_id,
+          secondary: `${r.work_date} · ${(r.review_reasons || []).join(", ") || r.business_status}`,
+        }))}
+        viewAll={{ to: "/approvals", search: { tab: "attendance" } }}
+        emptyText="No attendance waiting for review."
+      />
+    ),
+    pendingVisits: (
+      <ActionSection
+        title="Pending visits"
+        icon={icon(AlertTriangle, "text-amber-600")}
+        count={visits.count}
+        rows={visits.items.map((v: any) => ({
+          id: v.id,
+          primary: `${v.job_number || ""} ${v.worksite_name}`.trim(),
+          secondary: `${v.due_date} · ${v.employee_name}`,
+          meta: v.is_escalated ? <span className="font-bold text-rose-700">Escalated</span> : `${v.age_days}d`,
+        }))}
+        viewAll={{ to: "/pending-visits" }}
+        emptyText="No open pending visits."
+      />
+    ),
+    boundary: (
+      <ActionSection
+        title="Boundary queue"
+        icon={icon(Hexagon, "text-amber-600")}
+        count={boundaryQueue.count}
+        rows={boundaryQueue.items.map((b: any) => ({
+          id: b.id,
+          primary: `${b.code} ${b.name}`,
+          secondary: b.entity_type === "ACCOMMODATION" ? "Accommodation" : b.zone_name || "Worksite",
+        }))}
+        viewAll={{ to: "/boundaries" }}
+        emptyText="Every worksite and accommodation has a boundary."
+      />
+    ),
+    unassigned: (
+      <ActionSection
+        title="Unassigned worksites"
+        icon={icon(ShieldAlert, "text-amber-600")}
+        count={unassignedWorksites}
+        rows={unassignedList.map((w: any) => ({ id: w.id, primary: `${w.job_number} ${w.job_name}` }))}
+        viewAll={{ to: "/worksites" }}
+        emptyText="Every worksite has a supervisor."
+      />
+    ),
+    device: (
+      <ActionSection
+        title="Device & tracking alerts"
+        tone="rose"
+        icon={icon(Smartphone, "text-rose-600")}
+        count={deviceAlerts.length}
+        rows={alertRows(deviceAlerts)}
+        viewAll={{ to: "/devices" }}
+        emptyText="No device or tracking alerts."
+      />
+    ),
+  };
+  const visible = ACTION_SECTIONS.filter((x) => sections.has(x.key));
 
   return (
     <div className="space-y-6">
@@ -203,294 +375,18 @@ export const Dashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Active Operational Alerts Section */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-2xs p-6 space-y-4">
-        <div className="flex items-center justify-between">
+      {/* Pending actions & alerts, grouped by type (Batch 10 B) */}
+      {visible.length > 0 && (
+        <div className="space-y-3">
           <div className="flex items-center gap-2">
             <ShieldAlert className="h-5 w-5 text-amber-500" />
-            <h3 className="text-base font-bold text-slate-900">Active Operational Alerts & Pending Actions</h3>
+            <h3 className="text-base font-bold text-slate-900">Pending Actions & Alerts</h3>
           </div>
-          <span className="text-xs font-medium text-slate-400">
-            {coverAlerts.length +
-              docExpiryAlerts.length +
-              (pendingBoundaryCount > 0 ? 1 : 0) +
-              (unassignedWorksites > 0 ? 1 : 0)}{" "}
-            items requiring attention
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Pending Boundaries Alert (Admin / Engineer) */}
-          {(user?.role === "ADMIN" || user?.role === "ENGINEER") && pendingBoundaryCount > 0 && (
-            <div className="p-4 rounded-lg border border-amber-200 bg-amber-50/70 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-800">
-                  <Hexagon className="h-4 w-4 text-amber-600" />
-                  Worksite Boundaries Queue
-                </span>
-                <span className="bg-amber-200 text-amber-900 text-2xs font-extrabold px-2 py-0.5 rounded-full">
-                  {pendingBoundaryCount} Pending
-                </span>
-              </div>
-              <p className="text-xs text-amber-900">
-                Worksites imported or modified without drawn geofence boundaries. Attendance cannot be verified without geofences.
-              </p>
-              <Link
-                to="/boundaries"
-                className="inline-flex items-center gap-1 text-xs font-bold text-amber-900 hover:text-amber-700 pt-1"
-              >
-                Draw / Review Boundaries <ArrowRight className="h-3 w-3" />
-              </Link>
-            </div>
-          )}
-
-          {/* Unassigned worksites (Admin, DEC-57) */}
-          {user?.role === "ADMIN" && unassignedWorksites > 0 && (
-            <div className="p-4 rounded-lg border border-amber-200 bg-amber-50/70 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-800">
-                  <ShieldAlert className="h-4 w-4 text-amber-600" />
-                  Worksites without a supervisor
-                </span>
-                <span className="bg-amber-200 text-amber-900 text-2xs font-extrabold px-2 py-0.5 rounded-full">
-                  {unassignedWorksites} Unassigned
-                </span>
-              </div>
-              <p className="text-xs text-amber-900">
-                Only Admin can see these worksites. Assign a supervisor so supervisors, superintendents
-                and engineers can plan and follow them.
-              </p>
-              <Link
-                to="/worksites"
-                className="inline-flex items-center gap-1 text-xs font-bold text-amber-900 hover:text-amber-700 pt-1"
-              >
-                Review worksites <ArrowRight className="h-3 w-3" />
-              </Link>
-            </div>
-          )}
-
-          {/* Cover Needed Alerts (Supervisor / Engineer / Admin) */}
-          {coverAlerts.map((alert) => (
-            <div key={alert.id} className="p-4 rounded-lg border border-rose-200 bg-rose-50/70 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-rose-800">
-                  <AlertTriangle className="h-4 w-4 text-rose-600" />
-                  {alert.title}
-                </span>
-                <span className="text-2xs text-rose-700">
-                  {new Date(alert.created_at).toLocaleDateString()}
-                </span>
-              </div>
-              <p className="text-xs text-rose-900">{alert.message}</p>
-              <div className="flex flex-wrap items-center gap-2 pt-1">
-                <Link
-                  to="/operational-planner"
-                  search={{
-                    date: alert.details?.date_from || undefined,
-                    employee_id: alert.employee_id || alert.details?.employee_id || undefined,
-                  }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-md text-xs font-semibold shadow-2xs transition"
-                >
-                  <Users className="h-3.5 w-3.5" />
-                  Assign Cover in Planner <ArrowRight className="h-3 w-3" />
-                </Link>
-                {(user?.role === "ADMIN" || user?.role === "ENGINEER") && (
-                  <Link
-                    to="/approvals"
-                    className="inline-flex items-center gap-1 text-xs font-semibold text-slate-700 hover:text-slate-900 px-2.5 py-1.5"
-                  >
-                    Approvals Inbox <ArrowRight className="h-3 w-3" />
-                  </Link>
-                )}
-              </div>
-            </div>
-          ))}
-
-          {/* Document Expiry Alerts (Admin / Engineer) */}
-          {docExpiryAlerts.map((alert) => {
-            const daysLeft = Number(alert.details?.days_left ?? 0);
-            const isExpired = daysLeft < 0;
-            return (
-              <div
-                key={alert.id}
-                className={`p-4 rounded-lg border space-y-2 ${
-                  isExpired
-                    ? "border-rose-200 bg-rose-50/70"
-                    : "border-amber-200 bg-amber-50/70"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span
-                    className={`inline-flex items-center gap-1.5 text-xs font-bold ${
-                      isExpired ? "text-rose-800" : "text-amber-800"
-                    }`}
-                  >
-                    <FileText className={`h-4 w-4 ${isExpired ? "text-rose-600" : "text-amber-600"}`} />
-                    {alert.title}
-                  </span>
-                  <span
-                    className={`text-2xs font-extrabold px-2 py-0.5 rounded-full ${
-                      isExpired
-                        ? "bg-rose-200 text-rose-900"
-                        : "bg-amber-200 text-amber-900"
-                    }`}
-                  >
-                    {isExpired ? `Expired (${Math.abs(daysLeft)}d ago)` : `${daysLeft}d left`}
-                  </span>
-                </div>
-                <p className={`text-xs ${isExpired ? "text-rose-900" : "text-amber-900"}`}>
-                  {alert.message}
-                </p>
-                <div className="flex items-center justify-between pt-1">
-                  <span className="text-[11px] text-slate-500">
-                    Expiry: {alert.details?.expiry_date || "N/A"}
-                  </span>
-                  <Link
-                    to="/documents"
-                    className={`inline-flex items-center gap-1 text-xs font-bold hover:underline ${
-                      isExpired ? "text-rose-800" : "text-amber-800"
-                    }`}
-                  >
-                    Manage Documents <ArrowRight className="h-3 w-3" />
-                  </Link>
-                </div>
-              </div>
-            );
-          })}
-
-          {coverAlerts.length === 0 &&
-            docExpiryAlerts.length === 0 &&
-            pendingBoundaryCount === 0 &&
-            unassignedWorksites === 0 && (
-            <div className="col-span-2 p-8 text-center text-slate-400 space-y-1 bg-slate-50/60 rounded-lg border border-dashed border-slate-200">
-              <CheckCircle2 className="h-8 w-8 text-emerald-500 mx-auto" />
-              <div className="text-sm font-semibold text-slate-700">All Operations Clear</div>
-              <p className="text-xs text-slate-400">
-                No active leave cover shortages, expiring employee documents, or pending geofence boundaries.
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Admin & Engineer: Pending Approvals Queue */}
-      {(user?.role === "ADMIN" || user?.role === "ENGINEER") && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-2xs p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <CheckSquare className="h-5 w-5 text-indigo-600" />
-              <div>
-                <h3 className="text-base font-bold text-slate-900">Pending Approvals Queue</h3>
-                <p className="text-xs text-slate-500">
-                  Requests submitted by supervisors and workers awaiting your review and authorization.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="bg-indigo-50 text-indigo-700 text-xs font-bold px-2.5 py-1 rounded-full border border-indigo-200">
-                {pendingLeaveCount + pendingReassignCount} Decisions Pending
-              </span>
-              <Link
-                to="/approvals"
-                className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 px-3 py-1.5 rounded-lg hover:bg-indigo-50 transition"
-              >
-                Open Full Inbox <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
-            </div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {visible.map((x) => (
+              <React.Fragment key={x.key}>{sectionNodes[x.key]}</React.Fragment>
+            ))}
           </div>
-
-          {pendingLeaves.length === 0 && pendingReassigns.length === 0 ? (
-            <div className="p-8 text-center text-slate-400 space-y-1 bg-slate-50/60 rounded-lg border border-dashed border-slate-200">
-              <CheckCircle2 className="h-7 w-7 text-emerald-500 mx-auto" />
-              <div className="text-xs font-semibold text-slate-700">Inbox Clean</div>
-              <p className="text-2xs text-slate-400">All submitted leaves and temporary reassignments have been decided.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {/* Pending Leaves List */}
-              <div className="border border-slate-200 rounded-lg p-4 bg-slate-50/50 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                    <Calendar className="h-4 w-4 text-blue-600" />
-                    Leave Requests ({pendingLeaveCount})
-                  </span>
-                  <Link to="/approvals" className="text-2xs text-indigo-600 font-semibold hover:underline">
-                    Manage
-                  </Link>
-                </div>
-                {pendingLeaves.length === 0 ? (
-                  <p className="text-2xs text-slate-400 italic">No pending leave requests.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {pendingLeaves.slice(0, 4).map((l: any) => (
-                      <div key={l.id} className="p-3 bg-white rounded-lg border border-slate-200 shadow-2xs flex items-center justify-between text-xs">
-                        <div className="space-y-0.5">
-                          <div className="font-semibold text-slate-900">{l.employee_name || l.employee_id}</div>
-                          <div className="text-2xs text-slate-500">
-                            {l.from_date} to {l.to_date} · <span className="font-medium text-blue-700">{l.leave_type}</span>
-                          </div>
-                          <div className="text-2xs text-slate-400 truncate max-w-xs">{l.reason}</div>
-                        </div>
-                        <Link
-                          to="/approvals"
-                          className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded text-2xs font-bold border border-indigo-200 transition shrink-0"
-                        >
-                          Review
-                        </Link>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Pending Reassignments List */}
-              <div className="border border-slate-200 rounded-lg p-4 bg-slate-50/50 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                    <Clock className="h-4 w-4 text-purple-600" />
-                    Reassignment Requests ({pendingReassignCount})
-                  </span>
-                  <Link to="/approvals" className="text-2xs text-indigo-600 font-semibold hover:underline">
-                    Manage
-                  </Link>
-                </div>
-                {pendingReassigns.length === 0 ? (
-                  <p className="text-2xs text-slate-400 italic">No pending temporary reassignments.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {pendingReassigns.slice(0, 4).map((r: any) => (
-                      <div key={r.id} className="p-3 bg-white rounded-lg border border-slate-200 shadow-2xs flex items-center justify-between text-xs">
-                        <div className="space-y-0.5">
-                          <div className="font-semibold text-slate-900 flex items-center gap-1.5">
-                            <span className="px-1.5 py-0.5 bg-purple-50 text-purple-700 border border-purple-200 rounded text-2xs font-bold">
-                              {r.reassignment_type}
-                            </span>
-                            {r.reassignment_type === "REPLACE" ? (
-                              <span>
-                                {r.original_employee_name} → <span className="text-emerald-700 font-bold">{r.new_employee_name}</span>
-                              </span>
-                            ) : (
-                              <span>{r.new_employee_name || r.original_employee_name}</span>
-                            )}
-                          </div>
-                          <div className="text-2xs text-slate-500">
-                            {r.date_from === r.date_to ? r.date_from : `${r.date_from} to ${r.date_to}`} · {r.target_job_name || r.target_job_number || "Job"}
-                          </div>
-                          <div className="text-2xs text-slate-400 truncate max-w-xs">{r.reason}</div>
-                        </div>
-                        <Link
-                          to="/approvals"
-                          className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded text-2xs font-bold border border-indigo-200 transition shrink-0"
-                        >
-                          Review
-                        </Link>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
         </div>
       )}
 

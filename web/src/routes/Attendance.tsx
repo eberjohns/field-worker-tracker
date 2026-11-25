@@ -13,6 +13,7 @@ import { AttendanceRecord, AttendanceListResponse } from "../features/attendance
 import { AttendanceTable } from "../features/attendance/AttendanceTable";
 import { AttendanceDetailDrawer } from "../features/attendance/AttendanceDetailDrawer";
 import { RecalculateModal } from "../features/attendance/RecalculateModal";
+import { DatePicker } from "../ui";
 
 export const Attendance: React.FC = () => {
   const { token, user } = useAuth();
@@ -178,24 +179,24 @@ export const Attendance: React.FC = () => {
           <div className="flex items-center gap-2 text-xs">
             <div className="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-lg border border-slate-200">
               <Calendar className="h-3.5 w-3.5 text-slate-400" />
-              <input
-                type="date"
+              <DatePicker
                 value={fromDate}
-                onChange={(e) => {
-                  setFromDate(e.target.value);
+                onChange={(iso) => {
+                  setFromDate(iso);
                   setPage(0);
                 }}
-                className="bg-transparent text-slate-700 focus:outline-none text-xs"
+                aria-label="From date"
+                size="sm"
               />
               <span className="text-slate-400">to</span>
-              <input
-                type="date"
+              <DatePicker
                 value={toDate}
-                onChange={(e) => {
-                  setToDate(e.target.value);
+                onChange={(iso) => {
+                  setToDate(iso);
                   setPage(0);
                 }}
-                className="bg-transparent text-slate-700 focus:outline-none text-xs"
+                aria-label="To date"
+                size="sm"
               />
             </div>
           </div>

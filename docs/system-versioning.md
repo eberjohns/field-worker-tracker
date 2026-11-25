@@ -64,3 +64,4 @@ Field Worker Tracker follows semantic versioning `v<MAJOR>.<MINOR>.<PATCH>`:
 | **v1.21.0** | 2026-11-24 | `feat/batch10-ui-a` | `0a55faa` | New branch 'feat/batch10-ui-a' |
 | **v1.22.0** | 2026-11-24 | `fix/roster-materialise-absent` | `23c3a11` | New branch 'fix/roster-materialise-absent' |
 | **v1.22.1** | 2026-11-24 | `fix/roster-materialise-absent` | `d427a65` | Commit on 'fix/roster-materialise-absent' |
+| **v1.23.0** | 2026-11-25 | `feat/batch10-ui-b` | `9334f5a` | New branch 'feat/batch10-ui-b' |

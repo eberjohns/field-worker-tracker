@@ -44,6 +44,7 @@ import { GroupZoneSelect } from "../components/org/GroupZoneSelect";
 import type { OrgUnit } from "../features/org/groupZoneUtils";
 import { fmtHours, fmtMoney } from "../features/budget/budgetFormat";
 import type { WorksiteBudgetTotals } from "../features/budget/budgetFormat";
+import { ApiError, DatePicker, ensureOk, Modal, problemFromBody, useDialogs } from "../ui";
 
 interface WorksiteDetail {
   id: string;
@@ -108,6 +109,7 @@ interface OccurrenceSummary {
 }
 
 export const WorksiteDetail: React.FC = () => {
+  const dialogs = useDialogs();
   const { worksiteId } = useParams({ strict: false }) as { worksiteId: string };
   const { token, user } = useAuth();
 
@@ -266,7 +268,7 @@ export const WorksiteDetail: React.FC = () => {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(data?.detail?.message || data?.detail || "Action failed");
+        throw new ApiError(problemFromBody(null, data, "Action failed"));
       }
       setStatusMessage(data.message || "Status updated successfully.");
       setLifecycleTarget(null);
@@ -384,10 +386,7 @@ export const WorksiteDetail: React.FC = () => {
         },
         body: JSON.stringify({ supervisor_id: selectedSupervisorId }),
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || "Failed to assign supervisor.");
-      }
+      await ensureOk(res, "Failed to assign supervisor.");
       setSelectedSupervisorId("");
       setStatusMessage("Supervisor assigned successfully.");
       const reqHeaders: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
@@ -401,16 +400,13 @@ export const WorksiteDetail: React.FC = () => {
   };
 
   const handleRemoveSupervisor = async (supervisorId: string, supervisorName: string) => {
-    if (!window.confirm(`Unassign supervisor ${supervisorName} from this worksite?`)) return;
+    if (!(await dialogs.confirm({ title: "Unassign supervisor?", message: `Unassign supervisor ${supervisorName} from this worksite?`, confirmLabel: "Unassign", variant: "destructive" }))) return;
     try {
       const res = await fetch(`/api/v1/worksites/${worksiteId}/supervisors/${supervisorId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || "Failed to unassign supervisor.");
-      }
+      await ensureOk(res, "Failed to unassign supervisor.");
       setStatusMessage("Supervisor unassigned successfully.");
       const reqHeaders: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
       const updated = await (await fetch(`/api/v1/worksites/${worksiteId}/supervisors`, { headers: reqHeaders })).json();
@@ -457,10 +453,7 @@ export const WorksiteDetail: React.FC = () => {
         }),
       });
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || "Failed to update worksite.");
-      }
+      await ensureOk(res, "Failed to update worksite.");
 
       setStatusMessage("Worksite updated successfully.");
       setIsEditingMetadata(false);
@@ -484,10 +477,7 @@ export const WorksiteDetail: React.FC = () => {
         body: JSON.stringify({ boundary: polygon }),
       });
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || "Failed to save boundary.");
-      }
+      await ensureOk(res, "Failed to save boundary.");
 
       setStatusMessage("Boundary saved and validated successfully.");
       fetchData();
@@ -880,21 +870,19 @@ export const WorksiteDetail: React.FC = () => {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Contract Start Date</label>
-                    <input
-                      type="date"
+                    <DatePicker
+                      label="Contract Start Date"
                       value={editStartDate}
-                      onChange={(e) => setEditStartDate(e.target.value)}
-                      className="w-full px-3 py-1.5 border border-slate-300 rounded focus:ring-1 focus:ring-indigo-500"
+                      onChange={(iso) => setEditStartDate(iso)}
+                      size="sm"
                     />
                   </div>
                   <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Contract End Date</label>
-                    <input
-                      type="date"
+                    <DatePicker
+                      label="Contract End Date"
                       value={editEndDate}
-                      onChange={(e) => setEditEndDate(e.target.value)}
-                      className="w-full px-3 py-1.5 border border-slate-300 rounded focus:ring-1 focus:ring-indigo-500"
+                      onChange={(iso) => setEditEndDate(iso)}
+                      size="sm"
                     />
                   </div>
                 </div>
@@ -1462,7 +1450,8 @@ export const WorksiteDetail: React.FC = () => {
               initialZoom={worksite.has_boundary ? 17 : 14}
               onMapReady={(map) => setMapInstance(map)}
               onMapUnmount={() => setMapInstance(null)}
-              className="w-full h-[600px]"
+              cooperativeGestures
+              className="w-full h-[min(600px,calc(100vh-24rem))] min-h-[360px]"
             >
               <PlaceSearch map={mapInstance} />
             </MapContainer>
@@ -2055,247 +2044,206 @@ export const WorksiteDetail: React.FC = () => {
 
       {/* Admin Lifecycle Modal (Deactivate / Reactivate Worksite or Job Item) */}
       {lifecycleTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
-          <div
-            className={`bg-white rounded-xl shadow-2xl border w-full max-w-lg max-h-[92vh] flex flex-col overflow-hidden ${
-              lifecycleTarget.action === "deactivate" ? "border-rose-200" : "border-emerald-200"
-            }`}
+        <Modal
+          open
+          onClose={() => setLifecycleTarget(null)}
+          size="md"
+          title={<span className="inline-flex items-center gap-2">{lifecycleTarget.action === "deactivate" ? ( <PowerOff className="h-5 w-5 text-rose-600" /> ) : ( <RotateCcw className="h-5 w-5 text-emerald-600" /> )} {lifecycleTarget.action === "deactivate" ? "Deactivate" : "Reactivate"}{" "} {lifecycleTarget.entity === "worksite" ? "Worksite" : "Job Item"}</span>}
+          description={<>{lifecycleTarget.label}</>}
+        >
+          <form
+            onSubmit={handleConfirmLifecycle}
+            className="space-y-4"
           >
-            <div
-              className={`px-6 py-4 border-b flex items-center justify-between ${
-                lifecycleTarget.action === "deactivate"
-                  ? "border-rose-200 bg-rose-50"
-                  : "border-emerald-200 bg-emerald-50"
-              }`}
-            >
-              <div>
-                <h3
-                  className={`text-base font-bold flex items-center gap-2 ${
-                    lifecycleTarget.action === "deactivate" ? "text-rose-900" : "text-emerald-900"
-                  }`}
-                >
-                  {lifecycleTarget.action === "deactivate" ? (
-                    <PowerOff className="h-5 w-5 text-rose-600" />
-                  ) : (
-                    <RotateCcw className="h-5 w-5 text-emerald-600" />
-                  )}
-                  {lifecycleTarget.action === "deactivate" ? "Deactivate" : "Reactivate"}{" "}
-                  {lifecycleTarget.entity === "worksite" ? "Worksite" : "Job Item"}
-                </h3>
-                <p
-                  className={`text-xs mt-0.5 ${
-                    lifecycleTarget.action === "deactivate" ? "text-rose-700" : "text-emerald-700"
-                  }`}
-                >
-                  {lifecycleTarget.label}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setLifecycleTarget(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-white/60 cursor-pointer"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
+            {lifecycleTarget.action === "deactivate" ? (
+              <>
+                <div>
+                  <DatePicker
+                    label="Effective Date (Optional — defaults to Today)"
+                    value={lifecycleEffectiveDate}
+                    onChange={(iso) => setLifecycleEffectiveDate(iso)}
+                    size="sm"
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Future worker shifts &amp; occurrences on or after this date will be cancelled, immediately freeing assigned workers&apos; capacity.
+                  </p>
+                </div>
 
-            <form
-              onSubmit={handleConfirmLifecycle}
-              className="flex-1 overflow-y-auto p-6 space-y-4"
-            >
-              {lifecycleTarget.action === "deactivate" ? (
-                <>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Effective Date (Optional — defaults to Today)
-                    </label>
-                    <input
-                      type="date"
-                      value={lifecycleEffectiveDate}
-                      onChange={(e) => setLifecycleEffectiveDate(e.target.value)}
-                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
-                    />
-                    <p className="text-[11px] text-slate-500 mt-1">
-                      Future worker shifts &amp; occurrences on or after this date will be cancelled, immediately freeing assigned workers&apos; capacity.
-                    </p>
-                  </div>
-
-                  <div className="p-3.5 rounded-lg bg-amber-50 border border-amber-200 text-xs space-y-2">
-                    <div className="font-bold text-amber-950 flex items-center justify-between">
-                      <span>Deactivation Impact Preview</span>
-                      {loadingLifecycleImpact && (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-700" />
-                      )}
-                    </div>
-                    {lifecycleImpact ? (
-                      <ul className="space-y-1 text-[11px] text-amber-900">
-                        {lifecycleImpact.active_job_items != null && (
-                          <li>
-                            • <strong>Job Items Deactivated:</strong>{" "}
-                            {lifecycleImpact.active_job_items} active item(s)
-                          </li>
-                        )}
-                        <li>
-                          • <strong>Base Roster Templates Deactivated:</strong>{" "}
-                          {lifecycleImpact.active_base_templates ?? 0}
-                        </li>
-                        <li>
-                          • <strong>Workers Freed:</strong>{" "}
-                          {lifecycleImpact.affected_workers ?? 0} assigned worker(s)
-                        </li>
-                        <li>
-                          • <strong>Future Shifts Cancelled (≥ {lifecycleImpact.effective_date}):</strong>{" "}
-                          {lifecycleImpact.future_active_shifts ?? 0} shift(s)
-                        </li>
-                        <li>
-                          • <strong>Future Occurrences Cancelled:</strong>{" "}
-                          {lifecycleImpact.future_occurrences ?? 0} occurrence(s)
-                        </li>
-                        <li>
-                          • <strong>Standing Assignments Ended:</strong>{" "}
-                          {lifecycleImpact.active_standing_assignments ?? 0}
-                        </li>
-                        <li>
-                          • <strong>Pending Reassignments Cancelled:</strong>{" "}
-                          {lifecycleImpact.pending_reassignment_requests ?? 0}
-                        </li>
-                      </ul>
-                    ) : (
-                      <p className="text-[11px] text-amber-700">Calculating impact...</p>
+                <div className="p-3.5 rounded-lg bg-amber-50 border border-amber-200 text-xs space-y-2">
+                  <div className="font-bold text-amber-950 flex items-center justify-between">
+                    <span>Deactivation Impact Preview</span>
+                    {loadingLifecycleImpact && (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-700" />
                     )}
                   </div>
-                </>
-              ) : (
-                <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 space-y-2">
-                  <div className="font-bold">Clean Reactivation (Option A):</div>
-                  <p className="text-[11px]">
-                    Restores active visibility across planning and reporting pages.{" "}
-                    <strong>No previously cancelled schedules or roster templates are restored</strong>, preventing any double-booking with workers&apos; current assignments.
-                  </p>
-                  {lifecycleTarget.entity === "worksite" && (
-                    <label className="flex items-center gap-2 pt-1 font-semibold cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={reactivateChildItems}
-                        onChange={(e) => setReactivateChildItems(e.target.checked)}
-                        className="rounded border-emerald-400 text-emerald-600 focus:ring-emerald-500"
-                      />
-                      <span>Also reactivate child job items on this worksite</span>
-                    </label>
+                  {lifecycleImpact ? (
+                    <ul className="space-y-1 text-[11px] text-amber-900">
+                      {lifecycleImpact.active_job_items != null && (
+                        <li>
+                          • <strong>Job Items Deactivated:</strong>{" "}
+                          {lifecycleImpact.active_job_items} active item(s)
+                        </li>
+                      )}
+                      <li>
+                        • <strong>Base Roster Templates Deactivated:</strong>{" "}
+                        {lifecycleImpact.active_base_templates ?? 0}
+                      </li>
+                      <li>
+                        • <strong>Workers Freed:</strong>{" "}
+                        {lifecycleImpact.affected_workers ?? 0} assigned worker(s)
+                      </li>
+                      <li>
+                        • <strong>Future Shifts Cancelled (≥ {lifecycleImpact.effective_date}):</strong>{" "}
+                        {lifecycleImpact.future_active_shifts ?? 0} shift(s)
+                      </li>
+                      <li>
+                        • <strong>Future Occurrences Cancelled:</strong>{" "}
+                        {lifecycleImpact.future_occurrences ?? 0} occurrence(s)
+                      </li>
+                      <li>
+                        • <strong>Standing Assignments Ended:</strong>{" "}
+                        {lifecycleImpact.active_standing_assignments ?? 0}
+                      </li>
+                      <li>
+                        • <strong>Pending Reassignments Cancelled:</strong>{" "}
+                        {lifecycleImpact.pending_reassignment_requests ?? 0}
+                      </li>
+                    </ul>
+                  ) : (
+                    <p className="text-[11px] text-amber-700">Calculating impact...</p>
                   )}
                 </div>
-              )}
+              </>
+            ) : (
+              <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 space-y-2">
+                <div className="font-bold">Clean Reactivation (Option A):</div>
+                <p className="text-[11px]">
+                  Restores active visibility across planning and reporting pages.{" "}
+                  <strong>No previously cancelled schedules or roster templates are restored</strong>, preventing any double-booking with workers&apos; current assignments.
+                </p>
+                {lifecycleTarget.entity === "worksite" && (
+                  <label className="flex items-center gap-2 pt-1 font-semibold cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={reactivateChildItems}
+                      onChange={(e) => setReactivateChildItems(e.target.checked)}
+                      className="rounded border-emerald-400 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <span>Also reactivate child job items on this worksite</span>
+                  </label>
+                )}
+              </div>
+            )}
 
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Reason <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={lifecycleReason}
+                onChange={(e) => setLifecycleReason(e.target.value)}
+                placeholder={
+                  lifecycleTarget.action === "deactivate"
+                    ? "e.g. Contract expired / Client suspended service"
+                    : "e.g. Contract renewed by client"
+                }
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Reason <span className="text-rose-500">*</span>
+                  Type{" "}
+                  <span
+                    className={`font-mono font-bold ${
+                      lifecycleTarget.action === "deactivate"
+                        ? "text-rose-700"
+                        : "text-emerald-700"
+                    }`}
+                  >
+                    {lifecycleTarget.action === "deactivate" ? "DEACTIVATE" : "REACTIVATE"}
+                  </span>{" "}
+                  <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
                   required
-                  value={lifecycleReason}
-                  onChange={(e) => setLifecycleReason(e.target.value)}
+                  value={lifecycleConfirmText}
+                  onChange={(e) => setLifecycleConfirmText(e.target.value)}
                   placeholder={
-                    lifecycleTarget.action === "deactivate"
-                      ? "e.g. Contract expired / Client suspended service"
-                      : "e.g. Contract renewed by client"
+                    lifecycleTarget.action === "deactivate" ? "DEACTIVATE" : "REACTIVATE"
                   }
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-2 text-xs font-mono border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Type{" "}
-                    <span
-                      className={`font-mono font-bold ${
-                        lifecycleTarget.action === "deactivate"
-                          ? "text-rose-700"
-                          : "text-emerald-700"
-                      }`}
-                    >
-                      {lifecycleTarget.action === "deactivate" ? "DEACTIVATE" : "REACTIVATE"}
-                    </span>{" "}
-                    <span className="text-rose-500">*</span>
-                  </label>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Admin Password <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
                   <input
-                    type="text"
+                    type={showLifecyclePassword ? "text" : "password"}
                     required
-                    value={lifecycleConfirmText}
-                    onChange={(e) => setLifecycleConfirmText(e.target.value)}
-                    placeholder={
-                      lifecycleTarget.action === "deactivate" ? "DEACTIVATE" : "REACTIVATE"
-                    }
-                    className="w-full px-3 py-2 text-xs font-mono border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={lifecyclePassword}
+                    onChange={(e) => setLifecyclePassword(e.target.value)}
+                    placeholder="Enter your password"
+                    className="w-full px-3 py-2 pr-9 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Admin Password <span className="text-rose-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showLifecyclePassword ? "text" : "password"}
-                      required
-                      value={lifecyclePassword}
-                      onChange={(e) => setLifecyclePassword(e.target.value)}
-                      placeholder="Enter your password"
-                      className="w-full px-3 py-2 pr-9 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowLifecyclePassword((p) => !p)}
-                      className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                    >
-                      {showLifecyclePassword ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowLifecyclePassword((p) => !p)}
+                    className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    {showLifecyclePassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
                 </div>
               </div>
+            </div>
 
-              {lifecycleError && (
-                <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-800">
-                  {lifecycleError}
-                </div>
-              )}
-
-              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setLifecycleTarget(null)}
-                  className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={
-                    submittingLifecycle ||
-                    !lifecycleReason.trim() ||
-                    !lifecyclePassword ||
-                    lifecycleConfirmText.trim() !==
-                      (lifecycleTarget.action === "deactivate" ? "DEACTIVATE" : "REACTIVATE")
-                  }
-                  className={`px-4 py-2 rounded-lg text-xs font-bold text-white disabled:opacity-50 flex items-center gap-1.5 cursor-pointer ${
-                    lifecycleTarget.action === "deactivate"
-                      ? "bg-rose-600 hover:bg-rose-700"
-                      : "bg-emerald-600 hover:bg-emerald-700"
-                  }`}
-                >
-                  {submittingLifecycle && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  {lifecycleTarget.action === "deactivate"
-                    ? "Confirm Deactivation"
-                    : "Confirm Reactivation"}
-                </button>
+            {lifecycleError && (
+              <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-800">
+                {lifecycleError}
               </div>
-            </form>
-          </div>
-        </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setLifecycleTarget(null)}
+                className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={
+                  submittingLifecycle ||
+                  !lifecycleReason.trim() ||
+                  !lifecyclePassword ||
+                  lifecycleConfirmText.trim() !==
+                    (lifecycleTarget.action === "deactivate" ? "DEACTIVATE" : "REACTIVATE")
+                }
+                className={`px-4 py-2 rounded-lg text-xs font-bold text-white disabled:opacity-50 flex items-center gap-1.5 cursor-pointer ${
+                  lifecycleTarget.action === "deactivate"
+                    ? "bg-rose-600 hover:bg-rose-700"
+                    : "bg-emerald-600 hover:bg-emerald-700"
+                }`}
+              >
+                {submittingLifecycle && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {lifecycleTarget.action === "deactivate"
+                  ? "Confirm Deactivation"
+                  : "Confirm Reactivation"}
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   );

@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { MapContainer, PolygonEditor, PlaceSearch } from "../features/map";
 import { Map as MapLibreMap } from "maplibre-gl";
+import { ensureOk, Modal } from "../ui";
 
 interface QueueItem {
   id: string;
@@ -204,10 +205,7 @@ export const Boundaries: React.FC = () => {
         body: JSON.stringify({ items }),
       });
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.detail || "Failed to import boundaries.");
-      }
+      await ensureOk(res, "Failed to import boundaries.");
 
       const dataRes: BoundaryImportResponse = await res.json();
       setImportResult(dataRes);
@@ -257,10 +255,7 @@ export const Boundaries: React.FC = () => {
         body: JSON.stringify({ boundary: polygon }),
       });
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || "Failed to save accommodation boundary.");
-      }
+      await ensureOk(res, "Failed to save accommodation boundary.");
 
       setSuccessMsg(`Boundary saved for ${drawingAccommodation.name}.`);
       setDrawingAccommodation(null);
@@ -603,207 +598,179 @@ export const Boundaries: React.FC = () => {
 
       {/* Accommodation Boundary Modal */}
       {drawingAccommodation && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-3xl bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-              <div>
-                <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <Home className="h-5 w-5 text-blue-600" />
-                  {drawingAccommodation.has_boundary ? "Edit" : "Draw"} Boundary for {drawingAccommodation.name} ({drawingAccommodation.code})
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Camp / Accommodation polygon setup for night-time rest and departure verification.
-                </p>
-              </div>
-              <button
-                onClick={() => setDrawingAccommodation(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/60"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="p-4 space-y-4 flex-1 overflow-y-auto">
-              <div className="relative">
-                <PlaceSearch map={mapInstance} />
-                <MapContainer
-                  initialZoom={15}
-                  onMapReady={(map) => setMapInstance(map)}
-                  onMapUnmount={() => setMapInstance(null)}
-                  className="w-full h-[450px]"
-                />
-              </div>
-
-              <PolygonEditor
-                map={mapInstance}
-                initialPolygon={drawingAccommodation.boundary_geojson as GeoJSON.Polygon | null}
-                onSave={handleSaveAccommodationBoundary}
-                isSaving={savingBoundary}
+        <Modal
+          open
+          onClose={() => setDrawingAccommodation(null)}
+          size="xl"
+          title={<span className="inline-flex items-center gap-2"><Home className="h-5 w-5 text-blue-600" /> {drawingAccommodation.has_boundary ? "Edit" : "Draw"} Boundary for {drawingAccommodation.name} ({drawingAccommodation.code})</span>}
+          description="Camp / Accommodation polygon setup for night-time rest and departure verification."
+        >
+          <div className="p-4 space-y-4">
+            <div className="relative">
+              <PlaceSearch map={mapInstance} />
+              <MapContainer
+                initialZoom={15}
+                onMapReady={(map) => setMapInstance(map)}
+                onMapUnmount={() => setMapInstance(null)}
+                className="w-full h-[450px]"
               />
             </div>
+
+            <PolygonEditor
+              map={mapInstance}
+              initialPolygon={drawingAccommodation.boundary_geojson as GeoJSON.Polygon | null}
+              onSave={handleSaveAccommodationBoundary}
+              isSaving={savingBoundary}
+            />
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Import Boundaries Modal */}
       {showImportModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-2xl bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-              <div>
-                <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <Upload className="h-5 w-5 text-indigo-600" />
-                  Import Boundary Polygons
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Bulk import worksite and accommodation boundaries from CSV or GeoJSON.
-                </p>
-              </div>
-              <button
-                onClick={() => {
+        <Modal
+          open
+          onClose={() => {
                   setShowImportModal(false);
                   setImportResult(null);
                 }}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/60"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4 flex-1 overflow-y-auto text-xs">
+          size="lg"
+          title={<span className="inline-flex items-center gap-2"><Upload className="h-5 w-5 text-indigo-600" /> Import Boundary Polygons</span>}
+          description="Bulk import worksite and accommodation boundaries from CSV or GeoJSON."
+          footer={
+            <div className="flex w-full flex-wrap items-center justify-between gap-2">
               {!importResult ? (
-                <>
-                  {/* Format Guidelines */}
-                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1.5 text-slate-600 text-[11px]">
-                    <div className="font-bold text-slate-800 uppercase tracking-wider text-[10px]">
-                      Supported CSV / Text Formats:
-                    </div>
-                    <div className="font-mono bg-white p-2 rounded border border-slate-200 text-slate-700 select-all">
-                      entity_type, code, polygon<br />
-                      WORKSITE, 12A14301, "POLYGON((55.385 25.120, 55.388 25.120, 55.388 25.125, 55.385 25.120))"<br />
-                      ACCOMMODATION, WARSAN_01, "POLYGON((...))"
-                    </div>
-                    <p className="text-slate-500 text-[10px]">
-                      • Worksite primary key is <strong>job_number</strong>; Accommodation primary key is <strong>accommodation_code</strong>.<br />
-                      • Unmatched codes will be safely skipped and listed in the summary report.
-                    </p>
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setShowImportModal(false)}
+                      className="px-4 py-1.5 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-100 font-medium"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={importing || !importText.trim()}
+                      onClick={handleProcessImport}
+                      className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold disabled:opacity-50 flex items-center gap-1.5 transition-colors"
+                    >
+                      {importing ? "Importing..." : "Process Import"}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowImportModal(false);
+                      setImportResult(null);
+                    }}
+                    className="w-full py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-semibold transition-colors"
+                  >
+                    Close & Refresh Queue
+                  </button>
+                )}
+            </div>
+          }
+        >
+          <div className="p-6 space-y-4 text-xs">
+            {!importResult ? (
+              <>
+                {/* Format Guidelines */}
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1.5 text-slate-600 text-[11px]">
+                  <div className="font-bold text-slate-800 uppercase tracking-wider text-[10px]">
+                    Supported CSV / Text Formats:
                   </div>
-
-                  {/* File Upload Shortcut */}
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-slate-700 text-xs">Upload File or Paste Data:</span>
-                    <label className="cursor-pointer px-3 py-1.5 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 font-medium shadow-2xs">
-                      <FileText className="h-3.5 w-3.5 text-indigo-600" />
-                      Browse CSV / JSON
-                      <input
-                        type="file"
-                        accept=".csv,.json,.txt"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          const reader = new FileReader();
-                          reader.onload = (ev) => {
-                            setImportText(String(ev.target?.result || ""));
-                          };
-                          reader.readAsText(file);
-                        }}
-                      />
-                    </label>
+                  <div className="font-mono bg-white p-2 rounded border border-slate-200 text-slate-700 select-all">
+                    entity_type, code, polygon<br />
+                    WORKSITE, 12A14301, "POLYGON((55.385 25.120, 55.388 25.120, 55.388 25.125, 55.385 25.120))"<br />
+                    ACCOMMODATION, WARSAN_01, "POLYGON((...))"
                   </div>
-
-                  {/* Paste Textarea */}
-                  <textarea
-                    rows={8}
-                    value={importText}
-                    onChange={(e) => setImportText(e.target.value)}
-                    placeholder="Paste CSV rows or JSON array here..."
-                    className="w-full font-mono text-2xs p-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-slate-50"
-                  />
-                </>
-              ) : (
-                /* Import Results Summary */
-                <div className="space-y-4">
-                  <div className="grid grid-cols-3 gap-3 text-center">
-                    <div className="bg-slate-50 border border-slate-200 p-3 rounded-lg">
-                      <div className="text-xl font-bold text-slate-900">{importResult.total_rows}</div>
-                      <div className="text-[11px] text-slate-500 uppercase font-bold">Total Rows</div>
-                    </div>
-                    <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-lg">
-                      <div className="text-xl font-bold text-emerald-700">{importResult.updated_count}</div>
-                      <div className="text-[11px] text-emerald-600 uppercase font-bold">Updated</div>
-                    </div>
-                    <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg">
-                      <div className="text-xl font-bold text-amber-700">{importResult.skipped_count}</div>
-                      <div className="text-[11px] text-amber-600 uppercase font-bold">Skipped</div>
-                    </div>
-                  </div>
-
-                  {importResult.errors.length > 0 && (
-                    <div className="border border-amber-200 rounded-lg overflow-hidden">
-                      <div className="bg-amber-50 px-3 py-2 font-bold text-amber-800 text-[11px] border-b border-amber-200">
-                        Skipped Rows Details ({importResult.errors.length})
-                      </div>
-                      <div className="max-h-48 overflow-y-auto divide-y divide-slate-100 text-2xs">
-                        {importResult.errors.map((err, idx) => (
-                          <div key={idx} className="p-2 flex items-start justify-between bg-white">
-                            <div>
-                              <span className="font-mono font-bold text-slate-700">Row {err.row}:</span>{" "}
-                              <span className="font-mono text-indigo-700 font-bold">{err.code}</span>{" "}
-                              <span className="text-slate-400">({err.entity_type})</span>
-                            </div>
-                            <span className="text-amber-700 text-[11px]">{err.reason}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {importResult.updated_count > 0 && (
-                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 flex items-center gap-2 text-xs">
-                      <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
-                      <span>{importResult.updated_count} boundaries were successfully saved to the database.</span>
-                    </div>
-                  )}
+                  <p className="text-slate-500 text-[10px]">
+                    • Worksite primary key is <strong>job_number</strong>; Accommodation primary key is <strong>accommodation_code</strong>.<br />
+                    • Unmatched codes will be safely skipped and listed in the summary report.
+                  </p>
                 </div>
-              )}
-            </div>
 
-            {/* Footer */}
-            <div className="px-6 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
-              {!importResult ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setShowImportModal(false)}
-                    className="px-4 py-1.5 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-100 font-medium"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    disabled={importing || !importText.trim()}
-                    onClick={handleProcessImport}
-                    className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold disabled:opacity-50 flex items-center gap-1.5 transition-colors"
-                  >
-                    {importing ? "Importing..." : "Process Import"}
-                  </button>
-                </>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowImportModal(false);
-                    setImportResult(null);
-                  }}
-                  className="w-full py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-semibold transition-colors"
-                >
-                  Close & Refresh Queue
-                </button>
-              )}
-            </div>
+                {/* File Upload Shortcut */}
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-700 text-xs">Upload File or Paste Data:</span>
+                  <label className="cursor-pointer px-3 py-1.5 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 font-medium shadow-2xs">
+                    <FileText className="h-3.5 w-3.5 text-indigo-600" />
+                    Browse CSV / JSON
+                    <input
+                      type="file"
+                      accept=".csv,.json,.txt"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          setImportText(String(ev.target?.result || ""));
+                        };
+                        reader.readAsText(file);
+                      }}
+                    />
+                  </label>
+                </div>
+
+                {/* Paste Textarea */}
+                <textarea
+                  rows={8}
+                  value={importText}
+                  onChange={(e) => setImportText(e.target.value)}
+                  placeholder="Paste CSV rows or JSON array here..."
+                  className="w-full font-mono text-2xs p-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-slate-50"
+                />
+              </>
+            ) : (
+              /* Import Results Summary */
+              <div className="space-y-4">
+                <div className="grid grid-cols-3 gap-3 text-center">
+                  <div className="bg-slate-50 border border-slate-200 p-3 rounded-lg">
+                    <div className="text-xl font-bold text-slate-900">{importResult.total_rows}</div>
+                    <div className="text-[11px] text-slate-500 uppercase font-bold">Total Rows</div>
+                  </div>
+                  <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-lg">
+                    <div className="text-xl font-bold text-emerald-700">{importResult.updated_count}</div>
+                    <div className="text-[11px] text-emerald-600 uppercase font-bold">Updated</div>
+                  </div>
+                  <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg">
+                    <div className="text-xl font-bold text-amber-700">{importResult.skipped_count}</div>
+                    <div className="text-[11px] text-amber-600 uppercase font-bold">Skipped</div>
+                  </div>
+                </div>
+
+                {importResult.errors.length > 0 && (
+                  <div className="border border-amber-200 rounded-lg overflow-hidden">
+                    <div className="bg-amber-50 px-3 py-2 font-bold text-amber-800 text-[11px] border-b border-amber-200">
+                      Skipped Rows Details ({importResult.errors.length})
+                    </div>
+                    <div className="max-h-48 overflow-y-auto divide-y divide-slate-100 text-2xs">
+                      {importResult.errors.map((err, idx) => (
+                        <div key={idx} className="p-2 flex items-start justify-between bg-white">
+                          <div>
+                            <span className="font-mono font-bold text-slate-700">Row {err.row}:</span>{" "}
+                            <span className="font-mono text-indigo-700 font-bold">{err.code}</span>{" "}
+                            <span className="text-slate-400">({err.entity_type})</span>
+                          </div>
+                          <span className="text-amber-700 text-[11px]">{err.reason}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {importResult.updated_count > 0 && (
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 flex items-center gap-2 text-xs">
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                    <span>{importResult.updated_count} boundaries were successfully saved to the database.</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

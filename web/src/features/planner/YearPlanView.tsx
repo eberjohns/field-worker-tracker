@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { StandingAssignmentRead } from "./types";
 import { Calendar, Clock, Plus, CalendarOff } from "lucide-react";
+import { DatePicker, Modal } from "../../ui";
 
 interface YearPlanViewProps {
   standingAssignments: StandingAssignmentRead[];
@@ -108,20 +109,20 @@ export const YearPlanView: React.FC<YearPlanViewProps> = ({
 
       {/* End Assignment Modal */}
       {selectedAssignmentToEnd && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-md p-6 space-y-4">
-            <h3 className="text-base font-bold text-slate-900">End Standing Assignment</h3>
-            <p className="text-xs text-slate-500">
-              Ending this standing assignment will permanently end this worker's recurring assignment from the specified date forward and cancel unstarted scheduled work beyond that date.
-            </p>
-
+        <Modal
+          open
+          onClose={() => setSelectedAssignmentToEnd(null)}
+          size="md"
+          title="End Standing Assignment"
+          description="Ending this standing assignment will permanently end this worker's recurring assignment from the specified date forward and cancel unstarted scheduled work beyond that date."
+        >
+          <div className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Effective End Date</label>
-              <input
-                type="date"
+              <DatePicker
+                label="Effective End Date"
                 value={endDateInput}
-                onChange={(e) => setEndDateInput(e.target.value)}
-                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                onChange={(iso) => setEndDateInput(iso)}
+                size="sm"
               />
             </div>
 
@@ -145,7 +146,7 @@ export const YearPlanView: React.FC<YearPlanViewProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

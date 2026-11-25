@@ -8,6 +8,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { EmptyState, useToast } from "../../ui";
 import {
   GeneratedReportItem,
   GeneratedReportFilters,
@@ -17,6 +18,7 @@ import {
 
 export const GeneratedReports: React.FC = () => {
   const { token } = useAuth();
+  const toast = useToast();
   const [reports, setReports] = useState<GeneratedReportItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -58,8 +60,8 @@ export const GeneratedReports: React.FC = () => {
     setDownloadingId(item.id);
     try {
       await downloadFile(item.download_url, item.file_name, token);
-    } catch (err: any) {
-      alert(`Download failed: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(err, "Download failed.");
     } finally {
       setDownloadingId(null);
     }
@@ -191,23 +193,18 @@ export const GeneratedReports: React.FC = () => {
           </span>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className={filteredItems.length > 0 && !loading ? "overflow-x-auto fw-scroll" : undefined}>
           {loading ? (
             <div className="py-20 flex flex-col items-center justify-center gap-2 text-slate-400">
               <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
               <span className="text-xs">Loading generated report records...</span>
             </div>
           ) : filteredItems.length === 0 ? (
-            <div className="py-20 text-center text-slate-400 flex flex-col items-center gap-3">
-              <FileSpreadsheet className="w-8 h-8 text-slate-300" />
-              <div>
-                <p className="text-sm font-medium text-slate-700">No generated reports found</p>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Month-end packages will automatically appear here upon draft payroll creation and
-                  approval.
-                </p>
-              </div>
-            </div>
+            <EmptyState
+              icon={<FileSpreadsheet className="h-5 w-5" />}
+              title="No generated reports yet"
+              description="Month-end packages appear here when a payroll draft is created and approved."
+            />
           ) : (
             <table className="w-full text-left text-xs text-slate-700 border-collapse">
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">

@@ -10,6 +10,7 @@ import {
   monthLabel,
 } from "../../features/budget/budgetFormat";
 import type { PlannedActualFigures, WorksitePlannedVsActual } from "../../features/budget/budgetFormat";
+import { DatePicker } from "../../ui";
 
 interface Props {
   worksiteId: string;
@@ -107,20 +108,18 @@ export const PlannedVsActualPanel: React.FC<Props> = ({ worksiteId, isAdmin, tok
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <label className="flex items-center gap-1">
             From
-            <input
-              type="date"
+            <DatePicker
               value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              className="px-2 py-1 border border-slate-300 rounded"
+              onChange={(iso) => setFrom(iso)}
+              size="sm"
             />
           </label>
           <label className="flex items-center gap-1">
             To
-            <input
-              type="date"
+            <DatePicker
               value={to}
-              onChange={(e) => setTo(e.target.value)}
-              className="px-2 py-1 border border-slate-300 rounded"
+              onChange={(iso) => setTo(iso)}
+              size="sm"
             />
           </label>
           <button

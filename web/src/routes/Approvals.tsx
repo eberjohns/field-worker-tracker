@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
+import { AlertBanner, Button, Modal, problemFromBody, TextArea } from "../ui";
 import {
   CheckSquare,
   Clock,
   AlertTriangle,
   CheckCircle2,
-  XCircle,
   RefreshCw,
   ArrowRight,
   AlertCircle,
@@ -96,7 +96,11 @@ export const Approvals: React.FC = () => {
   const { token, user } = useAuth();
   const canApprove =
     user?.role === "ADMIN" || user?.role === "ENGINEER" || user?.role === "SUPERINTENDENT";
-  const [activeTab, setActiveTab] = useState<"leave" | "reassignments" | "attendance">("leave");
+  // "View all" on the dashboard opens a tab with ?tab=leave|reassignments|attendance.
+  const tabParam = useRouterState({ select: (st) => (st.location.search as { tab?: string }).tab });
+  const [activeTab, setActiveTab] = useState<"leave" | "reassignments" | "attendance">(
+    tabParam === "reassignments" || tabParam === "attendance" ? tabParam : "leave",
+  );
   const [counts, setCounts] = useState<ApprovalsCounts>({ leave: 0, leaves: 0, reassignments: 0, attendance: 0, total: 0 });
   const [leaves, setLeaves] = useState<LeaveRequestItem[]>([]);
   const [reassignments, setReassignments] = useState<ReassignmentItem[]>([]);
@@ -231,7 +235,7 @@ export const Approvals: React.FC = () => {
 
       if (!res.ok) {
         const errData = await res.json();
-        const msg = errData?.detail?.message || errData?.detail || "Action failed";
+        const msg = problemFromBody(null, errData, "Action failed").message;
         setDecisionModal((prev) => ({ ...prev, submitting: false, error: String(msg) }));
         return;
       }
@@ -861,25 +865,28 @@ export const Approvals: React.FC = () => {
 
       {/* Decision Modal */}
       {decisionModal.open && decisionModal.item && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4 border border-slate-100">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                {decisionModal.action === "APPROVE" ? (
-                  <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                ) : (
-                  <XCircle className="h-5 w-5 text-rose-600" />
-                )}
-                {decisionModal.action === "APPROVE" ? "Confirm Approval" : "Reject Request"}
-              </h3>
-              <button
-                onClick={() => setDecisionModal((prev) => ({ ...prev, open: false }))}
-                className="text-slate-400 hover:text-slate-600"
+        <Modal
+          open
+          onClose={() => setDecisionModal((prev) => ({ ...prev, open: false }))}
+          dismissible={!decisionModal.submitting}
+          size="md"
+          title={decisionModal.action === "APPROVE" ? "Confirm Approval" : "Reject Request"}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setDecisionModal((prev) => ({ ...prev, open: false }))}>
+                Cancel
+              </Button>
+              <Button
+                variant={decisionModal.action === "APPROVE" ? "primary" : "destructive"}
+                loading={decisionModal.submitting}
+                onClick={handleConfirmDecision}
               >
-                ✕
-              </button>
-            </div>
-
+                {decisionModal.action === "APPROVE" ? "Confirm Approval" : "Confirm Rejection"}
+              </Button>
+            </>
+          }
+        >
+          <div className="space-y-4">
             <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs space-y-1">
               <div>
                 <span className="font-semibold text-slate-700">Request:</span>{" "}
@@ -908,65 +915,29 @@ export const Approvals: React.FC = () => {
             </div>
 
             {decisionModal.action === "REJECT" && (
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-800">
-                  Rejection Reason <span className="text-rose-500">* (Mandatory)</span>
-                </label>
-                <textarea
-                  rows={3}
-                  value={decisionModal.note}
-                  onChange={(e) => setDecisionModal((prev) => ({ ...prev, note: e.target.value, error: null }))}
-                  placeholder="State the operational reason for rejecting this request..."
-                  className="w-full text-xs p-2.5 rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-rose-500"
-                />
-              </div>
+              <TextArea
+                label="Rejection reason"
+                required
+                rows={3}
+                value={decisionModal.note}
+                onChange={(e) => setDecisionModal((prev) => ({ ...prev, note: e.target.value, error: null }))}
+                placeholder="State the operational reason for rejecting this request..."
+              />
             )}
 
             {decisionModal.action === "APPROVE" && (
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-800">
-                  Decision Note <span className="text-slate-400 font-normal">(Optional)</span>
-                </label>
-                <textarea
-                  rows={2}
-                  value={decisionModal.note}
-                  onChange={(e) => setDecisionModal((prev) => ({ ...prev, note: e.target.value }))}
-                  placeholder="Optional approval comments..."
-                  className="w-full text-xs p-2.5 rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
+              <TextArea
+                label="Decision note (optional)"
+                rows={2}
+                value={decisionModal.note}
+                onChange={(e) => setDecisionModal((prev) => ({ ...prev, note: e.target.value }))}
+                placeholder="Optional approval comments..."
+              />
             )}
 
-            {decisionModal.error && (
-              <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg text-xs flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
-                {decisionModal.error}
-              </div>
-            )}
-
-            <div className="flex items-center justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setDecisionModal((prev) => ({ ...prev, open: false }))}
-                className="px-4 py-2 border border-slate-300 text-slate-700 hover:bg-slate-100 rounded-lg text-xs font-medium transition"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={decisionModal.submitting}
-                onClick={handleConfirmDecision}
-                className={`px-4 py-2 text-white rounded-lg text-xs font-semibold transition flex items-center gap-1.5 ${
-                  decisionModal.action === "APPROVE"
-                    ? "bg-emerald-600 hover:bg-emerald-700"
-                    : "bg-rose-600 hover:bg-rose-700"
-                }`}
-              >
-                {decisionModal.submitting ? "Processing..." : decisionModal.action === "APPROVE" ? "Confirm Approval" : "Confirm Rejection"}
-              </button>
-            </div>
+            {decisionModal.error && <AlertBanner tone="error">{decisionModal.error}</AlertBanner>}
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

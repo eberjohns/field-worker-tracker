@@ -25,6 +25,7 @@ import {
   Banknote,
 } from "lucide-react";
 import { LookupSelect } from "../components/lookups/LookupSelect";
+import { ApiError, DatePicker, Modal, problemFromBody, useToast } from "../ui";
 
 interface Employee {
   id: string;
@@ -62,6 +63,7 @@ interface HierarchyNode {
 }
 
 export const Employees: React.FC = () => {
+  const toast = useToast();
   const { token, user } = useAuth();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
@@ -164,7 +166,7 @@ export const Employees: React.FC = () => {
       a.remove();
       window.URL.revokeObjectURL(url);
     } catch (err: any) {
-      alert(err.message || "Export failed");
+      toast.error(err, "Export failed");
     } finally {
       setExporting(false);
     }
@@ -466,9 +468,7 @@ export const Employees: React.FC = () => {
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(
-          errData.detail?.message || errData.detail || errData.message || `Creation failed (${res.status})`
-        );
+        throw new ApiError(problemFromBody(null, errData, `Creation failed (${res.status})`));
       }
 
       const created = await res.json();
@@ -657,7 +657,7 @@ export const Employees: React.FC = () => {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || err.message || "Failed to update supervisor crew break");
+        throw new ApiError(problemFromBody(null, err, "Failed to update supervisor crew break"));
       }
       setSuccessToast(`Crew break time updated for ${editingSupervisor.name}`);
       setTimeout(() => setSuccessToast(null), 5000);
@@ -665,7 +665,7 @@ export const Employees: React.FC = () => {
       await fetchEmployees();
       await fetchHierarchy();
     } catch (err: any) {
-      alert(err.message || "Failed to save crew break");
+      toast.error(err, "Failed to save crew break");
     } finally {
       setSupervisorBreakLoading(false);
     }
@@ -1630,15 +1630,14 @@ export const Employees: React.FC = () => {
 
       {/* Bulk Update Modal */}
       {bulkModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-lg border border-slate-200 max-w-md w-full p-6 space-y-4">
-            <h3 className="text-lg font-bold text-slate-900">
-              Bulk Update {selectedIds.length} Employee(s)
-            </h3>
-            <p className="text-xs text-slate-500">
-              Update accommodation, break override, or weekly off day for the selected workers.
-            </p>
-
+        <Modal
+          open
+          onClose={() => setBulkModalOpen(false)}
+          size="md"
+          title={<>Bulk Update {selectedIds.length} Employee(s)</>}
+          description="Update accommodation, break override, or weekly off day for the selected workers."
+        >
+          <div className="space-y-4">
             <form onSubmit={handleBulkUpdate} className="space-y-4">
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1">Weekly Off Day</label>
@@ -1689,38 +1688,25 @@ export const Employees: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Add Employee Modal */}
       {createModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-y-auto">
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-lg w-full p-6 space-y-4 my-8">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div>
-                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                  <UserPlus className="h-5 w-5 text-indigo-600" />
-                  Add New Employee
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Creates employee profile and linked user account with default password.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setCreateModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
+        <Modal
+          open
+          onClose={() => setCreateModalOpen(false)}
+          size="md"
+          title={<span className="inline-flex items-center gap-2"><UserPlus className="h-5 w-5 text-indigo-600" /> Add New Employee</span>}
+          description="Creates employee profile and linked user account with default password."
+        >
+          <div className="space-y-4">
             {createError && (
               <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-lg">
                 {createError}
               </div>
             )}
-
+  
             <form onSubmit={handleCreateEmployee} className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -1739,7 +1725,7 @@ export const Employees: React.FC = () => {
                     className="w-full border border-slate-300 rounded-lg p-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
-
+  
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
                     Full Name <span className="text-rose-500">*</span>
@@ -1755,7 +1741,7 @@ export const Employees: React.FC = () => {
                     className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
-
+  
                 {createTallyCheck && !createTallyCheck.available && (
                   <div className="col-span-2 p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-center gap-2">
                     <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
@@ -1764,7 +1750,7 @@ export const Employees: React.FC = () => {
                     </span>
                   </div>
                 )}
-
+  
                 {createTallyCheck && createTallyCheck.available && createTallyCheck.previously_used && (
                   <div className="col-span-2 p-3 rounded-lg bg-amber-50 border border-amber-300 text-xs text-amber-900 space-y-2">
                     <div className="flex items-start gap-2">
@@ -1790,7 +1776,7 @@ export const Employees: React.FC = () => {
                     </label>
                   </div>
                 )}
-
+  
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Role</label>
                   <select
@@ -1818,7 +1804,7 @@ export const Employees: React.FC = () => {
                     <option value="ENGINEER">Engineer</option>
                   </select>
                 </div>
-
+  
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Country</label>
                   <select
@@ -1832,7 +1818,7 @@ export const Employees: React.FC = () => {
                     <option value="SA">Saudi Arabia (SA)</option>
                   </select>
                 </div>
-
+  
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
                     Trade / Designation
@@ -1871,7 +1857,7 @@ export const Employees: React.FC = () => {
                     />
                   )}
                 </div>
-
+  
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">Grade Code</label>
                   <LookupSelect
@@ -1882,7 +1868,7 @@ export const Employees: React.FC = () => {
                     inputClassName="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
                   />
                 </div>
-
+  
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
                     Weekly Off Day
@@ -1903,7 +1889,7 @@ export const Employees: React.FC = () => {
                     <option value="THURSDAY">Thursday</option>
                   </select>
                 </div>
-
+  
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
                     Assigned Accommodation
@@ -1923,7 +1909,7 @@ export const Employees: React.FC = () => {
                     ))}
                   </select>
                 </div>
-
+  
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">Phone</label>
                   <input
@@ -1936,7 +1922,7 @@ export const Employees: React.FC = () => {
                     className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
-
+  
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">Email</label>
                   <input
@@ -1949,19 +1935,16 @@ export const Employees: React.FC = () => {
                     className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
-
+  
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Join Date</label>
-                  <input
-                    type="date"
+                  <DatePicker
+                    label="Join Date"
                     value={createFormData.join_date}
-                    onChange={(e) =>
-                      setCreateFormData({ ...createFormData, join_date: e.target.value })
-                    }
-                    className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    onChange={(iso) => setCreateFormData({ ...createFormData, join_date: iso })}
+                    size="sm"
                   />
                 </div>
-
+  
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
                     Break Override (Minutes)
@@ -1980,7 +1963,7 @@ export const Employees: React.FC = () => {
                   />
                 </div>
               </div>
-
+  
               {/* Reporting & Leadership Oversight Section */}
               <div className="border-t border-slate-100 pt-3 space-y-3">
                 <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-800">
@@ -1990,7 +1973,7 @@ export const Employees: React.FC = () => {
                 <p className="text-[11px] text-slate-500">
                   Assign reporting lines directly upon creation. These relationships can also be viewed and edited later in the employee profile.
                 </p>
-
+  
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {createFormData.role === "WORKER" && (
                     <div>
@@ -2013,7 +1996,7 @@ export const Employees: React.FC = () => {
                       </select>
                     </div>
                   )}
-
+  
                   {createFormData.role !== "ENGINEER" && (
                     <div>
                       <label className="block text-xs font-medium text-slate-700 mb-1">
@@ -2038,7 +2021,7 @@ export const Employees: React.FC = () => {
                       </select>
                     </div>
                   )}
-
+  
                   <div>
                     <label className="block text-xs font-medium text-slate-700 mb-1">
                       Project Engineer
@@ -2060,7 +2043,7 @@ export const Employees: React.FC = () => {
                   </div>
                 </div>
               </div>
-
+  
               <div className="pt-1">
                 <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-slate-700">
                   <input
@@ -2074,7 +2057,7 @@ export const Employees: React.FC = () => {
                   <span>Designated Driver (eligible for site transport runs)</span>
                 </label>
               </div>
-
+  
               {/* Optional Initial Salary Structure Setup */}
               <div className="border-t border-slate-100 pt-3 space-y-3">
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -2089,7 +2072,7 @@ export const Employees: React.FC = () => {
                     Configure Initial Salary Structure Now (Optional)
                   </span>
                 </label>
-
+  
                 {includeInitialSalary && (
                   <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-3">
                     <p className="text-[11px] text-slate-500">
@@ -2183,19 +2166,18 @@ export const Employees: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Effective Date</label>
-                        <input
-                          type="date"
+                        <DatePicker
+                          label="Effective Date"
                           value={initialSalaryData.effective_from || createFormData.join_date}
-                          onChange={(e) => setInitialSalaryData({ ...initialSalaryData, effective_from: e.target.value })}
-                          className="w-full p-1.5 border rounded bg-white text-xs"
+                          onChange={(iso) => setInitialSalaryData({ ...initialSalaryData, effective_from: iso })}
+                          size="sm"
                         />
                       </div>
                     </div>
                   </div>
                 )}
               </div>
-
+  
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
                 <button
                   type="button"
@@ -2214,26 +2196,37 @@ export const Employees: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Supervisor Crew Break Time Modal */}
       {editingSupervisor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-lg border border-slate-200 max-w-md w-full p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <Coffee className="h-5 w-5 text-amber-600" />
-                Supervisor Crew Break Time
-              </h3>
+        <Modal
+          open
+          onClose={() => setEditingSupervisor(null)}
+          size="md"
+          title={<span className="inline-flex items-center gap-2"><Coffee className="h-5 w-5 text-amber-600" /> Supervisor Crew Break Time</span>}
+          footer={
+            <div className="flex w-full flex-wrap items-center justify-end gap-2">
               <button
-                type="button"
-                onClick={() => setEditingSupervisor(null)}
-                className="text-slate-400 hover:text-slate-600"
-              >
-                <X className="h-4 w-4" />
-              </button>
+                  type="button"
+                  onClick={() => setEditingSupervisor(null)}
+                  className="px-4 py-2 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-50 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={supervisorBreakLoading}
+                  onClick={handleSaveSupervisorBreak}
+                  className="px-4 py-2 bg-amber-600 text-white rounded-lg text-xs font-semibold hover:bg-amber-700 disabled:opacity-50 transition shadow-xs"
+                >
+                  {supervisorBreakLoading ? "Saving..." : "Save Crew Break"}
+                </button>
             </div>
+          }
+        >
+          <div className="space-y-4">
             <div>
               <p className="text-sm font-semibold text-slate-800">
                 {editingSupervisor.name} ({editingSupervisor.tally_id})
@@ -2262,38 +2255,18 @@ export const Employees: React.FC = () => {
               </p>
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">
-                Effective From Date
-              </label>
-              <input
-                type="date"
+              <DatePicker
+                label="Effective From Date"
                 value={supervisorBreakEffectiveFrom}
-                onChange={(e) => setSupervisorBreakEffectiveFrom(e.target.value)}
-                className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                onChange={(iso) => setSupervisorBreakEffectiveFrom(iso)}
+                size="sm"
               />
               <p className="text-[11px] text-slate-400 mt-1">
                 Creates or updates effective-dated salary records from this date. Unlocked past attendance will be recalculated automatically.
               </p>
             </div>
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setEditingSupervisor(null)}
-                className="px-4 py-2 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-50 transition"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={supervisorBreakLoading}
-                onClick={handleSaveSupervisorBreak}
-                className="px-4 py-2 bg-amber-600 text-white rounded-lg text-xs font-semibold hover:bg-amber-700 disabled:opacity-50 transition shadow-xs"
-              >
-                {supervisorBreakLoading ? "Saving..." : "Save Crew Break"}
-              </button>
-            </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

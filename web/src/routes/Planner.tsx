@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "@tanstack/react-router";
 import { useAuth } from "../context/AuthContext";
+import { ensureOk, useToast } from "../ui";
 import {
   CalendarDays,
   ChevronLeft,
@@ -50,6 +51,7 @@ function formatReadableWeek(weekStartStr: string): string {
 
 export const Planner: React.FC = () => {
   const { token, user } = useAuth();
+  const toast = useToast();
 
   // Navigation & Tabs
   const [activeTab, setActiveTab] = useState<"ROSTER" | "COVERAGE">("COVERAGE");
@@ -289,7 +291,7 @@ export const Planner: React.FC = () => {
       const res = await fetch(`/api/v1/roster?week_start=${weekStartDate}&format=xlsx`, {
         headers: authHeaders,
       });
-      if (!res.ok) throw new Error("Failed to export Excel roster.");
+      await ensureOk(res, "Failed to export Excel roster.");
 
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
@@ -300,8 +302,8 @@ export const Planner: React.FC = () => {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-    } catch (err: any) {
-      alert(err.message || "Failed to download Excel export.");
+    } catch (err: unknown) {
+      toast.error(err, "Failed to download Excel export.");
     } finally {
       setExportingExcel(false);
     }

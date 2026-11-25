@@ -19,6 +19,7 @@ import {
   getExportStatus,
   downloadFile,
 } from "./api";
+import { DatePicker, EmptyState } from "../../ui";
 
 export const ReportsHub: React.FC = () => {
   const { token, user } = useAuth();
@@ -135,7 +136,7 @@ export const ReportsHub: React.FC = () => {
   });
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 min-h-[calc(100vh-140px)]">
+    <div className="flex flex-col lg:flex-row gap-6">
       {/* Left Sidebar: Reports Catalog */}
       <div className="w-full lg:w-80 flex-shrink-0 bg-white border border-slate-200 rounded-xl shadow-sm p-4 flex flex-col gap-4">
         <div>
@@ -158,7 +159,7 @@ export const ReportsHub: React.FC = () => {
         </div>
 
         {/* List of Reports */}
-        <div className="flex-1 overflow-y-auto space-y-1 pr-1 max-h-[500px] lg:max-h-[calc(100vh-320px)]">
+        <div className="flex-1 overflow-y-auto fw-scroll space-y-1 pr-1 max-h-[500px] lg:max-h-[calc(100vh-320px)]">
           {loadingCatalog ? (
             <div className="py-8 text-center text-slate-400 flex flex-col items-center gap-2">
               <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
@@ -307,29 +308,19 @@ export const ReportsHub: React.FC = () => {
                     {isDateRange && (
                       <>
                         <div>
-                          <label className="block text-xs font-medium text-slate-700 mb-1">
-                            From Date
-                          </label>
-                          <input
-                            type="date"
+                          <DatePicker
+                            label="From Date"
                             value={filterParams.date_from || ""}
-                            onChange={(e) =>
-                              setFilterParams((prev) => ({ ...prev, date_from: e.target.value }))
-                            }
-                            className="w-full text-xs px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            onChange={(iso) => setFilterParams((prev) => ({ ...prev, date_from: iso }))}
+                            size="sm"
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-slate-700 mb-1">
-                            To Date
-                          </label>
-                          <input
-                            type="date"
+                          <DatePicker
+                            label="To Date"
                             value={filterParams.date_to || ""}
-                            onChange={(e) =>
-                              setFilterParams((prev) => ({ ...prev, date_to: e.target.value }))
-                            }
-                            className="w-full text-xs px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            onChange={(iso) => setFilterParams((prev) => ({ ...prev, date_to: iso }))}
+                            size="sm"
                           />
                         </div>
                       </>
@@ -457,31 +448,21 @@ export const ReportsHub: React.FC = () => {
                 )}
               </div>
 
-              <div className="flex-1 overflow-auto max-h-[600px]">
+              {/* Scrolls only when there is a table: an empty preview shows no scrollbar (Batch 10 B). */}
+              <div className={reportData && reportData.data.length > 0 && !runningReport ? "flex-1 overflow-auto fw-scroll max-h-[600px]" : "flex-1"}>
                 {runningReport ? (
                   <div className="py-20 flex flex-col items-center justify-center gap-2 text-slate-400">
                     <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
                     <span className="text-xs">Computing report rows...</span>
                   </div>
                 ) : !reportData ? (
-                  <div className="py-20 flex flex-col items-center justify-center text-center p-6 gap-3">
-                    <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
-                      <FileSpreadsheet className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-medium text-slate-800">
-                        Ready to generate {selectedReport.name}
-                      </h4>
-                      <p className="text-xs text-slate-400 max-w-sm mt-0.5">
-                        Set your preferred filters above and click "Run Preview", or click "Export
-                        Excel" to download directly.
-                      </p>
-                    </div>
-                  </div>
+                  <EmptyState
+                    icon={<FileSpreadsheet className="h-5 w-5" />}
+                    title={`Ready to generate ${selectedReport.name}`}
+                    description='Set your filters above and click "Run Preview", or "Export Excel" to download directly.'
+                  />
                 ) : reportData.data.length === 0 ? (
-                  <div className="py-20 text-center text-slate-400 text-xs">
-                    No matching records found for the selected period and criteria.
-                  </div>
+                  <EmptyState title="No matching records" description="Nothing matches the selected period and criteria." />
                 ) : (
                   <table className="w-full text-left text-xs text-slate-700 border-collapse">
                     <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold sticky top-0 z-10 shadow-sm">
@@ -519,8 +500,8 @@ export const ReportsHub: React.FC = () => {
             </div>
           </>
         ) : (
-          <div className="p-12 text-center text-slate-400 bg-white border border-slate-200 rounded-xl">
-            Select a report from the catalog.
+          <div className="bg-white border border-slate-200 rounded-xl">
+            <EmptyState title="No report selected" description="Select a report from the catalog." />
           </div>
         )}
       </div>

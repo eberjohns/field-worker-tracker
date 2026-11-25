@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { currencyForCountry, formatMoney } from "../features/format/money";
-import { Link } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { useAuth } from "../context/AuthContext";
 import {
   CalendarDays,
@@ -11,7 +11,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   Trash2,
-  X,
   Loader2,
   Search,
   UserCheck,
@@ -42,6 +41,7 @@ import {
   OperationalShiftCreate,
   CandidateRecommendation,
 } from "../features/planner/types";
+import { ApiError, DatePicker, ensureOk, Modal, problemFromBody, useDialogs, useToast } from "../ui";
 
 function formatReadableWeek(weekStartStr: string): string {
   try {
@@ -127,6 +127,8 @@ interface DraftBatchHistoryPayload {
 }
 
 export const OperationalPlanner: React.FC = () => {
+  const toast = useToast();
+  const dialogs = useDialogs();
   const { token, user } = useAuth();
   const canDirectEdit =
     user?.role === "ADMIN" || user?.role === "ENGINEER" || user?.role === "SUPERINTENDENT";
@@ -242,7 +244,7 @@ export const OperationalPlanner: React.FC = () => {
       a.remove();
       window.URL.revokeObjectURL(url);
     } catch (err: any) {
-      alert(err.message || "Failed to download Excel roster export.");
+      toast.error(err, "Failed to download Excel roster export.");
     } finally {
       setExportingRoster(false);
     }
@@ -250,6 +252,11 @@ export const OperationalPlanner: React.FC = () => {
 
   // Staffing Gaps & Reassignment Request Modal State
   const [staffingGaps, setStaffingGaps] = useState<any[]>([]);
+  // Menu item "Staffing Gaps" opens this page at #staffing-gaps: show every gap, not the first 4.
+  const showGapsFocus = useRouterState({ select: (st) => st.location.hash }) === "staffing-gaps";
+  useEffect(() => {
+    if (showGapsFocus) document.getElementById("staffing-gaps")?.scrollIntoView({ block: "start" });
+  }, [showGapsFocus, staffingGaps.length]);
   const [allEmployeesList, setAllEmployeesList] = useState<any[]>([]);
   const [reassignmentModalOpen, setReassignmentModalOpen] = useState<boolean>(false);
   const [reassignType, setReassignType] = useState<"REPLACE" | "MOVE" | "ADD" | "CANCEL">("REPLACE");
@@ -715,7 +722,7 @@ export const OperationalPlanner: React.FC = () => {
 
       const data = await res.json();
       if (!res.ok) {
-        const msg = data?.detail?.message || data?.detail || "Failed to create reassignment request";
+        const msg = problemFromBody(null, data, "Failed to create reassignment request").message;
         setReassignError(String(msg));
         return;
       }
@@ -1004,9 +1011,9 @@ export const OperationalPlanner: React.FC = () => {
     );
   };
 
-  const handleDiscardDraftBatch = () => {
+  const handleDiscardDraftBatch = async () => {
     if (draftBatch.length === 0) return;
-    if (!window.confirm(`Discard all ${draftBatch.length} staged draft reassignment(s)?`)) return;
+    if (!(await dialogs.confirm({ title: "Discard staged drafts?", message: `Discard all ${draftBatch.length} staged draft reassignment(s)?`, confirmLabel: "Discard", variant: "destructive" }))) return;
     const before = draftBatch;
     persistDraftBatch([]);
     draftHistory.push(`Discard ${before.length} draft item(s)`, { before, after: [] });
@@ -1042,7 +1049,7 @@ export const OperationalPlanner: React.FC = () => {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(data?.detail?.message || data?.detail || "Failed to submit batch request");
+        throw new ApiError(problemFromBody(null, data, "Failed to submit batch request"));
       }
       setBatchSuccess(
         `Submitted ${data.count || draftBatch.length} reassignment request(s) for approval!`
@@ -1162,10 +1169,7 @@ export const OperationalPlanner: React.FC = () => {
           method: "DELETE",
           headers: { Authorization: `Bearer ${token}` },
         });
-        if (!res.ok) {
-          const errJson = await res.json().catch(() => ({}));
-          throw new Error(errJson.detail?.message || errJson.detail || "Failed to remove shift");
-        }
+        await ensureOk(res, "Failed to remove shift");
         if (existingWorker) {
           deletedPayloads.push({
             job_item_id: selectedCell.item.job_item_id,
@@ -1202,10 +1206,7 @@ export const OperationalPlanner: React.FC = () => {
           body: JSON.stringify(payload),
         });
 
-        if (!res.ok) {
-          const errJson = await res.json().catch(() => ({}));
-          throw new Error(errJson.detail?.message || errJson.detail || "Failed to remove base shift");
-        }
+        await ensureOk(res, "Failed to remove base shift");
         const created = await res.json().catch(() => null);
         if (created?.id) createdShiftIds.push(created.id);
         createdPayloads.push(payload);
@@ -1238,9 +1239,7 @@ export const OperationalPlanner: React.FC = () => {
 
         if (!res.ok) {
           const errJson = await res.json().catch(() => ({}));
-          throw new Error(
-            errJson.detail?.message || errJson.detail || "Failed to assign operational shift"
-          );
+          throw new ApiError(problemFromBody(null, errJson, "Failed to assign operational shift"));
         }
         const created = await res.json().catch(() => null);
         if (created?.id) createdShiftIds.push(created.id);
@@ -1261,7 +1260,7 @@ export const OperationalPlanner: React.FC = () => {
         window.scrollTo({ top: scrollPos, behavior: "instant" });
       }, 0);
     } catch (err: any) {
-      alert(`Error saving operational roster: ${err.message}`);
+      toast.error(err, "Error saving operational roster");
     } finally {
       setSavingShift(false);
     }
@@ -1559,7 +1558,8 @@ export const OperationalPlanner: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-50">
+    // One scroller (Batch 10 B): the page fills the shell; the roster table, or else <main>, scrolls.
+    <div className="flex flex-col flex-1 min-h-0 bg-slate-50">
       {/* Top Controls Bar - Light Enterprise Styling */}
       <header className="bg-white border-b border-slate-200 px-6 py-4 sticky top-0 z-20">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -1882,8 +1882,13 @@ export const OperationalPlanner: React.FC = () => {
       )}
 
       {/* Staffing Gaps / Uncovered Leave Shortages Banner */}
+      {showGapsFocus && staffingGaps.length === 0 && (
+        <div id="staffing-gaps" className="bg-emerald-50 border-b border-emerald-200 px-6 py-2.5 text-xs text-emerald-900">
+          No leave shifts need cover right now.
+        </div>
+      )}
       {staffingGaps.length > 0 && (
-        <div className="bg-amber-50 border-b border-amber-200 px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+        <div id="staffing-gaps" className="bg-amber-50 border-b border-amber-200 px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
           <div className="flex items-center gap-2.5">
             <div className="p-1.5 bg-amber-100 rounded-full text-amber-700">
               <AlertTriangle className="h-4 w-4" />
@@ -1893,7 +1898,7 @@ export const OperationalPlanner: React.FC = () => {
                 {staffingGaps.length} Leave Shift{staffingGaps.length > 1 ? "s" : ""} Requiring Cover:
               </span>
               <div className="flex flex-wrap items-center gap-2 mt-1">
-                {staffingGaps.slice(0, 4).map((gap, idx) => (
+                {staffingGaps.slice(0, showGapsFocus ? staffingGaps.length : 4).map((gap, idx) => (
                   <span
                     key={idx}
                     className="inline-flex items-center gap-1.5 bg-white px-2 py-0.5 rounded border border-amber-300 text-slate-800 text-xs shadow-2xs"
@@ -1911,7 +1916,7 @@ export const OperationalPlanner: React.FC = () => {
                     </button>
                   </span>
                 ))}
-                {staffingGaps.length > 4 && (
+                {!showGapsFocus && staffingGaps.length > 4 && (
                   <span className="text-xs font-semibold text-amber-800">
                     +{staffingGaps.length - 4} more
                   </span>
@@ -1935,295 +1940,276 @@ export const OperationalPlanner: React.FC = () => {
 
       {/* Request Temporary Reassignment Modal (D2, BR-SC-04) */}
       {reassignmentModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
-          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-xl max-h-[92vh] flex flex-col overflow-hidden">
-            {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-              <div>
-                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <Users className="h-5 w-5 text-indigo-600" />
-                  Request Temporary Reassignment
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Operational adjustment for specific dates (requires ≥ 3 days notice per company policy).
-                </p>
+        <Modal
+          open
+          onClose={() => setReassignmentModalOpen(false)}
+          size="lg"
+          title={<span className="inline-flex items-center gap-2"><Users className="h-5 w-5 text-indigo-600" /> Request Temporary Reassignment</span>}
+          description="Operational adjustment for specific dates (requires ≥ 3 days notice per company policy)."
+        >
+          <form onSubmit={handleCreateReassignment} className="space-y-4">
+            {/* Type Switcher */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                Reassignment Type
+              </label>
+              <div className="grid grid-cols-4 gap-2">
+                {(["REPLACE", "MOVE", "ADD", "CANCEL"] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => {
+                      setReassignType(t);
+                      setReassignError(null);
+                      setReassignPreview(null);
+                    }}
+                    className={`py-2 px-2.5 rounded-lg text-xs font-bold text-center border transition cursor-pointer ${
+                      reassignType === t
+                        ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
+                        : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
               </div>
-              <button
-                type="button"
-                onClick={() => setReassignmentModalOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 cursor-pointer"
-              >
-                <X className="h-5 w-5" />
-              </button>
+              <p className="text-2xs text-slate-500 mt-1.5">
+                {reassignType === "REPLACE" && "Assign a replacement worker to cover an absent worker's shift."}
+                {reassignType === "MOVE" && "Relocate a worker from their blueprint site to another job site."}
+                {reassignType === "ADD" && "Deploy an additional worker to a job site for operational need."}
+                {reassignType === "CANCEL" && "Cancel a scheduled shift due to client closure or weather conditions."}
+              </p>
             </div>
 
-            {/* Modal Body / Form */}
-            <form onSubmit={handleCreateReassignment} className="flex-1 overflow-y-auto p-6 space-y-4">
-              {/* Type Switcher */}
+            {/* Date Selectors & Notice Period Banner */}
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                  Reassignment Type
+                <DatePicker
+                  label="Date From"
+                  required
+                  value={reassignDateFrom}
+                  onChange={(iso) => setReassignDateFrom(iso)}
+                  size="sm"
+                />
+              </div>
+              <div>
+                <DatePicker
+                  label="Date To"
+                  required
+                  value={reassignDateTo}
+                  onChange={(iso) => setReassignDateTo(iso)}
+                  size="sm"
+                />
+              </div>
+            </div>
+
+            {/* Notice Validation Banner */}
+            <div
+              className={`p-3 rounded-lg border text-xs flex items-center justify-between gap-2 ${
+                noticeDays >= 3
+                  ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                  : "bg-rose-50 border-rose-200 text-rose-800"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                {noticeDays >= 3 ? (
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                ) : (
+                  <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0" />
+                )}
+                <span>
+                  {noticeDays >= 3
+                    ? `${noticeDays} days advance notice (Valid notice period per BR-SC-04)`
+                    : `Notice is ${noticeDays} day(s). System requires strictly ≥ 3 days notice.`}
+                </span>
+              </div>
+              <span className="text-2xs font-extrabold uppercase tracking-wide">
+                {noticeDays >= 3 ? "Allowed" : user?.role === "ADMIN" ? "Admin Override" : "Refused"}
+              </span>
+            </div>
+
+            {/* Original Worker (REPLACE, MOVE, CANCEL) */}
+            {(reassignType === "REPLACE" || reassignType === "MOVE" || reassignType === "CANCEL") && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Original Worker (Absent / Being Moved) <span className="text-rose-500">*</span>
                 </label>
-                <div className="grid grid-cols-4 gap-2">
-                  {(["REPLACE", "MOVE", "ADD", "CANCEL"] as const).map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => {
-                        setReassignType(t);
-                        setReassignError(null);
-                        setReassignPreview(null);
-                      }}
-                      className={`py-2 px-2.5 rounded-lg text-xs font-bold text-center border transition cursor-pointer ${
-                        reassignType === t
-                          ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
-                          : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-                      }`}
-                    >
-                      {t}
-                    </button>
+                <select
+                  value={reassignOrigEmpId}
+                  onChange={(e) => setReassignOrigEmpId(e.target.value)}
+                  className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
+                >
+                  <option value="">-- Select Worker --</option>
+                  {availableEmployees.map((emp: any) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.name || emp.employee_name} ({emp.tally_id || "No Tally"} • {emp.staff_grade_description || emp.role || "Worker"})
+                    </option>
                   ))}
-                </div>
-                <p className="text-2xs text-slate-500 mt-1.5">
-                  {reassignType === "REPLACE" && "Assign a replacement worker to cover an absent worker's shift."}
-                  {reassignType === "MOVE" && "Relocate a worker from their blueprint site to another job site."}
-                  {reassignType === "ADD" && "Deploy an additional worker to a job site for operational need."}
-                  {reassignType === "CANCEL" && "Cancel a scheduled shift due to client closure or weather conditions."}
-                </p>
+                </select>
               </div>
+            )}
 
-              {/* Date Selectors & Notice Period Banner */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Date From <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={reassignDateFrom}
-                    onChange={(e) => setReassignDateFrom(e.target.value)}
-                    className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Date To <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={reassignDateTo}
-                    onChange={(e) => setReassignDateTo(e.target.value)}
-                    className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
-                  />
-                </div>
+            {/* Target Worksite & Job Item (REPLACE, MOVE, ADD) */}
+            {(reassignType === "REPLACE" || reassignType === "MOVE" || reassignType === "ADD") && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Target Worksite & Job Item <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  value={reassignJobItemId}
+                  onChange={(e) => setReassignJobItemId(e.target.value)}
+                  className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
+                >
+                  <option value="">-- Select Target Job Item --</option>
+                  {availableJobItems.map((j) => (
+                    <option key={j.job_item_id} value={j.job_item_id}>
+                      {j.label}
+                    </option>
+                  ))}
+                </select>
               </div>
+            )}
 
-              {/* Notice Validation Banner */}
-              <div
-                className={`p-3 rounded-lg border text-xs flex items-center justify-between gap-2 ${
-                  noticeDays >= 3
-                    ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-                    : "bg-rose-50 border-rose-200 text-rose-800"
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  {noticeDays >= 3 ? (
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                  ) : (
-                    <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0" />
-                  )}
-                  <span>
-                    {noticeDays >= 3
-                      ? `${noticeDays} days advance notice (Valid notice period per BR-SC-04)`
-                      : `Notice is ${noticeDays} day(s). System requires strictly ≥ 3 days notice.`}
-                  </span>
-                </div>
-                <span className="text-2xs font-extrabold uppercase tracking-wide">
-                  {noticeDays >= 3 ? "Allowed" : user?.role === "ADMIN" ? "Admin Override" : "Refused"}
-                </span>
-              </div>
-
-              {/* Original Worker (REPLACE, MOVE, CANCEL) */}
-              {(reassignType === "REPLACE" || reassignType === "MOVE" || reassignType === "CANCEL") && (
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Original Worker (Absent / Being Moved) <span className="text-rose-500">*</span>
+            {/* Replacement / New Worker (REPLACE, ADD) */}
+            {(reassignType === "REPLACE" || reassignType === "ADD") && (
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    Replacement / New Worker <span className="text-rose-500">*</span>
                   </label>
-                  <select
-                    value={reassignOrigEmpId}
-                    onChange={(e) => setReassignOrigEmpId(e.target.value)}
-                    className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
-                  >
-                    <option value="">-- Select Worker --</option>
-                    {availableEmployees.map((emp: any) => (
-                      <option key={emp.id} value={emp.id}>
-                        {emp.name || emp.employee_name} ({emp.tally_id || "No Tally"} • {emp.staff_grade_description || emp.role || "Worker"})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {/* Target Worksite & Job Item (REPLACE, MOVE, ADD) */}
-              {(reassignType === "REPLACE" || reassignType === "MOVE" || reassignType === "ADD") && (
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Target Worksite & Job Item <span className="text-rose-500">*</span>
-                  </label>
-                  <select
-                    value={reassignJobItemId}
-                    onChange={(e) => setReassignJobItemId(e.target.value)}
-                    className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
-                  >
-                    <option value="">-- Select Target Job Item --</option>
-                    {availableJobItems.map((j) => (
-                      <option key={j.job_item_id} value={j.job_item_id}>
-                        {j.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {/* Replacement / New Worker (REPLACE, ADD) */}
-              {(reassignType === "REPLACE" || reassignType === "ADD") && (
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-semibold text-slate-700">
-                      Replacement / New Worker <span className="text-rose-500">*</span>
-                    </label>
-                    <button
-                      type="button"
-                      onClick={handlePreviewReassignment}
-                      disabled={previewLoading || !reassignNewEmpId}
-                      className="text-xs text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 disabled:opacity-40 cursor-pointer"
-                    >
-                      {previewLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                      Preview Worker Hours
-                    </button>
-                  </div>
-                  <select
-                    value={reassignNewEmpId}
-                    onChange={(e) => setReassignNewEmpId(e.target.value)}
-                    className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
-                  >
-                    <option value="">-- Select Replacement Worker --</option>
-                    {availableEmployees.map((emp: any) => (
-                      <option key={emp.id} value={emp.id}>
-                        {emp.name || emp.employee_name} ({emp.tally_id || "No Tally"} • {emp.staff_grade_description || emp.role || "Worker"})
-                      </option>
-                    ))}
-                  </select>
-
-                  {/* Preview Result Card */}
-                  {reassignPreview && (
-                    <div className="mt-2.5 p-3 rounded-lg bg-indigo-50/70 border border-indigo-200 text-xs space-y-1">
-                      <div className="font-bold text-indigo-900 flex items-center justify-between">
-                        <span>Projected Total Weekly Hours: {reassignPreview.total_weekly_hours}h</span>
-                        {reassignPreview.planned_overtime_hours > 0 && (
-                          <span className="text-amber-700 font-bold">
-                            OT: +{reassignPreview.planned_overtime_hours}h
-                          </span>
-                        )}
-                      </div>
-                      {reassignPreview.warnings?.length > 0 ? (
-                        <div className="text-rose-700 space-y-0.5 pt-1">
-                          {reassignPreview.warnings.map((w: string, idx: number) => (
-                            <div key={idx} className="flex items-center gap-1">
-                              <AlertCircle className="h-3 w-3 shrink-0" />
-                              <span>{w}</span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-2xs text-emerald-700 font-medium">
-                          ✓ No schedule conflicts or overtime violations detected.
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Reason Category & Reason */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Reason Category <span className="text-rose-500">*</span>
-                  </label>
-                  <select
-                    value={reassignReasonCategory}
-                    onChange={(e) => setReassignReasonCategory(e.target.value)}
-                    className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
-                  >
-                    <option value="LEAVE_COVER">Leave Cover Absence</option>
-                    <option value="CAPACITY">Operational Capacity Shortfall</option>
-                    <option value="WEATHER">Weather Conditions</option>
-                    <option value="PRIORITY">High-Priority Client Request</option>
-                    <option value="OTHER">Other Operational Need</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Reason Details <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Covering sick leave for gardener..."
-                    value={reassignReason}
-                    onChange={(e) => setReassignReason(e.target.value)}
-                    className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
-                  />
-                </div>
-              </div>
-
-              {/* Errors & Success Banners */}
-              {reassignError && (
-                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-lg flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 shrink-0" />
-                  <span>{reassignError}</span>
-                </div>
-              )}
-              {reassignSuccess && (
-                <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-lg flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 shrink-0" />
-                  <span>{reassignSuccess}</span>
-                </div>
-              )}
-
-              {/* Modal Footer Actions */}
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-                <span className="text-2xs text-slate-400">
-                  Engineer or Admin approval required before operational schedule is updated.
-                </span>
-                <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setReassignmentModalOpen(false)}
-                    className="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                    onClick={handlePreviewReassignment}
+                    disabled={previewLoading || !reassignNewEmpId}
+                    className="text-xs text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 disabled:opacity-40 cursor-pointer"
                   >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={reassignSubmitting || (noticeDays < 3 && user?.role !== "ADMIN")}
-                    className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white flex items-center gap-1.5 shadow-xs transition cursor-pointer"
-                  >
-                    {reassignSubmitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                    Submit Reassignment Request
+                    {previewLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                    Preview Worker Hours
                   </button>
                 </div>
+                <select
+                  value={reassignNewEmpId}
+                  onChange={(e) => setReassignNewEmpId(e.target.value)}
+                  className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
+                >
+                  <option value="">-- Select Replacement Worker --</option>
+                  {availableEmployees.map((emp: any) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.name || emp.employee_name} ({emp.tally_id || "No Tally"} • {emp.staff_grade_description || emp.role || "Worker"})
+                    </option>
+                  ))}
+                </select>
+
+                {/* Preview Result Card */}
+                {reassignPreview && (
+                  <div className="mt-2.5 p-3 rounded-lg bg-indigo-50/70 border border-indigo-200 text-xs space-y-1">
+                    <div className="font-bold text-indigo-900 flex items-center justify-between">
+                      <span>Projected Total Weekly Hours: {reassignPreview.total_weekly_hours}h</span>
+                      {reassignPreview.planned_overtime_hours > 0 && (
+                        <span className="text-amber-700 font-bold">
+                          OT: +{reassignPreview.planned_overtime_hours}h
+                        </span>
+                      )}
+                    </div>
+                    {reassignPreview.warnings?.length > 0 ? (
+                      <div className="text-rose-700 space-y-0.5 pt-1">
+                        {reassignPreview.warnings.map((w: string, idx: number) => (
+                          <div key={idx} className="flex items-center gap-1">
+                            <AlertCircle className="h-3 w-3 shrink-0" />
+                            <span>{w}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-2xs text-emerald-700 font-medium">
+                        ✓ No schedule conflicts or overtime violations detected.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
-            </form>
-          </div>
-        </div>
+            )}
+
+            {/* Reason Category & Reason */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Reason Category <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  value={reassignReasonCategory}
+                  onChange={(e) => setReassignReasonCategory(e.target.value)}
+                  className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
+                >
+                  <option value="LEAVE_COVER">Leave Cover Absence</option>
+                  <option value="CAPACITY">Operational Capacity Shortfall</option>
+                  <option value="WEATHER">Weather Conditions</option>
+                  <option value="PRIORITY">High-Priority Client Request</option>
+                  <option value="OTHER">Other Operational Need</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Reason Details <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Covering sick leave for gardener..."
+                  value={reassignReason}
+                  onChange={(e) => setReassignReason(e.target.value)}
+                  className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
+                />
+              </div>
+            </div>
+
+            {/* Errors & Success Banners */}
+            {reassignError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-lg flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{reassignError}</span>
+              </div>
+            )}
+            {reassignSuccess && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-lg flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                <span>{reassignSuccess}</span>
+              </div>
+            )}
+
+            {/* Modal Footer Actions */}
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+              <span className="text-2xs text-slate-400">
+                Engineer or Admin approval required before operational schedule is updated.
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setReassignmentModalOpen(false)}
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={reassignSubmitting || (noticeDays < 3 && user?.role !== "ADMIN")}
+                  className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+                >
+                  {reassignSubmitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  Submit Reassignment Request
+                </button>
+              </div>
+            </div>
+          </form>
+        </Modal>
       )}
 
       {/* Main Grid Content */}
-      <main className="flex-1 overflow-auto p-6 space-y-6">
+      <main
+        className={`flex-1 min-h-0 p-6 ${
+          activeLens === "ROSTER" && rosterData && !loading ? "flex flex-col overflow-hidden" : "overflow-auto fw-scroll space-y-6"
+        }`}
+      >
         {loading ? (
           <div className="flex flex-col items-center justify-center h-64 text-slate-400">
             <Loader2 className="h-8 w-8 animate-spin mb-2" />
@@ -2548,7 +2534,7 @@ export const OperationalPlanner: React.FC = () => {
           </div>
         ) : activeLens === "ROSTER" && rosterData ? (
           /* Worker Roster View */
-          <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
+          <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col flex-1 min-h-0">
             {/* Worker Roster Toolbar */}
             <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-3">
@@ -2615,7 +2601,7 @@ export const OperationalPlanner: React.FC = () => {
             </div>
 
             {/* Persistent Header Table */}
-            <div className="overflow-auto max-h-[calc(100vh-250px)]">
+            <div className="flex-1 min-h-0 overflow-auto fw-scroll">
               <table className="w-full text-left text-xs border-collapse">
                 <thead className="sticky top-0 z-10 bg-slate-100 shadow-sm border-b border-slate-200">
                   <tr className="text-slate-600">
@@ -2677,29 +2663,52 @@ export const OperationalPlanner: React.FC = () => {
 
       {/* Single-Action Operational Modal - Light Theme Enterprise */}
       {selectedCell && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden">
-            {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-              <div>
-                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <CalendarDays className="h-5 w-5 text-indigo-600" />
-                  {isSupervisorDraftMode ? "Stage Temporary Reassignment (Draft)" : "Operational Shift Action"}
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {selectedCell.cell.weekday} {selectedCell.cell.work_date} • {selectedCell.worksite.job_number} (
-                  {selectedCell.item.sub_item_code} - {selectedCell.item.staff_grade_description})
-                </p>
-              </div>
-
-              <button
-                onClick={handleCancelModal}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200"
-              >
-                <X className="h-5 w-5" />
-              </button>
+        <Modal
+          open
+          onClose={handleCancelModal}
+          size="lg"
+          title={<span className="inline-flex items-center gap-2"><CalendarDays className="h-5 w-5 text-indigo-600" /> {isSupervisorDraftMode ? "Stage Temporary Reassignment (Draft)" : "Operational Shift Action"}</span>}
+          description={<>{selectedCell.cell.weekday} {selectedCell.cell.work_date} • {selectedCell.worksite.job_number} (
+                  {selectedCell.item.sub_item_code} - {selectedCell.item.staff_grade_description})</>}
+          footer={
+            <div className="flex w-full flex-wrap items-center justify-between gap-2">
+              <div className="text-xs text-slate-500">
+                  {stagedAdditions.length > 0 || stagedRemovals.size > 0 || stagedBaseRemovals.size > 0 ? (
+                    <span className="font-semibold text-indigo-700">
+                      Staged: +{stagedAdditions.length} addition(s), -{stagedRemovals.size + stagedBaseRemovals.size} removal(s)
+                    </span>
+                  ) : (
+                    <span>No changes staged</span>
+                  )}
+                </div>
+  
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleCancelModal}
+                    className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-200 transition-colors"
+                  >
+                    Cancel
+                  </button>
+  
+                  <button
+                    type="button"
+                    onClick={handleSaveOperationalRoster}
+                    disabled={savingShift || (stagedAdditions.length === 0 && stagedRemovals.size === 0 && stagedBaseRemovals.size === 0)}
+                    className={`px-4 py-2 rounded-lg text-xs font-semibold text-white disabled:opacity-50 flex items-center gap-1.5 shadow-sm transition-colors ${
+                      isSupervisorDraftMode
+                        ? "bg-amber-600 hover:bg-amber-700"
+                        : "bg-indigo-600 hover:bg-indigo-700"
+                    }`}
+                  >
+                    {savingShift && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    {isSupervisorDraftMode ? "Add to Draft Batch" : "Save Operational Roster"}
+                  </button>
+                </div>
             </div>
-
+          }
+        >
+          <div className="space-y-4">
             {isSupervisorDraftMode && (
               <div className="px-6 py-2.5 bg-amber-50 border-b border-amber-200 text-xs text-amber-900 flex items-center gap-2">
                 <Layers className="h-4 w-4 text-amber-600 shrink-0" />
@@ -2708,9 +2717,9 @@ export const OperationalPlanner: React.FC = () => {
                 </span>
               </div>
             )}
-
+  
             {/* Modal Body */}
-            <div className="p-6 space-y-5 flex-1 overflow-y-auto">
+            <div className="space-y-5">
               {/* 1. Currently Scheduled Staff in Slot */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -2724,7 +2733,7 @@ export const OperationalPlanner: React.FC = () => {
                     </span>
                   )}
                 </div>
-
+  
                 {selectedCell.cell.workers.length === 0 ? (
                   <p className="text-xs text-slate-400 italic py-1">No workers currently scheduled for this slot.</p>
                 ) : (
@@ -2734,7 +2743,7 @@ export const OperationalPlanner: React.FC = () => {
                       const isShiftMarkedForRemoval = w.shift_id ? stagedRemovals.has(w.shift_id) : false;
                       const isBaseStagedForRemoval = stagedBaseRemovals.has(w.employee_id);
                       const stagedBaseInfo = stagedBaseRemovals.get(w.employee_id);
-
+  
                       // Case A: Already Removed Base Worker (persisted in DB with status CANCELLED)
                       if (isRemoved) {
                         return (
@@ -2759,7 +2768,7 @@ export const OperationalPlanner: React.FC = () => {
                                   </span>
                                 )}
                               </div>
-
+  
                               {isShiftMarkedForRemoval ? (
                                 <button
                                   type="button"
@@ -2779,7 +2788,7 @@ export const OperationalPlanner: React.FC = () => {
                                 </button>
                               )}
                             </div>
-
+  
                             <div className="text-[11px] text-rose-800 flex items-center gap-1.5 pt-0.5 font-medium">
                               <FileText className="h-3 w-3 text-rose-500 shrink-0" />
                               <span>Reason: {w.reason || "Shift cancelled"}</span>
@@ -2787,7 +2796,7 @@ export const OperationalPlanner: React.FC = () => {
                           </div>
                         );
                       }
-
+  
                       // Case B: Blueprint Base Worker (Recurring from base template, no shift_id yet)
                       if (!w.shift_id) {
                         if (isBaseStagedForRemoval) {
@@ -2808,7 +2817,7 @@ export const OperationalPlanner: React.FC = () => {
                                     Pending Base Removal
                                   </span>
                                 </div>
-
+  
                                 <button
                                   type="button"
                                   onClick={() => handleUndoStageBaseRemoval(w.employee_id)}
@@ -2824,9 +2833,9 @@ export const OperationalPlanner: React.FC = () => {
                             </div>
                           );
                         }
-
+  
                         const isPromptingRemoval = removingBaseWorkerId === w.employee_id;
-
+  
                         return (
                           <div
                             key={idx}
@@ -2849,7 +2858,7 @@ export const OperationalPlanner: React.FC = () => {
                                   </span>
                                 )}
                               </div>
-
+  
                               {!isPromptingRemoval && (
                                 <div className="flex items-center gap-2">
                                   <button
@@ -2882,7 +2891,7 @@ export const OperationalPlanner: React.FC = () => {
                                 </div>
                               )}
                             </div>
-
+  
                             {isPromptingRemoval ? (
                               <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 space-y-2 mt-2">
                                 <label className="block text-[11px] font-semibold text-rose-900">
@@ -2927,7 +2936,7 @@ export const OperationalPlanner: React.FC = () => {
                           </div>
                         );
                       }
-
+  
                       // Case C: Operational Shifts (Direct or Cover with shift_id)
                       return (
                         <div
@@ -2965,7 +2974,7 @@ export const OperationalPlanner: React.FC = () => {
                                 </span>
                               )}
                             </div>
-
+  
                             {isShiftMarkedForRemoval ? (
                               <button
                                 type="button"
@@ -2984,7 +2993,7 @@ export const OperationalPlanner: React.FC = () => {
                               </button>
                             )}
                           </div>
-
+  
                           <div className="text-[11px] text-slate-500 mt-1 flex flex-wrap items-center gap-3">
                             <span>{w.assigned_hours} hrs</span>
                             <span>•</span>
@@ -3007,7 +3016,7 @@ export const OperationalPlanner: React.FC = () => {
                   </div>
                 )}
               </div>
-
+  
               {/* 2. Staged Additions (Newly Added Operational Workers) */}
               {stagedAdditions.length > 0 && (
                 <div className="space-y-2 pt-2 border-t border-slate-200">
@@ -3020,7 +3029,7 @@ export const OperationalPlanner: React.FC = () => {
                       Not saved yet
                     </span>
                   </div>
-
+  
                   <div className="space-y-2">
                     {stagedAdditions.map((addition) => (
                       <div
@@ -3053,7 +3062,7 @@ export const OperationalPlanner: React.FC = () => {
                               </span>
                             )}
                           </div>
-
+  
                           <button
                             type="button"
                             onClick={() => handleRemoveStagedAddition(addition.tempId)}
@@ -3063,7 +3072,7 @@ export const OperationalPlanner: React.FC = () => {
                             <Trash2 className="h-4 w-4" />
                           </button>
                         </div>
-
+  
                         {/* Editable inputs for Hours and Reason/Note */}
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
                           <div className="sm:col-span-1">
@@ -3098,7 +3107,7 @@ export const OperationalPlanner: React.FC = () => {
                   </div>
                 </div>
               )}
-
+  
               {/* Public Holiday Warning Banner */}
               {selectedCell.cell.is_public_holiday && (
                 <div className="p-3 rounded-lg bg-sky-50 border border-sky-200 text-xs text-sky-900 flex items-center gap-2">
@@ -3108,7 +3117,7 @@ export const OperationalPlanner: React.FC = () => {
                   </span>
                 </div>
               )}
-
+  
               {/* 3. Assign Candidates & Crew */}
               <div className="pt-3 border-t border-slate-200 space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -3116,7 +3125,7 @@ export const OperationalPlanner: React.FC = () => {
                     <UserCheck className="h-4 w-4 text-indigo-600" />
                     {replacementTargetId ? "Select Replacement Worker" : "Add Operational Worker"}
                   </h4>
-
+  
                   {selectedSupervisorId && (
                     <label className="text-xs font-medium text-indigo-700 flex items-center gap-1.5 cursor-pointer bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
                       <input
@@ -3129,7 +3138,7 @@ export const OperationalPlanner: React.FC = () => {
                     </label>
                   )}
                 </div>
-
+  
                 {replacementTargetId && (
                   <div className="p-2.5 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-800 text-xs flex items-center justify-between">
                     <span>
@@ -3146,7 +3155,7 @@ export const OperationalPlanner: React.FC = () => {
                     </button>
                   </div>
                 )}
-
+  
                 {/* Candidate Search & All Roles Toggle */}
                 <div className="flex items-center justify-between gap-2">
                   <div className="relative flex-1">
@@ -3179,7 +3188,7 @@ export const OperationalPlanner: React.FC = () => {
                     <span className="font-semibold text-slate-800">All roles</span>
                   </label>
                 </div>
-
+  
                 {/* Candidate List */}
                 {loadingCandidates ? (
                   <div className="text-xs text-slate-400 py-4 text-center">Loading candidates...</div>
@@ -3193,7 +3202,7 @@ export const OperationalPlanner: React.FC = () => {
                       const isOffDay = isSameWeekday(cand.weekly_off_day, selectedCell.cell.weekday);
                       const isBlocked = cand.is_blocked;
                       const remainingHours = Math.max(0, Number(cand.standard_hours) - Number(cand.today_allocated_hours || 0));
-
+  
                       return (
                         <div
                           key={cand.employee_id}
@@ -3220,7 +3229,7 @@ export const OperationalPlanner: React.FC = () => {
                                 Off: {cand.weekly_off_day || "None"}
                               </span>
                             </div>
-
+  
                             {/* Capacity or Blocked reason */}
                             {cand.is_blocked ? (
                               <div className="text-[10px] text-rose-700 font-semibold flex items-center gap-1 mt-0.5">
@@ -3242,7 +3251,7 @@ export const OperationalPlanner: React.FC = () => {
                               </div>
                             )}
                           </div>
-
+  
                           <button
                             type="button"
                             disabled={isBlocked}
@@ -3263,334 +3272,274 @@ export const OperationalPlanner: React.FC = () => {
                 )}
               </div>
             </div>
-
-            {/* Modal Footer */}
-            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
-              <div className="text-xs text-slate-500">
-                {stagedAdditions.length > 0 || stagedRemovals.size > 0 || stagedBaseRemovals.size > 0 ? (
-                  <span className="font-semibold text-indigo-700">
-                    Staged: +{stagedAdditions.length} addition(s), -{stagedRemovals.size + stagedBaseRemovals.size} removal(s)
-                  </span>
-                ) : (
-                  <span>No changes staged</span>
-                )}
-              </div>
-
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={handleCancelModal}
-                  className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-200 transition-colors"
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleSaveOperationalRoster}
-                  disabled={savingShift || (stagedAdditions.length === 0 && stagedRemovals.size === 0 && stagedBaseRemovals.size === 0)}
-                  className={`px-4 py-2 rounded-lg text-xs font-semibold text-white disabled:opacity-50 flex items-center gap-1.5 shadow-sm transition-colors ${
-                    isSupervisorDraftMode
-                      ? "bg-amber-600 hover:bg-amber-700"
-                      : "bg-indigo-600 hover:bg-indigo-700"
-                  }`}
-                >
-                  {savingShift && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  {isSupervisorDraftMode ? "Add to Draft Batch" : "Save Operational Roster"}
-                </button>
-              </div>
-            </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Request Temporary Reassignment Modal (D2, BR-SC-04) */}
       {reassignmentModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
-          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-xl max-h-[92vh] flex flex-col overflow-hidden">
-            {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-              <div>
-                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <Users className="h-5 w-5 text-indigo-600" />
-                  Request Temporary Reassignment
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Operational adjustment for specific dates (requires ≥ 3 days notice per company policy).
-                </p>
+        <Modal
+          open
+          onClose={() => setReassignmentModalOpen(false)}
+          size="lg"
+          title={<span className="inline-flex items-center gap-2"><Users className="h-5 w-5 text-indigo-600" /> Request Temporary Reassignment</span>}
+          description="Operational adjustment for specific dates (requires ≥ 3 days notice per company policy)."
+        >
+          <form onSubmit={handleCreateReassignment} className="space-y-4">
+            {/* Type Switcher */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                Reassignment Type
+              </label>
+              <div className="grid grid-cols-4 gap-2">
+                {(["REPLACE", "MOVE", "ADD", "CANCEL"] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => {
+                      setReassignType(t);
+                      setReassignError(null);
+                      setReassignPreview(null);
+                    }}
+                    className={`py-2 px-2.5 rounded-lg text-xs font-bold text-center border transition cursor-pointer ${
+                      reassignType === t
+                        ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
+                        : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
               </div>
-              <button
-                type="button"
-                onClick={() => setReassignmentModalOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 cursor-pointer"
-              >
-                <X className="h-5 w-5" />
-              </button>
+              <p className="text-2xs text-slate-500 mt-1.5">
+                {reassignType === "REPLACE" && "Assign a replacement worker to cover an absent worker's shift."}
+                {reassignType === "MOVE" && "Relocate a worker from their blueprint site to another job site."}
+                {reassignType === "ADD" && "Deploy an additional worker to a job site for operational need."}
+                {reassignType === "CANCEL" && "Cancel a scheduled shift due to client closure or weather conditions."}
+              </p>
             </div>
 
-            {/* Modal Body / Form */}
-            <form onSubmit={handleCreateReassignment} className="flex-1 overflow-y-auto p-6 space-y-4">
-              {/* Type Switcher */}
+            {/* Date Selectors & Notice Period Banner */}
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                  Reassignment Type
+                <DatePicker
+                  label="Date From"
+                  required
+                  value={reassignDateFrom}
+                  onChange={(iso) => setReassignDateFrom(iso)}
+                  size="sm"
+                />
+              </div>
+              <div>
+                <DatePicker
+                  label="Date To"
+                  required
+                  value={reassignDateTo}
+                  onChange={(iso) => setReassignDateTo(iso)}
+                  size="sm"
+                />
+              </div>
+            </div>
+
+            {/* Notice Validation Banner */}
+            <div
+              className={`p-3 rounded-lg border text-xs flex items-center justify-between gap-2 ${
+                noticeDays >= 3
+                  ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                  : "bg-rose-50 border-rose-200 text-rose-800"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                {noticeDays >= 3 ? (
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                ) : (
+                  <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0" />
+                )}
+                <span>
+                  {noticeDays >= 3
+                    ? `${noticeDays} days advance notice (Valid notice period per BR-SC-04)`
+                    : `Notice is ${noticeDays} day(s). System requires strictly ≥ 3 days notice.`}
+                </span>
+              </div>
+              <span className="text-2xs font-extrabold uppercase tracking-wide">
+                {noticeDays >= 3 ? "Allowed" : user?.role === "ADMIN" ? "Admin Override" : "Refused"}
+              </span>
+            </div>
+
+            {/* Original Worker (REPLACE, MOVE, CANCEL) */}
+            {(reassignType === "REPLACE" || reassignType === "MOVE" || reassignType === "CANCEL") && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Original Worker (Absent / Being Moved) <span className="text-rose-500">*</span>
                 </label>
-                <div className="grid grid-cols-4 gap-2">
-                  {(["REPLACE", "MOVE", "ADD", "CANCEL"] as const).map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => {
-                        setReassignType(t);
-                        setReassignError(null);
-                        setReassignPreview(null);
-                      }}
-                      className={`py-2 px-2.5 rounded-lg text-xs font-bold text-center border transition cursor-pointer ${
-                        reassignType === t
-                          ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
-                          : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-                      }`}
-                    >
-                      {t}
-                    </button>
+                <select
+                  value={reassignOrigEmpId}
+                  onChange={(e) => setReassignOrigEmpId(e.target.value)}
+                  className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
+                >
+                  <option value="">-- Select Worker --</option>
+                  {availableEmployees.map((emp: any) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.name || emp.employee_name} ({emp.tally_id || "No Tally"} • {emp.staff_grade_description || emp.role || "Worker"})
+                    </option>
                   ))}
-                </div>
-                <p className="text-2xs text-slate-500 mt-1.5">
-                  {reassignType === "REPLACE" && "Assign a replacement worker to cover an absent worker's shift."}
-                  {reassignType === "MOVE" && "Relocate a worker from their blueprint site to another job site."}
-                  {reassignType === "ADD" && "Deploy an additional worker to a job site for operational need."}
-                  {reassignType === "CANCEL" && "Cancel a scheduled shift due to client closure or weather conditions."}
-                </p>
+                </select>
               </div>
+            )}
 
-              {/* Date Selectors & Notice Period Banner */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Date From <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={reassignDateFrom}
-                    onChange={(e) => setReassignDateFrom(e.target.value)}
-                    className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Date To <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={reassignDateTo}
-                    onChange={(e) => setReassignDateTo(e.target.value)}
-                    className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
-                  />
-                </div>
+            {/* Target Worksite & Job Item (REPLACE, MOVE, ADD) */}
+            {(reassignType === "REPLACE" || reassignType === "MOVE" || reassignType === "ADD") && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Target Worksite & Job Item <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  value={reassignJobItemId}
+                  onChange={(e) => setReassignJobItemId(e.target.value)}
+                  className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
+                >
+                  <option value="">-- Select Target Job Item --</option>
+                  {availableJobItems.map((j) => (
+                    <option key={j.job_item_id} value={j.job_item_id}>
+                      {j.label}
+                    </option>
+                  ))}
+                </select>
               </div>
+            )}
 
-              {/* Notice Validation Banner */}
-              <div
-                className={`p-3 rounded-lg border text-xs flex items-center justify-between gap-2 ${
-                  noticeDays >= 3
-                    ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-                    : "bg-rose-50 border-rose-200 text-rose-800"
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  {noticeDays >= 3 ? (
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                  ) : (
-                    <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0" />
-                  )}
-                  <span>
-                    {noticeDays >= 3
-                      ? `${noticeDays} days advance notice (Valid notice period per BR-SC-04)`
-                      : `Notice is ${noticeDays} day(s). System requires strictly ≥ 3 days notice.`}
-                  </span>
-                </div>
-                <span className="text-2xs font-extrabold uppercase tracking-wide">
-                  {noticeDays >= 3 ? "Allowed" : user?.role === "ADMIN" ? "Admin Override" : "Refused"}
-                </span>
-              </div>
-
-              {/* Original Worker (REPLACE, MOVE, CANCEL) */}
-              {(reassignType === "REPLACE" || reassignType === "MOVE" || reassignType === "CANCEL") && (
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Original Worker (Absent / Being Moved) <span className="text-rose-500">*</span>
+            {/* Replacement / New Worker (REPLACE, ADD) */}
+            {(reassignType === "REPLACE" || reassignType === "ADD") && (
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    Replacement / New Worker <span className="text-rose-500">*</span>
                   </label>
-                  <select
-                    value={reassignOrigEmpId}
-                    onChange={(e) => setReassignOrigEmpId(e.target.value)}
-                    className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
-                  >
-                    <option value="">-- Select Worker --</option>
-                    {availableEmployees.map((emp: any) => (
-                      <option key={emp.id} value={emp.id}>
-                        {emp.name || emp.employee_name} ({emp.tally_id || "No Tally"} • {emp.staff_grade_description || emp.role || "Worker"})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {/* Target Worksite & Job Item (REPLACE, MOVE, ADD) */}
-              {(reassignType === "REPLACE" || reassignType === "MOVE" || reassignType === "ADD") && (
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Target Worksite & Job Item <span className="text-rose-500">*</span>
-                  </label>
-                  <select
-                    value={reassignJobItemId}
-                    onChange={(e) => setReassignJobItemId(e.target.value)}
-                    className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
-                  >
-                    <option value="">-- Select Target Job Item --</option>
-                    {availableJobItems.map((j) => (
-                      <option key={j.job_item_id} value={j.job_item_id}>
-                        {j.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {/* Replacement / New Worker (REPLACE, ADD) */}
-              {(reassignType === "REPLACE" || reassignType === "ADD") && (
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-semibold text-slate-700">
-                      Replacement / New Worker <span className="text-rose-500">*</span>
-                    </label>
-                    <button
-                      type="button"
-                      onClick={handlePreviewReassignment}
-                      disabled={previewLoading || !reassignNewEmpId}
-                      className="text-xs text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 disabled:opacity-40 cursor-pointer"
-                    >
-                      {previewLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                      Preview Worker Hours
-                    </button>
-                  </div>
-                  <select
-                    value={reassignNewEmpId}
-                    onChange={(e) => setReassignNewEmpId(e.target.value)}
-                    className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
-                  >
-                    <option value="">-- Select Replacement Worker --</option>
-                    {availableEmployees.map((emp: any) => (
-                      <option key={emp.id} value={emp.id}>
-                        {emp.name || emp.employee_name} ({emp.tally_id || "No Tally"} • {emp.staff_grade_description || emp.role || "Worker"})
-                      </option>
-                    ))}
-                  </select>
-
-                  {/* Preview Result Card */}
-                  {reassignPreview && (
-                    <div className="mt-2.5 p-3 rounded-lg bg-indigo-50/70 border border-indigo-200 text-xs space-y-1">
-                      <div className="font-bold text-indigo-900 flex items-center justify-between">
-                        <span>Projected Total Weekly Hours: {reassignPreview.total_weekly_hours}h</span>
-                        {reassignPreview.planned_overtime_hours > 0 && (
-                          <span className="text-amber-700 font-bold">
-                            OT: +{reassignPreview.planned_overtime_hours}h
-                          </span>
-                        )}
-                      </div>
-                      {reassignPreview.warnings?.length > 0 ? (
-                        <div className="text-rose-700 space-y-0.5 pt-1">
-                          {reassignPreview.warnings.map((w: string, idx: number) => (
-                            <div key={idx} className="flex items-center gap-1">
-                              <AlertCircle className="h-3 w-3 shrink-0" />
-                              <span>{w}</span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-2xs text-emerald-700 font-medium">
-                          ✓ No schedule conflicts or overtime violations detected.
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Reason Category & Reason */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Reason Category <span className="text-rose-500">*</span>
-                  </label>
-                  <select
-                    value={reassignReasonCategory}
-                    onChange={(e) => setReassignReasonCategory(e.target.value)}
-                    className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
-                  >
-                    <option value="LEAVE_COVER">Leave Cover Absence</option>
-                    <option value="CAPACITY">Operational Capacity Shortfall</option>
-                    <option value="WEATHER">Weather Conditions</option>
-                    <option value="PRIORITY">High-Priority Client Request</option>
-                    <option value="OTHER">Other Operational Need</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Reason Details <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Covering sick leave for gardener..."
-                    value={reassignReason}
-                    onChange={(e) => setReassignReason(e.target.value)}
-                    className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
-                  />
-                </div>
-              </div>
-
-              {/* Errors & Success Banners */}
-              {reassignError && (
-                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-lg flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 shrink-0" />
-                  <span>{reassignError}</span>
-                </div>
-              )}
-              {reassignSuccess && (
-                <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-lg flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 shrink-0" />
-                  <span>{reassignSuccess}</span>
-                </div>
-              )}
-
-              {/* Modal Footer Actions */}
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-                <span className="text-2xs text-slate-400">
-                  Engineer, Superintendent, or Admin approval required before operational schedule is updated.
-                </span>
-                <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setReassignmentModalOpen(false)}
-                    className="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                    onClick={handlePreviewReassignment}
+                    disabled={previewLoading || !reassignNewEmpId}
+                    className="text-xs text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 disabled:opacity-40 cursor-pointer"
                   >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={reassignSubmitting || (noticeDays < 3 && user?.role !== "ADMIN")}
-                    className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white flex items-center gap-1.5 shadow-xs transition cursor-pointer"
-                  >
-                    {reassignSubmitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                    Submit Reassignment Request
+                    {previewLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                    Preview Worker Hours
                   </button>
                 </div>
+                <select
+                  value={reassignNewEmpId}
+                  onChange={(e) => setReassignNewEmpId(e.target.value)}
+                  className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
+                >
+                  <option value="">-- Select Replacement Worker --</option>
+                  {availableEmployees.map((emp: any) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.name || emp.employee_name} ({emp.tally_id || "No Tally"} • {emp.staff_grade_description || emp.role || "Worker"})
+                    </option>
+                  ))}
+                </select>
+
+                {/* Preview Result Card */}
+                {reassignPreview && (
+                  <div className="mt-2.5 p-3 rounded-lg bg-indigo-50/70 border border-indigo-200 text-xs space-y-1">
+                    <div className="font-bold text-indigo-900 flex items-center justify-between">
+                      <span>Projected Total Weekly Hours: {reassignPreview.total_weekly_hours}h</span>
+                      {reassignPreview.planned_overtime_hours > 0 && (
+                        <span className="text-amber-700 font-bold">
+                          OT: +{reassignPreview.planned_overtime_hours}h
+                        </span>
+                      )}
+                    </div>
+                    {reassignPreview.warnings?.length > 0 ? (
+                      <div className="text-rose-700 space-y-0.5 pt-1">
+                        {reassignPreview.warnings.map((w: string, idx: number) => (
+                          <div key={idx} className="flex items-center gap-1">
+                            <AlertCircle className="h-3 w-3 shrink-0" />
+                            <span>{w}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-2xs text-emerald-700 font-medium">
+                        ✓ No schedule conflicts or overtime violations detected.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
-            </form>
-          </div>
-        </div>
+            )}
+
+            {/* Reason Category & Reason */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Reason Category <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  value={reassignReasonCategory}
+                  onChange={(e) => setReassignReasonCategory(e.target.value)}
+                  className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
+                >
+                  <option value="LEAVE_COVER">Leave Cover Absence</option>
+                  <option value="CAPACITY">Operational Capacity Shortfall</option>
+                  <option value="WEATHER">Weather Conditions</option>
+                  <option value="PRIORITY">High-Priority Client Request</option>
+                  <option value="OTHER">Other Operational Need</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Reason Details <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Covering sick leave for gardener..."
+                  value={reassignReason}
+                  onChange={(e) => setReassignReason(e.target.value)}
+                  className="w-full text-xs font-medium text-slate-900 border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
+                />
+              </div>
+            </div>
+
+            {/* Errors & Success Banners */}
+            {reassignError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-lg flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{reassignError}</span>
+              </div>
+            )}
+            {reassignSuccess && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-lg flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                <span>{reassignSuccess}</span>
+              </div>
+            )}
+
+            {/* Modal Footer Actions */}
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+              <span className="text-2xs text-slate-400">
+                Engineer, Superintendent, or Admin approval required before operational schedule is updated.
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setReassignmentModalOpen(false)}
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={reassignSubmitting || (noticeDays < 3 && user?.role !== "ADMIN")}
+                  className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+                >
+                  {reassignSubmitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  Submit Reassignment Request
+                </button>
+              </div>
+            </div>
+          </form>
+        </Modal>
       )}
 
       {/* Sticky Supervisor Draft Batch Bar */}
@@ -3639,124 +3588,109 @@ export const OperationalPlanner: React.FC = () => {
 
       {/* Submit Draft Reassignment Batch Modal */}
       {batchSubmitModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
-          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-amber-50">
-              <div>
-                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <Layers className="h-5 w-5 text-amber-600" />
-                  Submit Reassignment Batch ({draftBatch.length} items)
-                </h3>
-                <p className="text-xs text-slate-600 mt-0.5">
-                  All staged changes will be grouped as a single batch in the Approvals Inbox.
-                </p>
+        <Modal
+          open
+          onClose={() => setBatchSubmitModalOpen(false)}
+          size="lg"
+          title={<span className="inline-flex items-center gap-2"><Layers className="h-5 w-5 text-amber-600" /> Submit Reassignment Batch ({draftBatch.length} items)</span>}
+          description="All staged changes will be grouped as a single batch in the Approvals Inbox."
+        >
+          <form onSubmit={handleSubmitDraftBatch} className="space-y-4">
+            <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+              {draftBatch.map((item, idx) => (
+                <div
+                  key={item.draftId}
+                  className="p-3 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-between gap-3 text-xs"
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-[10px] font-bold text-slate-400">
+                        #{idx + 1}
+                      </span>
+                      <span
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
+                          item.reassignment_type === "CANCEL"
+                            ? "bg-rose-100 text-rose-800"
+                            : item.reassignment_type === "REPLACE"
+                            ? "bg-indigo-100 text-indigo-800"
+                            : "bg-emerald-100 text-emerald-800"
+                        }`}
+                      >
+                        {item.reassignment_type}
+                      </span>
+                      <span className="font-semibold text-slate-900">
+                        {item.reassignment_type === "REPLACE"
+                          ? `${item.original_employee_name || "Worker"} → ${item.new_employee_name}`
+                          : item.reassignment_type === "CANCEL"
+                          ? item.original_employee_name
+                          : item.new_employee_name}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">
+                      {item.date_from} · Job {item.job_number} ({item.sub_item_code}) · {item.reason}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveDraftItem(item.draftId)}
+                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition cursor-pointer"
+                    title="Remove from batch"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Batch Note (Optional)
+              </label>
+              <input
+                type="text"
+                value={batchNote}
+                onChange={(e) => setBatchNote(e.target.value)}
+                placeholder="e.g. Week 46 sick-leave cover plan for Zone A..."
+                className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
+              />
+            </div>
+
+            {batchError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-lg flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{batchError}</span>
               </div>
+            )}
+            {batchSuccess && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-lg flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                <span>{batchSuccess}</span>
+              </div>
+            )}
+
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setBatchSubmitModalOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-amber-100 cursor-pointer"
+                className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
               >
-                <X className="h-5 w-5" />
+                Keep Editing
+              </button>
+              <button
+                type="submit"
+                disabled={batchSubmitting || draftBatch.length === 0}
+                className="px-4 py-2 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white flex items-center gap-1.5 shadow-sm cursor-pointer"
+              >
+                {batchSubmitting ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Send className="h-3.5 w-3.5" />
+                )}
+                Submit Batch ({draftBatch.length})
               </button>
             </div>
-
-            <form onSubmit={handleSubmitDraftBatch} className="flex-1 overflow-y-auto p-6 space-y-4">
-              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                {draftBatch.map((item, idx) => (
-                  <div
-                    key={item.draftId}
-                    className="p-3 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-between gap-3 text-xs"
-                  >
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-[10px] font-bold text-slate-400">
-                          #{idx + 1}
-                        </span>
-                        <span
-                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
-                            item.reassignment_type === "CANCEL"
-                              ? "bg-rose-100 text-rose-800"
-                              : item.reassignment_type === "REPLACE"
-                              ? "bg-indigo-100 text-indigo-800"
-                              : "bg-emerald-100 text-emerald-800"
-                          }`}
-                        >
-                          {item.reassignment_type}
-                        </span>
-                        <span className="font-semibold text-slate-900">
-                          {item.reassignment_type === "REPLACE"
-                            ? `${item.original_employee_name || "Worker"} → ${item.new_employee_name}`
-                            : item.reassignment_type === "CANCEL"
-                            ? item.original_employee_name
-                            : item.new_employee_name}
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-slate-500 mt-0.5">
-                        {item.date_from} · Job {item.job_number} ({item.sub_item_code}) · {item.reason}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveDraftItem(item.draftId)}
-                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition cursor-pointer"
-                      title="Remove from batch"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Batch Note (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={batchNote}
-                  onChange={(e) => setBatchNote(e.target.value)}
-                  placeholder="e.g. Week 46 sick-leave cover plan for Zone A..."
-                  className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-slate-50 focus:bg-white focus:outline-indigo-500"
-                />
-              </div>
-
-              {batchError && (
-                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-lg flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 shrink-0" />
-                  <span>{batchError}</span>
-                </div>
-              )}
-              {batchSuccess && (
-                <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-lg flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 shrink-0" />
-                  <span>{batchSuccess}</span>
-                </div>
-              )}
-
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setBatchSubmitModalOpen(false)}
-                  className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
-                >
-                  Keep Editing
-                </button>
-                <button
-                  type="submit"
-                  disabled={batchSubmitting || draftBatch.length === 0}
-                  className="px-4 py-2 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white flex items-center gap-1.5 shadow-sm cursor-pointer"
-                >
-                  {batchSubmitting ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Send className="h-3.5 w-3.5" />
-                  )}
-                  Submit Batch ({draftBatch.length})
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+          </form>
+        </Modal>
       )}
     </div>
   );

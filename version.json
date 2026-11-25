@@ -1,9 +1,9 @@
 {
-  "version": "1.22.1",
+  "version": "1.23.0",
   "major": 1,
-  "minor": 22,
-  "patch": 1,
-  "last_branch": "fix/roster-materialise-absent",
-  "last_commit": "d427a65",
-  "updated_at": "2026-11-24T20:31:03.297132+00:00"
+  "minor": 23,
+  "patch": 0,
+  "last_branch": "feat/batch10-ui-b",
+  "last_commit": "9334f5a",
+  "updated_at": "2026-11-25T01:53:18.552171+00:00"
 }

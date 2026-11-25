@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
-import { X, CheckCircle2, AlertTriangle, Users, Clock, Calendar, Split, ShieldCheck } from "lucide-react";
+import { CheckCircle2, AlertTriangle, Users, Clock, Calendar, Split } from "lucide-react";
+import { AlertBanner, Button, Modal, describeError } from "../../ui";
 
 interface ValidationData {
   job_item_id: string;
@@ -58,7 +59,7 @@ export const JobItemValidationModal: React.FC<JobItemValidationModalProps> = ({
         const valData = await res.json();
         setData(valData);
       } catch (err: any) {
-        setErrorMsg(err.message || "An error occurred.");
+        setErrorMsg(describeError(err).message);
       } finally {
         setLoading(false);
       }
@@ -70,35 +71,23 @@ export const JobItemValidationModal: React.FC<JobItemValidationModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-xl bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden max-h-[90vh] flex flex-col">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-          <div>
-            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <ShieldCheck className="h-5 w-5 text-indigo-600" />
-              Job Item Validation & Feasibility Panel
-            </h2>
-            <p className="text-xs text-slate-500">
-              Worksite {worksiteJobNumber} &bull; Sub-Item {data?.sub_item_code || "..."}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/60"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="p-6 space-y-5 overflow-y-auto flex-1 text-xs">
+    <Modal
+      open={isOpen}
+      onClose={onClose}
+      size="md"
+      title="Job Item Validation & Feasibility Panel"
+      description={`Worksite ${worksiteJobNumber} \u2022 Sub-Item ${data?.sub_item_code || "..."}`}
+      footer={
+        <Button variant="secondary" onClick={onClose}>
+          Close
+        </Button>
+      }
+    >
+        <div className="space-y-5 text-xs">
           {loading ? (
             <div className="py-12 text-center text-slate-400">Loading calculations...</div>
           ) : errorMsg ? (
-            <div className="p-3 bg-red-50 border border-red-200 rounded text-red-700">
-              {errorMsg}
-            </div>
+            <AlertBanner tone="error">{errorMsg}</AlertBanner>
           ) : data ? (
             <>
               {/* Status Banner */}
@@ -225,18 +214,7 @@ export const JobItemValidationModal: React.FC<JobItemValidationModalProps> = ({
             </>
           ) : null}
         </div>
-
-        {/* Footer */}
-        <div className="px-6 py-3 border-t border-slate-200 bg-slate-50 flex justify-end">
-          <button
-            onClick={onClose}
-            className="px-4 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-medium"
-          >
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 };
 

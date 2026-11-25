@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { X, Users, AlertCircle } from "lucide-react";
+import { AlertBanner, Button, Modal } from "../../ui";
 import { useAuth } from "../../context/AuthContext";
 import { formatApiError } from "./jobItemUtils";
 
@@ -106,33 +106,32 @@ export default function SupervisorProposalsModal({ isOpen, onClose, onAssigned }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-3xl bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden max-h-[90vh] flex flex-col">
-        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-              <Users className="h-5 w-5 text-indigo-600" /> Assign supervisors from current crews
-            </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Suggested from today's standing assignments. Nothing is assigned until you confirm.
-            </p>
+    <Modal
+      open={isOpen}
+      onClose={onClose}
+      dismissible={!saving}
+      size="lg"
+      title="Assign supervisors from current crews"
+      description="Suggested from today's standing assignments. Nothing is assigned until you confirm."
+      footer={
+        <div className="flex w-full items-center justify-between gap-2">
+          <Button variant="ghost" onClick={selectTopSuggestions} disabled={withProposals.length === 0}>
+            Tick the top suggestion for each worksite
+          </Button>
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={onClose}>
+              Close
+            </Button>
+            <Button onClick={confirm} disabled={selected.size === 0} loading={saving}>
+              {`Assign ${selected.size} selected`}
+            </Button>
           </div>
-          <button onClick={onClose} className="p-1 rounded hover:bg-slate-200" title="Close">
-            <X className="h-5 w-5 text-slate-500" />
-          </button>
         </div>
-
-        <div className="px-6 py-4 overflow-y-auto flex-1 space-y-4">
-          {error && (
-            <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md p-3">
-              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" /> {error}
-            </div>
-          )}
-          {result && (
-            <div className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md p-3">
-              {result}
-            </div>
-          )}
+      }
+    >
+        <div className="space-y-4">
+          {error && <AlertBanner tone="error">{error}</AlertBanner>}
+          {result && <AlertBanner tone="success">{result}</AlertBanner>}
           {loading && <p className="text-sm text-slate-500">Loading suggestions…</p>}
 
           {!loading && withProposals.length === 0 && !error && (
@@ -201,31 +200,6 @@ export default function SupervisorProposalsModal({ isOpen, onClose, onAssigned }
           )}
         </div>
 
-        <div className="px-6 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
-          <button
-            onClick={selectTopSuggestions}
-            disabled={withProposals.length === 0}
-            className="text-sm text-indigo-700 hover:underline disabled:opacity-50"
-          >
-            Tick the top suggestion for each worksite
-          </button>
-          <div className="flex gap-2">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-sm border border-slate-300 rounded-md bg-white hover:bg-slate-50"
-            >
-              Close
-            </button>
-            <button
-              onClick={confirm}
-              disabled={selected.size === 0 || saving}
-              className="px-4 py-2 text-sm rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
-            >
-              {saving ? "Assigning…" : `Assign ${selected.size} selected`}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
