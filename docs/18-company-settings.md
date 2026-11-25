@@ -49,6 +49,7 @@ When resolving a setting for a worker, worksite, or process:
 | `planned_workday_hours` | decimal | `9.0` | hours | Global | GIVEN_BY_CLIENT | Default expected daily operational window including work and unpaid midday break. |
 | `reassignment_min_notice_days` | integer | `3` | days | Global | PROPOSED_DEFAULT | Advance notice required before an operational shift or replacement reassignment can be dispatched. |
 | `occurrence_horizon_months` | integer | `13` | months | Global | PROPOSED_DEFAULT | Number of months into the future for which recurring contract job slots are automatically materialized. |
+| `roster_materialise_weeks` | integer | `4` | weeks | Global | PROPOSED_DEFAULT | ADR-032: Base Planner templates become scheduled work from tomorrow to this many weeks ahead (1-26). Owner decision 25 Nov 2026. |
 | `budget_only_staff_types` | JSON array | `["Project Manager", "HSE Engineer", "QA/QC Engineer", "Irrigation Engineer"]` | list | Global | PROPOSED_DEFAULT | Job staff grades budgeted on contract items but excluded from field occurrence generation and worker planning grids. Actual cost is credited equal to planned cost in job costing. On Excel import, intersected case-insensitively with resolved staff grades across active employees and job items; any previously saved roles not currently in active records remain visible as removable chips in Settings and apply automatically if matching staff/jobs are added. |
 
 ---

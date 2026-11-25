@@ -309,7 +309,7 @@ class PayrollRunDetailRead(PayrollRunRead):
 
 
 class PayrollIssueItem(BaseModel):
-    issue_type: str  # UNAPPROVED_OVERTIME, MISSING_SALARY_STRUCTURE, MISSING_STANDARD_HOURS
+    issue_type: str  # UNAPPROVED_OVERTIME, PENDING_ABSENCE, MISSING_SALARY_STRUCTURE, MISSING_STANDARD_HOURS
     employee_id: UUID
     tally_id: str
     employee_name: str
@@ -321,6 +321,7 @@ class PayrollRunIssuesResponse(BaseModel):
     run_id: UUID
     total_issues: int
     unapproved_overtime_count: int
+    pending_absence_count: int = 0
     missing_salary_structure_count: int
     missing_standard_hours_count: int
     issues: list[PayrollIssueItem] = Field(default_factory=list)

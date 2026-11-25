@@ -46,6 +46,7 @@ DEFAULT_COMPANY_SETTINGS: list[tuple[str, str | None, Any, str | None]] = [
     ("pending_visit_reminder_hours", None, 24, "h"),
     ("day_close_delay_minutes", None, 120, "min"),
     ("occurrence_horizon_months", None, 13, "months"),
+    ("roster_materialise_weeks", None, 4, "weeks"),
     ("default_password_max_days", None, 7, "days"),
     (
         "budget_only_staff_types",

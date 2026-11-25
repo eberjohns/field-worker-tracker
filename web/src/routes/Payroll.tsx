@@ -97,15 +97,15 @@ interface RunIssuesData {
   payroll_run_id: string;
   status: string;
   unapproved_overtime_count: number;
+  pending_absence_count?: number;
   missing_salary_structure_count: number;
   issues: Array<{
-    issue_type: "UNAPPROVED_OVERTIME" | "MISSING_SALARY_STRUCTURE";
+    issue_type: "UNAPPROVED_OVERTIME" | "PENDING_ABSENCE" | "MISSING_SALARY_STRUCTURE" | "MISSING_STANDARD_HOURS";
     employee_id: string;
     employee_name: string;
     tally_id: string;
     work_date?: string;
-    description: string;
-    suggested_action: string;
+    details: string;
   }>;
 }
 
@@ -911,13 +911,14 @@ export const Payroll: React.FC = () => {
                 </div>
 
                 {/* Issues Notification Panel */}
-                {runIssues && (runIssues.unapproved_overtime_count > 0 || runIssues.missing_salary_structure_count > 0) && (
+                {runIssues && (runIssues.unapproved_overtime_count > 0 || (runIssues.pending_absence_count ?? 0) > 0 || runIssues.missing_salary_structure_count > 0) && (
                   <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs space-y-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 text-amber-900 font-bold">
                         <AlertTriangle className="w-4 h-4 text-amber-600" />
                         <span>
                           Payroll Draft Issues ({runIssues.unapproved_overtime_count} unapproved overtime,{" "}
+                          {runIssues.pending_absence_count ?? 0} absences pending review,{" "}
                           {runIssues.missing_salary_structure_count} missing salary structure)
                         </span>
                       </div>
@@ -933,6 +934,7 @@ export const Payroll: React.FC = () => {
                     <p className="text-amber-800 leading-relaxed text-3xs">
                       Unapproved overtime is held back and not included in pay until approved in the Attendance Approvals inbox.
                       Approving the draft with pending overtime will exclude those overtime hours from this month's slip.
+                      Absent days are deducted only once approved in the same inbox.
                     </p>
 
                     {issuesOpen && (
@@ -942,9 +944,8 @@ export const Payroll: React.FC = () => {
                             <div>
                               <span className="font-bold text-slate-800">{iss.employee_name}</span> ({iss.tally_id})
                               {iss.work_date && <span className="text-slate-500 ml-1.5 font-mono">Date: {iss.work_date}</span>}
-                              <span className="block text-amber-800 mt-0.5">{iss.description}</span>
+                              <span className="block text-amber-800 mt-0.5">{iss.details}</span>
                             </div>
-                            <span className="text-indigo-600 font-medium">{iss.suggested_action}</span>
                           </div>
                         ))}
                       </div>

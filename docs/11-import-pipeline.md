@@ -49,7 +49,7 @@ One registry in code (`modules/imports/registry.py`) defines sheets, columns, ty
 | Worksites | job_number |
 | Job_Items | job_number + sub_item_code |
 | Worksite_Supervisors | job_number + supervisor_tally_id |
-| Leave | tally_id + from_date |
+| Leave | tally_id + from_date. Read since v1.22.0: `status` APPROVED (default) or PENDING; validated like the Admin leave import (worker in the database or the file, leave type, dates) plus to >= from and no overlap with open leave or another row. Approved leave takes the worker off the materialised roster and raises the usual cover-needed alert (future leave); pending leave waits in the approvals inbox. Re-importing the same leave is UNCHANGED |
 | Public_Holidays | holiday_date + country |
 | Salary_Revisions / Salary_Revision_Lines | revision_code / revision_code + grade_code (Salary_Revision_Lines has optional `telephone_allowance` and `housing_transport_allowance` after `notes`, blank = 0; DEC-59) |
 | Company_Settings | setting_key + country + effective_from |

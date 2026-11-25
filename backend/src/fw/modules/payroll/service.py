@@ -1149,12 +1149,23 @@ class PayrollService:
                 worked_m = Decimal(str(calc.worked_minutes or 0))
                 worked_hours += round_money(worked_m / Decimal("60"))
 
-                # Shortfall minutes (skip leave days if run treats leaves as paid)
-                if calc.shortfall_minutes and calc.shortfall_minutes > 0:
-                    if not (payload.treat_leaves_as_paid and rec.work_date in approved_leave_dates):
-                        shortfall_hours += round_money(
-                            Decimal(str(calc.shortfall_minutes)) / Decimal("60")
-                        )
+                # Shortfall minutes (DEC-30). Approved leave days never count here: the leave
+                # lines below already pay or deduct them (counting the leave day's shortfall too
+                # deducted unpaid leave twice and paid leave once). An ABSENT day (planned,
+                # nothing recorded) counts only once its review is APPROVED (owner, 25 Nov 2026);
+                # a pending one is listed in the run issues, a rejected one is not deducted.
+                absent_unapproved = (
+                    calc.business_status == "ABSENT" and rec.review_status != "APPROVED"
+                )
+                if (
+                    calc.shortfall_minutes
+                    and calc.shortfall_minutes > 0
+                    and not absent_unapproved
+                    and rec.work_date not in approved_leave_dates
+                ):
+                    shortfall_hours += round_money(
+                        Decimal(str(calc.shortfall_minutes)) / Decimal("60")
+                    )
 
                 # Overtime: ONLY calculate if approved
                 # (review_status == 'APPROVED' or auto-approved when review_reasons is empty)
@@ -1494,6 +1505,7 @@ class PayrollService:
 
         issues: list[PayrollIssueItem] = []
         unapproved_ot_count = 0
+        pending_absence_count = 0
         missing_sal_count = 0
         missing_std_count = 0
 
@@ -1505,6 +1517,22 @@ class PayrollService:
             has_ot = (calc.ot1_minutes and calc.ot1_minutes > 0) or (
                 calc.ot2_minutes and calc.ot2_minutes > 0
             )
+            if calc.business_status == "ABSENT" and rec.review_status == "PENDING_REVIEW":
+                pending_absence_count += 1
+                emp = await session.get(Employee, rec.employee_id)
+                issues.append(
+                    PayrollIssueItem(
+                        issue_type="PENDING_ABSENCE",
+                        employee_id=rec.employee_id,
+                        tally_id=emp.tally_id if emp else "",
+                        employee_name=emp.name if emp else "",
+                        work_date=rec.work_date,
+                        details=(
+                            f"Absent day pending review: {calc.shortfall_minutes or 0}m missed. "
+                            "Deducted only once approved."
+                        ),
+                    )
+                )
             if has_ot and rec.review_status == "PENDING_REVIEW":
                 unapproved_ot_count += 1
                 emp = await session.get(Employee, rec.employee_id)
@@ -1552,6 +1580,7 @@ class PayrollService:
             run_id=run.id,
             total_issues=len(issues),
             unapproved_overtime_count=unapproved_ot_count,
+            pending_absence_count=pending_absence_count,
             missing_salary_structure_count=missing_sal_count,
             missing_standard_hours_count=missing_std_count,
             issues=issues,

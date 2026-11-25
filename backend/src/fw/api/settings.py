@@ -482,6 +482,7 @@ async def reset_to_bootstrap_state(session: AsyncSession) -> None:
         "salary_revision_lines",
         "salary_revisions",
         "pending_visits",
+        "attendance_manual_times",
         "attendance_approvals",
         "attendance_comments",
         "attendance_calculations",

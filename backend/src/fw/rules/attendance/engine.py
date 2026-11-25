@@ -291,6 +291,10 @@ def compute_daily_attendance(inputs: DailyCalculationInputs) -> DailyCalculation
         review_reasons.append("No accommodation data")
     if "CROSSES_MIDNIGHT" in flags:
         review_reasons.append("Midnight crossing")
+    if "NO_ATTENDANCE_EVENTS" in flags:
+        review_reasons.append("No attendance data")
+    if "MANUAL_TIMES" in flags:
+        review_reasons.append("Manual times")
     if ot1_minutes > 0 or ot2_minutes > 0:
         review_reasons.append("Overtime")
 

@@ -11,6 +11,11 @@ from fw.rules.attendance.gaps import (
     calculate_unaccounted_time_minutes,
     haversine_distance_m,
 )
+from fw.rules.attendance.manual_times import (
+    MANUAL_TIMES_FLAG,
+    NO_ATTENDANCE_EVENTS_FLAG,
+    build_manual_visits,
+)
 from fw.rules.attendance.verdicts import (
     EventFlag,
     EventVerdictInput,
@@ -26,6 +31,8 @@ from fw.rules.attendance.visits import (
 )
 
 __all__ = [
+    "MANUAL_TIMES_FLAG",
+    "NO_ATTENDANCE_EVENTS_FLAG",
     "ConstructedGap",
     "ConstructedVisit",
     "DailyCalculationInputs",
@@ -39,6 +46,7 @@ __all__ = [
     "ServerVerdict",
     "VisitFlag",
     "build_gaps_for_day",
+    "build_manual_visits",
     "build_visits_for_day",
     "calculate_unaccounted_time_minutes",
     "compute_daily_attendance",

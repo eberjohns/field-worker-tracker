@@ -19,6 +19,7 @@ import {
   formatTime,
 } from "./formatters";
 import { useAuth } from "../../context/AuthContext";
+import { ManualTimesModal } from "./ManualTimesModal";
 
 interface AttendanceDetailDrawerProps {
   record: AttendanceRecord | null;
@@ -53,6 +54,7 @@ export const AttendanceDetailDrawer: React.FC<AttendanceDetailDrawerProps> = ({
   const [decisionComment, setDecisionComment] = useState<string>("");
   const [submittingDecision, setSubmittingDecision] = useState(false);
   const [decisionError, setDecisionError] = useState<string | null>(null);
+  const [manualTimesOpen, setManualTimesOpen] = useState(false);
 
   useEffect(() => {
     if (!record) return;
@@ -68,6 +70,8 @@ export const AttendanceDetailDrawer: React.FC<AttendanceDetailDrawerProps> = ({
 
   const calc = record.current_calculation;
   const isSupervisorOrEngineer = ["SUPERVISOR", "ENGINEER", "ADMIN"].includes(user?.role || "");
+  // Owner decision 25 Nov 2026: Admin, and Engineers for their crew, can enter a day's times.
+  const canEnterTimes = ["ENGINEER", "ADMIN"].includes(user?.role || "");
 
   const fetchTimeline = async () => {
     setTimelineLoading(true);
@@ -496,6 +500,19 @@ export const AttendanceDetailDrawer: React.FC<AttendanceDetailDrawerProps> = ({
                   <span className="text-slate-500 text-[11px]">Current: {record.review_status}</span>
                 </div>
 
+                {canEnterTimes && (
+                  <div className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white p-2 text-[11px] text-slate-600">
+                    <span>Phone recorded nothing (e.g. a dead phone)? Enter the day's times with a reason.</span>
+                    <button
+                      type="button"
+                      onClick={() => setManualTimesOpen(true)}
+                      className="shrink-0 px-2.5 py-1 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium"
+                    >
+                      Enter times
+                    </button>
+                  </div>
+                )}
+
                 {decisionError && (
                   <div className="p-2 rounded bg-rose-50 border border-rose-200 text-rose-700 text-xs">
                     {decisionError}
@@ -587,6 +604,14 @@ export const AttendanceDetailDrawer: React.FC<AttendanceDetailDrawerProps> = ({
           </div>
         )}
       </div>
+      {canEnterTimes && (
+        <ManualTimesModal
+          open={manualTimesOpen}
+          record={record}
+          onClose={() => setManualTimesOpen(false)}
+          onSaved={onRecordUpdated}
+        />
+      )}
     </div>
   );
 };

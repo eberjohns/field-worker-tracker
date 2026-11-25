@@ -429,3 +429,51 @@ class PendingVisit(Base):
         default=lambda: datetime.now(UTC),
         nullable=False,
     )
+
+
+class AttendanceManualTime(Base):
+    """Times entered by an Engineer or Admin for a day the phone did not record (a dead phone).
+
+    Owner decision 25 Nov 2026. The active row replaces the phone events when the day is
+    calculated: a new calculation version, flagged MANUAL_TIMES, and the old one is kept. A newer
+    correction deactivates the previous one, so the history stays.
+    """
+
+    __tablename__ = "attendance_manual_times"
+    __table_args__ = (
+        Index(
+            "uq_attendance_manual_times_active",
+            "employee_id",
+            "work_date",
+            unique=True,
+            postgresql_where="is_active",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    employee_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("employees.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    work_date: Mapped[date] = mapped_column(Date, nullable=False)
+    first_site_entry_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_site_exit_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    accommodation_departure_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    accommodation_return_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_by_user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        nullable=False,
+    )

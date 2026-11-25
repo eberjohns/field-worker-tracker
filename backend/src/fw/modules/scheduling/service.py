@@ -19,7 +19,7 @@ from sqlalchemy.orm import selectinload
 
 from fw.core.clock import site_today
 from fw.core.errors import AppError
-from fw.core.events import event_bus
+from fw.core.events import ScheduledWorkChanged, ScheduledWorkRemoved, event_bus
 from fw.modules.audit import AuditService
 from fw.modules.identity import User
 from fw.modules.jobs import JobItem, JobOccurrence, Worksite
@@ -28,6 +28,10 @@ from fw.modules.scheduling.events import (
     LeaveApprovedEvent,
     LeaveCancelledEvent,
     ReassignmentApprovedEvent,
+)
+from fw.modules.scheduling.materialise import (
+    TEMPLATE_SOURCE,
+    RosterMaterialiser,
 )
 from fw.modules.scheduling.models import (
     BaseRosterEntry,
@@ -131,6 +135,7 @@ from fw.rules.scheduling import (
     validate_leave_dates,
     validate_reassignment_notice,
 )
+from fw.rules.scheduling.blueprint import is_entry_matching_date, is_same_weekday
 from fw.rules.time_rules import (
     TimeRuleAppliesTo,
     TimeRuleDefinition,
@@ -2558,9 +2563,12 @@ class SchedulingService:
 
         await self.session.commit()
 
-        if affected_emp_ids:
-            from fw.core.events import ScheduledWorkChanged, event_bus
+        # Owner decision 25 Nov 2026: the template becomes scheduled work for the rolling window
+        # (untouched TEMPLATE rows follow it; rows changed by hand are kept).
+        await RosterMaterialiser.run(self.session, job_item_ids=[payload.job_item_id])
+        await self.session.commit()
 
+        if affected_emp_ids:
             await event_bus.publish(
                 ScheduledWorkChanged(employee_ids=list(affected_emp_ids)),
                 session=self.session,
@@ -2785,8 +2793,18 @@ class SchedulingService:
                     public_holidays=holiday_dates,
                     worker_weekly_off_days=worker_weekly_off_days,
                     job_working_days=None,
-                    skip_public_holidays=True,
+                    skip_public_holidays=False,
                 )
+                # The same slots the roster materialiser schedules: public holidays are worked
+                # (OT2); a worker's weekly off and days outside the template dates are not.
+                resolved_period_slots = [
+                    slot
+                    for slot in resolved_period_slots
+                    if not slot.is_worker_weekly_off
+                    and tmpl is not None
+                    and tmpl.start_date <= slot.work_date
+                    and (tmpl.end_date is None or slot.work_date <= tmpl.end_date)
+                ]
 
                 # Filter slots to the displayed 7-day week
                 slots_by_date: dict[date, list[ResolvedTemplateSlot]] = defaultdict(list)
@@ -3143,6 +3161,26 @@ class SchedulingService:
                 direct_sw = sw_by_emp_date.get((emp.id, d), [])
                 if direct_sw:
                     for s in direct_sw:
+                        if s.source == TEMPLATE_SOURCE and s.status == "ACTIVE":
+                            # Materialised from the Base Planner: shown as the base plan.
+                            day_hours += s.assigned_hours
+                            if s.id in sw_job_number:
+                                assigned_jobs_set.add(sw_job_number[s.id])
+                            cell_workers.append(
+                                OperationalCellWorker(
+                                    employee_id=emp.id,
+                                    employee_name=emp.name,
+                                    tally_id=emp.tally_id,
+                                    assigned_hours=s.assigned_hours,
+                                    display_type="BLUEPRINT",
+                                    opacity_class="muted",
+                                    shift_id=None,
+                                    is_public_holiday=is_holiday,
+                                    is_rest_day=is_off,
+                                    tags=["Base Blueprint"],
+                                )
+                            )
+                            continue
                         is_cancelled = s.status == "CANCELLED"
                         if not is_cancelled:
                             day_hours += s.assigned_hours
@@ -3179,11 +3217,16 @@ class SchedulingService:
                                 ),
                             )
                         )
-                elif not active_leave_type and not is_holiday:
-                    # Check base templates if worker is not on approved leave and date is not a public holiday (DEC-55)
+                elif not active_leave_type and not is_off:
+                    # Days not materialised yet (today, beyond the window): the templates, with
+                    # the materialiser's rules (holidays worked, weekly off and leave skipped).
                     emp_templates = templates_by_emp.get(emp.id, [])
                     for t, e in emp_templates:
-                        if e.weekday_mask in ("ALL", dow):
+                        if (
+                            t.start_date <= d
+                            and (t.end_date is None or d <= t.end_date)
+                            and is_entry_matching_date(e.weekday_mask, d)
+                        ):
                             day_hours += e.assigned_hours
                             if t.id in tmpl_job_number:
                                 assigned_jobs_set.add(tmpl_job_number[t.id])
@@ -3277,23 +3320,66 @@ class SchedulingService:
             and emp.weekly_off_day.strip().upper()[:3] == dow
         )
 
-        shift = ScheduledWork(
-            id=uuid4(),
-            employee_id=payload.employee_id,
-            job_item_id=payload.job_item_id,
-            worksite_id=item.worksite_id,
-            work_date=payload.work_date,
-            assigned_hours=assigned_hours,
-            sequence=next_seq,
-            status=shift_status,
-            source=payload.source.upper(),
-            original_employee_id=payload.original_employee_id,
-            override_reason=payload.override_reason,
-            is_weekly_off_cover=is_wo_cover,
-            created_by_user_id=current_user_id,
-            version=1,
+        # The base worker's row materialised from the template (owner decision 25 Nov 2026): the
+        # worker being removed for the day, or the one a replacement stands in for.
+        base_emp_id = (
+            payload.employee_id if shift_status == "CANCELLED" else payload.original_employee_id
         )
-        self.session.add(shift)
+        template_row: ScheduledWork | None = None
+        if base_emp_id is not None:
+            template_row = (
+                (
+                    await self.session.execute(
+                        select(ScheduledWork).where(
+                            ScheduledWork.employee_id == base_emp_id,
+                            ScheduledWork.job_item_id == payload.job_item_id,
+                            ScheduledWork.work_date == payload.work_date,
+                            ScheduledWork.source == TEMPLATE_SOURCE,
+                            ScheduledWork.status == "ACTIVE",
+                        )
+                    )
+                )
+                .scalars()
+                .first()
+            )
+
+        changed_rows: list[ScheduledWork] = []
+        if shift_status == "CANCELLED" and template_row is not None:
+            # Removing a base worker for the day cancels their template row in place: it is the
+            # REMOVED marker the planner shows, and restoring the worker reactivates it.
+            shift = template_row
+            shift.status = "CANCELLED"
+            shift.override_reason = payload.override_reason
+            shift.version += 1
+            shift.updated_at = datetime.now(UTC)
+        else:
+            shift = ScheduledWork(
+                id=uuid4(),
+                employee_id=payload.employee_id,
+                job_item_id=payload.job_item_id,
+                worksite_id=item.worksite_id,
+                work_date=payload.work_date,
+                assigned_hours=assigned_hours,
+                sequence=next_seq,
+                status=shift_status,
+                source=payload.source.upper(),
+                original_employee_id=payload.original_employee_id,
+                override_reason=payload.override_reason,
+                is_weekly_off_cover=is_wo_cover,
+                created_by_user_id=current_user_id,
+                version=1,
+            )
+            self.session.add(shift)
+            if template_row is not None and shift_status == "ACTIVE":
+                # A replacement: the original worker's template row is reassigned to it.
+                template_row.status = "REASSIGNED"
+                template_row.version += 1
+                template_row.updated_at = datetime.now(UTC)
+                shift.original_scheduled_work_id = template_row.id
+                changed_rows.append(template_row)
+        changed_rows.append(shift)
+        await self.session.flush()
+        await self._notify_rows_changed(changed_rows)
         await self.session.commit()
 
         if payload.original_employee_id and shift_status == "ACTIVE":
@@ -3343,24 +3429,67 @@ class SchedulingService:
         shift_id: UUID,
         current_user_id: UUID | None = None,
     ) -> None:
-        """Cancel an operational shift."""
+        """Cancel an operational shift, or restore a removed base worker (a CANCELLED shift)."""
         shift = await self.session.get(ScheduledWork, shift_id)
         if not shift:
             return
         orig_emp_id = shift.original_employee_id
         w_date = shift.work_date
-        shift.status = "CANCELLED"
-        shift.version += 1
-        shift.updated_at = datetime.now(UTC)
+        now = datetime.now(UTC)
+        changed_rows: list[ScheduledWork] = []
+        removed_marker: tuple[UUID, UUID, int] | None = None
+
+        if shift.status == "CANCELLED" and shift.original_employee_id is None:
+            # Restore a base worker the planner removed for the day.
+            action, diff = "RESTORE", {"status": "ACTIVE"}
+            if shift.source == TEMPLATE_SOURCE:
+                shift.status = "ACTIVE"
+                shift.override_reason = None
+                shift.version += 1
+                shift.updated_at = now
+                changed_rows.append(shift)
+            else:
+                # The removal marker of a day not materialised yet: dropping it restores the
+                # base plan (the materialiser fills the day when it reaches it).
+                removed_marker = (shift.employee_id, shift.id, shift.version or 1)
+                await self.session.delete(shift)
+                diff = {"status": "DELETED_REMOVAL_MARKER"}
+        else:
+            action, diff = "CANCEL", {"status": "CANCELLED"}
+            shift.status = "CANCELLED"
+            shift.version += 1
+            shift.updated_at = now
+            changed_rows.append(shift)
+            if shift.original_scheduled_work_id is not None:
+                # A replacement removed: the original worker's template row comes back, unless
+                # the original is on approved leave that day.
+                orig_row = await self.session.get(ScheduledWork, shift.original_scheduled_work_id)
+                if (
+                    orig_row is not None
+                    and orig_row.source == TEMPLATE_SOURCE
+                    and orig_row.status == "REASSIGNED"
+                    and not await self._has_approved_leave(orig_row.employee_id, w_date)
+                ):
+                    orig_row.status = "ACTIVE"
+                    orig_row.version += 1
+                    orig_row.updated_at = now
+                    changed_rows.append(orig_row)
+        await self.session.flush()
+        if removed_marker is not None:
+            await event_bus.publish(
+                ScheduledWorkRemoved(items=[removed_marker]), session=self.session
+            )
+            await RosterMaterialiser.run(self.session, employee_ids=[removed_marker[0]])
+        await self._notify_rows_changed(changed_rows)
         await self.session.commit()
 
         await AuditService.log_action(
             session=self.session,
-            action="CANCEL",
+            action=action,
             entity_type="ScheduledWork",
             entity_id=str(shift_id),
             actor_user_id=current_user_id,
-            diff={"status": "CANCELLED"},
+            diff=diff,
         )
 
         if orig_emp_id:
@@ -3369,6 +3498,27 @@ class SchedulingService:
                 work_date=w_date,
                 current_user_id=current_user_id,
             )
+
+    async def _notify_rows_changed(self, rows: list[ScheduledWork]) -> None:
+        """Send the changed rows to the workers' phones (only these rows, not the whole window)."""
+        if rows:
+            await event_bus.publish(
+                ScheduledWorkChanged(
+                    employee_ids=sorted({r.employee_id for r in rows}),
+                    scheduled_work_ids=[r.id for r in rows],
+                ),
+                session=self.session,
+            )
+
+    async def _has_approved_leave(self, employee_id: UUID, day: date) -> bool:
+        stmt = select(LeaveRequest.id).where(
+            LeaveRequest.employee_id == employee_id,
+            LeaveRequest.status == "APPROVED",
+            LeaveRequest.is_active.is_(True),
+            LeaveRequest.from_date <= day,
+            LeaveRequest.to_date >= day,
+        )
+        return (await self.session.execute(stmt.limit(1))).first() is not None
 
     async def _check_and_resolve_leave_cover(
         self,
@@ -3397,13 +3547,22 @@ class SchedulingService:
         )
         templates = (await self.session.execute(stmt_tmpl)).scalars().all()
 
+        orig_emp = await self.session.get(Employee, original_employee_id)
+        orig_off = orig_emp.weekly_off_day if orig_emp else None
         cur = leave.from_date
         has_uncovered_gap = False
         while cur <= leave.to_date:
             dow = INT_TO_WEEKDAY[cur.weekday()]
+            if is_same_weekday(orig_off, dow):
+                cur += timedelta(days=1)
+                continue
             for t in templates:
+                if t.start_date > cur or (t.end_date is not None and t.end_date < cur):
+                    continue
                 for e in t.entries:
-                    if e.employee_id == original_employee_id and e.weekday_mask in ("ALL", dow):
+                    if e.employee_id == original_employee_id and is_entry_matching_date(
+                        e.weekday_mask, cur
+                    ):
                         sw_stmt = select(ScheduledWork.id).where(
                             ScheduledWork.original_employee_id == original_employee_id,
                             ScheduledWork.work_date == cur,
@@ -3742,10 +3901,6 @@ class SchedulingService:
         orig_off = (orig_emp.weekly_off_day or "").strip().upper()[:3]
         cover_off = (cover_emp.weekly_off_day or "").strip().upper()[:3]
 
-        holidays = await self.get_public_holidays(
-            orig_emp.country or "AE", leave.from_date, leave.to_date
-        )
-
         # Load active base templates containing leave.employee_id
         tmpl_stmt = (
             select(BaseRosterTemplate)
@@ -3791,11 +3946,12 @@ class SchedulingService:
             for s in orig_sw_by_date.get(cur, []):
                 target_slots[s.job_item_id] = (s.worksite_id, s.assigned_hours)
 
-            # 2. From BaseRosterTemplate entries (on original worker's working days & non-holidays)
-            if cur not in holidays and dow != orig_off:
+            # 2. From BaseRosterTemplate entries on the original worker's working days (public
+            #    holidays are worked, as in the materialised roster)
+            if dow != orig_off:
                 for t, e in emp_tmpl_entries:
                     if t.start_date <= cur and (t.end_date is None or t.end_date >= cur):
-                        if e.weekday_mask in ("ALL", dow):
+                        if is_entry_matching_date(e.weekday_mask, cur):
                             if t.job_item_id not in target_slots and t.job_item:
                                 target_slots[t.job_item_id] = (
                                     t.job_item.worksite_id,
@@ -3976,6 +4132,9 @@ class SchedulingService:
                 actor_user_id=current_user.id,
             )
 
+        await self.session.commit()
+        # Untouched template rows on the leave days go (the cover is planned as today).
+        await RosterMaterialiser.run(self.session, employee_ids=[leave.employee_id])
         await self.session.commit()
 
         # Emit COVER_NEEDED alert via event bus (if no cover worker was pre-assigned)
@@ -4283,6 +4442,7 @@ class SchedulingService:
 
         created = 0
         errors = []
+        imported_emp_ids: set[UUID] = set()
 
         for idx, row in enumerate(rows[1:], start=2):
             if not row or not any(row):
@@ -4331,9 +4491,12 @@ class SchedulingService:
                 approved_at=datetime.now(UTC),
             )
             self.session.add(leave)
+            imported_emp_ids.add(emp.id)
             created += 1
 
         if created > 0:
+            await self.session.commit()
+            await RosterMaterialiser.run(self.session, employee_ids=imported_emp_ids)
             await self.session.commit()
 
         return {"created": created, "errors": errors}

@@ -12,6 +12,7 @@ from fw.modules.attendance.models import (
     AttendanceApproval,
     AttendanceCalculation,
     AttendanceComment,
+    AttendanceManualTime,
     AttendanceRecord,
     SiteVisit,
     TrackingGap,
@@ -30,11 +31,14 @@ from fw.modules.scheduling.models import LeaveRequest, ScheduledWork
 from fw.modules.settings import SettingsService
 from fw.modules.settings.models import PublicHoliday, TimeRule
 from fw.rules.attendance import (
+    MANUAL_TIMES_FLAG,
+    NO_ATTENDANCE_EVENTS_FLAG,
     DailyCalculationInputs,
     EventForGap,
     EventForVisit,
     ScheduledAssignment,
     build_gaps_for_day,
+    build_manual_visits,
     build_visits_for_day,
     compute_daily_attendance,
 )
@@ -70,28 +74,11 @@ class AttendanceService:
         tz = get_country_timezone(country)
 
         # 2. Check if payroll is approved for this date (locked)
-        locked = False
         from sqlalchemy import text
 
-        chk_table = await session.execute(text("SELECT to_regclass('public.payroll_runs');"))
-        if chk_table.scalar() is not None:
-            p_res = await session.execute(
-                text(
-                    """
-                    SELECT pr.id FROM payroll_runs pr
-                    JOIN payroll_records rec ON rec.payroll_run_id = pr.id
-                    WHERE rec.employee_id = :emp_id
-                      AND pr.period_start <= :w_date
-                      AND pr.period_end >= :w_date
-                      AND pr.status = 'APPROVED'
-                    LIMIT 1
-                    """
-                ),
-                {"emp_id": employee_id, "w_date": work_date},
-            )
-            if p_res.first() is not None:
-                locked = True
-                reason = "POST_FINALIZATION"
+        locked = await AttendanceService.is_payroll_locked(session, employee_id, work_date)
+        if locked:
+            reason = "POST_FINALIZATION"
 
         # 3. Load employee standard hours and break minutes from salary structure (or fallback)
         standard_hours = 8.0
@@ -330,7 +317,18 @@ class AttendanceService:
         rec_res = await session.execute(rec_q)
         record = rec_res.scalar_one_or_none()
 
-        if not day_events and not assignments and record is None:
+        # Times an Engineer or Admin entered for the day replace the phone events (dead phone).
+        manual = (
+            await session.execute(
+                select(AttendanceManualTime).where(
+                    AttendanceManualTime.employee_id == employee_id,
+                    AttendanceManualTime.work_date == work_date,
+                    AttendanceManualTime.is_active.is_(True),
+                )
+            )
+        ).scalar_one_or_none()
+
+        if not day_events and not assignments and record is None and manual is None:
             return None
 
         # 8. Build visits & tracking gaps
@@ -365,6 +363,21 @@ class AttendanceService:
             if ev.event_type in ("LOCATION_DISABLED", "LOCATION_ENABLED")
         ]
         constructed_gaps = build_gaps_for_day(events_for_gap, work_date)
+        if manual is not None:
+            ordered_sites = [
+                s.worksite_id for s in sorted(scheduled_works, key=lambda x: (x.sequence, x.id))
+            ]
+            constructed_visits = build_manual_visits(
+                manual_id=manual.id,
+                work_date=work_date,
+                first_site_entry_at=manual.first_site_entry_at,
+                last_site_exit_at=manual.last_site_exit_at,
+                worksite_ids=ordered_sites,
+                accommodation_id=employee.accommodation_id,
+                accommodation_departure_at=manual.accommodation_departure_at,
+                accommodation_return_at=manual.accommodation_return_at,
+            )
+            constructed_gaps = []
 
         # 9. Effective break minutes resolution: Salary Structure > Resolved Time Rule > Company Default
         effective_break_minutes: int
@@ -398,6 +411,10 @@ class AttendanceService:
             extra_flags.append("NO_SALARY_STRUCTURE")
         if not has_weekly_off:
             extra_flags.append("NO_WEEKLY_OFF_DAY")
+        if manual is not None:
+            extra_flags.append(MANUAL_TIMES_FLAG)
+        elif assignments and not day_events and not has_approved_leave:
+            extra_flags.append(NO_ATTENDANCE_EVENTS_FLAG)
 
         # 10. Run pure engine calculation
         calc_inputs = DailyCalculationInputs(
@@ -486,6 +503,7 @@ class AttendanceService:
             for g in constructed_gaps
         ]
         inputs_snap = {
+            "manual_times_id": str(manual.id) if manual is not None else None,
             "standard_hours": standard_hours,
             "required_minutes": calc_result.required_minutes,
             "assigned_count": calc_result.assigned_count,
@@ -562,7 +580,7 @@ class AttendanceService:
                 SiteVisit.work_date == work_date,
             )
         )
-        for v in constructed_visits:
+        for v in constructed_visits if manual is None else []:
             session.add(
                 SiteVisit(
                     employee_id=employee_id,
@@ -611,6 +629,167 @@ class AttendanceService:
             )
 
         await session.flush()
+        return record
+
+    @staticmethod
+    async def is_payroll_locked(session: AsyncSession, employee_id: UUID, work_date: date) -> bool:
+        """True when an APPROVED payroll run covers this employee-day."""
+        from sqlalchemy import text
+
+        chk_table = await session.execute(text("SELECT to_regclass('public.payroll_runs');"))
+        if chk_table.scalar() is None:
+            return False
+        p_res = await session.execute(
+            text(
+                """
+                SELECT pr.id FROM payroll_runs pr
+                JOIN payroll_records rec ON rec.payroll_run_id = pr.id
+                WHERE rec.employee_id = :emp_id
+                  AND pr.period_start <= :w_date
+                  AND pr.period_end >= :w_date
+                  AND pr.status = 'APPROVED'
+                LIMIT 1
+                """
+            ),
+            {"emp_id": employee_id, "w_date": work_date},
+        )
+        return p_res.first() is not None
+
+    @staticmethod
+    async def set_manual_times(
+        session: AsyncSession,
+        *,
+        employee_id: UUID,
+        work_date: date,
+        first_site_entry: time,
+        last_site_exit: time,
+        accommodation_departure: time | None,
+        accommodation_return: time | None,
+        reason: str,
+        actor: User,
+    ) -> AttendanceRecord:
+        """Enter the times for a day the phone did not record (owner decision 25 Nov 2026).
+
+        The previous manual times for the day, if any, are deactivated (kept). The day is then
+        recalculated with reason MANUAL_CORRECTION: a new calculation version, flagged
+        MANUAL_TIMES and sent to review; the old versions stay. Audited.
+        """
+        from fw.core.clock import site_today
+        from fw.core.errors import AppError
+        from fw.modules.audit import AuditService
+
+        employee = await session.get(Employee, employee_id)
+        if employee is None:
+            raise AppError(code="NOT_FOUND", message="Employee not found", status_code=404)
+        text_reason = (reason or "").strip()
+        if not text_reason:
+            raise AppError(
+                code="REASON_REQUIRED",
+                message="A reason is required for manual attendance times.",
+                status_code=422,
+            )
+        country = (employee.country or "AE").upper()
+        if work_date > site_today(country):
+            raise AppError(
+                code="FUTURE_DATE",
+                message="Times can only be entered for today or a past day.",
+                status_code=422,
+            )
+        if last_site_exit <= first_site_entry:
+            raise AppError(
+                code="INVALID_TIMES",
+                message="The last site exit must be after the first site entry (same day).",
+                status_code=422,
+            )
+        if (accommodation_departure is None) != (accommodation_return is None):
+            raise AppError(
+                code="INVALID_TIMES",
+                message="Enter both the accommodation departure and return, or neither.",
+                status_code=422,
+            )
+        if accommodation_departure is not None and accommodation_return is not None:
+            if accommodation_departure > first_site_entry or accommodation_return < last_site_exit:
+                raise AppError(
+                    code="INVALID_TIMES",
+                    message=(
+                        "The accommodation departure must be before the first site entry, and "
+                        "the return after the last site exit."
+                    ),
+                    status_code=422,
+                )
+        if await AttendanceService.is_payroll_locked(session, employee_id, work_date):
+            raise AppError(
+                code="PAYROLL_LOCKED",
+                message="Payroll for this day is approved; its attendance can no longer change.",
+                status_code=409,
+            )
+
+        tz = get_country_timezone(country)
+
+        def at(t: time | None) -> datetime | None:
+            return None if t is None else datetime.combine(work_date, t, tzinfo=tz)
+
+        previous = list(
+            (
+                await session.execute(
+                    select(AttendanceManualTime).where(
+                        AttendanceManualTime.employee_id == employee_id,
+                        AttendanceManualTime.work_date == work_date,
+                        AttendanceManualTime.is_active.is_(True),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for old in previous:
+            old.is_active = False
+        await session.flush()
+
+        first_at = at(first_site_entry)
+        last_at = at(last_site_exit)
+        assert first_at is not None and last_at is not None
+        manual = AttendanceManualTime(
+            employee_id=employee_id,
+            work_date=work_date,
+            first_site_entry_at=first_at,
+            last_site_exit_at=last_at,
+            accommodation_departure_at=at(accommodation_departure),
+            accommodation_return_at=at(accommodation_return),
+            reason=text_reason,
+            created_by_user_id=actor.id,
+        )
+        session.add(manual)
+        await session.flush()
+
+        record = await AttendanceService.recalculate_day(
+            session, employee_id, work_date, reason="MANUAL_CORRECTION"
+        )
+        if record is None:  # pragma: no cover - a manual row always yields a record
+            raise AppError(code="NOT_CALCULATED", message="Day not calculated", status_code=500)
+
+        def fmt(t: time | None) -> str | None:
+            return t.strftime("%H:%M") if t is not None else None
+
+        await AuditService.log_action(
+            session=session,
+            action="ATTENDANCE_MANUAL_TIMES",
+            entity_type="AttendanceRecord",
+            entity_id=str(record.id),
+            actor_user_id=actor.id,
+            actor_role=actor.role,
+            reason=text_reason,
+            diff={
+                "employee_id": str(employee_id),
+                "work_date": work_date.isoformat(),
+                "first_site_entry": fmt(first_site_entry),
+                "last_site_exit": fmt(last_site_exit),
+                "accommodation_departure": fmt(accommodation_departure),
+                "accommodation_return": fmt(accommodation_return),
+                "replaced_manual_times_ids": [str(o.id) for o in previous],
+                "calculation_id": str(record.current_calculation_id),
+            },
+        )
         return record
 
     @staticmethod
