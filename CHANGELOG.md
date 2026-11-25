@@ -1,6 +1,31 @@
 # Changelog
 All notable changes. Format: Keep a Changelog. Mobile-contract changes are also logged in `docs/09-mobile-sync-contract.md`.
 
+## [1.26.0] - 2026-11-25
+### Changed (Batch 8 part 1-2: map port, Google Maps prepared, MapLibre kept as fallback)
+- **ADR-033:** Google Maps for the dashboard, chosen by `VITE_MAP_PROVIDER` (`google|maplibre`, default `maplibre`). It supersedes ADR-006's renderer, basemap and geocoding parts.
+  - Runbook 08 covers the web key and Map ID: restrictions, environment variables only, checks and rotation.
+  - `web/.env.example` lists the variable names, with no values.
+  - The legal docs list Google Maps Platform as a processor, with its terms to review. Open question: does drawing over satellite count as "tracing"?
+- **One map port** (`web/src/features/map/port.ts`). The pages (Live Map, Boundaries, Worksites, Worksite detail), the boundary editor and place search use it, never MapLibre directly.
+  - `MapLibreAdapter` holds today's layers, colours and clustering.
+  - The boundary preview stays above satellite tiles and the drawing tool.
+- **Geometry at the web edge** (`geo.ts`):
+  - WKT to and from GeoJSON, holes included;
+  - ring closing and orientation;
+  - 7 decimals;
+  - the editor's checks: too few points, out of range, self-crossing, invalid, and a new swapped longitude/latitude check.
+  The paste box also accepts `SRID=`, Z and single-polygon `MULTIPOLYGON` WKT.
+- **Place search** goes through the provider's search service:
+  - the MapLibre fallback is unchanged (MapTiler, else Nominatim, on Enter);
+  - the Google service will suggest while typing (3 characters, 300 ms).
+- **A grid clusterer** for Google markers (`gridCluster.ts`), with no extra dependency.
+- **Backend:** the unused `MAP_STYLE_STREETS_URL`, `MAP_STYLE_SATELLITE_URL` and `MAP_API_KEY` settings are removed. Existing `.env` files with them still load.
+### Fixed
+- **Live Map:** clicking a worker cluster now zooms into it. MapLibre 6 returns a promise from `getClusterExpansionZoom`, and the old callback was never called.
+### Pending
+- **The Google adapter** (advanced markers, Places API (New) autocomplete, the Terra Draw Google adapter). It waits for owner approval of three packages and for the keys. Until then, `VITE_MAP_PROVIDER=google` falls back to MapLibre and says why in the console.
+
 ## [1.25.0] - 2026-11-25
 ### Changed (Batch 9 step 4: reports in SQL, payroll draft in the background)
 - **Reports read only the columns they show.**

@@ -70,3 +70,4 @@ Field Worker Tracker follows semantic versioning `v<MAJOR>.<MINOR>.<PATCH>`:
 | **v1.24.0** | 2026-11-25 | `perf/batch9-cache-split` | `63ed9a3` | New branch 'perf/batch9-cache-split' |
 | **v1.25.0** | 2026-11-25 | `perf/batch9-reports-sql` | `b1a97d8` | New branch 'perf/batch9-reports-sql' |
 | **v1.26.0** | 2026-11-25 | `feat/batch8-google-maps` | `128088c` | New branch 'feat/batch8-google-maps' |
+| **v1.26.1** | 2026-11-25 | `feat/batch8-google-maps` | `9c080fb` | Commit on 'feat/batch8-google-maps' |

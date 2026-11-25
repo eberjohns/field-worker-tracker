@@ -59,10 +59,6 @@ class Settings(BaseSettings):
     RATE_LIMIT_LOGIN_MAX_ATTEMPTS: int = 5
     RATE_LIMIT_LOGIN_WINDOW_MINUTES: int = 15
 
-    MAP_STYLE_STREETS_URL: str = "https://api.maptiler.com/maps/streets-v2/style.json?key={key}"
-    MAP_STYLE_SATELLITE_URL: str = "https://api.maptiler.com/maps/satellite/style.json?key={key}"
-    MAP_API_KEY: str = "dev_placeholder_key"
-
     LOG_LEVEL: str = "INFO"
 
     # Speed measuring (Batch 9): Server-Timing header and a request_timing log line per request.

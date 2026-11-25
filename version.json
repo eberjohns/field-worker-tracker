@@ -1,9 +1,9 @@
 {
-  "version": "1.26.0",
+  "version": "1.26.1",
   "major": 1,
   "minor": 26,
-  "patch": 0,
+  "patch": 1,
   "last_branch": "feat/batch8-google-maps",
-  "last_commit": "128088c",
-  "updated_at": "2026-11-25T07:33:16.917781+00:00"
+  "last_commit": "9c080fb",
+  "updated_at": "2026-11-25T08:14:42.706186+00:00"
 }

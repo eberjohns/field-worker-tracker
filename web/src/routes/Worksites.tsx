@@ -22,7 +22,7 @@ import {
   PowerOff,
 } from "lucide-react";
 import { MapContainer, PolygonEditor, PlaceSearch } from "../features/map/lazy";
-import type { Map as MapLibreMap } from "maplibre-gl";
+import type { MapPort } from "../features/map/port";
 import SupervisorProposalsModal from "../components/jobs/SupervisorProposalsModal";
 import { AddWorksiteWizard } from "../components/worksites/AddWorksiteWizard";
 import { ensureOk, Modal, useDialogs, useToast } from "../ui";
@@ -98,7 +98,7 @@ export const Worksites: React.FC = () => {
 
   // Accommodation boundary modal
   const [drawingAccommodation, setDrawingAccommodation] = useState<AccommodationItem | null>(null);
-  const [mapInstance, setMapInstance] = useState<MapLibreMap | null>(null);
+  const [mapInstance, setMapInstance] = useState<MapPort | null>(null);
   const [savingAccommodationBoundary, setSavingAccommodationBoundary] = useState(false);
 
   // Edit Accommodation modal state

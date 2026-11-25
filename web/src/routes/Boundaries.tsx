@@ -16,7 +16,7 @@ import {
   FileText,
 } from "lucide-react";
 import { MapContainer, PolygonEditor, PlaceSearch } from "../features/map";
-import { Map as MapLibreMap } from "maplibre-gl";
+import type { MapPort } from "../features/map/port";
 import { ensureOk, Modal } from "../ui";
 
 interface QueueItem {
@@ -144,7 +144,7 @@ export const Boundaries: React.FC = () => {
 
   // Accommodation boundary modal
   const [drawingAccommodation, setDrawingAccommodation] = useState<QueueItem | null>(null);
-  const [mapInstance, setMapInstance] = useState<MapLibreMap | null>(null);
+  const [mapInstance, setMapInstance] = useState<MapPort | null>(null);
   const [savingBoundary, setSavingBoundary] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -619,6 +619,7 @@ export const Boundaries: React.FC = () => {
             <PolygonEditor
               map={mapInstance}
               initialPolygon={drawingAccommodation.boundary_geojson as GeoJSON.Polygon | null}
+              country={drawingAccommodation.country}
               onSave={handleSaveAccommodationBoundary}
               isSaving={savingBoundary}
             />

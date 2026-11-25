@@ -1,92 +1,88 @@
-import React, { useState } from "react";
-import { Map as MapLibreMap } from "maplibre-gl";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Search, MapPin, Loader2 } from "lucide-react";
+import type { MapPort, PlaceSuggestion } from "./port";
 
 interface PlaceSearchProps {
-  map: MapLibreMap | null;
+  map: MapPort | null;
 }
 
-interface PlaceResult {
-  place_name: string;
-  center: [number, number]; // [lng, lat]
-}
+/** Wait after the last keystroke before asking an autocomplete provider (Batch 8). */
+export const SEARCH_DEBOUNCE_MS = 300;
 
+/**
+ * Place search over the active provider's search service (ADR-033). With Google it suggests
+ * while typing (3 characters, 300 ms debounce, one session per pick); with the MapLibre fallback
+ * it searches on Enter, as before. Picking a result only moves the map: nothing is stored.
+ */
 export const PlaceSearch: React.FC<PlaceSearchProps> = ({ map }) => {
+  const service = useMemo(() => map?.placeSearch() ?? null, [map]);
   const [query, setQuery] = useState<string>("");
-  const [results, setResults] = useState<PlaceResult[]>([]);
+  const [results, setResults] = useState<PlaceSuggestion[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isOpen, setIsOpen] = useState<boolean>(false);
-  const apiKey = (import.meta as any).env?.VITE_MAP_API_KEY;
+  const abortRef = useRef<AbortController | null>(null);
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!query.trim()) return;
-
+  const run = async (q: string) => {
+    if (!service || q.trim().length < service.minChars) {
+      setResults([]);
+      return;
+    }
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
     setIsLoading(true);
     setIsOpen(true);
     try {
-      if (apiKey) {
-        const url = `https://api.maptiler.com/geocoding/${encodeURIComponent(
-          query.trim()
-        )}.json?key=${apiKey}&limit=5`;
-        const res = await fetch(url);
-        if (res.ok) {
-          const data = await res.json();
-          const features = data.features || [];
-          if (features.length > 0) {
-            setResults(
-              features.map((f: any) => ({
-                place_name: f.place_name,
-                center: f.center,
-              }))
-            );
-            return;
-          }
-        }
-      }
-
-      // Fallback to OpenStreetMap Nominatim (works worldwide including Kerala, India, Dubai without API key)
-      const nomUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-        query.trim()
-      )}&limit=5`;
-      const nomRes = await fetch(nomUrl, {
-        headers: { "Accept-Language": "en" },
-      });
-      if (nomRes.ok) {
-        const nomData = await nomRes.json();
-        setResults(
-          nomData.map((item: any) => ({
-            place_name: item.display_name,
-            center: [parseFloat(item.lon), parseFloat(item.lat)],
-          }))
-        );
-      }
+      const found = await service.suggest(q.trim(), ctrl.signal);
+      if (!ctrl.signal.aborted) setResults(found);
     } catch (err) {
-      console.error("Geocoding search failed:", err);
+      if (!ctrl.signal.aborted) console.error("Place search failed:", err);
     } finally {
-      setIsLoading(false);
+      if (abortRef.current === ctrl) setIsLoading(false);
     }
   };
 
-  const handleSelectPlace = (place: PlaceResult) => {
-    if (map) {
-      map.flyTo({
-        center: place.center,
-        zoom: 16,
-        essential: true,
-      });
-    }
-    setIsOpen(false);
+  // Autocomplete providers: search while typing, debounced.
+  useEffect(() => {
+    if (!service || service.mode !== "autocomplete") return;
+    const timer = setTimeout(() => void run(query), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [query, service]);
+
+  useEffect(() => () => abortRef.current?.abort(), []);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    void run(query);
   };
+
+  const handleSelectPlace = async (place: PlaceSuggestion) => {
+    setIsOpen(false);
+    if (!map || !service) return;
+    try {
+      const target = await service.resolve(place);
+      if (!target) return;
+      if (target.bbox) map.fitBounds(target.bbox, { padding: 40, maxZoom: 17 });
+      else map.flyTo(target.center, 16);
+    } catch (err) {
+      console.error("Place lookup failed:", err);
+    }
+  };
+
+  const placeholder =
+    service?.mode === "autocomplete"
+      ? "Search a place or address (UAE / KSA)..."
+      : "Search place worldwide (e.g. Dubai, Riyadh, Kerala)...";
 
   return (
     <div className="absolute top-3 left-64 z-20 w-72">
-      <form onSubmit={handleSearch} className="relative">
+      <form onSubmit={handleSubmit} className="relative">
         <input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search place worldwide (e.g. Dubai, Riyadh, Kerala)..."
+          placeholder={placeholder}
+          aria-label="Search place"
           className="w-full pl-8 pr-8 py-1.5 bg-white/95 backdrop-blur-sm border border-slate-300 rounded shadow-sm text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
         />
         <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
@@ -95,18 +91,17 @@ export const PlaceSearch: React.FC<PlaceSearchProps> = ({ map }) => {
         )}
       </form>
 
-      {/* Results dropdown */}
       {isOpen && results.length > 0 && (
         <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-48 overflow-y-auto z-30">
-          {results.map((r, i) => (
+          {results.map((r) => (
             <button
-              key={i}
+              key={r.id}
               type="button"
-              onClick={() => handleSelectPlace(r)}
+              onClick={() => void handleSelectPlace(r)}
               className="w-full text-left px-3 py-2 text-xs hover:bg-indigo-50 flex items-start gap-2 border-b border-slate-100 last:border-b-0"
             >
               <MapPin className="h-3.5 w-3.5 text-indigo-600 shrink-0 mt-0.5" />
-              <span className="text-slate-700 leading-tight line-clamp-2">{r.place_name}</span>
+              <span className="text-slate-700 leading-tight line-clamp-2">{r.label}</span>
             </button>
           ))}
         </div>
@@ -114,4 +109,3 @@ export const PlaceSearch: React.FC<PlaceSearchProps> = ({ map }) => {
     </div>
   );
 };
-

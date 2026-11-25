@@ -11,7 +11,7 @@ import {
   Navigation,
 } from "lucide-react";
 import { MapContainer } from "../features/map";
-import { Map as MapLibreMap, GeoJSONSource } from "maplibre-gl";
+import type { MapPort } from "../features/map/port";
 import { DatePicker } from "../ui";
 
 interface TodayAssignment {
@@ -74,7 +74,7 @@ function formatAge(seconds: number): string {
 
 export const LiveMap: React.FC = () => {
   const { token } = useAuth();
-  const [mapInstance, setMapInstance] = useState<MapLibreMap | null>(null);
+  const [mapInstance, setMapInstance] = useState<MapPort | null>(null);
 
   const [workers, setWorkers] = useState<LiveWorker[]>([]);
   const [loading, setLoading] = useState(true);
@@ -229,12 +229,12 @@ export const LiveMap: React.FC = () => {
         const data = await res.json();
         if (!isMounted || !mapInstance) return;
 
-        const siteFeatures: GeoJSON.Feature[] = [];
-        const accFeatures: GeoJSON.Feature[] = [];
+        const siteFeatures: GeoJSON.Feature<GeoJSON.Polygon>[] = [];
+        const accFeatures: GeoJSON.Feature<GeoJSON.Polygon>[] = [];
 
         (data.items || []).forEach((item: any) => {
           if (item.boundary_geojson) {
-            const feat: GeoJSON.Feature = {
+            const feat: GeoJSON.Feature<GeoJSON.Polygon> = {
               type: "Feature",
               properties: {
                 id: item.id,
@@ -252,82 +252,25 @@ export const LiveMap: React.FC = () => {
           }
         });
 
-        // Add or update Worksites Source & Layers
-        if (!mapInstance.getSource("worksites-polygons")) {
-          mapInstance.addSource("worksites-polygons", {
-            type: "geojson",
-            data: { type: "FeatureCollection", features: siteFeatures },
-          });
-
-          mapInstance.addLayer({
-            id: "worksites-fill",
-            type: "fill",
-            source: "worksites-polygons",
-            paint: {
-              "fill-color": "#3b82f6",
-              "fill-opacity": 0.15,
-            },
-          });
-
-          mapInstance.addLayer({
-            id: "worksites-outline",
-            type: "line",
-            source: "worksites-polygons",
-            paint: {
-              "line-color": "#2563eb",
-              "line-width": 2,
-            },
-          });
-        } else {
-          (mapInstance.getSource("worksites-polygons") as GeoJSONSource).setData({
-            type: "FeatureCollection",
-            features: siteFeatures,
-          });
-        }
-
-        // Add or update Accommodations Source & Layers
-        if (!mapInstance.getSource("accommodations-polygons")) {
-          mapInstance.addSource("accommodations-polygons", {
-            type: "geojson",
-            data: { type: "FeatureCollection", features: accFeatures },
-          });
-
-          mapInstance.addLayer({
-            id: "accommodations-fill",
-            type: "fill",
-            source: "accommodations-polygons",
-            paint: {
-              "fill-color": "#a855f7",
-              "fill-opacity": 0.15,
-            },
-          });
-
-          mapInstance.addLayer({
-            id: "accommodations-outline",
-            type: "line",
-            source: "accommodations-polygons",
-            paint: {
-              "line-color": "#9333ea",
-              "line-width": 2,
-              "line-dasharray": [2, 2],
-            },
-          });
-        } else {
-          (mapInstance.getSource("accommodations-polygons") as GeoJSONSource).setData({
-            type: "FeatureCollection",
-            features: accFeatures,
-          });
-        }
+        mapInstance.setPolygons("worksites-polygons", siteFeatures, {
+          fillColor: "#3b82f6",
+          fillOpacity: 0.15,
+          strokeColor: "#2563eb",
+          strokeWidth: 2,
+        });
+        mapInstance.setPolygons("accommodations-polygons", accFeatures, {
+          fillColor: "#a855f7",
+          fillOpacity: 0.15,
+          strokeColor: "#9333ea",
+          strokeWidth: 2,
+          dashed: true,
+        });
       } catch (e) {
         console.error("Failed to load map boundaries", e);
       }
     };
 
-    if (mapInstance.isStyleLoaded()) {
-      loadBoundaries();
-    } else {
-      mapInstance.once("load", loadBoundaries);
-    }
+    loadBoundaries();
 
     return () => {
       isMounted = false;
@@ -338,7 +281,7 @@ export const LiveMap: React.FC = () => {
   useEffect(() => {
     if (!mapInstance) return;
 
-    const workerFeatures: GeoJSON.Feature[] = workers
+    const workerFeatures: GeoJSON.Feature<GeoJSON.Point>[] = workers
       .filter((w) => w.latitude !== null && w.longitude !== null && w.latitude !== undefined && w.longitude !== undefined)
       .map((w) => ({
         type: "Feature",
@@ -356,141 +299,26 @@ export const LiveMap: React.FC = () => {
         },
       }));
 
-    const updateWorkerLayers = () => {
-      if (!mapInstance) return;
-
-      if (!mapInstance.getSource("worker-positions")) {
-        mapInstance.addSource("worker-positions", {
-          type: "geojson",
-          data: { type: "FeatureCollection", features: workerFeatures },
-          cluster: true,
-          clusterMaxZoom: 13,
-          clusterRadius: 40,
-        });
-
-        // Cluster circle
-        mapInstance.addLayer({
-          id: "worker-clusters",
-          type: "circle",
-          source: "worker-positions",
-          filter: ["has", "point_count"],
-          paint: {
-            "circle-color": [
-              "step",
-              ["get", "point_count"],
-              "#3b82f6",
-              10,
-              "#f59e0b",
-              30,
-              "#ef4444",
-            ],
-            "circle-radius": [
-              "step",
-              ["get", "point_count"],
-              18,
-              10,
-              24,
-              30,
-              30,
-            ],
-            "circle-stroke-width": 2,
-            "circle-stroke-color": "#ffffff",
-          },
-        });
-
-        // Cluster count text
-        mapInstance.addLayer({
-          id: "worker-cluster-count",
-          type: "symbol",
-          source: "worker-positions",
-          filter: ["has", "point_count"],
-          layout: {
-            "text-field": "{point_count_abbreviated}",
-            "text-size": 12,
-          },
-          paint: {
-            "text-color": "#ffffff",
-          },
-        });
-
-        // Unclustered worker points
-        mapInstance.addLayer({
-          id: "worker-unclustered",
-          type: "circle",
-          source: "worker-positions",
-          filter: ["!", ["has", "point_count"]],
-          paint: {
-            "circle-color": [
-              "match",
-              ["get", "live_state"],
-              "ACTIVE",
-              "#10b981",
-              "LOCATION_DISABLED",
-              "#f97316",
-              "NO_RECENT_SIGNAL",
-              "#eab308",
-              "#64748b", // NOT_SCHEDULED
-            ],
-            "circle-radius": 8,
-            "circle-stroke-width": 2,
-            "circle-stroke-color": "#ffffff",
-          },
-        });
-
-        // Click on cluster zooms in
-        mapInstance.on("click", "worker-clusters", (e) => {
-          const features = mapInstance.queryRenderedFeatures(e.point, {
-            layers: ["worker-clusters"],
-          });
-          const clusterId = features[0]?.properties?.cluster_id;
-          const source = mapInstance.getSource("worker-positions") as GeoJSONSource;
-          if (clusterId && source && typeof (source as any).getClusterExpansionZoom === "function") {
-            (source as any).getClusterExpansionZoom(clusterId, (err: any, zoom: number) => {
-              if (err) return;
-              const coords = (features[0].geometry as GeoJSON.Point).coordinates;
-              mapInstance.easeTo({
-                center: [coords[0], coords[1]],
-                zoom,
-              });
-            });
-          }
-        });
-
-        // Click on individual worker
-        mapInstance.on("click", "worker-unclustered", (e) => {
-          const feature = e.features?.[0];
-          if (feature && feature.properties?.employee_id) {
-            setSelectedWorkerId(feature.properties.employee_id);
-          }
-        });
-
-        // Cursor pointer styling
-        mapInstance.on("mouseenter", "worker-clusters", () => {
-          mapInstance.getCanvas().style.cursor = "pointer";
-        });
-        mapInstance.on("mouseleave", "worker-clusters", () => {
-          mapInstance.getCanvas().style.cursor = "";
-        });
-        mapInstance.on("mouseenter", "worker-unclustered", () => {
-          mapInstance.getCanvas().style.cursor = "pointer";
-        });
-        mapInstance.on("mouseleave", "worker-unclustered", () => {
-          mapInstance.getCanvas().style.cursor = "";
-        });
-      } else {
-        const source = mapInstance.getSource("worker-positions") as GeoJSONSource;
-        source.setData({
-          type: "FeatureCollection",
-          features: workerFeatures,
-        });
-      }
-    };
-
-    if (mapInstance.isStyleLoaded()) {
-      updateWorkerLayers();
-    } else {
-      mapInstance.once("load", updateWorkerLayers);
-    }
+    mapInstance.setPoints(
+      "worker-positions",
+      workerFeatures,
+      {
+        color: {
+          by: "live_state",
+          values: { ACTIVE: "#10b981", LOCATION_DISABLED: "#f97316", NO_RECENT_SIGNAL: "#eab308" },
+          fallback: "#64748b", // NOT_SCHEDULED
+        },
+        radius: 8,
+        strokeWidth: 2,
+        strokeColor: "#ffffff",
+      },
+      {
+        cluster: { maxZoom: 13, radius: 40 },
+        onClick: (props) => {
+          if (typeof props.employee_id === "string") setSelectedWorkerId(props.employee_id);
+        },
+      },
+    );
   }, [mapInstance, workers]);
 
   // 5. Fetch Trail points when worker or trailDate changes
@@ -499,18 +327,8 @@ export const LiveMap: React.FC = () => {
       setTrailPoints([]);
       setIsReplaying(false);
       setReplayIndex(0);
-      if (mapInstance && mapInstance.getSource("worker-trail")) {
-        (mapInstance.getSource("worker-trail") as GeoJSONSource).setData({
-          type: "FeatureCollection",
-          features: [],
-        });
-      }
-      if (mapInstance && mapInstance.getSource("replay-marker")) {
-        (mapInstance.getSource("replay-marker") as GeoJSONSource).setData({
-          type: "FeatureCollection",
-          features: [],
-        });
-      }
+      mapInstance?.removeOverlay("worker-trail");
+      mapInstance?.removeOverlay("replay-marker");
       return;
     }
 
@@ -531,46 +349,8 @@ export const LiveMap: React.FC = () => {
 
           // Update Trail Layer on Map
           if (mapInstance) {
-            const coordinates = points.map((p) => [p.longitude, p.latitude]);
-            const trailGeoJSON: GeoJSON.FeatureCollection = {
-              type: "FeatureCollection",
-              features: coordinates.length > 1
-                ? [
-                    {
-                      type: "Feature",
-                      properties: {},
-                      geometry: {
-                        type: "LineString",
-                        coordinates,
-                      },
-                    },
-                  ]
-                : [],
-            };
-
-            if (!mapInstance.getSource("worker-trail")) {
-              mapInstance.addSource("worker-trail", {
-                type: "geojson",
-                data: trailGeoJSON,
-              });
-
-              mapInstance.addLayer({
-                id: "worker-trail-line",
-                type: "line",
-                source: "worker-trail",
-                layout: {
-                  "line-join": "round",
-                  "line-cap": "round",
-                },
-                paint: {
-                  "line-color": "#3b82f6",
-                  "line-width": 3,
-                  "line-dasharray": [1, 1],
-                },
-              });
-            } else {
-              (mapInstance.getSource("worker-trail") as GeoJSONSource).setData(trailGeoJSON);
-            }
+            const coordinates = points.map((p) => [p.longitude, p.latitude] as [number, number]);
+            mapInstance.setLine("worker-trail", coordinates, { color: "#3b82f6", width: 3, dashed: true });
           }
         }
       } catch (err) {
@@ -607,73 +387,34 @@ export const LiveMap: React.FC = () => {
   useEffect(() => {
     if (!mapInstance) return;
     if (!selectedWorkerId || trailPoints.length === 0) {
-      if (mapInstance.getSource("replay-marker")) {
-        (mapInstance.getSource("replay-marker") as GeoJSONSource).setData({
-          type: "FeatureCollection",
-          features: [],
-        });
-      }
+      mapInstance.removeOverlay("replay-marker");
       return;
     }
 
     const currentPt = trailPoints[replayIndex];
     if (!currentPt) return;
 
-    const replayGeoJSON: GeoJSON.FeatureCollection = {
-      type: "FeatureCollection",
-      features: [
+    mapInstance.setPoints(
+      "replay-marker",
+      [
         {
           type: "Feature",
-          properties: {
-            event_type: currentPt.event_type,
-            timestamp: currentPt.event_timestamp_utc,
-          },
-          geometry: {
-            type: "Point",
-            coordinates: [currentPt.longitude, currentPt.latitude],
-          },
+          properties: { event_type: currentPt.event_type, timestamp: currentPt.event_timestamp_utc },
+          geometry: { type: "Point", coordinates: [currentPt.longitude, currentPt.latitude] },
         },
       ],
-    };
-
-    if (!mapInstance.getSource("replay-marker")) {
-      mapInstance.addSource("replay-marker", {
-        type: "geojson",
-        data: replayGeoJSON,
-      });
-
-      mapInstance.addLayer({
-        id: "replay-marker-glow",
-        type: "circle",
-        source: "replay-marker",
-        paint: {
-          "circle-color": "#f59e0b",
-          "circle-radius": 14,
-          "circle-opacity": 0.45,
-        },
-      });
-
-      mapInstance.addLayer({
-        id: "replay-marker-core",
-        type: "circle",
-        source: "replay-marker",
-        paint: {
-          "circle-color": "#d97706",
-          "circle-radius": 7,
-          "circle-stroke-width": 2.5,
-          "circle-stroke-color": "#ffffff",
-        },
-      });
-    } else {
-      (mapInstance.getSource("replay-marker") as GeoJSONSource).setData(replayGeoJSON);
-    }
+      {
+        color: "#d97706",
+        radius: 7,
+        strokeWidth: 2.5,
+        strokeColor: "#ffffff",
+        halo: { color: "#f59e0b", radius: 14, opacity: 0.45 },
+      },
+    );
 
     // Auto-pan if replaying
     if (isReplaying) {
-      mapInstance.easeTo({
-        center: [currentPt.longitude, currentPt.latitude],
-        duration: 250,
-      });
+      mapInstance.easeTo([currentPt.longitude, currentPt.latitude], { durationMs: 250 });
     }
   }, [mapInstance, replayIndex, trailPoints, selectedWorkerId, isReplaying]);
 
@@ -698,10 +439,7 @@ export const LiveMap: React.FC = () => {
   const handleSelectWorker = (worker: LiveWorker) => {
     setSelectedWorkerId(worker.employee_id);
     if (mapInstance && worker.latitude && worker.longitude) {
-      mapInstance.easeTo({
-        center: [Number(worker.longitude), Number(worker.latitude)],
-        zoom: 16,
-      });
+      mapInstance.easeTo([Number(worker.longitude), Number(worker.latitude)], { zoom: 16 });
     }
   };
 
@@ -1048,10 +786,7 @@ export const LiveMap: React.FC = () => {
                   <button
                     onClick={() => {
                       if (mapInstance) {
-                        mapInstance.easeTo({
-                          center: [Number(selectedWorker.longitude), Number(selectedWorker.latitude)],
-                          zoom: 16,
-                        });
+                        mapInstance.easeTo([Number(selectedWorker.longitude), Number(selectedWorker.latitude)], { zoom: 16 });
                       }
                     }}
                     className="p-1.5 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50"

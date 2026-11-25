@@ -36,7 +36,7 @@ import {
   Shield,
 } from "lucide-react";
 import { MapContainer, PolygonEditor, PlaceSearch } from "../features/map/lazy";
-import type { Map as MapLibreMap } from "maplibre-gl";
+import type { MapPort } from "../features/map/port";
 import { JobItemModal } from "../components/jobs/JobItemModal";
 import { JobItemValidationModal } from "../components/jobs/JobItemValidationModal";
 import { CopyBoundaryModal } from "../components/jobs/CopyBoundaryModal";
@@ -153,7 +153,7 @@ export const WorksiteDetail: React.FC = () => {
   const worksiteLoaded = useRef(false);
 
   // Map reference
-  const [mapInstance, setMapInstance] = useState<MapLibreMap | null>(null);
+  const [mapInstance, setMapInstance] = useState<MapPort | null>(null);
   const [savingBoundary, setSavingBoundary] = useState(false);
 
   // Job Item Modals
@@ -1456,6 +1456,7 @@ export const WorksiteDetail: React.FC = () => {
               <PolygonEditor
                 map={mapInstance}
                 initialPolygon={worksite.boundary_geojson}
+                country={worksite.country}
                 onSave={handleSaveBoundary}
                 isSaving={savingBoundary}
               />
