@@ -114,6 +114,11 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     return () => clearInterval(timer);
   }, [user]);
 
+  // The component gallery (/dev/ui) has no data, so it needs neither sign-in nor the sidebar.
+  if (import.meta.env.DEV && currentPath.startsWith("/dev/")) {
+    return <>{children}</>;
+  }
+
   if (!isAuthenticated || user?.must_change_password) {
     return <Login />;
   }

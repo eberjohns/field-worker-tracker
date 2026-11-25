@@ -2,6 +2,7 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
+  lazyRouteComponent,
   Outlet,
 } from "@tanstack/react-router";
 import { Shell } from "./components/layout/Shell";
@@ -194,7 +195,20 @@ const systemRoute = createRoute({
   component: System,
 });
 
+// Component gallery (Batch 10 A): development builds only; production builds drop the route
+// and its code.
+const devRoutes = import.meta.env.DEV
+  ? [
+      createRoute({
+        getParentRoute: () => rootRoute,
+        path: "/dev/ui",
+        component: lazyRouteComponent(() => import("./routes/DevUi"), "DevUi"),
+      }),
+    ]
+  : [];
+
 const routeTree = rootRoute.addChildren([
+  ...devRoutes,
   indexRoute,
   loginRoute,
   employeesRoute,

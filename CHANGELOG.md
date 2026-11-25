@@ -1,6 +1,25 @@
 # Changelog
 All notable changes. Format: Keep a Changelog. Mobile-contract changes are also logged in `docs/09-mobile-sync-contract.md`.
 
+## [1.21.0] - 2026-11-25
+### Added (Batch 10 A: UI component layer, ADR-031)
+- **`web/src/ui`, the app's building blocks** with stable props, built only on what is already installed (no new dependency):
+  - Button and IconButton, Modal, ConfirmDialog (default and destructive);
+  - toasts (success, info, warning, error) and AlertBanner;
+  - DatePicker, DateRangePicker (with presets), Calendar (holiday and leave markers);
+  - ScrollArea, TextField and TextArea, NumberField, Select, LookupSelect;
+  - Tabs, Menu, Tooltip, Badge and CountBadge, EmptyState, Skeleton, PageHeader.
+  
+  Keyboard behaviour throughout: focus stays inside dialogs and returns to the opener, and the destructive confirm focuses Cancel. Calendar arrows, Page Up/Down and Home/End work, Tabs and Menu use arrow keys, and Escape closes popovers.
+- **Dialogs and toasts as hooks:** `useDialogs().confirm/prompt` returns a promise, so `window.confirm` becomes one `await`. `useToast().error(err)` shows the server's message, and for a 422 lists each field (`ui/errors.ts` reads every error body shape the API sends).
+- **Tokens in one file** (`ui/tokens.css`): colour, spacing, radius, type, shadow and layer variables, mapped to `fw-*` Tailwind names. The light theme is defined now; dark can follow by redefining the variables. The thin `.fw-scroll` scrollbar shows on hover or keyboard focus.
+- **Dates:** ISO values and UTC arithmetic (no time-zone day shifts), "25 Nov 2026" display, day-first typing ("25/11/2026", "25 Nov 2026" or ISO), with min/max and a readable error.
+- **`/dev/ui` gallery** (development builds only, not in the production bundle): every component and state.
+- **UI rules check** (`pnpm run check:ui`, also part of `pnpm run lint`). It fails on a new `window.alert/confirm/prompt`, `<input type="date">`, hand-made `fixed inset-0` overlay, or import of a library the ui layer wraps (`clsx` and `tailwind-merge` outside `ui/cn.ts`; `react-dom` portals outside `ui/overlay.tsx`). The 157 existing violations in 34 files are listed in `web/scripts/ui-rules-baseline.json` for Batch 10 B to remove.
+- **Web tests in CI:** `pnpm run test` now runs in the frontend job. A small TypeScript loader (`web/scripts/register-ts.mjs`, using the installed `typescript`) lets `node --test` run `.tsx` component tests. 93 new tests: components, dates, errors, toasts, keyboard, popover placement, the rules and the gallery. The 33 existing web tests now run in CI too.
+### Fixed
+- **Reassignment notice tests failed after local midnight.** The tests built their dates from the machine's day, while the 3-day notice rule counts from the site's day (`site_today()`). Between local and Dubai midnight, a "2 days' notice" request was really 3 days and was accepted. The tests now use the site clock.
+
 ## [1.20.0] - 2026-11-25
 ### Added (demo activity generator)
 - **`tools/seed_demo_activity.py`** fills the demo import with activity from 1 Oct 2026 to yesterday, through the real pipeline. It never writes attendance, site visit, pending visit or payroll rows itself. In order:
