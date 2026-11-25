@@ -6,7 +6,7 @@ import {
   TerraDrawRenderMode,
 } from "terra-draw";
 import type { MapPort } from "./port";
-import { bboxOf, checkPolygon, closeRing, parsePolygonInput } from "./geo";
+import { bboxOf, checkPolygon, parsePolygonInput } from "./geo";
 import { CheckCircle2, AlertCircle, Trash2, Save, MousePointer, Hexagon, Info, Clipboard, Crosshair } from "lucide-react";
 import { Modal, useToast } from "../../ui";
 
@@ -18,70 +18,6 @@ interface PolygonEditorProps {
   onSave: (polygon: GeoJSON.Polygon) => Promise<void> | void;
   isSaving?: boolean;
   className?: string;
-}
-
-const PREVIEW_FILL_ID = "fwt-boundary-preview-fill";
-const PREVIEW_LINE_ID = "fwt-boundary-preview-line";
-const PREVIEW_POINTS_ID = "fwt-boundary-preview-points";
-const PREVIEW_CLOSING_ID = "fwt-boundary-preview-closing";
-const PREVIEW_IDS = [PREVIEW_FILL_ID, PREVIEW_LINE_ID, PREVIEW_POINTS_ID, PREVIEW_CLOSING_ID];
-
-type Pt = GeoJSON.Feature<GeoJSON.Point>;
-const point = (coordinates: number[], properties: Record<string, unknown> = {}): Pt => ({
-  type: "Feature",
-  properties,
-  geometry: { type: "Point", coordinates },
-});
-
-/**
- * Draws a high-contrast copy of the boundary (fill, outline, vertices, the green closing point)
- * above the map and the drawing tool, through the map port, so it stays visible on satellite.
- */
-function renderPreview(map: MapPort | null, polygon: GeoJSON.Polygon | null) {
-  if (!map) return;
-  const ring = polygon?.coordinates?.[0] ?? [];
-  const fillRing = ring.length >= 3 ? closeRing(ring) : [];
-  const fills: GeoJSON.Feature<GeoJSON.Polygon>[] =
-    fillRing.length >= 4
-      ? [{ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [fillRing] } }]
-      : [];
-
-  // Vertices without consecutive repeats; the first one is the closing target.
-  const distinct: number[][] = [];
-  for (const pt of ring) {
-    const prev = distinct[distinct.length - 1];
-    if (!prev || prev[0] !== pt[0] || prev[1] !== pt[1]) distinct.push([pt[0], pt[1]]);
-  }
-  const first = distinct[0];
-  const last = distinct[distinct.length - 1];
-  const closed = distinct.length > 2 && first[0] === last[0] && first[1] === last[1];
-  const active = closed ? distinct.slice(0, -1) : distinct;
-
-  const top = { top: true };
-  map.setPolygons(
-    PREVIEW_FILL_ID,
-    fills,
-    { fillColor: "#2563eb", fillOpacity: 0.35, strokeColor: "#1d4ed8", strokeWidth: 0 },
-    top,
-  );
-  map.setLine(
-    PREVIEW_LINE_ID,
-    ring.length >= 2 ? ring.map((p) => [p[0], p[1]] as [number, number]) : [],
-    { color: "#1d4ed8", width: 4 },
-    top,
-  );
-  map.setPoints(
-    PREVIEW_POINTS_ID,
-    active.slice(1).map((c, i) => point(c, { index: i + 1 })),
-    { color: "#2563eb", radius: 7, strokeColor: "#ffffff", strokeWidth: 2.5 },
-    top,
-  );
-  map.setPoints(
-    PREVIEW_CLOSING_ID,
-    active.length > 0 ? [point(active[0])] : [],
-    { color: "#10b981", radius: 11, strokeColor: "#ffffff", strokeWidth: 3 },
-    top,
-  );
 }
 
 function fitTo(map: MapPort, polygon: GeoJSON.Polygon) {
@@ -139,6 +75,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
     if (!map) return;
 
     let isDisposed = false;
+    let created: TerraDraw | null = null;
 
     const setupEditor = async () => {
       if (isDisposed) return;
@@ -197,35 +134,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
             new TerraDrawRenderMode({ modeName: "render", styles: {} as any }),
           ],
         });
-
-        draw.start();
-        drawRef.current = draw;
-        (window as any).__draw = draw;
-
-        // Initialize our native preview layers on top
-        const existingPolygon = currentPolygonRef.current || initialPolygon;
-        const hasInitial = Boolean(
-          existingPolygon && existingPolygon.coordinates && existingPolygon.coordinates.length > 0
-        );
-
-        renderPreview(map, existingPolygon ?? null);
-
-        const startingMode = hasInitial ? "select" : "polygon";
-        draw.setMode(startingMode);
-        setCurrentMode(startingMode);
-
-        if (hasInitial && existingPolygon && existingPolygon.coordinates?.length > 0) {
-          draw.addFeatures([
-            {
-              type: "Feature",
-              geometry: existingPolygon,
-              properties: { mode: "polygon" },
-            },
-          ]);
-          evaluateGeometry(existingPolygon);
-
-          fitTo(map, existingPolygon);
-        }
+        created = draw;
 
         draw.on("finish", () => {
           draw.setMode("select");
@@ -239,7 +148,6 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
             currentPolygonRef.current = geom;
             setCurrentPolygon(geom);
             evaluateGeometry(geom);
-            renderPreview(map, geom);
           }
         });
 
@@ -254,7 +162,6 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
             const isDrawing = Boolean(polygonFeature.properties?.currentlyDrawing);
 
             currentPolygonRef.current = geom;
-            renderPreview(map, geom);
 
             if (isDrawing) {
               setCurrentPolygon(geom);
@@ -276,7 +183,6 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
                 coordinates: [lineFeature.geometry.coordinates as [number, number][]],
               };
               currentPolygonRef.current = lineGeom;
-              renderPreview(map, lineGeom);
               setCurrentPolygon(lineGeom);
               setIsValid(false);
               setValidationMessage(
@@ -284,7 +190,6 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
               );
             } else {
               currentPolygonRef.current = null;
-              renderPreview(map, null);
               setCurrentPolygon(null);
               setAreaSqM(0);
               setIsValid(true);
@@ -293,6 +198,35 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
           }
         });
 
+        // Load the existing boundary once the adapter is ready (the Google adapter needs its
+        // overlay projection first).
+        draw.on("ready", () => {
+          if (isDisposed) return;
+          drawRef.current = draw;
+          (window as any).__draw = draw;
+          const existingPolygon = currentPolygonRef.current || initialPolygon;
+          const hasInitial = Boolean(
+            existingPolygon && existingPolygon.coordinates && existingPolygon.coordinates.length > 0
+          );
+
+          const startingMode = hasInitial ? "select" : "polygon";
+          draw.setMode(startingMode);
+          setCurrentMode(startingMode);
+
+          if (hasInitial && existingPolygon && existingPolygon.coordinates?.length > 0) {
+            draw.addFeatures([
+              {
+                type: "Feature",
+                geometry: existingPolygon,
+                properties: { mode: "polygon" },
+              },
+            ]);
+            evaluateGeometry(existingPolygon);
+
+            fitTo(map, existingPolygon);
+          }
+        });
+        draw.start();
       } catch (err) {
         console.error("TerraDraw init error:", err);
       }
@@ -303,15 +237,12 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
     return () => {
       isDisposed = true;
       try {
-        if (drawRef.current) {
-          drawRef.current.stop();
-        }
+        (drawRef.current ?? created)?.stop();
       } catch {
         // ignore cleanup error
       }
       drawRef.current = null;
 
-      for (const id of PREVIEW_IDS) map.removeOverlay(id);
     };
   }, [map]);
 
@@ -338,7 +269,6 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
       setCurrentMode("select");
     }
 
-    renderPreview(map, initialPolygon);
   }, [initialPolygon, map]);
 
   const evaluateGeometry = (geom: GeoJSON.Polygon) => {
@@ -360,12 +290,10 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
       drawRef.current.setMode("select");
       setCurrentMode("select");
       setValidationMessage("Boundary is loaded. Drag corner handles to reshape, or click Clear to redraw from scratch.");
-      map?.raiseTopOverlays();
       return;
     }
     drawRef.current.setMode(mode);
     setCurrentMode(mode);
-    map?.raiseTopOverlays();
   };
 
   const handleClear = () => {
@@ -376,7 +304,6 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
     setAreaSqM(0);
     setIsValid(false);
     setValidationMessage("Boundary cleared. Click corners on map to draw new boundary.");
-    renderPreview(map, null);
     drawRef.current.setMode("polygon");
     setCurrentMode("polygon");
   };
@@ -414,7 +341,6 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
     setCurrentPolygon(polygon);
     currentPolygonRef.current = polygon;
     evaluateGeometry(polygon);
-    renderPreview(map, polygon);
 
     fitTo(map, polygon);
 

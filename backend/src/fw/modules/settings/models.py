@@ -165,3 +165,28 @@ class ConsentPolicy(Base):
         default=lambda: datetime.now(UTC),
         nullable=False,
     )
+
+
+class MapUsageCounter(Base):
+    """Google Maps usage this app caused, per environment and month (Batch 8, ADR-033).
+
+    Our own count of billable events, next to Google's quotas: ``MAP_LOAD`` (a Google map
+    created) and ``GEOCODE`` (a Search button press). One row per (environment, month, kind),
+    incremented in place.
+    """
+
+    __tablename__ = "map_usage_counters"
+    __table_args__ = (
+        UniqueConstraint("environment", "month", "kind", name="uq_map_usage_env_month_kind"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    environment: Mapped[str] = mapped_column(String(20), nullable=False)
+    month: Mapped[date] = mapped_column(Date, nullable=False)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        nullable=False,
+    )

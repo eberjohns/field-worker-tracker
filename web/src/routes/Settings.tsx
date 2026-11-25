@@ -20,8 +20,10 @@ import {
   Eye,
   EyeOff,
   ListChecks,
+  Server,
 } from "lucide-react";
 import { ArchiveSettings } from "../features/admin/ArchiveSettings";
+import { MapUsagePanel } from "../features/admin/MapUsagePanel";
 import { ManagedListsPanel } from "../features/lookups/ManagedListsPanel";
 import { addLookupValue, lookupLoaded, useLookup } from "../features/lookups/useLookup";
 import { isBudgetOnly, splitBudgetOnly, valueKey } from "../features/lookups/lookupUtils";
@@ -123,7 +125,7 @@ export const Settings: React.FC = () => {
   const dialogs = useDialogs();
   const { token, user } = useAuth();
   const [activeTab, setActiveTab] = useState<
-    "company" | "timerules" | "checktool" | "holidays" | "budget" | "lists" | "password" | "consent" | "database" | "archive"
+    "company" | "timerules" | "checktool" | "holidays" | "budget" | "lists" | "password" | "consent" | "database" | "archive" | "system"
   >("company");
 
   // Reset database state
@@ -726,6 +728,7 @@ export const Settings: React.FC = () => {
           { id: "consent", label: "Consent Notice", icon: ShieldCheck },
           ...(user?.role === "ADMIN"
             ? [
+                { id: "system", label: "System", icon: Server },
                 { id: "archive", label: "Archive & Retention", icon: Archive },
                 { id: "database", label: "Clear Database", icon: Database },
               ]
@@ -1451,6 +1454,8 @@ export const Settings: React.FC = () => {
       )}
 
       {/* TAB: Archive & Retention (Admin Only) */}
+      {activeTab === "system" && user?.role === "ADMIN" && <MapUsagePanel />}
+
       {activeTab === "archive" && user?.role === "ADMIN" && (
         <ArchiveSettings />
       )}

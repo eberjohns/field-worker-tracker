@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 import { MapContainer, PolygonEditor, PlaceSearch } from "../features/map/lazy";
 import type { MapPort } from "../features/map/port";
+import { BoundaryThumbnail } from "../features/map/BoundaryThumbnail";
 import { JobItemModal } from "../components/jobs/JobItemModal";
 import { JobItemValidationModal } from "../components/jobs/JobItemValidationModal";
 import { CopyBoundaryModal } from "../components/jobs/CopyBoundaryModal";
@@ -619,6 +620,17 @@ export const WorksiteDetail: React.FC = () => {
               <MapPin className="h-3 w-3" />
               {worksite.has_boundary ? "Boundary Configured" : "Boundary Missing"}
             </span>
+            {worksite.has_boundary && (
+              <button
+                type="button"
+                onClick={() => setActiveTab("boundary")}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-indigo-700 hover:underline"
+                title="Open the map on the Boundary tab"
+              >
+                <BoundaryThumbnail polygon={worksite.boundary_geojson} size={28} title={`Boundary of ${worksite.job_number}`} />
+                Show on map
+              </button>
+            )}
             {worksite.is_active === false && (
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-300">
                 DEACTIVATED

@@ -12,7 +12,7 @@ Per `.agents/rules/dependencies.md` and Phase 00 requirements, all candidate lib
 4. Unpinned dependencies vs exact lock files (`uv.lock`, `pnpm-lock.yaml`).
 
 ## Decision
-- **React**: Pin React to 18.3.1 with Vite 5.x and TypeScript 5.x. This ensures rock-solid compatibility with MapLibre GL wrappers (`react-map-gl`, kept for the fallback map since ADR-033), TanStack Router/Table, and UI components without peer-dependency friction.
+- **React**: Pin React to 18.3.1 with Vite 5.x and TypeScript 5.x. This ensures rock-solid compatibility with MapLibre GL wrappers (`react-map-gl`; removed with MapLibre by ADR-033), TanStack Router/Table, and UI components without peer-dependency friction.
 - **Date & Timezone**: Adopt `date-fns` v4 with `@date-fns/tz` for timezone calculations (`Asia/Dubai`, `Asia/Riyadh`), superseding the unmaintained `date-fns-tz` v2 package.
 - **Excel Division**: Enforce strict separation: `openpyxl` is pinned for read-only parsing of uploaded client workbooks; `XlsxWriter` is pinned for generating fast, memory-efficient reports and workbook templates.
 - **Lock Files**: All Python dependencies are pinned via `uv.lock` (managed by `uv 0.13.6` with Python 3.12 target); all frontend dependencies are pinned via `pnpm-lock.yaml` (pnpm 12.x).

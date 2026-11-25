@@ -131,6 +131,7 @@ describe("apiCache", () => {
     assert.equal(isCacheBustingWrite(undefined, "/api/v1/worksites", true), false);
     assert.equal(isCacheBustingWrite("POST", "/api/v1/auth/login", true), false);
     assert.equal(isCacheBustingWrite("POST", "/api/v1/live/stream-ticket", true), false);
+    assert.equal(isCacheBustingWrite("POST", "/api/v1/map-usage", true), false);
     assert.equal(isCacheBustingWrite("POST", "/api/v1/reassignment-requests/preview", true), false);
     assert.equal(isCacheBustingWrite("POST", "/api/v1/imports/1/preview?x=1", true), false);
     assert.equal(isCacheBustingWrite("POST", "https://tiles.example/x", true), false);

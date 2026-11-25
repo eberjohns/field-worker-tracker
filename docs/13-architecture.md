@@ -40,7 +40,7 @@ flowchart TB
 | Logging | structlog (JSON) | request ids, no secrets |
 | Packaging | `uv`, `ruff`, `pyright`, `import-linter` | |
 | Web | React, TypeScript, Vite, TanStack Router/Query/Table, Tailwind + shadcn/ui, react-hook-form + zod, Recharts | see 10 |
-| Maps (web) | Google Maps JavaScript API (advanced markers, Places API (New) autocomplete) behind one map port, with MapLibre GL JS 6.x + MapTiler/OSM tiles as the fallback (`VITE_MAP_PROVIDER`); Terra Draw with the provider's adapter; Turf (modular); place search sends query text only | ADR-033 (ADR-006 for the fallback); Leaflet rejected; compatibility gate in M3 |
+| Maps (web) | Google Maps JavaScript API only (advanced markers, Geocoding on Search), loaded lazily once by `@googlemaps/js-api-loader`, behind one map interface with a pooled, reused map; Terra Draw with `terra-draw-google-maps-adapter`; Turf (modular); our own usage counter (`/map-usage`) | ADR-033 |
 | API client | `openapi-typescript` | generated from the OpenAPI file |
 | Container | Docker; docker-compose for local | |
 | Pin versions | latest stable at project start, pinned in lock files | every dependency verified for recency and maintenance; see `17-dependencies.md` |
@@ -112,7 +112,7 @@ docs/  .agents/  infra/
 | `FileStorage.put/get/delete/url` | `LocalFileStorage`, `S3FileStorage` (any S3-compatible) |
 | `Clock.now()` | `SystemClock`, `FrozenClock` |
 | `JobQueue.enqueue(...)` | `ProcrastinateQueue` |
-| Map provider (dashboard) | web configuration only: `VITE_MAP_PROVIDER`, `VITE_GOOGLE_MAPS_API_KEY`, `VITE_GOOGLE_MAPS_MAP_ID` (Google), `VITE_MAP_API_KEY` (MapTiler, fallback); no backend dependency (ADR-033) |
+| Map provider (dashboard) | web build configuration only: `VITE_GOOGLE_MAPS_API_KEY`, `VITE_GOOGLE_MAPS_MAP_ID` (read at build time; a change needs a rebuild); the backend has no map keys and never calls Google (ADR-033, runbook 08) |
 | Geocoding (dashboard) | configuration (`GEOCODER_URL`, key); web-side wrapper in `features/map/`; no backend dependency |
 Selected by configuration (`PUSH_BACKEND`, `EMAIL_BACKEND`, `FILE_STORAGE_BACKEND`). Changing provider = add an adapter + change config.
 

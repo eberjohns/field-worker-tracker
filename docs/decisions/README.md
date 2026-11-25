@@ -9,7 +9,7 @@ One decision per file, numbered. Use the `write-adr` skill. Status: Proposed, Ac
 | 003 | [Per-worker sync change log](003-sync-change-log.md) | Accepted |
 | 004 | [Country rule packs and per-country deployment](004-country-rule-packs.md) | Superseded in part by 007 |
 | 005 | [Immutable events and versioned calculations](005-immutable-events-versioned-calculations.md) | Accepted |
-| 006 | [Map stack, tile provider and dependency policy](006-map-stack-and-dependency-policy.md) | Partly superseded by 033 (fallback map) |
+| 006 | [Map stack, tile provider and dependency policy](006-map-stack-and-dependency-policy.md) | Partly superseded by 033 (map stack); dependency policy applies |
 | 007 | [Multi-country operation in one deployment](007-multi-country-single-deployment.md) | Superseded by 009 |
 | 008 | [Effective-dated configuration and time rules](008-effective-dated-configuration.md) | Accepted |
 | 009 | [One stack per country, and hosting](009-country-deployments-and-hosting.md) | Accepted |
@@ -36,7 +36,7 @@ One decision per file, numbered. Use the `write-adr` skill. Status: Proposed, Ac
 | 030 | [Managed lists for staff types and grade codes](030-managed-lists.md) | Accepted |
 | 031 | [Web UI component layer (`web/src/ui`)](031-web-ui-component-layer.md) | Accepted |
 | 032 | [Base Planner templates materialised into scheduled work](032-roster-materialisation.md) | Accepted |
-| 033 | [Google Maps for the web map stack, behind a provider setting](033-google-maps-web-map-stack.md) | Accepted (Google enabled once keys are supplied) |
+| 033 | [Google Maps for the web map stack](033-google-maps-web-map-stack.md) | Accepted (Google Maps only) |
 
 See also [decision-register.md](decision-register.md) for business decisions awaiting client confirmation.
 

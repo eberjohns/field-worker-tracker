@@ -285,6 +285,7 @@ export const LiveMap: React.FC = () => {
       .filter((w) => w.latitude !== null && w.longitude !== null && w.latitude !== undefined && w.longitude !== undefined)
       .map((w) => ({
         type: "Feature",
+        id: w.employee_id, // keeps the worker's marker across refreshes (moved, not replaced)
         properties: {
           employee_id: w.employee_id,
           name: w.name,

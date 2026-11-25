@@ -165,3 +165,13 @@ test("bboxOf covers polygons, lines and points", () => {
   assert.deepEqual(bboxOf({ type: "Point", coordinates: [55, 25] }), [55, 25, 55, 25]);
   assert.equal(bboxOf([]), null);
 });
+
+test("thumbnailPath fits the polygon into the box and keeps holes", async () => {
+  const { thumbnailPath } = await import("./BoundaryThumbnail.tsx");
+  const d = thumbnailPath(WITH_HOLE, 40, 3)!;
+  assert.equal((d.match(/M/g) ?? []).length, 2, "outer ring and hole");
+  const nums = d.match(/-?\d+(\.\d+)?/g)!.map(Number);
+  assert.ok(nums.every((n) => n >= 0 && n <= 40), d);
+  assert.equal(thumbnailPath(null), null);
+  assert.equal(thumbnailPath({ type: "Polygon", coordinates: [[[1, 1], [2, 2]]] }), null);
+});

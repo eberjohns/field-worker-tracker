@@ -9,7 +9,7 @@ We need typed APIs with an auto-generated contract for a separate mobile team, s
 Backend: NestJS (TypeScript) vs FastAPI (Python) vs Django REST. Queue: Celery+Redis vs Procrastinate (PostgreSQL). Frontend: React vs others.
 
 ## Decision
-FastAPI + Pydantic v2 + SQLAlchemy 2 (async) + Alembic + PostGIS (GeoAlchemy2, Shapely); Procrastinate for background jobs behind a `JobQueue` port; React + TypeScript + Vite with a client generated from OpenAPI; MapLibre GL for maps (since ADR-033: Google Maps behind a map port, MapLibre as the fallback).
+FastAPI + Pydantic v2 + SQLAlchemy 2 (async) + Alembic + PostGIS (GeoAlchemy2, Shapely); Procrastinate for background jobs behind a `JobQueue` port; React + TypeScript + Vite with a client generated from OpenAPI; MapLibre GL for maps (since ADR-033: Google Maps only, behind a map interface).
 
 ## Why
 FastAPI generates the OpenAPI schema from code, so the mobile contract cannot drift and field additions/removals show up as a diff. Python suits Excel import/export, geometry and decimal-safe payroll. A PostgreSQL-backed queue avoids running Redis initially. FastAPI has no enforced structure, so we add it with the module layout, rules and `import-linter`.

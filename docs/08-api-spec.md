@@ -158,6 +158,8 @@ Roles: A = Admin, E = Engineer, S = Superintendent, V = Supervisor. "scope" = li
 | PUT | /settings/{key} | A | adds a new effective-dated value `{ value, country?, effective_from }` (never edits in place) |
 | GET | /settings/{key}/history | A E | all values with their effective ranges |
 | GET | /settings/staff-grades | any signed-in role | deprecated: the staff type list (managed list plus values in use), used by the budget-only checklist (DEC-60) |
+| POST | /map-usage | any signed-in role | the browser reports one Google Maps use `{ kind: MAP_LOAD|GEOCODE, count: 1..50 }`; adds to this environment's monthly counter; 204 (ADR-033) |
+| GET | /map-usage?months=1..24 | A | `{ environment, months: [{ month, map_loads, geocodes }], soft_limits, warnings }`, newest month first, months with no use as zeros; a warning when this month reaches a soft limit (Settings > System) |
 | GET/POST/PATCH | /time-rules | A (all), E (their scope), others read | planned times, break, standard-hours change, season, scope (company / team / drivers / employee), applies to all/outdoor/indoor; `GET /time-rules/resolve?employee_id=&date=` shows the effective plan and which rule won |
 | GET/POST | /consent-policies | A | publish location consent notice versions (per language) |
 | GET/POST/DELETE | /public-holidays | A | per country |
