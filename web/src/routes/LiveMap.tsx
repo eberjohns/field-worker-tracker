@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { MapContainer } from "../features/map";
 import { Map as MapLibreMap, GeoJSONSource } from "maplibre-gl";
+import { DatePicker } from "../ui";
 
 interface TodayAssignment {
   worksite_id?: string;
@@ -935,11 +936,11 @@ export const LiveMap: React.FC = () => {
               <div className="space-y-2 pt-1 border-t border-slate-200">
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-semibold text-slate-700">Journey Trail:</span>
-                  <input
-                    type="date"
+                  <DatePicker
                     value={trailDate}
-                    onChange={(e) => setTrailDate(e.target.value)}
-                    className="border border-slate-300 rounded px-2 py-0.5 text-xs text-slate-700 font-mono bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    onChange={(iso) => setTrailDate(iso)}
+                    aria-label="Journey trail date"
+                    size="sm"
                   />
                 </div>
 

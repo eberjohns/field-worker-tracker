@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { RENEWAL_HINT, RENEWAL_LABEL } from "../components/worksites/RenewalLabel";
 import { currencyForCountry, formatMoney } from "../features/format/money";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useAuth } from "../context/AuthContext";
 import {
   Search,
@@ -14,7 +14,6 @@ import {
   RefreshCw,
   ExternalLink,
   MapPin,
-  X,
   Download,
   Upload,
   ArrowUpDown,
@@ -25,6 +24,7 @@ import { MapContainer, PolygonEditor, PlaceSearch } from "../features/map";
 import { Map as MapLibreMap } from "maplibre-gl";
 import SupervisorProposalsModal from "../components/jobs/SupervisorProposalsModal";
 import { AddWorksiteWizard } from "../components/worksites/AddWorksiteWizard";
+import { ensureOk, Modal, useDialogs, useToast } from "../ui";
 
 interface Worksite {
   id: string;
@@ -77,9 +77,18 @@ interface Zone {
 }
 
 export const Worksites: React.FC = () => {
+  const toast = useToast();
+  const dialogs = useDialogs();
   const navigate = useNavigate();
   const { token, user } = useAuth();
-  const [activeTab, setActiveTab] = useState<"worksites" | "accommodations">("worksites");
+  // The menu item "Accommodations" opens this page with ?tab=accommodations.
+  const tabParam = useRouterState({ select: (st) => (st.location.search as { tab?: string }).tab });
+  const [activeTab, setActiveTab] = useState<"worksites" | "accommodations">(
+    tabParam === "accommodations" ? "accommodations" : "worksites",
+  );
+  useEffect(() => {
+    setActiveTab(tabParam === "accommodations" ? "accommodations" : "worksites");
+  }, [tabParam]);
   const [worksites, setWorksites] = useState<Worksite[]>([]);
   const [accommodations, setAccommodations] = useState<AccommodationItem[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -133,7 +142,7 @@ export const Worksites: React.FC = () => {
       a.remove();
       window.URL.revokeObjectURL(url);
     } catch (err: any) {
-      alert(err.message || "Export failed");
+      toast.error(err, "Export failed");
     } finally {
       setExporting(false);
     }
@@ -216,15 +225,12 @@ export const Worksites: React.FC = () => {
         body: JSON.stringify({ boundary: polygon }),
       });
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || "Failed to save boundary.");
-      }
+      await ensureOk(res, "Failed to save boundary.");
 
       setDrawingAccommodation(null);
       fetchData();
     } catch (err: any) {
-      alert(err.message || "Failed to save accommodation boundary");
+      toast.error(err, "Failed to save accommodation boundary");
     } finally {
       setSavingAccommodationBoundary(false);
     }
@@ -244,14 +250,11 @@ export const Worksites: React.FC = () => {
           version: editingAccommodation.version,
         }),
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || "Failed to update accommodation");
-      }
+      await ensureOk(res, "Failed to update accommodation");
       setEditingAccommodation(null);
       fetchData();
     } catch (err: any) {
-      alert(err.message || "Failed to update accommodation");
+      toast.error(err, "Failed to update accommodation");
     } finally {
       setSavingAcc(false);
     }
@@ -259,7 +262,7 @@ export const Worksites: React.FC = () => {
 
   const handleToggleAccommodationActive = async (acc: AccommodationItem) => {
     const action = acc.is_active ? "deactivate" : "reactivate";
-    if (!window.confirm(`Are you sure you want to ${action} accommodation '${acc.name}' (${acc.accommodation_code})?`)) return;
+    if (!(await dialogs.confirm({ title: "Change accommodation status?", message: `Are you sure you want to ${action} accommodation '${acc.name}' (${acc.accommodation_code})?`, confirmLabel: "Confirm" }))) return;
     try {
       const res = await fetch(`/api/v1/accommodations/${acc.id}`, {
         method: "PATCH",
@@ -269,13 +272,10 @@ export const Worksites: React.FC = () => {
           version: acc.version,
         }),
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || `Failed to ${action} accommodation`);
-      }
+      await ensureOk(res, `Failed to ${action} accommodation`);
       fetchData();
     } catch (err: any) {
-      alert(err.message || `Failed to ${action} accommodation`);
+      toast.error(err, `Failed to ${action} accommodation`);
     }
   };
 
@@ -318,7 +318,7 @@ export const Worksites: React.FC = () => {
   });
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-6">
+    <div className="w-full max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
@@ -331,7 +331,7 @@ export const Worksites: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3 [&>button]:whitespace-nowrap">
           {user?.role === "ADMIN" && (
             <button
               onClick={() => setShowProposals(true)}
@@ -389,7 +389,7 @@ export const Worksites: React.FC = () => {
       {/* Tab Switcher: Worksites vs Accommodations */}
       <div className="flex items-center gap-3 border-b border-slate-200 pb-2">
         <button
-          onClick={() => setActiveTab("worksites")}
+          onClick={() => navigate({ to: "/worksites", search: {} as never })}
           className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition ${
             activeTab === "worksites"
               ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
@@ -400,7 +400,7 @@ export const Worksites: React.FC = () => {
           Worksites ({worksites.length})
         </button>
         <button
-          onClick={() => setActiveTab("accommodations")}
+          onClick={() => navigate({ to: "/worksites", search: { tab: "accommodations" } as never })}
           className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition ${
             activeTab === "accommodations"
               ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
@@ -415,7 +415,7 @@ export const Worksites: React.FC = () => {
       {/* Filter Bar */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-wrap gap-4 items-center justify-between">
         <div className="flex flex-wrap items-center gap-3 flex-1 min-w-[280px]">
-          <div className="relative flex-1 max-w-xs">
+          <div className="relative flex-1 min-w-[12rem] max-w-xs">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
             <input
               type="text"
@@ -508,7 +508,7 @@ export const Worksites: React.FC = () => {
               <select
                 value={revisionFilter}
                 onChange={(e) => setRevisionFilter(e.target.value)}
-                className="text-sm border border-slate-300 rounded-md py-1.5 px-3 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                className="max-w-full text-sm border border-slate-300 rounded-md py-1.5 px-3 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
               >
                 <option value="">All Revisions</option>
                 <option value="UNASSIGNED">Unassigned (Default)</option>
@@ -841,46 +841,32 @@ export const Worksites: React.FC = () => {
 
       {/* Accommodation Boundary Modal */}
       {drawingAccommodation && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-3xl bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-              <div>
-                <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <Home className="h-5 w-5 text-blue-600" />
-                  {drawingAccommodation.has_boundary ? "Edit" : "Draw"} Boundary for {drawingAccommodation.name} ({drawingAccommodation.accommodation_code})
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Worker living quarters / camp boundary for attendance and nightly rest verification.
-                </p>
-              </div>
-              <button
-                onClick={() => setDrawingAccommodation(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/60"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="p-4 space-y-4 flex-1 overflow-y-auto">
-              <div className="relative">
-                <PlaceSearch map={mapInstance} />
-                <MapContainer
-                  initialZoom={15}
-                  onMapReady={(map) => setMapInstance(map)}
-                  onMapUnmount={() => setMapInstance(null)}
-                  className="w-full h-[450px]"
-                />
-              </div>
-
-              <PolygonEditor
-                map={mapInstance}
-                initialPolygon={drawingAccommodation.boundary_geojson as GeoJSON.Polygon | null}
-                onSave={handleSaveAccommodationBoundary}
-                isSaving={savingAccommodationBoundary}
+        <Modal
+          open
+          onClose={() => setDrawingAccommodation(null)}
+          size="xl"
+          title={<span className="inline-flex items-center gap-2"><Home className="h-5 w-5 text-blue-600" /> {drawingAccommodation.has_boundary ? "Edit" : "Draw"} Boundary for {drawingAccommodation.name} ({drawingAccommodation.accommodation_code})</span>}
+          description="Worker living quarters / camp boundary for attendance and nightly rest verification."
+        >
+          <div className="p-4 space-y-4">
+            <div className="relative">
+              <PlaceSearch map={mapInstance} />
+              <MapContainer
+                initialZoom={15}
+                onMapReady={(map) => setMapInstance(map)}
+                onMapUnmount={() => setMapInstance(null)}
+                className="w-full h-[450px]"
               />
             </div>
+
+            <PolygonEditor
+              map={mapInstance}
+              initialPolygon={drawingAccommodation.boundary_geojson as GeoJSON.Polygon | null}
+              onSave={handleSaveAccommodationBoundary}
+              isSaving={savingAccommodationBoundary}
+            />
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Add Worksite wizard (Batch 5.1 B; Admin only, DEC-61) */}
@@ -904,65 +890,55 @@ export const Worksites: React.FC = () => {
 
       {/* Edit Accommodation Modal */}
       {editingAccommodation && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-md w-full p-6 space-y-4">
-            <div className="flex items-center justify-between border-b pb-3">
-              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <Edit2 className="h-5 w-5 text-indigo-600" />
-                Edit Accommodation ({editingAccommodation.accommodation_code})
-              </h2>
+        <Modal
+          open
+          onClose={() => setEditingAccommodation(null)}
+          size="md"
+          title={<span className="inline-flex items-center gap-2"><Edit2 className="h-5 w-5 text-indigo-600" /> Edit Accommodation ({editingAccommodation.accommodation_code})</span>}
+        >
+          <form onSubmit={handleSaveAccommodation} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Accommodation Name *
+              </label>
+              <input
+                type="text"
+                required
+                value={editAccName}
+                onChange={(e) => setEditAccName(e.target.value)}
+                className="w-full p-2 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Address / Location
+              </label>
+              <input
+                type="text"
+                value={editAccAddress}
+                onChange={(e) => setEditAccAddress(e.target.value)}
+                placeholder="e.g. Al Quoz Industrial Area 4, Dubai"
+                className="w-full p-2 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2 border-t">
               <button
                 type="button"
                 onClick={() => setEditingAccommodation(null)}
-                className="text-slate-400 hover:text-slate-600 p-1"
+                className="px-4 py-2 border border-slate-300 rounded text-xs font-medium text-slate-700 hover:bg-slate-50 transition"
               >
-                <X className="h-5 w-5" />
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={savingAcc}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-semibold shadow-sm transition disabled:opacity-50"
+              >
+                {savingAcc ? "Saving..." : "Save Changes"}
               </button>
             </div>
-            <form onSubmit={handleSaveAccommodation} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Accommodation Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={editAccName}
-                  onChange={(e) => setEditAccName(e.target.value)}
-                  className="w-full p-2 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-indigo-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Address / Location
-                </label>
-                <input
-                  type="text"
-                  value={editAccAddress}
-                  onChange={(e) => setEditAccAddress(e.target.value)}
-                  placeholder="e.g. Al Quoz Industrial Area 4, Dubai"
-                  className="w-full p-2 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-indigo-500"
-                />
-              </div>
-              <div className="flex justify-end gap-2 pt-2 border-t">
-                <button
-                  type="button"
-                  onClick={() => setEditingAccommodation(null)}
-                  className="px-4 py-2 border border-slate-300 rounded text-xs font-medium text-slate-700 hover:bg-slate-50 transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={savingAcc}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-semibold shadow-sm transition disabled:opacity-50"
-                >
-                  {savingAcc ? "Saving..." : "Save Changes"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+          </form>
+        </Modal>
       )}
       <SupervisorProposalsModal
         isOpen={showProposals}

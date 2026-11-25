@@ -9,6 +9,7 @@ import {
   FileKey,
   Users,
 } from "lucide-react";
+import { Modal, useDialogs } from "../../ui";
 
 interface ArchiveRecord {
   id: string;
@@ -27,6 +28,7 @@ interface ArchiveRecord {
 }
 
 export const ArchiveSettings: React.FC = () => {
+  const dialogs = useDialogs();
   const [archives, setArchives] = useState<ArchiveRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -145,7 +147,7 @@ export const ArchiveSettings: React.FC = () => {
   };
 
   const handleRunRetentionPurge = async () => {
-    if (!window.confirm("Run retention cleanup now? This will permanently purge sync changes older than 60 days and resolved alerts older than 6 months.")) {
+    if (!(await dialogs.confirm({ title: "Run retention cleanup now?", message: "Run retention cleanup now? This will permanently purge sync changes older than 60 days and resolved alerts older than 6 months.", confirmLabel: "Run cleanup", variant: "destructive" }))) {
       return;
     }
 
@@ -183,7 +185,7 @@ export const ArchiveSettings: React.FC = () => {
   };
 
   const handleRunAnonymisation = async () => {
-    if (!window.confirm("Run employee anonymisation? This will permanently anonymise personal details for terminated employees whose employment ended over 2 years ago.")) {
+    if (!(await dialogs.confirm({ title: "Run employee anonymisation?", message: "Run employee anonymisation? This will permanently anonymise personal details for terminated employees whose employment ended over 2 years ago.", confirmLabel: "Anonymise", variant: "destructive" }))) {
       return;
     }
 
@@ -392,73 +394,62 @@ export const ArchiveSettings: React.FC = () => {
 
       {/* Generate Yearly Archive Modal */}
       {showGenerateModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
-            <div className="flex items-start justify-between">
-              <div>
-                <h3 className="text-base font-semibold text-slate-900">Run Yearly Archive</h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Package raw location events and visits into an encrypted archive.
-                </p>
-              </div>
-              <button
-                onClick={() => setShowGenerateModal(false)}
-                className="text-slate-400 hover:text-slate-600 text-sm"
-              >
-                ✕
-              </button>
+        <Modal
+          open
+          onClose={() => setShowGenerateModal(false)}
+          size="md"
+          title="Run Yearly Archive"
+          description="Package raw location events and visits into an encrypted archive."
+        >
+          <form onSubmit={handleGenerateArchive} className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">
+                Calendar Year to Archive
+              </label>
+              <input
+                type="number"
+                min={2020}
+                max={new Date().getFullYear()}
+                value={targetYear}
+                onChange={(e) => setTargetYear(parseInt(e.target.value, 10))}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                required
+              />
             </div>
 
-            <form onSubmit={handleGenerateArchive} className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">
-                  Calendar Year to Archive
-                </label>
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-2">
+              <label className="flex items-start gap-2 text-xs text-amber-900 cursor-pointer">
                 <input
-                  type="number"
-                  min={2020}
-                  max={new Date().getFullYear()}
-                  value={targetYear}
-                  onChange={(e) => setTargetYear(parseInt(e.target.value, 10))}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  required
+                  type="checkbox"
+                  checked={purgeLiveEvents}
+                  onChange={(e) => setPurgeLiveEvents(e.target.checked)}
+                  className="mt-0.5 rounded border-amber-300 text-indigo-600 focus:ring-indigo-500"
                 />
-              </div>
+                <span>
+                  <strong>Purge live database records:</strong> Automatically purge archived raw events and granular visits from the active database after successful package encryption and verification.
+                </span>
+              </label>
+            </div>
 
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-2">
-                <label className="flex items-start gap-2 text-xs text-amber-900 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={purgeLiveEvents}
-                    onChange={(e) => setPurgeLiveEvents(e.target.checked)}
-                    className="mt-0.5 rounded border-amber-300 text-indigo-600 focus:ring-indigo-500"
-                  />
-                  <span>
-                    <strong>Purge live database records:</strong> Automatically purge archived raw events and granular visits from the active database after successful package encryption and verification.
-                  </span>
-                </label>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowGenerateModal(false)}
-                  className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-50 transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={actionLoading === "generate"}
-                  className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-medium transition shadow-sm disabled:opacity-50"
-                >
-                  <Archive className="w-3.5 h-3.5" />
-                  {actionLoading === "generate" ? "Archiving..." : "Create Archive"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowGenerateModal(false)}
+                className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-50 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={actionLoading === "generate"}
+                className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-medium transition shadow-sm disabled:opacity-50"
+              >
+                <Archive className="w-3.5 h-3.5" />
+                {actionLoading === "generate" ? "Archiving..." : "Create Archive"}
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   );

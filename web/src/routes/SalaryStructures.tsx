@@ -7,12 +7,12 @@ import {
   History,
   Calendar,
   Plus,
-  X,
   ArrowUpDown,
   Pencil,
   Trash2,
   Banknote,
 } from "lucide-react";
+import { DatePicker, ensureOk, Modal, useDialogs, useToast } from "../ui";
 
 interface SalaryItem {
   employee_id: string;
@@ -58,6 +58,8 @@ interface SalaryHistoryRecord {
 }
 
 export const SalaryStructures: React.FC = () => {
+  const toast = useToast();
+  const dialogs = useDialogs();
   const { token, user } = useAuth();
   const [salaries, setSalaries] = useState<SalaryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -184,15 +186,12 @@ export const SalaryStructures: React.FC = () => {
         },
         body: JSON.stringify(editRevForm),
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail?.message || err.detail || "Failed to update salary revision.");
-      }
+      await ensureOk(res, "Failed to update salary revision.");
       setEditingRevision(null);
       await openHistory(selectedWorkerId, selectedWorkerName, selectedWorkerTally);
       fetchSalaries();
     } catch (err: any) {
-      alert(err.message || "Failed to update salary revision");
+      toast.error(err, "Failed to update salary revision");
     } finally {
       setSavingRev(false);
     }
@@ -201,9 +200,7 @@ export const SalaryStructures: React.FC = () => {
   const handleDeleteRevision = async (rec: SalaryHistoryRecord) => {
     if (!selectedWorkerId) return;
     if (
-      !window.confirm(
-        `Are you sure you want to delete the future salary revision effective ${rec.effective_from}?`
-      )
+      !(await dialogs.confirm({ title: "Delete salary revision?", message: `Are you sure you want to delete the future salary revision effective ${rec.effective_from}?`, confirmLabel: "Delete", variant: "destructive" }))
     )
       return;
     try {
@@ -211,14 +208,11 @@ export const SalaryStructures: React.FC = () => {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail?.message || err.detail || "Failed to delete salary revision.");
-      }
+      await ensureOk(res, "Failed to delete salary revision.");
       await openHistory(selectedWorkerId, selectedWorkerName, selectedWorkerTally);
       fetchSalaries();
     } catch (err: any) {
-      alert(err.message || "Failed to delete salary revision");
+      toast.error(err, "Failed to delete salary revision");
     }
   };
 
@@ -262,10 +256,10 @@ export const SalaryStructures: React.FC = () => {
         fetchSalaries();
       } else {
         const err = await res.json();
-        alert(err.detail?.message || "Failed to update salary.");
+        toast.error(err, "Failed to update salary.");
       }
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err);
     } finally {
       setSubmitting(false);
     }
@@ -548,185 +542,159 @@ export const SalaryStructures: React.FC = () => {
 
       {/* History Modal */}
       {selectedWorkerId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full p-6 space-y-4 max-h-[85vh] flex flex-col">
-            <div className="flex items-center justify-between border-b pb-3">
-              <div>
-                <h3 className="text-lg font-bold text-slate-900">Salary Structure History</h3>
-                <p className="text-xs text-slate-500 font-mono">
-                  {selectedWorkerName} ({selectedWorkerTally})
-                </p>
-              </div>
+        <Modal
+          open
+          onClose={() => setSelectedWorkerId(null)}
+          size="lg"
+          title="Salary Structure History"
+          description={<>{selectedWorkerName} ({selectedWorkerTally})</>}
+          footer={
+            <div className="flex w-full flex-wrap items-center justify-end gap-2">
               <button
-                onClick={() => setSelectedWorkerId(null)}
-                className="text-slate-400 hover:text-slate-600 p-1"
-              >
-                <X className="h-5 w-5" />
-              </button>
+                  onClick={() => setSelectedWorkerId(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-lg"
+                >
+                  Close
+                </button>
             </div>
-
-            <div className="flex-1 overflow-y-auto space-y-3">
-              {historyLoading ? (
-                <div className="p-8 text-center text-slate-400">Loading history...</div>
-              ) : historyList.length === 0 ? (
-                <div className="p-8 text-center text-slate-400">No revisions recorded.</div>
-              ) : (
-                <div className="space-y-3">
-                  {historyList.map((rec) => {
-                    const isFuture = rec.effective_from > todayStr;
-                    return (
-                      <div
-                        key={rec.id}
-                        className={`border rounded-lg p-4 transition-colors ${
-                          isFuture
-                            ? "border-purple-200 bg-purple-50/30"
-                            : "border-slate-200 bg-slate-50/50 hover:border-indigo-300"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4 text-indigo-600" />
-                            <span className="text-sm font-bold text-slate-900">
-                              Effective from {rec.effective_from}
+          }
+        >
+          <div className="space-y-3">
+            {historyLoading ? (
+              <div className="p-8 text-center text-slate-400">Loading history...</div>
+            ) : historyList.length === 0 ? (
+              <div className="p-8 text-center text-slate-400">No revisions recorded.</div>
+            ) : (
+              <div className="space-y-3">
+                {historyList.map((rec) => {
+                  const isFuture = rec.effective_from > todayStr;
+                  return (
+                    <div
+                      key={rec.id}
+                      className={`border rounded-lg p-4 transition-colors ${
+                        isFuture
+                          ? "border-purple-200 bg-purple-50/30"
+                          : "border-slate-200 bg-slate-50/50 hover:border-indigo-300"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4 text-indigo-600" />
+                          <span className="text-sm font-bold text-slate-900">
+                            Effective from {rec.effective_from}
+                          </span>
+                          {isFuture && (
+                            <span className="px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 text-[10px] font-bold border border-purple-200">
+                              Upcoming (Editable)
                             </span>
-                            {isFuture && (
-                              <span className="px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 text-[10px] font-bold border border-purple-200">
-                                Upcoming (Editable)
-                              </span>
-                            )}
-                            {rec.change_source === "CREW_BREAK" && (
-                              <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-bold">
-                                Break change
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            {rec.change_source === "CREW_BREAK" ? (
-                              <span className="text-xs text-slate-400 font-medium">
-                                No salary diff
-                              </span>
-                            ) : rec.difference !== 0 ? (
-                              <span
-                                className={`text-xs font-bold px-2 py-0.5 rounded ${
-                                  rec.difference > 0
-                                    ? "bg-emerald-100 text-emerald-800"
-                                    : "bg-red-100 text-red-800"
-                                }`}
-                              >
-                                {rec.difference > 0 ? `+${rec.difference}` : rec.difference}
-                              </span>
-                            ) : null}
-
-                            {/* CREW_BREAK rows follow the row before them; change the crew break instead. */}
-                            {isFuture && user?.role === "ADMIN" && rec.change_source !== "CREW_BREAK" && (
-                              <div className="flex items-center gap-1.5 ml-2 border-l border-slate-200 pl-2">
-                                <button
-                                  type="button"
-                                  onClick={() => handleEditRevision(rec)}
-                                  className="p-1 text-slate-500 hover:text-indigo-600 rounded hover:bg-slate-100 transition"
-                                  title="Edit future revision"
-                                >
-                                  <Pencil className="h-3.5 w-3.5" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteRevision(rec)}
-                                  className="p-1 text-slate-500 hover:text-rose-600 rounded hover:bg-slate-100 transition"
-                                  title="Delete future revision"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </button>
-                              </div>
-                            )}
-                          </div>
+                          )}
+                          {rec.change_source === "CREW_BREAK" && (
+                            <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-bold">
+                              Break change
+                            </span>
+                          )}
                         </div>
 
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-slate-600">
-                          <div>
-                            <span className="text-slate-400 block">Standard Hours:</span>
-                            <span className="font-semibold">{rec.standard_hours} hrs</span>
-                          </div>
-                          <div>
-                            <span className="text-slate-400 block">Basic Salary:</span>
-                            <span className="font-semibold">{formatMoney(rec.basic_salary, historyCurrency)}</span>
-                          </div>
-                          <div>
-                            <span className="text-slate-400 block">Allowances:</span>
-                            <span className="font-semibold">
-                              {formatMoney(
-                                Number(rec.special_allowance) +
-                                  Number(rec.fixed_ot_amount) +
-                                  Number(rec.bonus) +
-                                  Number(rec.telephone_allowance) +
-                                  Number(rec.housing_transport_allowance),
-                                historyCurrency,
-                              )}
+                        <div className="flex items-center gap-2">
+                          {rec.change_source === "CREW_BREAK" ? (
+                            <span className="text-xs text-slate-400 font-medium">
+                              No salary diff
                             </span>
-                          </div>
-                          <div>
-                            <span className="text-slate-400 block">Total Fixed Pay:</span>
-                            <span className="font-bold text-indigo-700">{formatMoney(rec.salary_portion, historyCurrency)}</span>
-                          </div>
+                          ) : rec.difference !== 0 ? (
+                            <span
+                              className={`text-xs font-bold px-2 py-0.5 rounded ${
+                                rec.difference > 0
+                                  ? "bg-emerald-100 text-emerald-800"
+                                  : "bg-red-100 text-red-800"
+                              }`}
+                            >
+                              {rec.difference > 0 ? `+${rec.difference}` : rec.difference}
+                            </span>
+                          ) : null}
+
+                          {/* CREW_BREAK rows follow the row before them; change the crew break instead. */}
+                          {isFuture && user?.role === "ADMIN" && rec.change_source !== "CREW_BREAK" && (
+                            <div className="flex items-center gap-1.5 ml-2 border-l border-slate-200 pl-2">
+                              <button
+                                type="button"
+                                onClick={() => handleEditRevision(rec)}
+                                className="p-1 text-slate-500 hover:text-indigo-600 rounded hover:bg-slate-100 transition"
+                                title="Edit future revision"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteRevision(rec)}
+                                className="p-1 text-slate-500 hover:text-rose-600 rounded hover:bg-slate-100 transition"
+                                title="Delete future revision"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
 
-            <div className="border-t pt-3 flex justify-end">
-              <button
-                onClick={() => setSelectedWorkerId(null)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-lg"
-              >
-                Close
-              </button>
-            </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-slate-600">
+                        <div>
+                          <span className="text-slate-400 block">Standard Hours:</span>
+                          <span className="font-semibold">{rec.standard_hours} hrs</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block">Basic Salary:</span>
+                          <span className="font-semibold">{formatMoney(rec.basic_salary, historyCurrency)}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block">Allowances:</span>
+                          <span className="font-semibold">
+                            {formatMoney(
+                              Number(rec.special_allowance) +
+                                Number(rec.fixed_ot_amount) +
+                                Number(rec.bonus) +
+                                Number(rec.telephone_allowance) +
+                                Number(rec.housing_transport_allowance),
+                              historyCurrency,
+                            )}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block">Total Fixed Pay:</span>
+                          <span className="font-bold text-indigo-700">{formatMoney(rec.salary_portion, historyCurrency)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Edit Future Salary Revision Modal */}
       {editingRevision && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-          <form
-            onSubmit={handleSaveRevision}
-            className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4"
-          >
-            <div className="flex items-center justify-between border-b pb-3">
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-1.5">
-                <Pencil className="h-4 w-4 text-indigo-600" />
-                Edit Future Salary Revision
-              </h3>
-              <button
-                type="button"
-                onClick={() => setEditingRevision(null)}
-                className="text-slate-400 hover:text-slate-600 p-1"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
+        <Modal
+          open
+          onClose={() => setEditingRevision(null)}
+          size="md"
+          title={<><Pencil className="h-4 w-4 text-indigo-600" />
+                Edit Future Salary Revision</>}
+        >
+          <form onSubmit={handleSaveRevision} className="space-y-4">
             <p className="text-xs text-slate-500">
               Modifying upcoming revision for <span className="font-semibold">{selectedWorkerName}</span>.
             </p>
 
             <div className="space-y-3 text-xs">
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Effective From Date (Must be future)
-                </label>
-                <input
-                  type="date"
+                <DatePicker
+                  label="Effective From Date (Must be future)"
                   required
                   min={new Date(Date.now() + 86400000).toISOString().slice(0, 10)}
                   value={editRevForm.effective_from}
-                  onChange={(e) =>
-                    setEditRevForm({ ...editRevForm, effective_from: e.target.value })
-                  }
-                  className="w-full border rounded-lg px-3 py-1.5 focus:outline-none focus:border-indigo-500"
+                  onChange={(iso) => setEditRevForm({ ...editRevForm, effective_from: iso })}
+                  size="lg"
                 />
               </div>
 
@@ -871,27 +839,18 @@ export const SalaryStructures: React.FC = () => {
               </button>
             </div>
           </form>
-        </div>
+        </Modal>
       )}
 
       {/* Record Salary Change Modal */}
       {changeModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-          <form
-            onSubmit={submitSalaryChange}
-            className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4"
-          >
-            <div className="flex items-center justify-between border-b pb-3">
-              <h3 className="text-base font-bold text-slate-900">Record Salary Revision</h3>
-              <button
-                type="button"
-                onClick={() => setChangeModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
+        <Modal
+          open
+          onClose={() => setChangeModalOpen(false)}
+          size="md"
+          title="Record Salary Revision"
+        >
+          <form onSubmit={submitSalaryChange} className="space-y-4">
             <p className="text-xs text-slate-500">
               Applying change for <span className="font-semibold text-slate-700">{changeWorkerName}</span>.
               Salary changes take effect from the next payroll month.
@@ -899,14 +858,11 @@ export const SalaryStructures: React.FC = () => {
 
             <div className="space-y-3 text-sm">
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">
-                  Effective From (Blank = 1st of upcoming month)
-                </label>
-                <input
-                  type="date"
+                <DatePicker
+                  label="Effective From (Blank = 1st of upcoming month)"
                   value={formData.effective_from}
-                  onChange={(e) => setFormData({ ...formData, effective_from: e.target.value })}
-                  className="w-full border rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-indigo-500"
+                  onChange={(iso) => setFormData({ ...formData, effective_from: iso })}
+                  size="lg"
                 />
               </div>
 
@@ -993,7 +949,7 @@ export const SalaryStructures: React.FC = () => {
               </button>
             </div>
           </form>
-        </div>
+        </Modal>
       )}
     </div>
   );

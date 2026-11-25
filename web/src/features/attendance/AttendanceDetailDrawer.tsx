@@ -20,6 +20,7 @@ import {
 } from "./formatters";
 import { useAuth } from "../../context/AuthContext";
 import { ManualTimesModal } from "./ManualTimesModal";
+import { problemFromBody } from "../../ui";
 
 interface AttendanceDetailDrawerProps {
   record: AttendanceRecord | null;
@@ -159,7 +160,7 @@ export const AttendanceDetailDrawer: React.FC<AttendanceDetailDrawerProps> = ({
         onRecordUpdated();
       } else {
         const errData = await res.json();
-        setDecisionError(errData.detail || "Failed to record approval decision.");
+        setDecisionError(problemFromBody(null, errData, "Failed to record approval decision.").message);
       }
     } catch (err) {
       setDecisionError("Network error recording decision.");
@@ -379,7 +380,7 @@ export const AttendanceDetailDrawer: React.FC<AttendanceDetailDrawerProps> = ({
             {/* Immutability & Calculation Provenance */}
             <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-slate-500 font-mono text-[11px] space-y-1">
               <div>Version: v{calc?.version_no} (Engine {calc?.engine_version})</div>
-              <div>Input Hash: {calc?.input_hash}</div>
+              <div className="break-all">Input Hash: {calc?.input_hash}</div>
               <div>Calculated: {calc?.calculated_at}</div>
               <div>Reason: {calc?.reason}</div>
             </div>

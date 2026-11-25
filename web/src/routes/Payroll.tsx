@@ -15,7 +15,6 @@ import {
   ArrowRight,
   Search,
   Check,
-  X,
   Layers,
   ChevronDown,
   ChevronRight,
@@ -24,6 +23,7 @@ import {
   FileSpreadsheet,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { DatePicker, Modal, useDialogs, useToast } from "../ui";
 
 // --- Types ---
 
@@ -178,6 +178,8 @@ interface BudgetVsActualItem {
 }
 
 export const Payroll: React.FC = () => {
+  const toast = useToast();
+  const dialogs = useDialogs();
   const { token, user } = useAuth();
   const isAdmin = user?.role === "ADMIN";
   // DEC-47: payroll runs, records, revision lines and budgets are Admin only (Batch 5.3b).
@@ -408,11 +410,11 @@ export const Payroll: React.FC = () => {
         setSelectedRunId(newRun.id);
       } else {
         const errData = await res.json();
-        alert(errData.detail || "Failed to generate payroll draft.");
+        toast.error(errData, "Failed to generate payroll draft.");
       }
     } catch (err) {
       console.error("Failed to generate draft", err);
-      alert("Error generating draft run.");
+      toast.error("Error generating draft run.");
     } finally {
       setGenerating(false);
     }
@@ -420,7 +422,7 @@ export const Payroll: React.FC = () => {
 
   const handleRerunDraft = async () => {
     if (!selectedRunDetail || !isAdmin) return;
-    if (!confirm(`Re-run draft for ${selectedRunDetail.run.period_start} to ${selectedRunDetail.run.period_end}? This will increment Run No and recalculate with latest approved attendance.`)) {
+    if (!(await dialogs.confirm({ title: "Re-run payroll draft?", message: `Re-run draft for ${selectedRunDetail.run.period_start} to ${selectedRunDetail.run.period_end}? This will increment Run No and recalculate with latest approved attendance.`, confirmLabel: "Re-run draft" }))) {
       return;
     }
     setRunsLoading(true);
@@ -445,7 +447,7 @@ export const Payroll: React.FC = () => {
         setSelectedRunId(newRun.id);
       } else {
         const err = await res.json();
-        alert(err.detail || "Failed to re-run draft.");
+        toast.error(err, "Failed to re-run draft.");
       }
     } catch (err) {
       console.error("Failed to re-run draft", err);
@@ -469,7 +471,7 @@ export const Payroll: React.FC = () => {
         await fetchRunDetail(selectedRunId);
       } else {
         const err = await res.json();
-        alert(err.detail || "Failed to approve payroll run.");
+        toast.error(err, "Failed to approve payroll run.");
       }
     } catch (err) {
       console.error("Approve error", err);
@@ -491,7 +493,7 @@ export const Payroll: React.FC = () => {
       if (res.ok) {
         await fetchBudgetVsActual();
       } else {
-        alert("Failed to update worksite revision.");
+        toast.error("Failed to update worksite revision.");
       }
     } catch (err) {
       console.error("Error updating worksite revision", err);
@@ -519,14 +521,14 @@ export const Payroll: React.FC = () => {
       window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error("Export template error", err);
-      alert("Failed to export revision Excel template.");
+      toast.error("Failed to export revision Excel template.");
     }
   };
 
   const handleFileUploadAndPreview = async (selectedFile?: File) => {
     const file = selectedFile || uploadFile;
     if (!file) {
-      alert("Please choose an Excel (.xlsx/.xls) or CSV file first.");
+      toast.warning("Please choose an Excel (.xlsx/.xls) or CSV file first.");
       return;
     }
     const targetCode = targetRevisionInput.trim() || `${selectedRevisionCode || "REV-2026"}-V2`;
@@ -554,11 +556,11 @@ export const Payroll: React.FC = () => {
         setPreviewLines(data.preview_lines || []);
       } else {
         const err = await res.json().catch(() => ({}));
-        alert(err.detail?.message || err.detail || "Failed to analyze and diff the uploaded spreadsheet.");
+        toast.error(err, "Failed to analyze and diff the uploaded spreadsheet.");
       }
     } catch (err) {
       console.error("File upload diff error", err);
-      alert("An unexpected error occurred while analyzing the file.");
+      toast.error("An unexpected error occurred while analyzing the file.");
     } finally {
       setDiffLoading(false);
     }
@@ -575,11 +577,11 @@ export const Payroll: React.FC = () => {
   const handleSaveImportedRevision = async () => {
     const code = targetRevisionInput.trim();
     if (!code) {
-      alert("Please specify a target revision code.");
+      toast.warning("Please specify a target revision code.");
       return;
     }
     if (!previewLines || previewLines.length === 0) {
-      alert("No revision lines to save. Please upload a spreadsheet first.");
+      toast.error("No revision lines to save. Please upload a spreadsheet first.");
       return;
     }
     setDiffLoading(true);
@@ -607,14 +609,14 @@ export const Payroll: React.FC = () => {
         setTargetRevisionName("");
         await fetchRevisions();
         setSelectedRevisionCode(code);
-        alert(`Salary Revision ${code} created successfully!`);
+        toast.success(`Salary Revision ${code} created successfully!`);
       } else {
         const err = await res.json().catch(() => ({}));
-        alert(err.detail?.message || err.detail || "Failed to save salary revision.");
+        toast.error(err, "Failed to save salary revision.");
       }
     } catch (err) {
       console.error("Save revision error", err);
-      alert("Error saving revision.");
+      toast.error("Error saving revision.");
     } finally {
       setDiffLoading(false);
     }
@@ -1285,19 +1287,17 @@ export const Payroll: React.FC = () => {
                 <option value="SA">Saudi Arabia (SA)</option>
                 <option value="QA">Qatar (QA)</option>
               </select>
-              <label className="text-3xs uppercase font-bold text-slate-400 ml-2">From:</label>
-              <input
-                type="date"
+              <DatePicker
+                label="From"
                 value={budgetFrom}
-                onChange={(e) => setBudgetFrom(e.target.value)}
-                className="px-2 py-1 text-xs bg-slate-50 border border-slate-200 rounded-lg"
+                onChange={(iso) => setBudgetFrom(iso)}
+                size="lg"
               />
-              <label className="text-3xs uppercase font-bold text-slate-400">To:</label>
-              <input
-                type="date"
+              <DatePicker
+                label="To"
                 value={budgetTo}
-                onChange={(e) => setBudgetTo(e.target.value)}
-                className="px-2 py-1 text-xs bg-slate-50 border border-slate-200 rounded-lg"
+                onChange={(iso) => setBudgetTo(iso)}
+                size="lg"
               />
               {(budgetFrom || budgetTo) && (
                 <button
@@ -1441,249 +1441,231 @@ export const Payroll: React.FC = () => {
       {/* MODAL 1: WORKER RECORD DETAIL DRAWER                                      */}
       {/* ========================================================================= */}
       {selectedRecord && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex justify-end z-50">
-          <div className="bg-white w-full max-w-xl h-full shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right">
-            {/* Header */}
-            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
-              <div>
-                <h3 className="text-base font-bold text-slate-900">{selectedRecord.employee_name}</h3>
-                <p className="text-xs text-slate-500 font-mono">
-                  {selectedRecord.employee_tally_id || selectedRecord.tally_id || "—"} • {selectedRecord.employee_role || selectedRecord.role || "WORKER"}
-                </p>
+        <Modal
+          open
+          onClose={() => setSelectedRecord(null)}
+          size="lg"
+          title={<span className="inline-flex items-center gap-2">{selectedRecord.employee_name}</span>}
+          description={<>{selectedRecord.employee_tally_id || selectedRecord.tally_id || "—"} • {selectedRecord.employee_role || selectedRecord.role || "WORKER"}</>}
+        >
+          <div className="p-6 space-y-6 text-xs">
+            {/* Employee Earnings & Deductions */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold uppercase text-slate-400 tracking-wider">
+                Employee Monthly Earnings
+              </h4>
+
+              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-slate-600">Basic Salary:</span>
+                  <span className="font-mono font-bold">{money(selectedRecord.basic_salary)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-600">Special Allowance:</span>
+                  <span className="font-mono">{money(selectedRecord.special_allowance)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-600">Fixed Overtime:</span>
+                  <span className="font-mono">{money(selectedRecord.fixed_ot_amount)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-600">Bonus:</span>
+                  <span className="font-mono">{money(selectedRecord.bonus)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-600">Telephone Allowance:</span>
+                  <span className="font-mono">{money(selectedRecord.telephone_allowance)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-600">Housing / Transport Allowance:</span>
+                  <span className="font-mono">{money(selectedRecord.housing_transport_allowance)}</span>
+                </div>
+                <div className="flex justify-between border-t border-slate-200 pt-1 font-bold text-slate-900">
+                  <span>Base Salary Portion:</span>
+                  <span className="font-mono">{money(selectedRecord.salary_portion)}</span>
+                </div>
               </div>
-              <button
-                onClick={() => setSelectedRecord(null)}
-                className="p-1 rounded-lg hover:bg-slate-200 text-slate-500"
-              >
-                <X className="w-5 h-5" />
-              </button>
+
+              {/* Overtime Breakdown */}
+              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 space-y-2">
+                <div className="flex justify-between text-slate-600">
+                  <span>OT1 (Normal Hours &gt; Std):</span>
+                  <span className="font-mono">
+                    {Number(selectedRecord.ot1_hours || 0).toFixed(1)}h × {money(selectedRecord.ot1_rate)} ={" "}
+                    <strong className="text-slate-900">{money(selectedRecord.ot1_amount)}</strong>
+                  </span>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>OT2 (Holiday & Weekly Off):</span>
+                  <span className="font-mono">
+                    {Number(selectedRecord.ot2_hours || 0).toFixed(1)}h × {money(selectedRecord.ot2_rate)} ={" "}
+                    <strong className="text-slate-900">{money(selectedRecord.ot2_amount)}</strong>
+                  </span>
+                </div>
+                <div className="flex justify-between border-t border-slate-200 pt-1 font-bold text-slate-900">
+                  <span>Gross Pay:</span>
+                  <span className="font-mono">{money(selectedRecord.gross_pay)}</span>
+                </div>
+              </div>
+
+              {/* Missed Hours Deductions */}
+              <div className="bg-rose-50/60 p-3.5 rounded-xl border border-rose-100 space-y-1.5 text-rose-900">
+                <div className="flex justify-between">
+                  <span>Missed Hours ({Number(selectedRecord.missed_hours || 0).toFixed(1)}h @ Basic/208):</span>
+                  <span className="font-mono font-bold">
+                    {money(-Number(selectedRecord.missed_hours_deduction || 0) || 0) /* "|| 0": no "-0.00" */}
+                  </span>
+                </div>
+                <div className="flex justify-between border-t border-rose-200/60 pt-1 font-bold text-sm text-indigo-900">
+                  <span>Final Net Pay:</span>
+                  <span className="font-mono">{money(selectedRecord.net_pay)}</span>
+                </div>
+              </div>
             </div>
 
-            {/* Scrollable Content */}
-            <div className="p-6 overflow-y-auto space-y-6 flex-1 text-xs">
-              {/* Employee Earnings & Deductions */}
-              <div className="space-y-3">
-                <h4 className="text-xs font-bold uppercase text-slate-400 tracking-wider">
-                  Employee Monthly Earnings
-                </h4>
+            {/* Employer Statutory Provisions & Staff Cost */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold uppercase text-slate-400 tracking-wider">
+                Employer Provisions & Total Staff Cost
+              </h4>
 
-                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">Basic Salary:</span>
-                    <span className="font-mono font-bold">{money(selectedRecord.basic_salary)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">Special Allowance:</span>
-                    <span className="font-mono">{money(selectedRecord.special_allowance)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">Fixed Overtime:</span>
-                    <span className="font-mono">{money(selectedRecord.fixed_ot_amount)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">Bonus:</span>
-                    <span className="font-mono">{money(selectedRecord.bonus)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">Telephone Allowance:</span>
-                    <span className="font-mono">{money(selectedRecord.telephone_allowance)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">Housing / Transport Allowance:</span>
-                    <span className="font-mono">{money(selectedRecord.housing_transport_allowance)}</span>
-                  </div>
-                  <div className="flex justify-between border-t border-slate-200 pt-1 font-bold text-slate-900">
-                    <span>Base Salary Portion:</span>
-                    <span className="font-mono">{money(selectedRecord.salary_portion)}</span>
-                  </div>
+              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 space-y-2">
+                <div className="flex justify-between text-slate-600">
+                  <span>Gratuity Provision (basic / 365 × 30):</span>
+                  <span className="font-mono font-semibold">
+                    {money(selectedRecord.gratuity_provision)}
+                  </span>
                 </div>
-
-                {/* Overtime Breakdown */}
-                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 space-y-2">
-                  <div className="flex justify-between text-slate-600">
-                    <span>OT1 (Normal Hours &gt; Std):</span>
-                    <span className="font-mono">
-                      {Number(selectedRecord.ot1_hours || 0).toFixed(1)}h × {money(selectedRecord.ot1_rate)} ={" "}
-                      <strong className="text-slate-900">{money(selectedRecord.ot1_amount)}</strong>
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-slate-600">
-                    <span>OT2 (Holiday & Weekly Off):</span>
-                    <span className="font-mono">
-                      {Number(selectedRecord.ot2_hours || 0).toFixed(1)}h × {money(selectedRecord.ot2_rate)} ={" "}
-                      <strong className="text-slate-900">{money(selectedRecord.ot2_amount)}</strong>
-                    </span>
-                  </div>
-                  <div className="flex justify-between border-t border-slate-200 pt-1 font-bold text-slate-900">
-                    <span>Gross Pay:</span>
-                    <span className="font-mono">{money(selectedRecord.gross_pay)}</span>
-                  </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Leave Salary Provision (basic / 12):</span>
+                  <span className="font-mono font-semibold">
+                    {money(selectedRecord.leave_salary_provision)}
+                  </span>
                 </div>
-
-                {/* Missed Hours Deductions */}
-                <div className="bg-rose-50/60 p-3.5 rounded-xl border border-rose-100 space-y-1.5 text-rose-900">
-                  <div className="flex justify-between">
-                    <span>Missed Hours ({Number(selectedRecord.missed_hours || 0).toFixed(1)}h @ Basic/208):</span>
-                    <span className="font-mono font-bold">
-                      {money(-Number(selectedRecord.missed_hours_deduction || 0))}
-                    </span>
-                  </div>
-                  <div className="flex justify-between border-t border-rose-200/60 pt-1 font-bold text-sm text-indigo-900">
-                    <span>Final Net Pay:</span>
-                    <span className="font-mono">{money(selectedRecord.net_pay)}</span>
-                  </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Company Provisions (5 Items):</span>
+                  <span className="font-mono font-semibold">
+                    {money(selectedRecord.company_provisions_total)}
+                  </span>
                 </div>
-              </div>
-
-              {/* Employer Statutory Provisions & Staff Cost */}
-              <div className="space-y-3">
-                <h4 className="text-xs font-bold uppercase text-slate-400 tracking-wider">
-                  Employer Provisions & Total Staff Cost
-                </h4>
-
-                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 space-y-2">
-                  <div className="flex justify-between text-slate-600">
-                    <span>Gratuity Provision (basic / 365 × 30):</span>
-                    <span className="font-mono font-semibold">
-                      {money(selectedRecord.gratuity_provision)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-slate-600">
-                    <span>Leave Salary Provision (basic / 12):</span>
-                    <span className="font-mono font-semibold">
-                      {money(selectedRecord.leave_salary_provision)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-slate-600">
-                    <span>Company Provisions (5 Items):</span>
-                    <span className="font-mono font-semibold">
-                      {money(selectedRecord.company_provisions_total)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-slate-600">
-                    <span>HR Overhead (5% of Subtotal):</span>
-                    <span className="font-mono font-semibold">
-                      {money(selectedRecord.hr_overhead_amount)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between border-t border-slate-200 pt-1 font-bold text-sm text-indigo-950">
-                    <span>Final Total Staff Cost:</span>
-                    <span className="font-mono">{money(selectedRecord.final_total_staff_cost)}</span>
-                  </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>HR Overhead (5% of Subtotal):</span>
+                  <span className="font-mono font-semibold">
+                    {money(selectedRecord.hr_overhead_amount)}
+                  </span>
+                </div>
+                <div className="flex justify-between border-t border-slate-200 pt-1 font-bold text-sm text-indigo-950">
+                  <span>Final Total Staff Cost:</span>
+                  <span className="font-mono">{money(selectedRecord.final_total_staff_cost)}</span>
                 </div>
               </div>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* ========================================================================= */}
       {/* MODAL 2: GENERATE DRAFT PAYROLL                                           */}
       {/* ========================================================================= */}
       {generateModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
-            <div className="flex justify-between items-center">
-              <h3 className="text-base font-bold text-slate-900">Generate Monthly Payroll Draft</h3>
-              <button onClick={() => setGenerateModalOpen(false)} className="text-slate-400 hover:text-slate-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="text-slate-700 font-semibold block mb-1">Country</label>
-                <select
-                  value={genCountry}
-                  onChange={(e) => setGenCountry(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-bold"
+        <Modal
+          open
+          onClose={() => setGenerateModalOpen(false)}
+          size="md"
+          title="Generate Monthly Payroll Draft"
+          footer={
+            <div className="flex w-full flex-wrap items-center justify-end gap-2">
+              <button
+                  onClick={() => setGenerateModalOpen(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold"
                 >
-                  <option value="AE">United Arab Emirates (AE)</option>
-                  <option value="SA">Saudi Arabia (SA)</option>
-                  <option value="QA">Qatar (QA)</option>
-                </select>
-              </div>
+                  Cancel
+                </button>
+                <button
+                  onClick={handleGenerateDraft}
+                  disabled={generating}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold disabled:opacity-50"
+                >
+                  {generating ? "Calculating..." : "Generate Draft"}
+                </button>
+            </div>
+          }
+        >
+          <div className="space-y-3 text-xs">
+            <div>
+              <label className="text-slate-700 font-semibold block mb-1">Country</label>
+              <select
+                value={genCountry}
+                onChange={(e) => setGenCountry(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-bold"
+              >
+                <option value="AE">United Arab Emirates (AE)</option>
+                <option value="SA">Saudi Arabia (SA)</option>
+                <option value="QA">Qatar (QA)</option>
+              </select>
+            </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-slate-700 font-semibold block mb-1">Period Start</label>
-                  <input
-                    type="date"
-                    value={genPeriodStart}
-                    onChange={(e) => setGenPeriodStart(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="text-slate-700 font-semibold block mb-1">Period End</label>
-                  <input
-                    type="date"
-                    value={genPeriodEnd}
-                    onChange={(e) => setGenPeriodEnd(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-mono"
-                  />
-                </div>
-              </div>
-
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-slate-700 font-semibold block mb-1">Notes / Description (Optional)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. October 2026 Regular Payroll"
-                  value={genNotes}
-                  onChange={(e) => setGenNotes(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg"
+                <DatePicker
+                  label="Period Start"
+                  value={genPeriodStart}
+                  onChange={(iso) => setGenPeriodStart(iso)}
+                  size="lg"
                 />
               </div>
-
-              <label className="flex items-start gap-2.5 p-3 rounded-lg bg-teal-50/70 border border-teal-200 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={genTreatLeavesAsPaid}
-                  onChange={(e) => setGenTreatLeavesAsPaid(e.target.checked)}
-                  className="mt-0.5 rounded text-teal-600 focus:ring-teal-500 h-4 w-4"
+              <div>
+                <DatePicker
+                  label="Period End"
+                  value={genPeriodEnd}
+                  onChange={(iso) => setGenPeriodEnd(iso)}
+                  size="lg"
                 />
-                <div className="space-y-0.5">
-                  <span className="font-semibold text-teal-900 block">
-                    Treat all approved leaves as paid (no leave deduction)
-                  </span>
-                  <span className="text-[11px] text-teal-800/80 block leading-snug">
-                    By default, Annual &amp; Sick leaves are paid while Unpaid, Emergency &amp; Other leaves are deducted. Enable this option to pay all approved leave hours in this payroll run.
-                  </span>
-                </div>
-              </label>
+              </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-              <button
-                onClick={() => setGenerateModalOpen(false)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleGenerateDraft}
-                disabled={generating}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold disabled:opacity-50"
-              >
-                {generating ? "Calculating..." : "Generate Draft"}
-              </button>
+            <div>
+              <label className="text-slate-700 font-semibold block mb-1">Notes / Description (Optional)</label>
+              <input
+                type="text"
+                placeholder="e.g. October 2026 Regular Payroll"
+                value={genNotes}
+                onChange={(e) => setGenNotes(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg"
+              />
             </div>
+
+            <label className="flex items-start gap-2.5 p-3 rounded-lg bg-teal-50/70 border border-teal-200 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={genTreatLeavesAsPaid}
+                onChange={(e) => setGenTreatLeavesAsPaid(e.target.checked)}
+                className="mt-0.5 rounded text-teal-600 focus:ring-teal-500 h-4 w-4"
+              />
+              <div className="space-y-0.5">
+                <span className="font-semibold text-teal-900 block">
+                  Treat all approved leaves as paid (no leave deduction)
+                </span>
+                <span className="text-[11px] text-teal-800/80 block leading-snug">
+                  By default, Annual &amp; Sick leaves are paid while Unpaid, Emergency &amp; Other leaves are deducted. Enable this option to pay all approved leave hours in this payroll run.
+                </span>
+              </div>
+            </label>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* ========================================================================= */}
       {/* MODAL 3: APPROVE PAYROLL CONFIRMATION                                     */}
       {/* ========================================================================= */}
       {approveModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
-            <div className="flex items-center gap-3 text-emerald-600">
-              <Lock className="w-6 h-6" />
-              <h3 className="text-base font-bold text-slate-900">Approve & Lock Payroll Run</h3>
-            </div>
-
+        <Modal
+          open
+          onClose={() => setApproveModalOpen(false)}
+          size="md"
+          title="Approve & Lock Payroll Run"
+        >
+          <div className="space-y-4">
             <div className="bg-amber-50 p-3.5 rounded-xl border border-amber-200 text-xs text-amber-900 space-y-1.5">
               <span className="font-bold block">Important Notice:</span>
               <p className="text-3xs leading-relaxed">
@@ -1719,388 +1701,369 @@ export const Payroll: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* ========================================================================= */}
       {/* MODAL 4: SALARY REVISION EXCEL IMPORT & SIDE-BY-SIDE DIFF                 */}
       {/* ========================================================================= */}
       {diffModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-5xl w-full p-6 shadow-2xl space-y-4 max-h-[92vh] flex flex-col">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+        <Modal
+          open
+          onClose={() => setDiffModalOpen(false)}
+          size="xl"
+          title={<span className="inline-flex items-center gap-2"><FileSpreadsheet className="w-5 h-5 text-emerald-600" /> Import Revision from Excel (.xlsx) & Side-by-Side Diff</span>}
+          description={<>Upload your edited Excel spreadsheet. The system parses all grade lines, diffs against base revision{" "}
+                  <strong className="text-indigo-600 font-mono">{selectedRevisionCode}</strong>, and lets you review & edit before confirming.</>}
+          footer={
+            <div className="flex w-full flex-wrap items-center justify-between gap-2">
+              <button
+                  onClick={() => setDiffModalOpen(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold"
+                >
+                  Cancel
+                </button>
+  
+                <div className="flex items-center gap-2">
+                  {previewLines.length > 0 && (
+                    <button
+                      onClick={handleSaveImportedRevision}
+                      disabled={diffLoading}
+                      className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold disabled:opacity-50 flex items-center gap-1.5 shadow-xs transition"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      {diffLoading ? "Saving..." : `Confirm & Save ${targetRevisionInput || "Revision"}`}
+                    </button>
+                  )}
+                </div>
+            </div>
+          }
+        >
+          <div className="space-y-4 text-xs pr-1">
+            {/* Revision Metadata Fields */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50/70 p-3.5 rounded-xl border border-slate-200">
               <div>
-                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
-                  Import Revision from Excel (.xlsx) & Side-by-Side Diff
-                </h3>
-                <p className="text-3xs text-slate-500 mt-0.5">
-                  Upload your edited Excel spreadsheet. The system parses all grade lines, diffs against base revision{" "}
-                  <strong className="text-indigo-600 font-mono">{selectedRevisionCode}</strong>, and lets you review & edit before confirming.
-                </p>
+                <label className="text-3xs uppercase font-bold text-slate-500 block mb-1">Target Revision Code *</label>
+                <input
+                  type="text"
+                  value={targetRevisionInput}
+                  onChange={(e) => setTargetRevisionInput(e.target.value)}
+                  placeholder="e.g. REV-2026-V2"
+                  className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-mono font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
               </div>
-              <button onClick={() => setDiffModalOpen(false)} className="text-slate-400 hover:text-slate-600">
-                <X className="w-5 h-5" />
-              </button>
+              <div>
+                <label className="text-3xs uppercase font-bold text-slate-500 block mb-1">Revision Name</label>
+                <input
+                  type="text"
+                  value={targetRevisionName}
+                  onChange={(e) => setTargetRevisionName(e.target.value)}
+                  placeholder={`Revision ${targetRevisionInput || "2026"}`}
+                  className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <DatePicker
+                  label="Effective From Date"
+                  value={targetEffectiveDate}
+                  onChange={(iso) => setTargetEffectiveDate(iso)}
+                  size="lg"
+                />
+              </div>
             </div>
 
-            <div className="overflow-y-auto space-y-4 flex-1 text-xs pr-1">
-              {/* Revision Metadata Fields */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50/70 p-3.5 rounded-xl border border-slate-200">
-                <div>
-                  <label className="text-3xs uppercase font-bold text-slate-500 block mb-1">Target Revision Code *</label>
-                  <input
-                    type="text"
-                    value={targetRevisionInput}
-                    onChange={(e) => setTargetRevisionInput(e.target.value)}
-                    placeholder="e.g. REV-2026-V2"
-                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-mono font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  />
+            {/* File Upload Zone */}
+            <div className="border-2 border-dashed border-slate-200 hover:border-indigo-400 bg-slate-50/50 hover:bg-indigo-50/20 rounded-xl p-5 text-center transition">
+              <input
+                type="file"
+                id="excel-file-input"
+                accept=".xlsx, .xls, .csv"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    setUploadFile(file);
+                    handleFileUploadAndPreview(file);
+                  }
+                }}
+              />
+              <label htmlFor="excel-file-input" className="cursor-pointer block space-y-2">
+                <div className="w-10 h-10 mx-auto rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <Upload className="w-5 h-5" />
                 </div>
                 <div>
-                  <label className="text-3xs uppercase font-bold text-slate-500 block mb-1">Revision Name</label>
-                  <input
-                    type="text"
-                    value={targetRevisionName}
-                    onChange={(e) => setTargetRevisionName(e.target.value)}
-                    placeholder={`Revision ${targetRevisionInput || "2026"}`}
-                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  />
+                  <span className="font-bold text-indigo-600 hover:underline">Click to browse</span> or drag and drop your Excel template (.xlsx, .xls, .csv)
                 </div>
-                <div>
-                  <label className="text-3xs uppercase font-bold text-slate-500 block mb-1">Effective From Date</label>
-                  <input
-                    type="date"
-                    value={targetEffectiveDate}
-                    onChange={(e) => setTargetEffectiveDate(e.target.value)}
-                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  />
-                </div>
-              </div>
+                <p className="text-3xs text-slate-400">
+                  Use the template exported from the active revision. The system reads Grade Code, Basic Salary, Allowances, and Provisions.
+                </p>
+              </label>
 
-              {/* File Upload Zone */}
-              <div className="border-2 border-dashed border-slate-200 hover:border-indigo-400 bg-slate-50/50 hover:bg-indigo-50/20 rounded-xl p-5 text-center transition">
-                <input
-                  type="file"
-                  id="excel-file-input"
-                  accept=".xlsx, .xls, .csv"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      setUploadFile(file);
-                      handleFileUploadAndPreview(file);
-                    }
-                  }}
-                />
-                <label htmlFor="excel-file-input" className="cursor-pointer block space-y-2">
-                  <div className="w-10 h-10 mx-auto rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                    <Upload className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <span className="font-bold text-indigo-600 hover:underline">Click to browse</span> or drag and drop your Excel template (.xlsx, .xls, .csv)
-                  </div>
-                  <p className="text-3xs text-slate-400">
-                    Use the template exported from the active revision. The system reads Grade Code, Basic Salary, Allowances, and Provisions.
-                  </p>
-                </label>
-
-                {uploadFile && (
-                  <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border border-slate-200 shadow-xs font-mono text-xs">
-                    <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                    <span className="font-bold text-slate-800">{uploadFile.name}</span>
-                    <span className="text-3xs text-slate-400">({(uploadFile.size / 1024).toFixed(1)} KB)</span>
-                    <button
-                      type="button"
-                      onClick={() => handleFileUploadAndPreview()}
-                      disabled={diffLoading}
-                      className="ml-2 px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-3xs font-bold disabled:opacity-50"
-                    >
-                      {diffLoading ? "Analyzing..." : "Re-Analyze Diff"}
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Side-by-Side Diff Section */}
-              {diffResult && (
-                <div className="space-y-4">
-                  {/* Summary Chips */}
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <div className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-medium">
-                      Base Revision: <strong className="font-mono text-slate-900">{diffResult.base_revision_code || "None"}</strong>
-                    </div>
-                    <div className="px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold flex items-center gap-1.5">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>{diffResult.new_grades_count} New Grade(s)</span>
-                    </div>
-                    <div className="px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 text-xs font-semibold flex items-center gap-1.5">
-                      <Info className="w-3.5 h-3.5" />
-                      <span>{diffResult.updated_grades_count} Updated Grade(s)</span>
-                    </div>
-                    <div className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-xs">
-                      <span>{diffResult.unchanged_grades_count} Unchanged</span>
-                    </div>
-                  </div>
-
-                  {/* Changes Diff List (Red -> Green) */}
-                  {diffResult.diffs && diffResult.diffs.some((d: any) => d.is_changed) && (
-                    <div className="border border-slate-200 rounded-xl overflow-hidden">
-                      <div className="bg-slate-50 px-3 py-2 border-b border-slate-200 font-bold text-3xs uppercase text-slate-600 flex justify-between">
-                        <span>Side-by-Side Field Changes (Old vs New)</span>
-                        <span className="text-slate-400">Red: Previous Value → Green: Imported Value</span>
-                      </div>
-                      <div className="max-h-48 overflow-y-auto divide-y divide-slate-100 text-3xs">
-                        {diffResult.diffs
-                          .filter((d: any) => d.is_changed)
-                          .map((d: any, idx: number) => (
-                            <div key={idx} className="p-2.5 flex items-center justify-between hover:bg-slate-50/50">
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono font-bold text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded">
-                                  {d.grade_code}
-                                </span>
-                                <span className="text-slate-600 font-medium">{d.field_name}:</span>
-                              </div>
-                              <div className="flex items-center gap-2 font-mono">
-                                <span className="bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 rounded line-through">
-                                  {d.old_value !== null ? Number(d.old_value).toFixed(2) : "None"}
-                                </span>
-                                <ArrowRight className="w-3 h-3 text-slate-400" />
-                                <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded font-bold">
-                                  {d.new_value !== null ? Number(d.new_value).toFixed(2) : "0.00"}
-                                </span>
-                              </div>
-                            </div>
-                          ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Editable Preview Table */}
-                  <div className="border border-slate-200 rounded-xl overflow-hidden">
-                    <div className="bg-slate-50 px-3 py-2 border-b border-slate-200 font-bold text-3xs uppercase text-slate-600 flex justify-between">
-                      <span>Editable Grade Lines Preview ({previewLines.length} lines)</span>
-                      <span className="text-indigo-600 font-normal">You can tweak numbers before saving</span>
-                    </div>
-                    <div className="max-h-60 overflow-y-auto">
-                      <table className="w-full text-left border-collapse text-3xs">
-                        <thead>
-                          <tr className="bg-slate-100/70 border-b border-slate-200 font-semibold text-slate-600">
-                            <th className="py-2 px-3">Grade</th>
-                            <th className="py-2 px-3">Title</th>
-                            <th className="py-2 px-2">Basic</th>
-                            <th className="py-2 px-2">Special</th>
-                            <th className="py-2 px-2">Fixed OT</th>
-                            <th className="py-2 px-2">Bonus</th>
-                            <th className="py-2 px-2">Visa</th>
-                            <th className="py-2 px-2">Air Tkt</th>
-                            <th className="py-2 px-2">Uniform</th>
-                            <th className="py-2 px-2">Medical</th>
-                            <th className="py-2 px-2">Accomm</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 font-mono">
-                          {previewLines.map((line: any, idx: number) => (
-                            <tr key={idx} className="hover:bg-slate-50/60">
-                              <td className="py-1.5 px-3 font-bold text-slate-900">{line.grade_code}</td>
-                              <td className="py-1.5 px-3 font-sans text-slate-600">{line.grade_group_title || "—"}</td>
-                              <td className="py-1 px-1">
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  value={line.basic_salary}
-                                  onChange={(e) => handleLineValueChange(idx, "basic_salary", parseFloat(e.target.value) || 0)}
-                                  className="w-16 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-right font-bold text-slate-900 focus:bg-white"
-                                />
-                              </td>
-                              <td className="py-1 px-1">
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  value={line.special_allowance}
-                                  onChange={(e) => handleLineValueChange(idx, "special_allowance", parseFloat(e.target.value) || 0)}
-                                  className="w-16 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-right text-slate-700 focus:bg-white"
-                                />
-                              </td>
-                              <td className="py-1 px-1">
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  value={line.fixed_ot_amount}
-                                  onChange={(e) => handleLineValueChange(idx, "fixed_ot_amount", parseFloat(e.target.value) || 0)}
-                                  className="w-16 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-right text-slate-700 focus:bg-white"
-                                />
-                              </td>
-                              <td className="py-1 px-1">
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  value={line.bonus}
-                                  onChange={(e) => handleLineValueChange(idx, "bonus", parseFloat(e.target.value) || 0)}
-                                  className="w-14 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-right text-slate-700 focus:bg-white"
-                                />
-                              </td>
-                              <td className="py-1 px-1">
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  value={line.visa_provision}
-                                  onChange={(e) => handleLineValueChange(idx, "visa_provision", parseFloat(e.target.value) || 0)}
-                                  className="w-14 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-right text-slate-700 focus:bg-white"
-                                />
-                              </td>
-                              <td className="py-1 px-1">
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  value={line.air_ticket_provision}
-                                  onChange={(e) => handleLineValueChange(idx, "air_ticket_provision", parseFloat(e.target.value) || 0)}
-                                  className="w-14 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-right text-slate-700 focus:bg-white"
-                                />
-                              </td>
-                              <td className="py-1 px-1">
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  value={line.uniform_provision}
-                                  onChange={(e) => handleLineValueChange(idx, "uniform_provision", parseFloat(e.target.value) || 0)}
-                                  className="w-14 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-right text-slate-700 focus:bg-white"
-                                />
-                              </td>
-                              <td className="py-1 px-1">
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  value={line.medical_provision}
-                                  onChange={(e) => handleLineValueChange(idx, "medical_provision", parseFloat(e.target.value) || 0)}
-                                  className="w-14 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-right text-slate-700 focus:bg-white"
-                                />
-                              </td>
-                              <td className="py-1 px-1">
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  value={line.accommodation_provision}
-                                  onChange={(e) => handleLineValueChange(idx, "accommodation_provision", parseFloat(e.target.value) || 0)}
-                                  className="w-16 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-right text-slate-700 focus:bg-white"
-                                />
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
+              {uploadFile && (
+                <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border border-slate-200 shadow-xs font-mono text-xs">
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                  <span className="font-bold text-slate-800">{uploadFile.name}</span>
+                  <span className="text-3xs text-slate-400">({(uploadFile.size / 1024).toFixed(1)} KB)</span>
+                  <button
+                    type="button"
+                    onClick={() => handleFileUploadAndPreview()}
+                    disabled={diffLoading}
+                    className="ml-2 px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-3xs font-bold disabled:opacity-50"
+                  >
+                    {diffLoading ? "Analyzing..." : "Re-Analyze Diff"}
+                  </button>
                 </div>
               )}
             </div>
 
-            <div className="flex justify-between items-center pt-3 border-t border-slate-100">
-              <button
-                onClick={() => setDiffModalOpen(false)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold"
-              >
-                Cancel
-              </button>
+            {/* Side-by-Side Diff Section */}
+            {diffResult && (
+              <div className="space-y-4">
+                {/* Summary Chips */}
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-medium">
+                    Base Revision: <strong className="font-mono text-slate-900">{diffResult.base_revision_code || "None"}</strong>
+                  </div>
+                  <div className="px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>{diffResult.new_grades_count} New Grade(s)</span>
+                  </div>
+                  <div className="px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 text-xs font-semibold flex items-center gap-1.5">
+                    <Info className="w-3.5 h-3.5" />
+                    <span>{diffResult.updated_grades_count} Updated Grade(s)</span>
+                  </div>
+                  <div className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-xs">
+                    <span>{diffResult.unchanged_grades_count} Unchanged</span>
+                  </div>
+                </div>
 
-              <div className="flex items-center gap-2">
-                {previewLines.length > 0 && (
-                  <button
-                    onClick={handleSaveImportedRevision}
-                    disabled={diffLoading}
-                    className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold disabled:opacity-50 flex items-center gap-1.5 shadow-xs transition"
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
-                    {diffLoading ? "Saving..." : `Confirm & Save ${targetRevisionInput || "Revision"}`}
-                  </button>
+                {/* Changes Diff List (Red -> Green) */}
+                {diffResult.diffs && diffResult.diffs.some((d: any) => d.is_changed) && (
+                  <div className="border border-slate-200 rounded-xl overflow-hidden">
+                    <div className="bg-slate-50 px-3 py-2 border-b border-slate-200 font-bold text-3xs uppercase text-slate-600 flex justify-between">
+                      <span>Side-by-Side Field Changes (Old vs New)</span>
+                      <span className="text-slate-400">Red: Previous Value → Green: Imported Value</span>
+                    </div>
+                    <div className="max-h-48 overflow-y-auto divide-y divide-slate-100 text-3xs">
+                      {diffResult.diffs
+                        .filter((d: any) => d.is_changed)
+                        .map((d: any, idx: number) => (
+                          <div key={idx} className="p-2.5 flex items-center justify-between hover:bg-slate-50/50">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-bold text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded">
+                                {d.grade_code}
+                              </span>
+                              <span className="text-slate-600 font-medium">{d.field_name}:</span>
+                            </div>
+                            <div className="flex items-center gap-2 font-mono">
+                              <span className="bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 rounded line-through">
+                                {d.old_value !== null ? Number(d.old_value).toFixed(2) : "None"}
+                              </span>
+                              <ArrowRight className="w-3 h-3 text-slate-400" />
+                              <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded font-bold">
+                                {d.new_value !== null ? Number(d.new_value).toFixed(2) : "0.00"}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
                 )}
+
+                {/* Editable Preview Table */}
+                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                  <div className="bg-slate-50 px-3 py-2 border-b border-slate-200 font-bold text-3xs uppercase text-slate-600 flex justify-between">
+                    <span>Editable Grade Lines Preview ({previewLines.length} lines)</span>
+                    <span className="text-indigo-600 font-normal">You can tweak numbers before saving</span>
+                  </div>
+                  <div className="max-h-60 overflow-y-auto">
+                    <table className="w-full text-left border-collapse text-3xs">
+                      <thead>
+                        <tr className="bg-slate-100/70 border-b border-slate-200 font-semibold text-slate-600">
+                          <th className="py-2 px-3">Grade</th>
+                          <th className="py-2 px-3">Title</th>
+                          <th className="py-2 px-2">Basic</th>
+                          <th className="py-2 px-2">Special</th>
+                          <th className="py-2 px-2">Fixed OT</th>
+                          <th className="py-2 px-2">Bonus</th>
+                          <th className="py-2 px-2">Visa</th>
+                          <th className="py-2 px-2">Air Tkt</th>
+                          <th className="py-2 px-2">Uniform</th>
+                          <th className="py-2 px-2">Medical</th>
+                          <th className="py-2 px-2">Accomm</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 font-mono">
+                        {previewLines.map((line: any, idx: number) => (
+                          <tr key={idx} className="hover:bg-slate-50/60">
+                            <td className="py-1.5 px-3 font-bold text-slate-900">{line.grade_code}</td>
+                            <td className="py-1.5 px-3 font-sans text-slate-600">{line.grade_group_title || "—"}</td>
+                            <td className="py-1 px-1">
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={line.basic_salary}
+                                onChange={(e) => handleLineValueChange(idx, "basic_salary", parseFloat(e.target.value) || 0)}
+                                className="w-16 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-right font-bold text-slate-900 focus:bg-white"
+                              />
+                            </td>
+                            <td className="py-1 px-1">
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={line.special_allowance}
+                                onChange={(e) => handleLineValueChange(idx, "special_allowance", parseFloat(e.target.value) || 0)}
+                                className="w-16 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-right text-slate-700 focus:bg-white"
+                              />
+                            </td>
+                            <td className="py-1 px-1">
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={line.fixed_ot_amount}
+                                onChange={(e) => handleLineValueChange(idx, "fixed_ot_amount", parseFloat(e.target.value) || 0)}
+                                className="w-16 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-right text-slate-700 focus:bg-white"
+                              />
+                            </td>
+                            <td className="py-1 px-1">
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={line.bonus}
+                                onChange={(e) => handleLineValueChange(idx, "bonus", parseFloat(e.target.value) || 0)}
+                                className="w-14 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-right text-slate-700 focus:bg-white"
+                              />
+                            </td>
+                            <td className="py-1 px-1">
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={line.visa_provision}
+                                onChange={(e) => handleLineValueChange(idx, "visa_provision", parseFloat(e.target.value) || 0)}
+                                className="w-14 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-right text-slate-700 focus:bg-white"
+                              />
+                            </td>
+                            <td className="py-1 px-1">
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={line.air_ticket_provision}
+                                onChange={(e) => handleLineValueChange(idx, "air_ticket_provision", parseFloat(e.target.value) || 0)}
+                                className="w-14 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-right text-slate-700 focus:bg-white"
+                              />
+                            </td>
+                            <td className="py-1 px-1">
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={line.uniform_provision}
+                                onChange={(e) => handleLineValueChange(idx, "uniform_provision", parseFloat(e.target.value) || 0)}
+                                className="w-14 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-right text-slate-700 focus:bg-white"
+                              />
+                            </td>
+                            <td className="py-1 px-1">
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={line.medical_provision}
+                                onChange={(e) => handleLineValueChange(idx, "medical_provision", parseFloat(e.target.value) || 0)}
+                                className="w-14 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-right text-slate-700 focus:bg-white"
+                              />
+                            </td>
+                            <td className="py-1 px-1">
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={line.accommodation_provision}
+                                onChange={(e) => handleLineValueChange(idx, "accommodation_provision", parseFloat(e.target.value) || 0)}
+                                className="w-16 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-right text-slate-700 focus:bg-white"
+                              />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* ========================================================================= */}
       {/* MODAL 5: INFORMATIVE FORMULA GUIDE MODAL                                  */}
       {/* ========================================================================= */}
       {formulaModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2 text-indigo-600">
-                <Info className="w-5 h-5" />
-                <h3 className="text-base font-bold text-slate-900">
-                  Payroll Rules & Cost Allocation Formula Guide
-                </h3>
-              </div>
-              <button onClick={() => setFormulaModalOpen(false)} className="text-slate-400 hover:text-slate-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-4 text-xs leading-relaxed text-slate-700">
-              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 space-y-1.5">
-                <h4 className="font-bold text-indigo-900 text-xs">1. Overtime Calculation Basis</h4>
-                <p className="text-3xs text-slate-600">
-                  Under UAE / GCC labor standards, the standard monthly working hour divisor is <strong>208 hours</strong>{" "}
-                  (calculated as 26 working days × 8 standard hours).
-                </p>
-                <div className="font-mono text-3xs bg-white p-2 rounded border border-slate-200 space-y-0.5">
-                  <div><strong>OT1 Rate (Normal Days Beyond Std):</strong> (Basic Salary / 208) × 1.25</div>
-                  <div><strong>OT2 Rate (Public Holidays & Weekly Off):</strong> (Basic Salary / 208) × 1.50</div>
-                </div>
-                <p className="text-3xs text-slate-500">
-                  <em>Benchmark:</em> Basic of AED 1,100 yields an OT1 rate of AED 6.61/hr and OT2 rate of AED 7.93/hr.
-                </p>
-              </div>
-
-              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 space-y-1.5">
-                <h4 className="font-bold text-indigo-900 text-xs">2. Missed Hours & Leave Deductions</h4>
-                <p className="text-3xs text-slate-600">
-                  Workers are paid standard monthly salary portions. Missed hours (unpaid leave hours + shortfalls) are deducted
-                  proportionately from pay using the formula:
-                </p>
-                <div className="font-mono text-3xs bg-white p-2 rounded border border-slate-200">
-                  Deduction = Missed Hours × (Basic Salary / 208)
-                </div>
-                <p className="text-3xs text-slate-500">
-                  Approved paid leaves (Annual, Sick) incur 0 deduction.
-                </p>
-              </div>
-
-              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 space-y-1.5">
-                <h4 className="font-bold text-indigo-900 text-xs">3. Employer Statutory Provisions & HR Overhead</h4>
-                <p className="text-3xs text-slate-600">
-                  Employer staff cost calculation includes statutory end-of-service gratuity and leave salary accruals:
-                </p>
-                <div className="font-mono text-3xs bg-white p-2 rounded border border-slate-200 space-y-0.5">
-                  <div><strong>Gratuity Provision:</strong> Basic Salary / 365 × 30</div>
-                  <div><strong>Leave Salary Provision:</strong> Basic Salary / 12</div>
-                  <div><strong>5 Company Provisions:</strong> Visa, Air Ticket, Uniform, Medical, Accommodation</div>
-                  <div><strong>HR Overhead:</strong> 5% added to Total Staff Cost for the final figure.</div>
-                </div>
-              </div>
-
-              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 space-y-1.5">
-                <h4 className="font-bold text-indigo-900 text-xs">4. Job Budget Provision Basis Distinction</h4>
-                <p className="text-3xs text-slate-600">
-                  <strong>Planned Job Budgets</strong> use static commercial provisions explicitly specified in the active{" "}
-                  <em>Salary Revision</em> file for tender pricing. In contrast, <strong>Actual Allocated Costs</strong> use
-                  dynamic statutory employer provisions derived from live company settings and attendance records.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex justify-end pt-2 border-t border-slate-100">
+        <Modal
+          open
+          onClose={() => setFormulaModalOpen(false)}
+          size="lg"
+          title="Payroll Rules & Cost Allocation Formula Guide"
+          footer={
+            <div className="flex w-full flex-wrap items-center justify-end gap-2">
               <button
-                onClick={() => setFormulaModalOpen(false)}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700"
-              >
-                Close Guide
-              </button>
+                  onClick={() => setFormulaModalOpen(false)}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700"
+                >
+                  Close Guide
+                </button>
+            </div>
+          }
+        >
+          <div className="space-y-4 text-xs leading-relaxed text-slate-700">
+            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 space-y-1.5">
+              <h4 className="font-bold text-indigo-900 text-xs">1. Overtime Calculation Basis</h4>
+              <p className="text-3xs text-slate-600">
+                Under UAE / GCC labor standards, the standard monthly working hour divisor is <strong>208 hours</strong>{" "}
+                (calculated as 26 working days × 8 standard hours).
+              </p>
+              <div className="font-mono text-3xs bg-white p-2 rounded border border-slate-200 space-y-0.5">
+                <div><strong>OT1 Rate (Normal Days Beyond Std):</strong> (Basic Salary / 208) × 1.25</div>
+                <div><strong>OT2 Rate (Public Holidays & Weekly Off):</strong> (Basic Salary / 208) × 1.50</div>
+              </div>
+              <p className="text-3xs text-slate-500">
+                <em>Benchmark:</em> Basic of AED 1,100 yields an OT1 rate of AED 6.61/hr and OT2 rate of AED 7.93/hr.
+              </p>
+            </div>
+
+            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 space-y-1.5">
+              <h4 className="font-bold text-indigo-900 text-xs">2. Missed Hours & Leave Deductions</h4>
+              <p className="text-3xs text-slate-600">
+                Workers are paid standard monthly salary portions. Missed hours (unpaid leave hours + shortfalls) are deducted
+                proportionately from pay using the formula:
+              </p>
+              <div className="font-mono text-3xs bg-white p-2 rounded border border-slate-200">
+                Deduction = Missed Hours × (Basic Salary / 208)
+              </div>
+              <p className="text-3xs text-slate-500">
+                Approved paid leaves (Annual, Sick) incur 0 deduction.
+              </p>
+            </div>
+
+            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 space-y-1.5">
+              <h4 className="font-bold text-indigo-900 text-xs">3. Employer Statutory Provisions & HR Overhead</h4>
+              <p className="text-3xs text-slate-600">
+                Employer staff cost calculation includes statutory end-of-service gratuity and leave salary accruals:
+              </p>
+              <div className="font-mono text-3xs bg-white p-2 rounded border border-slate-200 space-y-0.5">
+                <div><strong>Gratuity Provision:</strong> Basic Salary / 365 × 30</div>
+                <div><strong>Leave Salary Provision:</strong> Basic Salary / 12</div>
+                <div><strong>5 Company Provisions:</strong> Visa, Air Ticket, Uniform, Medical, Accommodation</div>
+                <div><strong>HR Overhead:</strong> 5% added to Total Staff Cost for the final figure.</div>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 space-y-1.5">
+              <h4 className="font-bold text-indigo-900 text-xs">4. Job Budget Provision Basis Distinction</h4>
+              <p className="text-3xs text-slate-600">
+                <strong>Planned Job Budgets</strong> use static commercial provisions explicitly specified in the active{" "}
+                <em>Salary Revision</em> file for tender pricing. In contrast, <strong>Actual Allocated Costs</strong> use
+                dynamic statutory employer provisions derived from live company settings and attendance records.
+              </p>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

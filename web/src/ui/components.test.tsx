@@ -212,6 +212,11 @@ describe("DatePicker", () => {
     assert.match(out, /aria-haspopup="dialog"/);
     assert.match(out, /aria-label="Clear date"/);
   });
+  it("sizes: sm for filter bars, md by default, lg matches the older 36px form inputs", () => {
+    assert.match(html(<DatePicker value="" onChange={noop} size="sm" aria-label="d" />), /\bh-7\b/);
+    assert.match(html(<DatePicker value="" onChange={noop} aria-label="d" />), /\bh-8\b/);
+    assert.match(html(<DatePicker value="" onChange={noop} size="lg" aria-label="d" />), /\bh-9\b/);
+  });
   it("required pickers have no clear button and show errors", () => {
     const out = html(<DatePicker value="2026-11-25" onChange={noop} required error="Pick a later day" />);
     assert.doesNotMatch(out, /Clear date/);

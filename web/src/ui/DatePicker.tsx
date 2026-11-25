@@ -22,7 +22,8 @@ export interface DatePickerProps {
   disabled?: boolean;
   /** Show a clear (x) button when there is a value. Default: when not required. */
   clearable?: boolean;
-  size?: "sm" | "md";
+  /** sm: filter bars; md: the ui layer's forms; lg (36px): forms whose other inputs are 36-40px. */
+  size?: "sm" | "md" | "lg";
   id?: string;
   name?: string;
   className?: string;
@@ -130,6 +131,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
           aria-haspopup="dialog"
           aria-expanded={open}
           aria-controls={open ? popoverId : undefined}
+          onClick={() => !disabled && setOpen(true)}
           onChange={(e) => {
             setText(e.target.value);
             if (typingError) setTypingError(null);

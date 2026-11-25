@@ -1,6 +1,45 @@
 # Changelog
 All notable changes. Format: Keep a Changelog. Mobile-contract changes are also logged in `docs/09-mobile-sync-contract.md`.
 
+## [1.23.0] - 2026-11-25
+### Changed (Batch 10 B: the UI uses the component layer everywhere)
+- **No browser dialogs, native date inputs or hand-made overlays are left.** The ui-rules baseline is empty, so `pnpm run lint` now refuses every new one.
+  - **Dialogs:** `alert/confirm/prompt` became toasts and `useDialogs()` confirmations. Each confirmation has a title and a clear button ("Delete holiday?", "Roll back"); destructive ones are red and focus Cancel.
+  - **Errors:** they show the server's message. A 422 lists each field, through `ensureOk`/`toast.error(err)`, instead of a generic "failed".
+  - **Modals:** all 44 hand-made overlays became `Modal`: one header, a footer for the buttons, only the body scrolls, and Escape and focus behave the same everywhere. That includes the job item, copy boundary, assign and approvals dialogs.
+  - **Dates:** every date field is the DatePicker.
+- **Menu grouped by area:** Overview · Planning · Workforce · Sites · Time & Pay · Reports · Admin.
+  - Items and groups a role can't use are hidden.
+  - New entries: Staffing Gaps (the Operational Planner's gap list) and Accommodations (the Worksites tab).
+- **Sidebar:** the collapse button moved to the sidebar footer, so it no longer covers the logo, and the collapsed state is remembered.
+- **Favicon and titles:** a favicon from the app logo (SVG, 32 px PNG, apple-touch-icon), and a page title per route in the browser tab.
+- **Dashboard: pending actions and alerts grouped by type.** Each section has a count, the 5 most recent items and "View all". The sections are: document expiry, cover needed, leave, reassignment and attendance approvals, pending visits, boundary queue, unassigned worksites (Admin) and device/tracking alerts, each shown only to the roles that can act on it. "View all" opens the right Approvals tab (`?tab=`).
+- **Scrolling:**
+  - one thin, hover-only scrollbar style for every scroll area;
+  - the Operational Planner roster scrolls once, inside the table, with a sticky header;
+  - the job page boundary map no longer captures the page's scroll (cooperative gestures) and fits the window;
+  - the Reports pages show an EmptyState instead of an empty scroll box.
+- **API:** `GET /pending-visits` takes an optional `limit`, used by the dashboard preview. Without it, the response is unchanged.
+### Fixed (screenshot review on the demo data, 1440×900 and 390×844)
+- **Phones:**
+  - the sidebar covered most of the screen; below 768 px it is now a drawer opened from a menu button in the top bar, and it closes when you pick a page;
+  - page padding is smaller on small screens.
+- **Operational Planner:**
+  - on phones the controls squeezed the roster to nothing; below 1024 px the page now flows normally and the roster scrolls sideways;
+  - on desktop the title no longer wraps into four lines.
+- **Date fields:**
+  - in forms they were shorter than the inputs beside them; they now match, using the new DatePicker size `lg` (36 px);
+  - clicking in a date field now opens the calendar; before, only the small calendar icon did.
+- **Worksite page:** the header no longer squeezes the job name and badges.
+- **Worksites:** the header buttons and filters wrap instead of running off the screen, and the search box keeps a usable width.
+- **Settings:** the "As of" date no longer overflows on phones.
+- **Padding:** Documents, Pending Visits, System and Worksites no longer add their own padding on top of the page's.
+- **Dashboard:** sections no longer stretch to the tallest one in their row.
+- **Dialog descriptions** are now a `div`. A `p` could not hold the Add Worksite step list, which was invalid HTML and logged a React warning.
+- **Small fixes:**
+  - the attendance detail's input hash wraps;
+  - the payroll breakdown shows "AED 0.00", not "AED -0.00".
+
 ## [1.22.0] - 2026-11-25
 ### Added (owner decisions of 25 Nov 2026)
 - **Base Planner templates become scheduled work** (ADR-032). From tomorrow to `roster_materialise_weeks` ahead (new company setting, default 4), each template produces real `scheduled_work` rows with `source = TEMPLATE`.

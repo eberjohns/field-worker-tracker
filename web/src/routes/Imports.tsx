@@ -14,6 +14,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
+import { ApiError, problemFromBody, useDialogs, useToast } from "../ui";
 
 interface ImportRow {
   id: string;
@@ -64,6 +65,8 @@ const MASTER_IMPORT_SHEETS = [
 ] as const;
 
 export const Imports: React.FC = () => {
+  const toast = useToast();
+  const dialogs = useDialogs();
   const { token, user } = useAuth();
   const [activeTab, setActiveTab] = useState<"upload" | "history">("upload");
 
@@ -143,9 +146,7 @@ export const Imports: React.FC = () => {
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(
-          err.detail?.message || err.detail || err.message || "Failed to parse import workbook."
-        );
+        throw new ApiError(problemFromBody(null, err, "Failed to parse import workbook."));
       }
 
       const previewData = await res.json();
@@ -185,7 +186,7 @@ export const Imports: React.FC = () => {
 
   const handleCommit = async () => {
     if (!currentBatch) return;
-    if (!window.confirm("Are you sure you want to commit these changes to the database? This operation is atomic.")) {
+    if (!(await dialogs.confirm({ title: "Commit this import?", message: "Are you sure you want to commit these changes to the database? This operation is atomic.", confirmLabel: "Commit" }))) {
       return;
     }
 
@@ -201,7 +202,7 @@ export const Imports: React.FC = () => {
 
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.detail?.message || "Failed to commit import batch.");
+        throw new ApiError(problemFromBody(null, err, "Failed to commit import batch."));
       }
 
       const commitRes = await res.json();
@@ -215,7 +216,7 @@ export const Imports: React.FC = () => {
   };
 
   const handleRollback = async (batchId: string) => {
-    if (!window.confirm("Rollback this committed batch? Records created by this batch will be reverted.")) {
+    if (!(await dialogs.confirm({ title: "Roll back this batch?", message: "Rollback this committed batch? Records created by this batch will be reverted.", confirmLabel: "Roll back", variant: "destructive" }))) {
       return;
     }
     try {
@@ -228,10 +229,10 @@ export const Imports: React.FC = () => {
         fetchHistory();
       } else {
         const err = await res.json();
-        alert(err.detail?.message || "Rollback failed.");
+        toast.error(err, "Rollback failed.");
       }
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err);
     }
   };
 
@@ -242,7 +243,7 @@ export const Imports: React.FC = () => {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || err.message || "Failed to download import template.");
+        throw new ApiError(problemFromBody(null, err, "Failed to download import template."));
       }
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
@@ -254,7 +255,7 @@ export const Imports: React.FC = () => {
       a.remove();
       window.URL.revokeObjectURL(url);
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err);
     }
   };
 
@@ -266,7 +267,7 @@ export const Imports: React.FC = () => {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || err.message || "Failed to download error workbook.");
+        throw new ApiError(problemFromBody(null, err, "Failed to download error workbook."));
       }
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
@@ -278,7 +279,7 @@ export const Imports: React.FC = () => {
       a.remove();
       window.URL.revokeObjectURL(url);
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err);
     }
   };
 

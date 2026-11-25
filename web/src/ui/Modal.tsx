@@ -80,9 +80,9 @@ export const Modal: React.FC<ModalProps> = ({
                 {title}
               </h2>
               {description && (
-                <p id={descId} className="mt-0.5 text-fw-sm text-fw-text-muted">
+                <div id={descId} className="mt-0.5 text-fw-sm text-fw-text-muted">
                   {description}
-                </p>
+                </div>
               )}
             </div>
             {dismissible && (

@@ -2,6 +2,8 @@
  * API client for Reports and Generated Reports history (Phase 12).
  */
 
+import { ensureOk } from "../../ui";
+
 export interface ReportColumn {
   key: string;
   label: string;
@@ -94,10 +96,7 @@ export async function fetchReportsRegistry(token?: string | null): Promise<Repor
   const res = await fetch("/api/v1/reports", {
     headers: getAuthHeaders(token),
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || "Failed to fetch reports catalog");
-  }
+  await ensureOk(res, "Failed to fetch reports catalog");
   return res.json();
 }
 
@@ -116,10 +115,7 @@ export async function fetchReportData(
   const res = await fetch(`/api/v1/reports/${encodeURIComponent(key)}?${params.toString()}`, {
     headers: getAuthHeaders(token),
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || `Failed to fetch report: ${key}`);
-  }
+  await ensureOk(res, `Failed to fetch report: ${key}`);
   return res.json();
 }
 
@@ -141,10 +137,7 @@ export async function triggerExportJob(
     method: "POST",
     headers: getAuthHeaders(token),
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || `Export request failed for ${key}`);
-  }
+  await ensureOk(res, `Export request failed for ${key}`);
   return res.json();
 }
 
@@ -155,10 +148,7 @@ export async function getExportStatus(
   const res = await fetch(`/api/v1/exports/${exportId}`, {
     headers: getAuthHeaders(token),
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || "Failed to check export status");
-  }
+  await ensureOk(res, "Failed to check export status");
   return res.json();
 }
 
@@ -209,10 +199,7 @@ export async function fetchGeneratedReports(
   const res = await fetch(`/api/v1/generated-reports?${params.toString()}`, {
     headers: getAuthHeaders(token),
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || "Failed to fetch generated reports history");
-  }
+  await ensureOk(res, "Failed to fetch generated reports history");
   return res.json();
 }
 

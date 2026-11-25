@@ -9,9 +9,11 @@ The scope and role rules in `02-roles-and-permissions.md` apply to every screen:
   - **Gallery:** `/dev/ui` shows every component and state (development builds only).
   - **Confirmations and messages:** `useDialogs().confirm/prompt` and `useToast()`, never `window.alert/confirm/prompt`. An error toast shows the server's message, and for a 422 one line per field.
   - **Dates:** one DatePicker. Dates show as "25 Nov 2026"; typing is day-first ("25/11/2026"); values are ISO.
-  - **Scrolling:** one ScrollArea per region (thin scrollbar on hover), so panels never scroll twice.
-  - **The check:** `pnpm run lint` refuses new browser dialogs, native date inputs, hand-made overlays and direct imports of libraries the ui layer wraps. The existing ones are listed in `web/scripts/ui-rules-baseline.json` until Batch 10 B removes them.
-- **Layout**: left navigation (collapsible), top bar with search, alerts bell, user menu. Navigation items depend on role (see section 2).
+  - **Scrolling:** one scrolling region per panel, so panels never scroll twice. Every scroll area (ScrollArea, `.fw-scroll` and any `overflow-*-auto` container) has the thin scrollbar that shows on hover. Inside a Modal only the body scrolls. Maps embedded in a scrolling page use cooperative gestures: the wheel scrolls the page, Ctrl/Cmd+wheel or two fingers zoom the map. An empty list shows an EmptyState, not an empty scroll box.
+  - **The check:** `pnpm run lint` refuses new browser dialogs, native date inputs, hand-made overlays and direct imports of libraries the ui layer wraps. Since Batch 10 B the baseline (`web/scripts/ui-rules-baseline.json`) is empty: there are no exceptions.
+- **Layout** (Batch 10 B): left navigation, top bar with the page title and the user. The logo (also the favicon: `web/public/favicon.svg`, a 32 px PNG and an apple-touch-icon) links to the dashboard and is never covered. The collapse button is in the sidebar footer, and the collapsed state is remembered in the browser. The browser tab shows "<page> · Field Worker Tracker".
+- **Small screens** (Batch 10 B review): below 768 px the sidebar is a drawer opened from the top bar's menu button, and the page padding is smaller. Wide grids, such as the planner roster and tables, scroll sideways inside their card. Date fields in older forms use the DatePicker's `lg` size (36 px), so they line up with the inputs beside them; filter bars use `sm`.
+- **Menu groups** (`web/src/components/layout/nav.ts`): Overview (Dashboard, Live Map) · Planning (Base Planner, Operational Planner, Leave, Approvals, Staffing Gaps) · Workforce (Employees, Documents, Devices) · Sites (Worksites, Boundaries, Accommodations) · Time & Pay (Attendance, Pending Visits, Payroll, Salary Structures) · Reports (Reports, Generated Reports) · Admin (Master Data Import, Settings, Users & Security, Audit Logs, System). Items a role can't use are hidden, and a group with none left is hidden. Staffing Gaps opens the Operational Planner at its gaps banner (`#staffing-gaps`, all gaps listed); Accommodations opens the Worksites page on its tab (`?tab=accommodations`).
 - **Lists**: server-side filtering, sorting and cursor pagination; saved filter chips; column chooser; CSV/XLSX export where the report catalog allows.
 - **Detail pages**: header with key facts and status chips, tabs for sections, "History" tab showing audit entries for that record.
 - **Forms**: inline validation from API error `errors[]`; optimistic-lock conflict shows "changed by someone else - reload".
@@ -56,6 +58,19 @@ Role-aware widgets (derived or cached, never editable):
 - **Documents**: expiring in the next N days.
 - **Admin/Engineer only**: payroll run status, items blocking finalization.
 Each widget links to the filtered list.
+
+**Pending actions & alerts** (Batch 10 B): one section per type, in this order, each with its count, the 5 most recent items and "View all". A role sees only the sections for pages it can use:
+| Section | Source | View all | Roles |
+|---|---|---|---|
+| Document expiry | `DOC_EXPIRY` alerts | Documents | Admin |
+| Cover needed | `COVER_NEEDED` alerts | Operational Planner, gaps | Admin, Engineer, Superintendent, Supervisor |
+| Leave approval | approvals inbox, leave | Approvals, leave tab | Admin, Engineer, Superintendent |
+| Reassignment approval | approvals inbox, reassignments | Approvals, reassignments tab | Admin, Engineer, Superintendent |
+| Attendance review | approvals inbox, attendance | Approvals, attendance tab | Admin, Engineer, Superintendent |
+| Pending visits | open pending visits (`?limit=5`) | Pending Visits | Admin, Engineer, Superintendent, Supervisor |
+| Boundary queue | worksites and accommodations without a boundary | Boundaries | Admin, Engineer |
+| Unassigned worksites | worksites with no supervisor (DEC-57) | Worksites | Admin |
+| Device & tracking alerts | `TRACKING_INTERRUPTED`, `STALE_DEVICE`, `NO_ACTIVITY`, `CONSENT_WITHDRAWN` alerts | Devices | Admin, Engineer, Superintendent |
 
 ### 3.3 Employees
 **List** (`/employees`): grouped by Supervisor (toggle to flat). Columns: Tally ID, name, role, SGD, grade code (Admin/Engineer), supervisor, superintendent, engineer, weekly off, accommodation, active. Bulk-select -> **Bulk update** dialog (accommodation, break minutes, weekly off day).

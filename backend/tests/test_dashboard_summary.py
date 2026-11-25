@@ -104,3 +104,61 @@ async def test_summary_counts_open_visits_escalations_and_live_workers() -> None
     assert body["live_workers"]["active"] == 1
     assert body["live_workers"]["total"] >= 1
     assert body["attendance"]["total_scheduled"] == 1
+
+
+async def test_pending_visits_limit_caps_items_but_not_counts() -> None:
+    """Dashboard preview (Batch 10 B): ?limit returns the newest N; counts cover every visit."""
+    today = site_today("AE")
+    async with async_session_factory() as session:
+        sup, sup_token = await _person(session, "SUPERVISOR", "Preview Sup")
+        worker, _ = await _person(session, "WORKER", "Preview Worker")
+        site, item = await _site(session, "Preview Site")
+        session.add(WorksiteSupervisor(worksite_id=site.id, supervisor_id=sup.id))
+        days = [today - timedelta(days=n) for n in (1, 5, 9)]
+        works = [
+            ScheduledWork(
+                work_date=d,
+                employee_id=worker.id,
+                job_item_id=item.id,
+                worksite_id=site.id,
+                assigned_hours=Decimal("8.00"),
+                status="ACTIVE",
+            )
+            for d in days
+        ]
+        session.add_all(works)
+        await session.flush()
+        for sw in works:
+            session.add(
+                PendingVisit(
+                    scheduled_work_id=sw.id,
+                    worksite_id=site.id,
+                    employee_id=worker.id,
+                    due_date=sw.work_date,
+                    detected_on=sw.work_date,
+                    status="OPEN",
+                )
+            )
+        await session.commit()
+
+    app = create_app()
+    headers = {"Authorization": f"Bearer {sup_token}"}
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        limited = await client.get(
+            "/api/v1/pending-visits",
+            params={"status": "OPEN", "worksite_id": str(site.id), "limit": 2},
+            headers=headers,
+        )
+        full = await client.get(
+            "/api/v1/pending-visits",
+            params={"status": "OPEN", "worksite_id": str(site.id)},
+            headers=headers,
+        )
+        bad = await client.get("/api/v1/pending-visits", params={"limit": 0}, headers=headers)
+    assert limited.status_code == 200, limited.text
+    body = limited.json()
+    assert [i["due_date"] for i in body["items"]] == [str(days[0]), str(days[1])]
+    assert body["open_count"] == 3
+    assert body["total_count"] == 3
+    assert len(full.json()["items"]) == 3
+    assert bad.status_code == 422

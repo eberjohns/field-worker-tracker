@@ -10,7 +10,6 @@ import {
   Loader2,
   Plus,
   Trash2,
-  X,
   Sparkles,
   UserCheck,
   Calendar,
@@ -29,6 +28,7 @@ import {
   BaseRosterTemplateCreate,
   CandidateRecommendation,
 } from "../features/planner/types";
+import { ensureOk, Modal, useToast } from "../ui";
 
 const WEEKDAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] as const;
 
@@ -51,6 +51,7 @@ interface BaseTemplateHistoryPayload {
 }
 
 export const BasePlanner: React.FC = () => {
+  const toast = useToast();
   const { token, user } = useAuth();
   const canEditBasePlanner =
     user?.role === "ADMIN" || user?.role === "ENGINEER" || user?.role === "SUPERINTENDENT";
@@ -185,10 +186,7 @@ export const BasePlanner: React.FC = () => {
       },
       body: JSON.stringify(snapshot),
     });
-    if (!res.ok) {
-      const errJson = await res.json().catch(() => ({}));
-      throw new Error(errJson.detail?.message || errJson.detail || "Failed to revert template");
-    }
+    await ensureOk(res, "Failed to revert template");
     const scrollPos = window.scrollY;
     await fetchBasePlannerData(true);
     setTimeout(() => window.scrollTo({ top: scrollPos, behavior: "instant" }), 0);
@@ -202,7 +200,7 @@ export const BasePlanner: React.FC = () => {
         await applyTemplateSnapshot(entry.payload.before);
         showHistoryToast(`Undid: ${entry.label}`);
       } catch (err) {
-        alert(`Failed to undo: ${err instanceof Error ? err.message : "Unknown error"}`);
+        toast.error(err, "Failed to undo");
         throw err;
       }
     },
@@ -211,7 +209,7 @@ export const BasePlanner: React.FC = () => {
         await applyTemplateSnapshot(entry.payload.after);
         showHistoryToast(`Redid: ${entry.label}`);
       } catch (err) {
-        alert(`Failed to redo: ${err instanceof Error ? err.message : "Unknown error"}`);
+        toast.error(err, "Failed to redo");
         throw err;
       }
     },
@@ -475,10 +473,7 @@ export const BasePlanner: React.FC = () => {
         body: JSON.stringify(payload),
       });
 
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.detail?.message || errJson.detail || "Failed to save template");
-      }
+      await ensureOk(res, "Failed to save template");
 
       const actionLabel = fillWorkingDays
         ? `Fill working days on ${activeSlot.worksite.job_number} · ${it.sub_item_code}`
@@ -492,7 +487,7 @@ export const BasePlanner: React.FC = () => {
         window.scrollTo({ top: scrollPos, behavior: "instant" });
       }, 0);
     } catch (err: any) {
-      alert(`Error saving slot: ${err.message}`);
+      toast.error(err, "Error saving slot");
     } finally {
       setSavingSlot(false);
     }
@@ -978,440 +973,421 @@ export const BasePlanner: React.FC = () => {
 
       {/* Click-to-Assign Slot Modal - Light Theme Enterprise */}
       {activeSlot && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
-            {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-              <div>
-                <div className="flex items-center gap-2">
-                  <CalendarRange className="h-5 w-5 text-indigo-600" />
-                  <h3 className="text-base font-bold text-slate-900">
-                    Assign Recurring Staff to Slot
-                  </h3>
-                </div>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {activeSlot.worksite.job_number} - {activeSlot.worksite.job_name} • Item{" "}
+        <Modal
+          open
+          onClose={() => setActiveSlot(null)}
+          size="lg"
+          title="Assign Recurring Staff to Slot"
+          description={<>{activeSlot.worksite.job_number} - {activeSlot.worksite.job_name} • Item{" "}
                   <span className="font-semibold">{activeSlot.item.sub_item_code}</span> (
                   {activeSlot.item.staff_grade_description}) • Target:{" "}
-                  <strong className="text-indigo-700">{activeSlot.weekday}</strong>
-                </p>
-              </div>
-
+                  <strong className="text-indigo-700">{activeSlot.weekday}</strong></>}
+          footer={
+            <div className="flex w-full flex-wrap items-center justify-end gap-2">
               <button
-                onClick={() => setActiveSlot(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors"
-              >
-                <X className="h-5 w-5" />
-              </button>
+                  type="button"
+                  onClick={() => setActiveSlot(null)}
+                  className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-200 transition-colors"
+                >
+                  Cancel
+                </button>
+  
+                <button
+                  type="button"
+                  onClick={handleSaveSlot}
+                  disabled={savingSlot}
+                  className="px-4 py-2 rounded-lg text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center gap-1.5 shadow-sm"
+                >
+                  {savingSlot && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  Save Recurring Slot
+                </button>
             </div>
-
-            {/* Modal Body */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-5">
-              {/* Quota limit warning banner in Base Planner */}
-              {quotaStatusInModal.isQuotaReached && !quotaStatusInModal.isCurrentSlotAlreadyScheduled && (
-                <div className="p-3 rounded-lg bg-amber-50 border border-amber-300 text-xs text-amber-900 flex items-start gap-2.5">
-                  <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-bold">Contract Quota Reached:</p>
-                    <p className="mt-0.5 text-amber-800">
-                      This contract line item specifies {quotaStatusInModal.maxOccurrences} visit(s). All {quotaStatusInModal.maxOccurrences} slots are already scheduled in the base blueprint. To schedule {activeSlot.weekday}, please remove another assigned day first.
-                    </p>
-                  </div>
+          }
+        >
+          <div className="p-6 space-y-5">
+            {/* Quota limit warning banner in Base Planner */}
+            {quotaStatusInModal.isQuotaReached && !quotaStatusInModal.isCurrentSlotAlreadyScheduled && (
+              <div className="p-3 rounded-lg bg-amber-50 border border-amber-300 text-xs text-amber-900 flex items-start gap-2.5">
+                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold">Contract Quota Reached:</p>
+                  <p className="mt-0.5 text-amber-800">
+                    This contract line item specifies {quotaStatusInModal.maxOccurrences} visit(s). All {quotaStatusInModal.maxOccurrences} slots are already scheduled in the base blueprint. To schedule {activeSlot.weekday}, please remove another assigned day first.
+                  </p>
                 </div>
-              )}
+              </div>
+            )}
 
-              {/* Periodic Cadence Selection: Monthly or Quarterly (Option B) */}
-              {activeSlot.item.frequency_unit === "MONTH" && (() => {
-                const maxAllowedWeeks = Math.min(
-                  4,
-                  Math.max(1, Number(activeSlot.item.occurrences_per_period) || 1)
-                );
-                return (
-                  <div className="p-3.5 rounded-lg bg-indigo-50/50 border border-indigo-100 space-y-2">
-                    <label className="text-xs font-bold text-indigo-900 flex items-center justify-between">
-                      <span className="flex items-center gap-1.5">
-                        <Calendar className="h-3.5 w-3.5 text-indigo-600" />
-                        Target Weeks of the Month:
-                      </span>
-                      <span className="text-2xs font-semibold px-2 py-0.5 rounded bg-indigo-100 text-indigo-800">
-                        Max {maxAllowedWeeks} week{maxAllowedWeeks > 1 ? "s" : ""} (Quota)
-                      </span>
-                    </label>
-                    <p className="text-[11px] text-slate-500">
-                      Select which week(s) of the month this recurring visit should take place (selected {selectedWeeksOfMonth.length} of {maxAllowedWeeks}):
-                    </p>
-                    <div className="flex flex-wrap items-center gap-3 pt-1">
-                      {[1, 2, 3, 4].map((wk) => {
-                        const isChecked = selectedWeeksOfMonth.includes(wk);
-                        const isMaxReached = selectedWeeksOfMonth.length >= maxAllowedWeeks;
-                        const isDisabled = !isChecked && isMaxReached && maxAllowedWeeks > 1;
+            {/* Periodic Cadence Selection: Monthly or Quarterly (Option B) */}
+            {activeSlot.item.frequency_unit === "MONTH" && (() => {
+              const maxAllowedWeeks = Math.min(
+                4,
+                Math.max(1, Number(activeSlot.item.occurrences_per_period) || 1)
+              );
+              return (
+                <div className="p-3.5 rounded-lg bg-indigo-50/50 border border-indigo-100 space-y-2">
+                  <label className="text-xs font-bold text-indigo-900 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Calendar className="h-3.5 w-3.5 text-indigo-600" />
+                      Target Weeks of the Month:
+                    </span>
+                    <span className="text-2xs font-semibold px-2 py-0.5 rounded bg-indigo-100 text-indigo-800">
+                      Max {maxAllowedWeeks} week{maxAllowedWeeks > 1 ? "s" : ""} (Quota)
+                    </span>
+                  </label>
+                  <p className="text-[11px] text-slate-500">
+                    Select which week(s) of the month this recurring visit should take place (selected {selectedWeeksOfMonth.length} of {maxAllowedWeeks}):
+                  </p>
+                  <div className="flex flex-wrap items-center gap-3 pt-1">
+                    {[1, 2, 3, 4].map((wk) => {
+                      const isChecked = selectedWeeksOfMonth.includes(wk);
+                      const isMaxReached = selectedWeeksOfMonth.length >= maxAllowedWeeks;
+                      const isDisabled = !isChecked && isMaxReached && maxAllowedWeeks > 1;
 
-                        return (
-                          <label
-                            key={wk}
-                            className={`flex items-center gap-1.5 text-xs font-semibold transition ${
-                              isDisabled
-                                ? "text-slate-400 cursor-not-allowed opacity-60"
-                                : "text-slate-700 cursor-pointer"
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              disabled={isDisabled}
-                              onChange={(e) => {
-                                if (maxAllowedWeeks === 1) {
-                                  setSelectedWeeksOfMonth([wk]);
+                      return (
+                        <label
+                          key={wk}
+                          className={`flex items-center gap-1.5 text-xs font-semibold transition ${
+                            isDisabled
+                              ? "text-slate-400 cursor-not-allowed opacity-60"
+                              : "text-slate-700 cursor-pointer"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            disabled={isDisabled}
+                            onChange={(e) => {
+                              if (maxAllowedWeeks === 1) {
+                                setSelectedWeeksOfMonth([wk]);
+                              } else {
+                                if (e.target.checked) {
+                                  if (selectedWeeksOfMonth.length < maxAllowedWeeks) {
+                                    setSelectedWeeksOfMonth((prev) => [...prev, wk]);
+                                  }
                                 } else {
-                                  if (e.target.checked) {
-                                    if (selectedWeeksOfMonth.length < maxAllowedWeeks) {
-                                      setSelectedWeeksOfMonth((prev) => [...prev, wk]);
-                                    }
-                                  } else {
-                                    if (selectedWeeksOfMonth.length > 1) {
-                                      setSelectedWeeksOfMonth((prev) => prev.filter((w) => w !== wk));
-                                    }
+                                  if (selectedWeeksOfMonth.length > 1) {
+                                    setSelectedWeeksOfMonth((prev) => prev.filter((w) => w !== wk));
                                   }
                                 }
-                              }}
-                              className="rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 disabled:opacity-50"
-                            />
-                            <span>Week {wk}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {activeSlot.item.frequency_unit === "QUARTER" && (
-                <div className="p-3.5 rounded-lg bg-indigo-50/50 border border-indigo-100 space-y-3">
-                  <label className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
-                    <Calendar className="h-3.5 w-3.5 text-indigo-600" />
-                    Target Cadence in Quarter:
-                  </label>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <span className="block text-[11px] font-semibold text-slate-600 mb-1">Month of Quarter:</span>
-                      <select
-                        value={selectedQuarterMonth}
-                        onChange={(e) => setSelectedQuarterMonth(Number(e.target.value))}
-                        className="w-full text-xs py-1.5 px-2.5 rounded-lg border border-slate-200 bg-white"
-                      >
-                        <option value={1}>Month 1 (Jan / Apr / Jul / Oct)</option>
-                        <option value={2}>Month 2 (Feb / May / Aug / Nov)</option>
-                        <option value={3}>Month 3 (Mar / Jun / Sep / Dec)</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <span className="block text-[11px] font-semibold text-slate-600 mb-1">Week of Month:</span>
-                      <select
-                        value={selectedQuarterWeek}
-                        onChange={(e) => setSelectedQuarterWeek(Number(e.target.value))}
-                        className="w-full text-xs py-1.5 px-2.5 rounded-lg border border-slate-200 bg-white"
-                      >
-                        <option value={1}>Week 1</option>
-                        <option value={2}>Week 2</option>
-                        <option value={3}>Week 3</option>
-                        <option value={4}>Week 4</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Convenience Fill Action for Weekly Jobs */}
-              {activeSlot.item.frequency_unit === "WEEK" && Number(activeSlot.item.occurrences_per_period) >= 5 && (
-                <div className="p-3 rounded-lg bg-indigo-50/40 border border-indigo-100 flex items-center justify-between">
-                  <div>
-                    <label className="text-xs font-bold text-indigo-900 flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={fillWorkingDays}
-                        onChange={(e) => setFillWorkingDays(e.target.checked)}
-                        className="rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
-                      />
-                      Fill Active Working Days (Mon–Sat) with this crew
-                    </label>
-                    <p className="text-[11px] text-slate-500 ml-6 mt-0.5">
-                      Convenience shortcut: copies this crew across Mon–Sat while preserving Sunday completely.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Currently Assigned Workers in this Slot */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs text-slate-600 font-semibold">
-                  <span>
-                    Currently Scheduled Workers ({slotEntries.length} / {activeSlot.item.required_staff_count || 1} Required)
-                  </span>
-                </div>
-
-                {slotEntries.length >= (activeSlot.item.required_staff_count || 1) && (
-                  <div className="p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium flex items-center justify-between">
-                    <span>✓ Slot Headcount Full ({slotEntries.length} of {activeSlot.item.required_staff_count || 1} staff assigned)</span>
-                    <span className="text-[10px] text-emerald-700">Remove a worker using ✕ to replace</span>
-                  </div>
-                )}
-
-                {slotEntries.length === 0 ? (
-                  <p className="text-xs text-slate-400 italic py-2">
-                    No workers assigned to this slot yet. Choose from the recommended candidates below.
-                  </p>
-                ) : (
-                  <div className="space-y-1.5">
-                    {slotEntries.map((e, idx) => {
-                      const isOffDay = isSameWeekday(e.weekly_off_day, activeSlot.weekday);
-
-                      return (
-                        <div
-                          key={e.employee_id}
-                          className={`flex items-center justify-between p-2.5 rounded-lg border shadow-sm ${
-                            isOffDay ? "bg-amber-50/50 border-amber-300" : "bg-white border-slate-200"
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <span className="text-xs font-mono font-bold text-slate-400">#{idx + 1}</span>
-                            <div>
-                              <div className="text-xs font-bold text-slate-900">
-                                {e.employee_name}
-                                <span className="text-slate-400 font-mono font-normal ml-1.5">
-                                  ({e.tally_id})
-                                </span>
-                              </div>
-                              <div className="text-[11px] text-slate-500 flex items-center gap-2 mt-0.5">
-                                <span>{e.assigned_hours} hrs/day</span>
-                                {e.weekly_off_day && (
-                                  <span className="text-slate-600 font-medium">
-                                    Weekly Off: {e.weekly_off_day}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            {isOffDay && (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                                <ShieldAlert className="h-3 w-3" /> Rest Day
-                              </span>
-                            )}
-                            <button
-                              onClick={() => handleRemoveEntry(e.employee_id)}
-                              className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition-colors"
-                              title="Remove worker from slot"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </div>
+                              }
+                            }}
+                            className="rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 disabled:opacity-50"
+                          />
+                          <span>Week {wk}</span>
+                        </label>
                       );
                     })}
                   </div>
-                )}
+                </div>
+              );
+            })()}
+
+            {activeSlot.item.frequency_unit === "QUARTER" && (
+              <div className="p-3.5 rounded-lg bg-indigo-50/50 border border-indigo-100 space-y-3">
+                <label className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
+                  <Calendar className="h-3.5 w-3.5 text-indigo-600" />
+                  Target Cadence in Quarter:
+                </label>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <span className="block text-[11px] font-semibold text-slate-600 mb-1">Month of Quarter:</span>
+                    <select
+                      value={selectedQuarterMonth}
+                      onChange={(e) => setSelectedQuarterMonth(Number(e.target.value))}
+                      className="w-full text-xs py-1.5 px-2.5 rounded-lg border border-slate-200 bg-white"
+                    >
+                      <option value={1}>Month 1 (Jan / Apr / Jul / Oct)</option>
+                      <option value={2}>Month 2 (Feb / May / Aug / Nov)</option>
+                      <option value={3}>Month 3 (Mar / Jun / Sep / Dec)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <span className="block text-[11px] font-semibold text-slate-600 mb-1">Week of Month:</span>
+                    <select
+                      value={selectedQuarterWeek}
+                      onChange={(e) => setSelectedQuarterWeek(Number(e.target.value))}
+                      className="w-full text-xs py-1.5 px-2.5 rounded-lg border border-slate-200 bg-white"
+                    >
+                      <option value={1}>Week 1</option>
+                      <option value={2}>Week 2</option>
+                      <option value={3}>Week 3</option>
+                      <option value={4}>Week 4</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Convenience Fill Action for Weekly Jobs */}
+            {activeSlot.item.frequency_unit === "WEEK" && Number(activeSlot.item.occurrences_per_period) >= 5 && (
+              <div className="p-3 rounded-lg bg-indigo-50/40 border border-indigo-100 flex items-center justify-between">
+                <div>
+                  <label className="text-xs font-bold text-indigo-900 flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={fillWorkingDays}
+                      onChange={(e) => setFillWorkingDays(e.target.checked)}
+                      className="rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+                    />
+                    Fill Active Working Days (Mon–Sat) with this crew
+                  </label>
+                  <p className="text-[11px] text-slate-500 ml-6 mt-0.5">
+                    Convenience shortcut: copies this crew across Mon–Sat while preserving Sunday completely.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Currently Assigned Workers in this Slot */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs text-slate-600 font-semibold">
+                <span>
+                  Currently Scheduled Workers ({slotEntries.length} / {activeSlot.item.required_staff_count || 1} Required)
+                </span>
               </div>
 
-              {/* Candidate Worker Recommendations Section */}
-              <div className="space-y-3 pt-3 border-t border-slate-200">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5">
-                    <Sparkles className="h-4 w-4 text-indigo-600" />
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                      Candidate Worker Recommendations
-                    </h4>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <label className="text-xs font-medium text-slate-700 flex items-center gap-1.5 cursor-pointer bg-slate-50 px-2 py-1 rounded border border-slate-200">
-                      <input
-                        type="checkbox"
-                        checked={showAllRoles}
-                        onChange={(e) => {
-                          const next = e.target.checked;
-                          setShowAllRoles(next);
-                          if (activeSlot) {
-                            fetchCandidatesForSlot(activeSlot.item.job_item_id, activeSlot.weekday, next);
-                          }
-                        }}
-                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
-                      />
-                      <span>Show all workforce roles</span>
-                    </label>
-
-                    {/* Supervisor Crew Filter Toggle inside Modal */}
-                    {selectedSupervisorId && (
-                      <label className="text-xs font-medium text-indigo-700 flex items-center gap-1.5 cursor-pointer bg-indigo-50 px-2 py-1 rounded border border-indigo-200">
-                        <input
-                          type="checkbox"
-                          checked={filterToSupervisorCrew}
-                          onChange={(e) => setFilterToSupervisorCrew(e.target.checked)}
-                          className="rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
-                        />
-                        <span>Filter to Crew</span>
-                      </label>
-                    )}
-                  </div>
+              {slotEntries.length >= (activeSlot.item.required_staff_count || 1) && (
+                <div className="p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium flex items-center justify-between">
+                  <span>✓ Slot Headcount Full ({slotEntries.length} of {activeSlot.item.required_staff_count || 1} staff assigned)</span>
+                  <span className="text-[10px] text-emerald-700">Remove a worker using ✕ to replace</span>
                 </div>
+              )}
 
-                {/* Candidate Search Box */}
-                <div className="relative">
-                  <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Search candidate by name, ID or grade..."
-                    value={candidateSearch}
-                    onChange={(e) => setCandidateSearch(e.target.value)}
-                    className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
+              {slotEntries.length === 0 ? (
+                <p className="text-xs text-slate-400 italic py-2">
+                  No workers assigned to this slot yet. Choose from the recommended candidates below.
+                </p>
+              ) : (
+                <div className="space-y-1.5">
+                  {slotEntries.map((e, idx) => {
+                    const isOffDay = isSameWeekday(e.weekly_off_day, activeSlot.weekday);
 
-                {/* Candidate List */}
-                {loadingCandidates ? (
-                  <div className="text-center py-6 text-slate-400 text-xs flex items-center justify-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" /> Loading candidate pool...
-                  </div>
-                ) : filteredCandidates.length === 0 ? (
-                  <p className="text-xs text-slate-400 py-3 text-center">
-                    No matching candidates found. Try unchecking the crew filter or clearing the search.
-                  </p>
-                ) : (
-                  <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                    {filteredCandidates.map((cand) => {
-                      const requiredHeadcount = activeSlot.item.required_staff_count || 1;
-                      const isSlotFull = slotEntries.length >= requiredHeadcount;
-                      const isExactMatch = cand.exact_staff_type_match;
-                      const isOffDay = isSameWeekday(cand.weekly_off_day, activeSlot.weekday);
-                      const isAlreadyAssigned = slotEntries.some((e) => e.employee_id === cand.employee_id);
-                      const isBlockedByQuota = quotaStatusInModal.isQuotaReached && !quotaStatusInModal.isCurrentSlotAlreadyScheduled;
-                      const isBlockedByHeadcount = isSlotFull && !isAlreadyAssigned;
-                      const isCandidateBlocked = cand.is_blocked;
-                      const isDisabled = isAlreadyAssigned || isBlockedByQuota || isBlockedByHeadcount || isCandidateBlocked;
-
-                      const remainingHours = Math.max(0, Number(cand.standard_hours) - Number(cand.today_allocated_hours || 0));
-
-                      return (
-                        <div
-                          key={cand.employee_id}
-                          className={`p-2.5 rounded-lg border flex items-center justify-between gap-3 transition-colors ${
-                            isDisabled
-                              ? "bg-slate-50 border-slate-200 opacity-60"
-                              : "bg-white border-slate-200 hover:border-indigo-300"
-                          }`}
-                        >
-                          <div className="space-y-0.5">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-bold text-slate-900">
-                                {cand.name} {isExactMatch && <span className="text-amber-500 font-bold">*</span>}
+                    return (
+                      <div
+                        key={e.employee_id}
+                        className={`flex items-center justify-between p-2.5 rounded-lg border shadow-sm ${
+                          isOffDay ? "bg-amber-50/50 border-amber-300" : "bg-white border-slate-200"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs font-mono font-bold text-slate-400">#{idx + 1}</span>
+                          <div>
+                            <div className="text-xs font-bold text-slate-900">
+                              {e.employee_name}
+                              <span className="text-slate-400 font-mono font-normal ml-1.5">
+                                ({e.tally_id})
                               </span>
-                              <span className="text-[10px] text-slate-400 font-mono">
-                                ({cand.tally_id})
-                              </span>
-                              {isExactMatch && (
-                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200">
-                                  Exact Staff Match
+                            </div>
+                            <div className="text-[11px] text-slate-500 flex items-center gap-2 mt-0.5">
+                              <span>{e.assigned_hours} hrs/day</span>
+                              {e.weekly_off_day && (
+                                <span className="text-slate-600 font-medium">
+                                  Weekly Off: {e.weekly_off_day}
                                 </span>
                               )}
                             </div>
-
-                            <div className="text-[11px] text-slate-500 flex flex-wrap items-center gap-2">
-                              <span>{cand.staff_grade_description || "Staff"}</span>
-                              <span>•</span>
-                              <span className="font-mono text-slate-600">{cand.grade_code}</span>
-                              <span>•</span>
-                              <span className={isOffDay ? "text-amber-700 font-bold" : "text-slate-600"}>
-                                Off: {cand.weekly_off_day || "None"}
-                              </span>
-                              {cand.supervisor_name && (
-                                <>
-                                  <span>•</span>
-                                  <span>Supervisor: {cand.supervisor_name}</span>
-                                </>
-                              )}
-                            </div>
-
-                            {/* Capacity or Blocked badge */}
-                            {cand.is_blocked ? (
-                              <div className="text-[10px] text-rose-700 font-semibold flex items-center gap-1 mt-0.5">
-                                <span className="px-1.5 py-0.2 rounded bg-rose-50 border border-rose-200">
-                                  Blocked: {cand.blocked_reason}
-                                </span>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-1.5 mt-0.5">
-                                {Number(cand.today_allocated_hours || 0) > 0 ? (
-                                  <span className="text-[9px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded">
-                                    Remote: {cand.today_allocated_hours}h / {cand.standard_hours}h ({remainingHours.toFixed(1)}h left)
-                                  </span>
-                                ) : (
-                                  <span className="text-[9px] text-slate-500 bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded">
-                                    Available ({cand.standard_hours}h standard)
-                                  </span>
-                                )}
-                              </div>
-                            )}
-
-                            {isOffDay && (
-                              <div className="text-[10px] text-amber-700 font-semibold flex items-center gap-1">
-                                <ShieldAlert className="h-3 w-3" />
-                                <span>Rest-Day Warning: Off day is {activeSlot.weekday}</span>
-                              </div>
-                            )}
                           </div>
+                        </div>
 
+                        <div className="flex items-center gap-2">
+                          {isOffDay && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                              <ShieldAlert className="h-3 w-3" /> Rest Day
+                            </span>
+                          )}
                           <button
-                            type="button"
-                            onClick={() => handleAddCandidate(cand)}
-                            disabled={isDisabled}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors ${
-                              isDisabled
-                                ? "bg-slate-100 text-slate-400 cursor-not-allowed"
-                                : "bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 shadow-sm"
-                            }`}
+                            onClick={() => handleRemoveEntry(e.employee_id)}
+                            className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition-colors"
+                            title="Remove worker from slot"
                           >
-                            <Plus className="h-3.5 w-3.5" />
-                            {isAlreadyAssigned
-                              ? "Assigned"
-                              : isCandidateBlocked
-                              ? "Blocked"
-                              : isBlockedByHeadcount
-                              ? `Slot Full (${slotEntries.length}/${requiredHeadcount})`
-                              : isBlockedByQuota
-                              ? "Quota Reached"
-                              : "Add to Slot"}
+                            <Trash2 className="h-4 w-4" />
                           </button>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
-            {/* Modal Footer */}
-            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setActiveSlot(null)}
-                className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-200 transition-colors"
-              >
-                Cancel
-              </button>
+            {/* Candidate Worker Recommendations Section */}
+            <div className="space-y-3 pt-3 border-t border-slate-200">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5">
+                  <Sparkles className="h-4 w-4 text-indigo-600" />
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                    Candidate Worker Recommendations
+                  </h4>
+                </div>
 
-              <button
-                type="button"
-                onClick={handleSaveSlot}
-                disabled={savingSlot}
-                className="px-4 py-2 rounded-lg text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center gap-1.5 shadow-sm"
-              >
-                {savingSlot && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                Save Recurring Slot
-              </button>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-medium text-slate-700 flex items-center gap-1.5 cursor-pointer bg-slate-50 px-2 py-1 rounded border border-slate-200">
+                    <input
+                      type="checkbox"
+                      checked={showAllRoles}
+                      onChange={(e) => {
+                        const next = e.target.checked;
+                        setShowAllRoles(next);
+                        if (activeSlot) {
+                          fetchCandidatesForSlot(activeSlot.item.job_item_id, activeSlot.weekday, next);
+                        }
+                      }}
+                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
+                    />
+                    <span>Show all workforce roles</span>
+                  </label>
+
+                  {/* Supervisor Crew Filter Toggle inside Modal */}
+                  {selectedSupervisorId && (
+                    <label className="text-xs font-medium text-indigo-700 flex items-center gap-1.5 cursor-pointer bg-indigo-50 px-2 py-1 rounded border border-indigo-200">
+                      <input
+                        type="checkbox"
+                        checked={filterToSupervisorCrew}
+                        onChange={(e) => setFilterToSupervisorCrew(e.target.checked)}
+                        className="rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
+                      />
+                      <span>Filter to Crew</span>
+                    </label>
+                  )}
+                </div>
+              </div>
+
+              {/* Candidate Search Box */}
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search candidate by name, ID or grade..."
+                  value={candidateSearch}
+                  onChange={(e) => setCandidateSearch(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              {/* Candidate List */}
+              {loadingCandidates ? (
+                <div className="text-center py-6 text-slate-400 text-xs flex items-center justify-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading candidate pool...
+                </div>
+              ) : filteredCandidates.length === 0 ? (
+                <p className="text-xs text-slate-400 py-3 text-center">
+                  No matching candidates found. Try unchecking the crew filter or clearing the search.
+                </p>
+              ) : (
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                  {filteredCandidates.map((cand) => {
+                    const requiredHeadcount = activeSlot.item.required_staff_count || 1;
+                    const isSlotFull = slotEntries.length >= requiredHeadcount;
+                    const isExactMatch = cand.exact_staff_type_match;
+                    const isOffDay = isSameWeekday(cand.weekly_off_day, activeSlot.weekday);
+                    const isAlreadyAssigned = slotEntries.some((e) => e.employee_id === cand.employee_id);
+                    const isBlockedByQuota = quotaStatusInModal.isQuotaReached && !quotaStatusInModal.isCurrentSlotAlreadyScheduled;
+                    const isBlockedByHeadcount = isSlotFull && !isAlreadyAssigned;
+                    const isCandidateBlocked = cand.is_blocked;
+                    const isDisabled = isAlreadyAssigned || isBlockedByQuota || isBlockedByHeadcount || isCandidateBlocked;
+
+                    const remainingHours = Math.max(0, Number(cand.standard_hours) - Number(cand.today_allocated_hours || 0));
+
+                    return (
+                      <div
+                        key={cand.employee_id}
+                        className={`p-2.5 rounded-lg border flex items-center justify-between gap-3 transition-colors ${
+                          isDisabled
+                            ? "bg-slate-50 border-slate-200 opacity-60"
+                            : "bg-white border-slate-200 hover:border-indigo-300"
+                        }`}
+                      >
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-slate-900">
+                              {cand.name} {isExactMatch && <span className="text-amber-500 font-bold">*</span>}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              ({cand.tally_id})
+                            </span>
+                            {isExactMatch && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200">
+                                Exact Staff Match
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="text-[11px] text-slate-500 flex flex-wrap items-center gap-2">
+                            <span>{cand.staff_grade_description || "Staff"}</span>
+                            <span>•</span>
+                            <span className="font-mono text-slate-600">{cand.grade_code}</span>
+                            <span>•</span>
+                            <span className={isOffDay ? "text-amber-700 font-bold" : "text-slate-600"}>
+                              Off: {cand.weekly_off_day || "None"}
+                            </span>
+                            {cand.supervisor_name && (
+                              <>
+                                <span>•</span>
+                                <span>Supervisor: {cand.supervisor_name}</span>
+                              </>
+                            )}
+                          </div>
+
+                          {/* Capacity or Blocked badge */}
+                          {cand.is_blocked ? (
+                            <div className="text-[10px] text-rose-700 font-semibold flex items-center gap-1 mt-0.5">
+                              <span className="px-1.5 py-0.2 rounded bg-rose-50 border border-rose-200">
+                                Blocked: {cand.blocked_reason}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              {Number(cand.today_allocated_hours || 0) > 0 ? (
+                                <span className="text-[9px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded">
+                                  Remote: {cand.today_allocated_hours}h / {cand.standard_hours}h ({remainingHours.toFixed(1)}h left)
+                                </span>
+                              ) : (
+                                <span className="text-[9px] text-slate-500 bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded">
+                                  Available ({cand.standard_hours}h standard)
+                                </span>
+                              )}
+                            </div>
+                          )}
+
+                          {isOffDay && (
+                            <div className="text-[10px] text-amber-700 font-semibold flex items-center gap-1">
+                              <ShieldAlert className="h-3 w-3" />
+                              <span>Rest-Day Warning: Off day is {activeSlot.weekday}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleAddCandidate(cand)}
+                          disabled={isDisabled}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors ${
+                            isDisabled
+                              ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                              : "bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 shadow-sm"
+                          }`}
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          {isAlreadyAssigned
+                            ? "Assigned"
+                            : isCandidateBlocked
+                            ? "Blocked"
+                            : isBlockedByHeadcount
+                            ? `Slot Full (${slotEntries.length}/${requiredHeadcount})`
+                            : isBlockedByQuota
+                            ? "Quota Reached"
+                            : "Add to Slot"}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

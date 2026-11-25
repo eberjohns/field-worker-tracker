@@ -14,6 +14,11 @@ interface MapContainerProps {
   /** Called just before the map is destroyed (style switch or unmount). Use to null-out any stored map reference. */
   onMapUnmount?: () => void;
   className?: string;
+  /**
+   * For maps embedded in a scrolling page: the wheel scrolls the page and Ctrl/Cmd+wheel
+   * (or two fingers) zooms the map, so the page and the map don't both scroll (Batch 10 B).
+   */
+  cooperativeGestures?: boolean;
   children?: React.ReactNode;
 }
 
@@ -45,6 +50,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
   onMapReady,
   onMapUnmount,
   className = "w-full h-[500px]",
+  cooperativeGestures = false,
   children,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -75,6 +81,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
       zoom: currentZoomRef.current,
       attributionControl: { compact: true },
       maxTileCacheSize: 200,
+      cooperativeGestures,
     });
 
     map.addControl(new NavigationControl({ showCompass: true }), "top-right");

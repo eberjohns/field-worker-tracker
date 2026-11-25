@@ -139,7 +139,7 @@ Roles: A = Admin, E = Engineer, S = Superintendent, V = Supervisor. "scope" = li
 | GET | /attendance/exceptions | A E (scope) | PENDING_REVIEW queue |
 | GET | /alerts | scope | open alerts |
 | POST | /alerts/{id}/resolve | A E V | |
-| GET | /pending-visits | A E S V scope | follow-up list; filters `status, from, to, worksite_id, supervisor_id` |
+| GET | /pending-visits | A E S V scope | follow-up list; filters `status, from, to, worksite_id, supervisor_id`; optional `limit` (1–500) returns the newest N items while the counts still cover every match (dashboard preview) |
 | POST | /pending-visits/{id}/explain | A E V | adds a PENDING_VISIT_EXPLANATION comment; status EXPLAINED |
 | POST | /pending-visits/{id}/reschedule | A E | `{ work_date, employee_ids }` creates Scheduled Work (source FOLLOW_UP); status RESCHEDULED |
 | POST | /pending-visits/{id}/close | A E | `{ reason }`; status CLOSED |

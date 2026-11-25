@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
+import { describeError, ensureOk, useDialogs } from "../ui";
 import { KeyRound, CheckCircle, AlertCircle, RefreshCw } from "lucide-react";
 
 interface UserItem {
@@ -15,6 +16,7 @@ interface UserItem {
 
 export const UsersAdmin: React.FC = () => {
   const { token, user } = useAuth();
+  const dialogs = useDialogs();
   const [users, setUsers] = useState<UserItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -44,7 +46,13 @@ export const UsersAdmin: React.FC = () => {
   }, [user]);
 
   const handleResetPassword = async (userId: string, username: string) => {
-    if (!window.confirm(`Reset password for user '${username}' to company default?`)) return;
+    const ok = await dialogs.confirm({
+      title: "Reset password?",
+      message: `The password for '${username}' will be reset to the company default.`,
+      confirmLabel: "Reset password",
+      variant: "destructive",
+    });
+    if (!ok) return;
     setStatusMessage(null);
     setErrorMessage(null);
 
@@ -53,11 +61,11 @@ export const UsersAdmin: React.FC = () => {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error("Reset failed");
+      await ensureOk(res, "Failed to reset password");
       setStatusMessage(`Password for user '${username}' has been reset to company default.`);
       fetchUsers();
     } catch (err: any) {
-      setErrorMessage(err.message || "Failed to reset password");
+      setErrorMessage(describeError(err, "Failed to reset password").message);
     }
   };
 

@@ -4,8 +4,8 @@ import {
   Download,
   RefreshCw,
   Search,
-  X,
 } from "lucide-react";
+import { DatePicker, Modal, problemFromBody } from "../ui";
 
 interface PendingVisitItem {
   id: string;
@@ -86,7 +86,7 @@ export const PendingVisits: React.FC = () => {
         setTotalCount(data.total_count || 0);
       } else {
         const err = await res.json().catch(() => ({}));
-        setErrorMsg(err.detail || "Failed to load pending visits.");
+        setErrorMsg(problemFromBody(null, err, "Failed to load pending visits.").message);
       }
     } catch (err) {
       console.error(err);
@@ -139,7 +139,7 @@ export const PendingVisits: React.FC = () => {
         fetchPendingVisits();
       } else {
         const err = await res.json().catch(() => ({}));
-        setErrorMsg(err.detail || "Failed to submit explanation.");
+        setErrorMsg(problemFromBody(null, err, "Failed to submit explanation.").message);
       }
     } catch (err) {
       console.error(err);
@@ -175,7 +175,7 @@ export const PendingVisits: React.FC = () => {
         fetchPendingVisits();
       } else {
         const err = await res.json().catch(() => ({}));
-        setErrorMsg(err.detail || "Failed to reschedule visit.");
+        setErrorMsg(problemFromBody(null, err, "Failed to reschedule visit.").message);
       }
     } catch (err) {
       console.error(err);
@@ -207,7 +207,7 @@ export const PendingVisits: React.FC = () => {
         fetchPendingVisits();
       } else {
         const err = await res.json().catch(() => ({}));
-        setErrorMsg(err.detail || "Failed to close pending visit.");
+        setErrorMsg(problemFromBody(null, err, "Failed to close pending visit.").message);
       }
     } catch (err) {
       console.error(err);
@@ -270,7 +270,7 @@ export const PendingVisits: React.FC = () => {
   const isEngineerOrAdmin = user?.role === "ADMIN" || user?.role === "ENGINEER";
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-6">
+    <div className="w-full max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -486,21 +486,36 @@ export const PendingVisits: React.FC = () => {
 
       {/* Modal: Explain Pending Visit */}
       {explainingItem && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 space-y-4">
-            <div className="flex items-center justify-between border-b pb-3">
-              <h3 className="font-bold text-slate-900 text-base">Explain Missed Visit</h3>
-              <button onClick={() => setExplainingItem(null)} className="text-slate-400 hover:text-slate-600">
-                <X className="h-5 w-5" />
-              </button>
+        <Modal
+          open
+          onClose={() => setExplainingItem(null)}
+          size="md"
+          title="Explain Missed Visit"
+          footer={
+            <div className="flex w-full flex-wrap items-center justify-end gap-2">
+              <button
+                  onClick={() => setExplainingItem(null)}
+                  className="px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleExplain}
+                  disabled={submittingExplain || !explanationText.trim()}
+                  className="px-4 py-2 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {submittingExplain ? "Submitting..." : "Save Explanation"}
+                </button>
             </div>
-
+          }
+        >
+          <div className="space-y-4">
             <div className="text-xs text-slate-600 space-y-1 bg-slate-50 p-3 rounded-lg border border-slate-200">
               <div><strong>Worksite:</strong> {explainingItem.worksite_name || "—"} ({explainingItem.job_number || "—"})</div>
               <div><strong>Worker:</strong> {explainingItem.employee_name || "—"} ({explainingItem.tally_id || "—"})</div>
               <div><strong>Work Date:</strong> {explainingItem.work_date || explainingItem.due_date || "—"}</div>
             </div>
-
+  
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Explanation / Reason for missed visit:
@@ -513,55 +528,51 @@ export const PendingVisits: React.FC = () => {
                 className="w-full text-sm p-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t">
-              <button
-                onClick={() => setExplainingItem(null)}
-                className="px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleExplain}
-                disabled={submittingExplain || !explanationText.trim()}
-                className="px-4 py-2 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-              >
-                {submittingExplain ? "Submitting..." : "Save Explanation"}
-              </button>
-            </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Modal: Reschedule Pending Visit */}
       {reschedulingItem && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 space-y-4">
-            <div className="flex items-center justify-between border-b pb-3">
-              <h3 className="font-bold text-slate-900 text-base">Reschedule Follow-up Visit</h3>
-              <button onClick={() => setReschedulingItem(null)} className="text-slate-400 hover:text-slate-600">
-                <X className="h-5 w-5" />
-              </button>
+        <Modal
+          open
+          onClose={() => setReschedulingItem(null)}
+          size="md"
+          title="Reschedule Follow-up Visit"
+          footer={
+            <div className="flex w-full flex-wrap items-center justify-end gap-2">
+              <button
+                  onClick={() => setReschedulingItem(null)}
+                  className="px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleReschedule}
+                  disabled={submittingReschedule || !rescheduleDate || selectedWorkerIds.length === 0}
+                  className="px-4 py-2 text-sm font-semibold bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                >
+                  {submittingReschedule ? "Rescheduling..." : "Confirm Reschedule"}
+                </button>
             </div>
-
+          }
+        >
+          <div className="space-y-4">
             <div className="text-xs text-slate-600 space-y-1 bg-slate-50 p-3 rounded-lg border border-slate-200">
               <div><strong>Worksite:</strong> {reschedulingItem.worksite_name || "—"}</div>
               <div><strong>Original Date:</strong> {reschedulingItem.work_date || reschedulingItem.due_date || "—"}</div>
               <div><strong>Item:</strong> {reschedulingItem.sub_item_code || "—"} {reschedulingItem.item_description ? `- ${reschedulingItem.item_description}` : ""}</div>
             </div>
-
+  
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                New Work Date:
-              </label>
-              <input
-                type="date"
+              <DatePicker
+                label="New Work Date"
                 value={rescheduleDate}
-                onChange={(e) => setRescheduleDate(e.target.value)}
-                className="w-full text-sm p-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                onChange={(iso) => setRescheduleDate(iso)}
+                size="lg"
               />
             </div>
-
+  
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Assign Worker(s):
@@ -596,41 +607,40 @@ export const PendingVisits: React.FC = () => {
                 {selectedWorkerIds.length} worker(s) selected for follow-up shift.
               </p>
             </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t">
-              <button
-                onClick={() => setReschedulingItem(null)}
-                className="px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleReschedule}
-                disabled={submittingReschedule || !rescheduleDate || selectedWorkerIds.length === 0}
-                className="px-4 py-2 text-sm font-semibold bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
-              >
-                {submittingReschedule ? "Rescheduling..." : "Confirm Reschedule"}
-              </button>
-            </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Modal: Close Pending Visit */}
       {closingItem && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 space-y-4">
-            <div className="flex items-center justify-between border-b pb-3">
-              <h3 className="font-bold text-slate-900 text-base">Close Pending Visit</h3>
-              <button onClick={() => setClosingItem(null)} className="text-slate-400 hover:text-slate-600">
-                <X className="h-5 w-5" />
-              </button>
+        <Modal
+          open
+          onClose={() => setClosingItem(null)}
+          size="md"
+          title="Close Pending Visit"
+          footer={
+            <div className="flex w-full flex-wrap items-center justify-end gap-2">
+              <button
+                  onClick={() => setClosingItem(null)}
+                  className="px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleClose}
+                  disabled={submittingClose || !closeReason.trim()}
+                  className="px-4 py-2 text-sm font-semibold bg-slate-800 text-white rounded-lg hover:bg-slate-900 disabled:opacity-50"
+                >
+                  {submittingClose ? "Closing..." : "Close Visit"}
+                </button>
             </div>
-
+          }
+        >
+          <div className="space-y-4">
             <p className="text-xs text-slate-600">
               Closing a pending visit marks it as resolved without creating a rescheduled assignment.
             </p>
-
+  
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Reason for closure (required):
@@ -643,24 +653,8 @@ export const PendingVisits: React.FC = () => {
                 className="w-full text-sm p-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500"
               />
             </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t">
-              <button
-                onClick={() => setClosingItem(null)}
-                className="px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleClose}
-                disabled={submittingClose || !closeReason.trim()}
-                className="px-4 py-2 text-sm font-semibold bg-slate-800 text-white rounded-lg hover:bg-slate-900 disabled:opacity-50"
-              >
-                {submittingClose ? "Closing..." : "Close Visit"}
-              </button>
-            </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

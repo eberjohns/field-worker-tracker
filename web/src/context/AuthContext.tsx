@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { problemFromBody, ApiError } from "../ui";
 
 export interface UserProfile {
   id: string;
@@ -92,7 +93,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || err.message || "Login failed");
+      throw new ApiError(problemFromBody(null, err, "Login failed"));
     }
 
     const data = await res.json();
@@ -119,7 +120,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || err.message || "Password change failed");
+      throw new ApiError(problemFromBody(null, err, "Password change failed"));
     }
 
     const updatedUser = await res.json();
