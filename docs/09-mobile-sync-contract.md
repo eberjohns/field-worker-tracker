@@ -4,7 +4,7 @@
 
 The machine-readable OpenAPI schema is exported in [`openapi-mobile.json`](../openapi-mobile.json) (routes tagged `mobile`). Additive changes (new optional fields, new entity types) may appear at any time — **clients must ignore unknown fields and unknown entity types**. Breaking changes ship under a new API version path with at least 60 days' notice.
 
-- **Contract version:** `1` (recommended header `X-Contract-Version: 1`)
+- **Contract version:** `1` (recommended header `X-Contract-Version: 1`); document revision 1.2.0 (25 Nov 2026, see §14)
 - **Base path:** `/api/v1/mobile`
 - **Content type:** `application/json` over HTTPS (TLS only)
 
@@ -38,11 +38,17 @@ The mobile app is strictly an **offline-first data collector and schedule/paysli
 - **Error format:** RFC 7807 (`application/problem+json`) with a stable machine-readable `code` field:
   ```json
   {
+    "type": "about:blank",
+    "title": "Device Mismatch",
+    "status": 403,
+    "detail": "This account is bound to another device. Contact Admin to reset binding.",
     "code": "DEVICE_MISMATCH",
-    "message": "This account is bound to another device. Contact Admin to reset binding."
+    "instance": "/api/v1/mobile/auth/login"
   }
   ```
-- **Rate limits:** Login locks after repeated failures; on `429 RATE_LIMITED`, honour `Retry-After`.
+  The human-readable text is in `detail` (corrected 25 Nov 2026: earlier revisions showed a `message` key, which the server has never sent). Some errors add fields, e.g. `ACCOUNT_LOCKED` (§4.1).
+- **Login lockout (no `429`):** after 5 wrong passwords in a row (company setting `login_max_failed_attempts`) the account is locked for 15 minutes (`login_lockout_minutes`). While locked, every login, even with the right password, gets `403 ACCOUNT_LOCKED`. The server never sends `429 RATE_LIMITED` or `Retry-After`. See §4.1.
+- **Compression:** responses over 1 KB are gzip-compressed when the request sends `Accept-Encoding: gzip` (OkHttp does this and decompresses transparently). The SSE stream and file downloads are never compressed.
 
 ---
 
@@ -57,14 +63,13 @@ The mobile app is strictly an **offline-first data collector and schedule/paysli
 | **Policy & Consent** | `GET /api/v1/mobile/policy/location` | No | Fetch active location tracking privacy notice |
 | **Policy & Consent** | `POST /api/v1/mobile/consent` | Bearer | Record worker acceptance of location policy |
 | **Policy & Consent** | `POST /api/v1/mobile/consent/withdraw` | Bearer | Withdraw tracking consent (halts ingestion & alerts Admin) |
-| **Device** | `PUT /api/v1/mobile/device` | Bearer | Update push token, OS/app version, or location permission state |
+| **Device** | `PUT /api/v1/mobile/device` | Bearer | Update OS/app version or location permission state (`push_token` is accepted but unused in v1) |
 | **Liveness** | `POST /api/v1/mobile/heartbeat` | Bearer | Report liveness, permission state & cursor; check for pending changes |
 | **Sync** | `GET /api/v1/mobile/sync/snapshot` | Bearer | Full 30-day offline state handshake / resync |
 | **Sync** | `GET /api/v1/mobile/sync/changes` | Bearer | Incremental coalesced delta pull since cursor |
 | **Sync** | `POST /api/v1/mobile/sync/ack` | Bearer | Acknowledge highest locally committed cursor |
 | **Events** | `POST /api/v1/mobile/events/batch` | Bearer | Upload up to 200 immutable location events per batch |
 | **On-Demand** | `GET /api/v1/mobile/me/payroll` | Bearer | List all approved monthly payslips or fetch one by `?period=YYYY-MM` |
-| **On-Demand (Planned)** | `GET /api/v1/mobile/me/scorecard` | Bearer | *Reserved for future release — not yet active* |
 
 ---
 
@@ -85,12 +90,12 @@ Workers log in with **`tally_id`** (their employee ID) and a **password**. New w
     "device_model": "Samsung Galaxy A14",
     "app_version": "1.0.3",
     "os_version": "14",
-    "push_token": "fcm-token-or-null"
+    "push_token": null
   }
 }
 ```
 - `device.platform`: `"ANDROID"` or `"IOS"`.
-- `device_model`, `app_version`, `os_version`, `push_token` are optional (`null` allowed).
+- `device_model`, `app_version`, `os_version`, `push_token` are optional (`null` allowed). Push is not used in v1: send `null` or leave `push_token` out; a value is stored but never used.
 
 **Response (`200 OK`):**
 ```json
@@ -112,7 +117,20 @@ Workers log in with **`tally_id`** (their employee ID) and a **password**. New w
 **Behaviour & Errors:**
 - If `must_change_password` is `true`, **only `POST /mobile/auth/change-password` is permitted**. Every other authenticated endpoint returns `403 PASSWORD_CHANGE_REQUIRED`.
 - First successful login binds `device_identifier` to the employee. Any login from a different `device_identifier` returns `403 DEVICE_MISMATCH`.
-- Errors: `401 INVALID_CREDENTIALS`, `403 DEVICE_MISMATCH`, `403 ACCOUNT_LOCKED` (default password expired or too many failures), `403 ACCOUNT_DISABLED`.
+- Errors: `401 INVALID_CREDENTIALS`, `403 DEVICE_MISMATCH`, `403 ACCOUNT_LOCKED` (too many failures, or default password expired), `403 ACCOUNT_DISABLED`.
+- **Lockout:** each wrong password counts; the 5th in a row locks the account for 15 minutes and that reply is already `403 ACCOUNT_LOCKED`. The lock is checked before the password. A successful login resets the count; Admin can unlock early (Users page). An unknown `tally_id` gets the same `401 INVALID_CREDENTIALS` as a wrong password.
+- `403 ACCOUNT_LOCKED` body:
+  ```json
+  {
+    "code": "ACCOUNT_LOCKED",
+    "detail": "Too many failed sign-in attempts. Try again after 14:35 (25 Nov 2026, site time) or ask Admin to unlock the account.",
+    "reason": "TOO_MANY_ATTEMPTS",
+    "locked_until": "2026-11-25T10:35:00+00:00",
+    "locked_until_local": "2026-11-25 14:35"
+  }
+  ```
+  `reason` is `TOO_MANY_ATTEMPTS` (temporary; `locked_until_local` is site time), `DEFAULT_PASSWORD_EXPIRED` or `LOCKED` (both need Admin). Show `detail` as is. The app's own 30-second local lock can stay.
+- A `403 DEVICE_MISMATCH` also raises an Admin alert (one per worker per day); the reply itself is unchanged.
 
 ---
 
@@ -261,14 +279,13 @@ Allows a worker to withdraw location tracking consent (privacy compliance).
 
 ### 6.1 `PUT /api/v1/mobile/device`
 
-Call whenever push token, app version, OS version, or location permission state changes. All fields are optional; send only changed or current values.
+Call whenever app version, OS version, or location permission state changes. All fields are optional; send only changed or current values. `push_token` is still accepted and stored, but push is not used in v1.
 
 **Headers:** `Authorization: Bearer <access_token>`
 
 **Request:**
 ```json
 {
-  "push_token": "fcm-updated-token-xyz",
   "app_version": "1.0.4",
   "os_version": "14.1",
   "location_permission_state": "ALWAYS"
@@ -464,19 +481,14 @@ Called **only after** the local database transaction applying a snapshot or delt
 
 ---
 
-### 7.4 Silent Push Nudge (Optional Trigger)
+### 7.4 Silent Push: not used in v1
 
-When an urgent change occurs (e.g., reassignment or cancellation), the server may send a silent data push:
-```json
-{
-  "type": "SYNC",
-  "latest_cursor": 4815,
-  "priority": 1
-}
-```
-- Push payloads carry **no schedule or personal data** (privacy by design).
-- On receipt, trigger `GET /mobile/sync/changes?cursor=<local_cursor>`.
-- Because push delivery is best-effort, `POST /mobile/heartbeat` and app-open pulls remain the guaranteed fallback.
+The server sends **no push** in v1 (owner decision, 19 and 25 Nov 2026). The app must not register for push (no FCM setup needed) or wait for one. It finds changes through:
+- `has_pending_changes: true` in the `POST /mobile/heartbeat` reply;
+- `latest_cursor` in the `POST /mobile/events/batch` reply;
+- a `GET /mobile/sync/changes` pull when the app opens and before the morning alarm.
+
+`priority = 1` changes (reassignments, cancellations) are still marked so the app can apply them first.
 
 ---
 
@@ -647,7 +659,7 @@ One entity per unique worksite referenced by the worker's 30-day `SCHEDULE_ITEM`
 - Passengers see their driver, vehicle, and only their own stop/name. Drivers see all ordered stops and passenger manifests. Cancelled runs are removed via a `DELETE` tombstone.
 
 #### Reserved Entity Types
-Ignore until formally announced: `SCORECARD`, `PAYROLL_SUMMARY`.
+Ignore until formally announced: `PAYROLL_SUMMARY`. (`SCORECARD` is removed: there is no weekly scorecard.)
 
 ---
 
@@ -836,8 +848,8 @@ Returns an array of `WorkerMobilePayrollSlip` sorted newest first (`[]` if no pa
 - Returns a single `WorkerMobilePayrollSlip` JSON object (`200 OK`), or `404 PAYROLL_NOT_FOUND` if the month has not been approved yet.
 - Monetary and hour values are serialized as exact decimal strings (e.g., `"1156.19"`). Parse as decimal/numeric for formatting; never apply float rounding logic to recompute totals.
 
-### 9.2 Planned / Reserved Endpoints (Do Not Call Yet)
-- `GET /api/v1/mobile/me/scorecard?week_start=YYYY-MM-DD` — *Reserved for a future contract update; not currently exposed by the backend.*
+### 9.2 Removed: weekly scorecard
+`GET /api/v1/mobile/me/scorecard` is removed from the contract (owner decision, 19 Nov 2026): there is no worker scorecard. The backend never exposed it; calling it returns `404`. The app must not call it or show a scorecard screen.
 
 ---
 
@@ -872,8 +884,8 @@ Returns an array of `WorkerMobilePayrollSlip` sorted newest first (`[]` if no pa
 
 ### Scenario 4: Mid-Day Reassignment (`priority = 1`)
 1. Supervisor reassigns worker to a different site at `10:00`.
-2. Backend writes `UPSERT` (new `SCHEDULE_ITEM` + `JOB`) and `DELETE` (old `SCHEDULE_ITEM`) to `sync_changes` with `priority = 1`, and sends a silent `SYNC` push nudge.
-3. App receives push (or discovers `has_pending_changes: true` on next heartbeat / batch response `latest_cursor`), pulls `GET /mobile/sync/changes`, applies transactionally, calls `POST /mobile/sync/ack`, and **immediately updates today's active geofence circles**.
+2. Backend writes `UPSERT` (new `SCHEDULE_ITEM` + `JOB`) and `DELETE` (old `SCHEDULE_ITEM`) to `sync_changes` with `priority = 1` (no push in v1).
+3. App discovers `has_pending_changes: true` on the next heartbeat (or a newer `latest_cursor` in a batch response), pulls `GET /mobile/sync/changes`, applies transactionally, calls `POST /mobile/sync/ack`, and **immediately updates today's active geofence circles**.
 
 ### Scenario 5: Cursor Compaction & Full Resync
 1. Worker's phone was off for >60 days; server compacted old `sync_changes` rows and updated `sync_cursor_floor`.
@@ -919,14 +931,13 @@ Returns an array of `WorkerMobilePayrollSlip` sorted newest first (`[]` if no pa
 | `403` | `PASSWORD_CHANGE_REQUIRED` | `must_change_password` is true | Lock navigation to Change Password screen |
 | `403` | `DEVICE_MISMATCH` | Account is bound to a different phone | Show "Contact Admin to reset device binding" |
 | `403` | `DEVICE_NOT_ACTIVE` | Current device was revoked by Admin | Stop tracking, clear session, show re-login message |
-| `403` | `ACCOUNT_LOCKED` | Too many failures or default password expired | Show "Account locked — contact Admin" |
+| `403` | `ACCOUNT_LOCKED` | 5 wrong passwords (locked 15 min), or default password expired | Show `detail`; for `reason: TOO_MANY_ATTEMPTS` allow a retry after `locked_until`, otherwise "contact Admin" |
 | `403` | `ACCOUNT_DISABLED` | Worker account deactivated | Stop tracking, clear session, show contact Admin |
 | `403` | `CONSENT_WITHDRAWN` | Location batch rejected after consent withdrawal | Stop tracking immediately; prompt re-consent if worker wishes to resume |
 | `404` | `PAYROLL_NOT_FOUND` | Requested `?period=YYYY-MM` has no approved slip | Show "Payslip not available yet for this month" |
 | `404` | `EMPLOYEE_NOT_FOUND` | Linked employee record missing | Contact Admin |
 | `422` | `VALIDATION_ERROR` | Malformed JSON body / missing required field | Fix payload schema; do not retry unchanged |
 | `426` | `APP_VERSION_UNSUPPORTED` | App version below minimum supported | Force user to update app |
-| `429` | `RATE_LIMITED` | Too many requests | Wait for `Retry-After` header before retrying |
 
 ---
 
@@ -957,3 +968,4 @@ Returns an array of `WorkerMobilePayrollSlip` sorted newest first (`[]` if no pa
 | 2026-11-16 | 1.0.2 | Added `POST /mobile/consent/withdraw` and `403 CONSENT_WITHDRAWN` enforcement on event batch uploads (Phase 13). |
 | 2026-11-17 | 1.1.0 | Added voluntary worker password change support on `POST /mobile/auth/change-password` and list-all-slips mode on `GET /mobile/me/payroll` (when `period` is omitted). |
 | 2026-11-18 | 1.1.1 | Comprehensive contract audit & alignment with backend implementation: corrected `WorkerMobilePayrollSlip` response schema, documented `POST /mobile/consent/withdraw`, added request/response JSON examples for every endpoint, documented server-side PostGIS verification verdicts & flags, clarified password strength rules and planned `/mobile/me/scorecard` status, added complete error code table and 9 end-to-end operational scenarios. |
+| 2026-11-25 | 1.2.0 | Owner decisions 19 and 25 Nov (Batch 7). Login lockout is `403 ACCOUNT_LOCKED` after 5 wrong passwords for 15 min, with `reason`, `locked_until` and `locked_until_local` in the body; `429 RATE_LIMITED` and `Retry-After` removed. Silent push not used in v1 (§7.4); `push_token` still accepted, unused. Weekly scorecard removed (`GET /mobile/me/scorecard`, `SCORECARD`). Gzip on responses over 1 KB when asked. A device mismatch raises an Admin alert. No other field changes. |

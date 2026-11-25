@@ -37,7 +37,13 @@ export function sectionsForRole(role: string | undefined): ActionSectionKey[] {
 }
 
 /** Alert types shown under "Device / tracking alerts". */
-export const DEVICE_ALERT_TYPES = new Set(["TRACKING_INTERRUPTED", "STALE_DEVICE", "NO_ACTIVITY", "CONSENT_WITHDRAWN"]);
+export const DEVICE_ALERT_TYPES = new Set([
+  "TRACKING_INTERRUPTED",
+  "STALE_DEVICE",
+  "NO_ACTIVITY",
+  "CONSENT_WITHDRAWN",
+  "DEVICE_MISMATCH_ATTEMPT",
+]);
 
 export const PREVIEW_SIZE = 5;
 

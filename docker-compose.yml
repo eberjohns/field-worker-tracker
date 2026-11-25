@@ -29,7 +29,6 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://fw_app:fw_secret@db:5432/fw_db
       - DATABASE_MIGRATOR_URL=postgresql+asyncpg://fw_migrator:fw_migrator_secret@db:5432/fw_db
-      - SMTP_HOST=mail
     depends_on:
       db:
         condition: service_healthy
@@ -45,7 +44,6 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://fw_app:fw_secret@db:5432/fw_db
       - DATABASE_MIGRATOR_URL=postgresql+asyncpg://fw_migrator:fw_migrator_secret@db:5432/fw_db
-      - SMTP_HOST=mail
     depends_on:
       db:
         condition: service_healthy
@@ -59,13 +57,6 @@ services:
       - "5173:80"
     depends_on:
       - api
-
-  mail:
-    image: axllent/mailpit:v1.21
-    restart: unless-stopped
-    ports:
-      - "1025:1025"
-      - "8025:8025"
 
 volumes:
   pgdata:

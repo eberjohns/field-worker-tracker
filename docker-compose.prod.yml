@@ -31,8 +31,6 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - ARCHIVE_ENCRYPTION_KEY=${ARCHIVE_ENCRYPTION_KEY}
       - CORS_ORIGINS=${CORS_ORIGINS:-https://fieldtracker.example.com}
-      - PUSH_BACKEND=${PUSH_BACKEND:-fcm}
-      - FCM_CREDENTIALS=${FCM_CREDENTIALS:-}
       - LOG_LEVEL=INFO
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health/liveness || exit 1"]

@@ -27,11 +27,6 @@ class UAECountryPack:
         # Saturday (5) and Sunday (6)
         return (5, 6)
 
-    @property
-    def ot2_weekdays(self) -> tuple[int, ...]:
-        # Sunday (6) is default OT2 weekday per DEC-01
-        return (6,)
-
     def get_public_holidays(self, year: int) -> set[date]:
         # Standard fixed UAE statutory holidays (lunar Islamic holidays injected via database/settings)
         return {

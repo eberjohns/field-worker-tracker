@@ -134,7 +134,8 @@ Banner on every change: "affects dates from <start date>; earlier days and appro
 Upload -> **Preview** (counts per sheet: create/update/unchanged, warnings, errors; filterable row table with stable codes) -> Commit -> Result summary; download error report; history of batches with rollback where allowed. Link to download the template.
 
 ### 3.12 Users, Devices and Audit (Admin)
-Users list (invite, resend, deactivate). Devices list with sync lag and last seen, revoke. Audit log with filters.
+Users list (invite, resend, deactivate). A **Locked** badge shows on an account locked after 5 wrong passwords (hover: until when), with an **Unlock account** button next to **Reset to Default** (Batch 7, DEC-66). Devices list with sync lag and last seen, revoke. Audit log with filters.
+A mobile login refused with `DEVICE_MISMATCH` raises the Admin alert **Sign-in from another phone** (`DEVICE_MISMATCH_ATTEMPT`, one per worker per day, with the device model and the number of attempts), listed with the device and tracking alerts on the dashboard.
 
 ### 3.15 Documents (`/documents`)
 Admin's expiry section (also visible read-only to other roles in scope): documents (Visa, Passport, Emirates ID, Labour Card, Driving Licence) by employee with expiry date, days left and status (OK / expiring within `document_expiry_lead_days` / expired), filters by type and supervisor, and a count tile on the dashboard. Dates are optional per employee and can be added or edited later here or on the employee's Documents tab.

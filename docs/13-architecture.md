@@ -22,7 +22,6 @@ flowchart TB
   API --> DB
   WK --> DB
   API -. ports .-> PUSH[Push adapter FCM/APNs]
-  WK -. ports .-> MAIL[Email adapter SMTP/SES]
   WK -. ports .-> FS
 ```
 
@@ -107,17 +106,16 @@ docs/  .agents/  infra/
 ## 5. Ports and adapters
 | Port (in `ports.py` / `core`) | Adapters |
 |---|---|
-| `PushProvider.send_silent(token, data)` | `FcmPushProvider`, `NullPushProvider` (dev/test) |
-| `EmailProvider.send(to, template, context)` | `SmtpEmailProvider`, `SesEmailProvider`, `ConsoleEmailProvider` |
+| `PushProvider.send_silent(token, data)` | `NullPushProvider` only: push is not used in v1 (DEC-64); the port stays for later |
 | `FileStorage.put/get/delete/url` | `LocalFileStorage`, `S3FileStorage` (any S3-compatible) |
 | `Clock.now()` | `SystemClock`, `FrozenClock` |
 | `JobQueue.enqueue(...)` | `ProcrastinateQueue` |
 | Map provider (dashboard) | web build configuration only: `VITE_GOOGLE_MAPS_API_KEY`, `VITE_GOOGLE_MAPS_MAP_ID` (read at build time; a change needs a rebuild); the backend has no map keys and never calls Google (ADR-033, runbook 08) |
 | Geocoding (dashboard) | configuration (`GEOCODER_URL`, key); web-side wrapper in `features/map/`; no backend dependency |
-Selected by configuration (`PUSH_BACKEND`, `EMAIL_BACKEND`, `FILE_STORAGE_BACKEND`). Changing provider = add an adapter + change config.
+Selected by configuration (`FILE_STORAGE_BACKEND`). There is no email adapter (no email notifications, DEC-62). Changing provider = add an adapter + change config.
 
 ## 6. Country Rule Packs (one deployment per country, ADR-009)
-`rules/country/base.py` defines a Protocol: `timezone`, `currency`, `weekend_days`, `ot2_weekdays`, `public_holidays(year)`, `gratuity_policy`, and **templates** for time rules. `ae.py` ships first; `sa.py` is added as data and a pack file. The pack for a calculation is chosen by the **record's country**: the site's country for scheduling and attendance, the employee's country for payroll and currency. Engines receive the pack as a parameter; no `if country ==` branches. Country-scoped settings, holidays, salary revisions and work-period rules are stored with their country (ADR-007). The code keeps every table country-keyed so the system can later be split into one deployment per country if a legal or hosting requirement appears.
+`rules/country/base.py` defines a Protocol: `timezone`, `currency`, `weekend_days`, `public_holidays(year)`, `gratuity_policy`, and **templates** for time rules. `ae.py` ships first; `sa.py` is added as data and a pack file. The pack for a calculation is chosen by the **record's country**: the site's country for scheduling and attendance, the employee's country for payroll and currency. Engines receive the pack as a parameter; no `if country ==` branches. Country-scoped settings, holidays, salary revisions and work-period rules are stored with their country (ADR-007). The code keeps every table country-keyed so the system can later be split into one deployment per country if a legal or hosting requirement appears.
 
 ## 7. Background jobs
 | Job | Trigger | Purpose |
@@ -143,7 +141,7 @@ Selected by configuration (`PUSH_BACKEND`, `EMAIL_BACKEND`, `FILE_STORAGE_BACKEN
 - `fw.modules.tasks` sits just above `fw.core` in the layers contract, so any module can start a job.
 
 ## 8. Configuration (env, via pydantic-settings)
-`APP_ENV`, `DEPLOYMENT_COUNTRY` (AE or SA), `DATABASE_URL`, `JWT_SECRET` (or key paths), `ACCESS_TOKEN_MINUTES`, `REFRESH_TOKEN_DAYS`, `CORS_ORIGINS`, `PUSH_BACKEND`, `FCM_CREDENTIALS`, `EMAIL_BACKEND`, `SMTP_*`, `FILE_STORAGE_BACKEND`, `S3_*`, `MAP_STYLE_STREETS_URL`, `MAP_STYLE_SATELLITE_URL`, `MAP_API_KEY` (public, domain-restricted, used by the web build), `LOG_LEVEL`. Secrets come from the environment/secret manager, never the repository. Settings that business users change (alarm time, grace...) live in the database (`company_settings`), not env.
+`APP_ENV`, `DEPLOYMENT_COUNTRY` (AE or SA), `DATABASE_URL`, `JWT_SECRET` (or key paths), `ACCESS_TOKEN_MINUTES`, `REFRESH_TOKEN_DAYS`, `CORS_ORIGINS`, `FILE_STORAGE_BACKEND`, `S3_*`, `LOG_LEVEL` (the web build reads `VITE_GOOGLE_MAPS_API_KEY` and `VITE_GOOGLE_MAPS_MAP_ID`, ADR-033). Secrets come from the environment/secret manager, never the repository. Settings that business users change (alarm time, grace...) live in the database (`company_settings`), not env.
 
 ## 9. Deployment topology
 - **One stack per country** (ADR-009): UAE stack first (Azure UAE North, in-country backup in UAE Central); a **separate Saudi stack in the Kingdom** when Saudi goes live, built from the same images. The two never share a database; cross-country management views show non-personal totals only.

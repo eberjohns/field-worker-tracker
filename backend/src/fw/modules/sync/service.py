@@ -12,13 +12,18 @@ from fw.adapters.push import get_push_provider
 from fw.core.clock import get_country_timezone
 from fw.core.config import get_settings
 from fw.core.errors import AppError
-from fw.core.events import WorkerConsentWithdrawn, event_bus
+from fw.core.events import DeviceMismatchAttempted, WorkerConsentWithdrawn, event_bus
 from fw.modules.audit import AuditService
 from fw.modules.identity import (
+    SETTING_LOCKOUT_MINUTES,
+    SETTING_MAX_FAILED_ATTEMPTS,
     AuthService,
+    LockoutPolicy,
+    LoginGuard,
     User,
     UserSession,
     hash_password,
+    spend_password_check,
     verify_password,
 )
 from fw.modules.jobs import JobItem, Worksite
@@ -158,9 +163,33 @@ class SyncService:
         request: MobileLoginRequest,
         default_password_max_days: int = 7,
     ) -> tuple[User, str, str, Employee, RegisteredDevice]:
-        """Authenticate worker by tally ID and password, handling single-device binding."""
+        """Authenticate worker by tally ID and password, handling single-device binding.
+
+        Wrong passwords count towards the lockout (Batch 7, `identity/lockout.py`); the lock is
+        checked before the password. Unknown IDs get the same reply and the same hashing work.
+        """
         now = datetime.now(UTC)
         settings = get_settings()
+        policy = LockoutPolicy.from_values(
+            await SettingsService.get_setting(session, key=SETTING_MAX_FAILED_ATTEMPTS),
+            await SettingsService.get_setting(session, key=SETTING_LOCKOUT_MINUTES),
+        )
+
+        async def audit(user: User, action: str, diff: dict[str, Any], reason: str) -> None:
+            await AuditService.log_action(
+                session=session,
+                action=action,
+                entity_type="user",
+                entity_id=str(user.id),
+                diff=diff,
+                reason=reason,
+            )
+
+        invalid = AppError(
+            code="INVALID_CREDENTIALS",
+            message="Invalid employee ID or password.",
+            status_code=401,
+        )
 
         # Find employee by tally_id
         emp_query = select(Employee).where(
@@ -170,11 +199,8 @@ class SyncService:
         emp_res = await session.execute(emp_query)
         employee = emp_res.scalar_one_or_none()
         if not employee:
-            raise AppError(
-                code="INVALID_CREDENTIALS",
-                message="Invalid employee ID or password.",
-                status_code=401,
-            )
+            spend_password_check(request.password)
+            raise invalid
 
         # Find user account
         user_query = select(User).where(User.username == request.tally_id)
@@ -197,19 +223,13 @@ class SyncService:
                 session.add(user)
                 await session.flush()
             else:
-                raise AppError(
-                    code="INVALID_CREDENTIALS",
-                    message="Invalid employee ID or password.",
-                    status_code=401,
-                )
+                spend_password_check(request.password)
+                raise invalid
         else:
-            # Check user password
+            await LoginGuard.ensure_not_locked(session, user, policy, now)
             if not verify_password(request.password, user.credential_hash):
-                raise AppError(
-                    code="INVALID_CREDENTIALS",
-                    message="Invalid employee ID or password.",
-                    status_code=401,
-                )
+                await LoginGuard.record_failure(session, user, policy, now, "mobile", audit)
+                raise invalid
 
         if not user.is_active:
             raise AppError(
@@ -218,12 +238,7 @@ class SyncService:
                 status_code=403,
             )
 
-        if user.locked_until and user.locked_until > now:
-            raise AppError(
-                code="ACCOUNT_LOCKED",
-                message="This account is locked. Please contact Admin.",
-                status_code=403,
-            )
+        await LoginGuard.ensure_not_locked(session, user, policy, now)
 
         # Check default password expiry
         if is_default_password_expired(
@@ -232,12 +247,8 @@ class SyncService:
             now,
             max_days=default_password_max_days,
         ):
-            user.locked_until = now + timedelta(days=365)
-            await session.flush()
-            raise AppError(
-                code="ACCOUNT_LOCKED",
-                message="Default password was not changed in time. Account is locked.",
-                status_code=403,
+            raise await LoginGuard.lock_for_expired_default_password(
+                session, user, now, "mobile", audit
             )
 
         # Device binding verification
@@ -279,6 +290,21 @@ class SyncService:
                     bound_device=active_device.device_identifier,
                     attempted_device=request.device.device_identifier,
                 )
+                # The password was right, so it isn't a failed attempt. Alert Admin (one open
+                # alert per employee per day) and commit it before refusing.
+                await event_bus.publish(
+                    DeviceMismatchAttempted(
+                        employee_id=employee.id,
+                        tally_id=employee.tally_id,
+                        employee_name=employee.name,
+                        device_model=request.device.device_model,
+                        platform=request.device.platform.value,
+                        app_version=request.device.app_version,
+                    ),
+                    session,
+                )
+                LoginGuard.record_success(user)
+                await session.commit()
                 raise AppError(
                     code="DEVICE_MISMATCH",
                     message="This account is bound to another device. Contact Admin to reset binding.",
@@ -296,6 +322,7 @@ class SyncService:
                 active_device.device_model = request.device.device_model
             await session.flush()
 
+        LoginGuard.record_success(user)
         user.last_login_at = now
         await session.flush()
 

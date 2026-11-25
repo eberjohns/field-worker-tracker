@@ -11,6 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.core.config import get_settings
 from fw.core.errors import AppError
+from fw.modules.identity.lockout import (
+    AuditHook,
+    LockoutPolicy,
+    LoginGuard,
+    no_audit,
+    spend_password_check,
+)
 from fw.modules.identity.models import User, UserSession
 from fw.modules.identity.schemas import LoginRequest, PasswordChangeRequest, UserUpdate
 from fw.rules.password import is_default_password_expired, validate_password_strength
@@ -38,12 +45,17 @@ class AuthService:
     async def authenticate(
         session: AsyncSession,
         request: LoginRequest,
+        audit: AuditHook | None = None,
         default_password_max_days: int = 7,
+        policy: LockoutPolicy | None = None,
     ) -> tuple[User, str, str]:
         """Authenticate user by username (tally_id) and password.
 
-        Returns (user, access_token, raw_refresh_token).
+        Returns (user, access_token, raw_refresh_token). Wrong passwords count towards the
+        lockout (`lockout.py`); the lock is checked before the password.
         """
+        policy = policy or LockoutPolicy()
+        audit = audit or no_audit
         settings = get_settings()
         now = datetime.now(UTC)
 
@@ -79,12 +91,18 @@ class AuthService:
             result = await session.execute(query)
             user = result.scalar_one_or_none()
 
-            if not user or not verify_password(request.password, user.credential_hash):
-                raise AppError(
-                    code="UNAUTHENTICATED",
-                    message="Invalid username or password.",
-                    status_code=401,
-                )
+            invalid = AppError(
+                code="UNAUTHENTICATED",
+                message="Invalid username or password.",
+                status_code=401,
+            )
+            if not user:
+                spend_password_check(request.password)
+                raise invalid
+            await LoginGuard.ensure_not_locked(session, user, policy, now)
+            if not verify_password(request.password, user.credential_hash):
+                await LoginGuard.record_failure(session, user, policy, now, "web", audit)
+                raise invalid
 
         if not user.is_active:
             raise AppError(
@@ -93,12 +111,7 @@ class AuthService:
                 status_code=403,
             )
 
-        if user.locked_until and user.locked_until > now:
-            raise AppError(
-                code="ACCOUNT_LOCKED",
-                message="This account is locked. Please contact Admin.",
-                status_code=403,
-            )
+        await LoginGuard.ensure_not_locked(session, user, policy, now)
 
         # Check default password expiry
         if is_default_password_expired(
@@ -107,16 +120,12 @@ class AuthService:
             now,
             max_days=default_password_max_days,
         ):
-            # Lock the account
-            user.locked_until = now + timedelta(days=365)
-            await session.flush()
-            raise AppError(
-                code="ACCOUNT_LOCKED",
-                message="Default password was not changed within the allowed timeframe. Account is locked.",
-                status_code=403,
+            raise await LoginGuard.lock_for_expired_default_password(
+                session, user, now, "web", audit
             )
 
         # Update last login
+        LoginGuard.record_success(user)
         user.last_login_at = now
         await session.flush()
 
@@ -304,6 +313,7 @@ class UserService:
         admin.must_change_password = False
         admin.locked_until = None
         admin.failed_attempts = 0
+        admin.last_failed_login_at = None
         await session.flush()
         return admin
 
@@ -352,6 +362,23 @@ class UserService:
         return user, diff
 
     @staticmethod
+    async def unlock(session: AsyncSession, user_id: UUID) -> tuple[User, dict[str, str | int]]:
+        """Admin unlock: clear the lock and the failed-attempt count. Returns (user, before)."""
+        user = await UserService.get_by_id(session, user_id)
+        if not user:
+            raise AppError(code="NOT_FOUND", message="User not found.", status_code=404)
+        before: dict[str, str | int] = {
+            "locked_until": user.locked_until.isoformat() if user.locked_until else "",
+            "failed_attempts": user.failed_attempts,
+        }
+        user.locked_until = None
+        user.failed_attempts = 0
+        user.last_failed_login_at = None
+        user.version += 1
+        await session.flush()
+        return user, before
+
+    @staticmethod
     async def reset_password_to_default(
         session: AsyncSession,
         user_id: UUID,
@@ -367,6 +394,7 @@ class UserService:
         user.password_changed_at = None
         user.locked_until = None
         user.failed_attempts = 0
+        user.last_failed_login_at = None
         user.version += 1
         await session.flush()
 

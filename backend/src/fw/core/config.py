@@ -45,13 +45,6 @@ class Settings(BaseSettings):
         ]
     )
 
-    PUSH_BACKEND: str = "null"
-    FCM_CREDENTIALS: str = ""
-
-    EMAIL_BACKEND: str = "smtp"
-    SMTP_HOST: str = "localhost"
-    SMTP_PORT: int = 1025
-
     FILE_STORAGE_BACKEND: str = "local"
     LOCAL_STORAGE_PATH: str = "./storage"
     ARCHIVE_STORAGE_PATH: str = "./storage/archives"

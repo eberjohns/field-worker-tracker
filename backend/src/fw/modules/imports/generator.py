@@ -4,7 +4,9 @@ Generates FieldWorkerTracker_Import_Template_v1.0.xlsx matching docs/import-temp
 """
 
 import io
+import json
 from collections.abc import Iterable
+from typing import Any
 
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -14,7 +16,35 @@ from fw.modules.imports.registry import (
     ALL_SHEET_NAMES,
     SHEET_REGISTRY,
 )
+from fw.modules.settings.defaults import DEFAULT_COMPANY_SETTINGS, DEFAULTS_EFFECTIVE_FROM
 from fw.rules.lookups import GRADE_CODE, SEED_STAFF_TYPES, STAFF_GRADE_DESCRIPTION, sort_values
+
+
+def _setting_cell(value: Any) -> str:
+    if isinstance(value, list | dict):
+        return json.dumps(value)
+    return str(value)
+
+
+def company_settings_default_rows(described: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The Company_Settings rows: every default from `DEFAULT_COMPANY_SETTINGS` (so a fresh
+    import sets them), with the description and status from the registry where it has one."""
+    notes = {(str(e.get("setting_key")), e.get("country")): e for e in described}
+    rows: list[dict[str, Any]] = []
+    for key, country, value, unit in DEFAULT_COMPANY_SETTINGS:
+        note = notes.get((key, country), {})
+        rows.append(
+            {
+                "setting_key": key,
+                "value": _setting_cell(value),
+                "unit": unit,
+                "country": country,
+                "effective_from": DEFAULTS_EFFECTIVE_FROM.isoformat(),
+                "status": note.get("status", "PROPOSED_DEFAULT"),
+                "description": note.get("description", ""),
+            }
+        )
+    return rows
 
 
 def generate_import_template_bytes(
@@ -79,7 +109,9 @@ def generate_import_template_bytes(
         ),
         (
             "4. Column A (#) is ignored",
-            "Any row with '#' or 'EXAMPLE' in column A is ignored by the parser.",
+            "Any row with '#' or 'EXAMPLE' in column A is ignored by the parser. "
+            "Company_Settings rows are not examples: they are the current defaults and are "
+            "imported (edit a value or delete a row before importing).",
         ),
         (
             "5. Headers on row 4",
@@ -156,21 +188,27 @@ def generate_import_template_bytes(
             c.border = thin_border
             c.alignment = Alignment(horizontal="center")
 
-        # Row 5+: Examples
-        examples = list(sheet_def.examples)
+        # Row 5+: Examples (or, for Company_Settings, the real defaults that get imported)
+        if sheet_def.rows_are_defaults:
+            examples = company_settings_default_rows(sheet_def.examples)
+        else:
+            examples = list(sheet_def.examples)
+        marker = "" if sheet_def.rows_are_defaults else "EXAMPLE"
         for e_idx, ex in enumerate(examples, start=5):
-            c_ex = ws.cell(row=e_idx, column=1, value="EXAMPLE")
-            c_ex.font = font_example
-            c_ex.fill = fill_example
+            c_ex = ws.cell(row=e_idx, column=1, value=marker or None)
             c_ex.border = thin_border
-            c_ex.alignment = Alignment(horizontal="center")
+            if marker:
+                c_ex.font = font_example
+                c_ex.fill = fill_example
+                c_ex.alignment = Alignment(horizontal="center")
 
             for c_idx, col in enumerate(sheet_def.columns, start=2):
                 val = ex.get(col.name, col.example)
                 cell = ws.cell(row=e_idx, column=c_idx, value=val)
-                cell.font = font_example
-                cell.fill = fill_example
                 cell.border = thin_border
+                if marker:
+                    cell.font = font_example
+                    cell.fill = fill_example
 
         # Adjust column widths
         ws.column_dimensions["A"].width = 12

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { describeError, ensureOk, useDialogs } from "../ui";
-import { KeyRound, CheckCircle, AlertCircle, RefreshCw } from "lucide-react";
+import { KeyRound, CheckCircle, AlertCircle, RefreshCw, LockOpen } from "lucide-react";
 
 interface UserItem {
   id: string;
@@ -11,6 +11,8 @@ interface UserItem {
   is_active: boolean;
   must_change_password: boolean;
   last_login_at: string | null;
+  locked_until: string | null;
+  failed_attempts: number;
   version: number;
 }
 
@@ -68,6 +70,24 @@ export const UsersAdmin: React.FC = () => {
       setErrorMessage(describeError(err, "Failed to reset password").message);
     }
   };
+
+  const handleUnlock = async (userId: string, username: string) => {
+    setStatusMessage(null);
+    setErrorMessage(null);
+    try {
+      const res = await fetch(`/api/v1/users/${userId}/unlock`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      await ensureOk(res, "Failed to unlock account");
+      setStatusMessage(`Account '${username}' unlocked.`);
+      fetchUsers();
+    } catch (err: any) {
+      setErrorMessage(describeError(err, "Failed to unlock account").message);
+    }
+  };
+
+  const isLocked = (u: UserItem) => !!u.locked_until && new Date(u.locked_until) > new Date();
 
   if (user?.role !== "ADMIN") {
     return <div className="p-8 text-center text-red-600">Access Restricted to Administrators.</div>;
@@ -148,8 +168,24 @@ export const UsersAdmin: React.FC = () => {
                     >
                       {u.is_active ? "Active" : "Inactive"}
                     </span>
+                    {isLocked(u) && (
+                      <span
+                        className="ml-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700"
+                        title={`Locked until ${new Date(u.locked_until as string).toLocaleString()}`}
+                      >
+                        Locked
+                      </span>
+                    )}
                   </td>
-                  <td className="p-4 text-right">
+                  <td className="p-4 text-right space-x-2 whitespace-nowrap">
+                    {isLocked(u) && (
+                      <button
+                        onClick={() => handleUnlock(u.id, u.username)}
+                        className="px-3 py-1.5 bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 border border-slate-200 rounded-lg text-xs font-medium inline-flex items-center gap-1.5 transition"
+                      >
+                        <LockOpen className="h-3.5 w-3.5" /> Unlock account
+                      </button>
+                    )}
                     <button
                       onClick={() => handleResetPassword(u.id, u.username)}
                       className="px-3 py-1.5 bg-slate-100 hover:bg-amber-50 text-slate-700 hover:text-amber-800 border border-slate-200 rounded-lg text-xs font-medium inline-flex items-center gap-1.5 transition"

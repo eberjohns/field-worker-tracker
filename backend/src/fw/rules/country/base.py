@@ -20,11 +20,6 @@ class CountryRulePack(Protocol):
         """0 = Monday, 6 = Sunday."""
         ...
 
-    @property
-    def ot2_weekdays(self) -> tuple[int, ...]:
-        """Weekdays designated as OT2 by default (e.g. Sunday in UAE)."""
-        ...
-
     def get_public_holidays(self, year: int) -> set[date]: ...
 
     def calculate_ot1_rate(self, basic_salary: Decimal) -> Decimal:

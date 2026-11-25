@@ -457,6 +457,8 @@ mobile event logs.
 -   Notifications and relevant payroll information
 -   First-login consent and permission flow
 
+> **Superseded – see DEC-63 and DEC-64** (owner confirmation 19 Nov 2026): there is no weekly scorecard in the mobile app, and no push notifications in v1. Payroll information stays (approved payslips).
+
 Checklist functionality is not included.
 
 ### Consent and permissions
@@ -720,6 +722,8 @@ Do not store document number or full document scan. Notification lead
 time is configurable in Company Settings. Expiry notifications use the
 configured notification integration.
 
+> **Superseded – see DEC-62** (owner confirmation 19 Nov 2026): there are no email or push notifications. Expiry warnings are shown as dashboard alerts in the web app.
+
 ## 17. Logical Database Entities and Relationships
 
 ### Identity and organization
@@ -847,6 +851,9 @@ application.
 
 1.  Upload workbook.
 2.  Select worksheet and map columns if needed.
+
+    > **Superseded – see DEC-65** (owner confirmation 19 Nov 2026): imports use the fixed template only; there is no column mapping step.
+
 3.  Parse and normalize.
 4.  Validate required values, duplicates, references and formula
     consistency.
@@ -972,6 +979,8 @@ No document number or scan is imported.
 -   Attendance/location events
 -   Alerts
 -   Relevant payroll information
+
+> **Superseded – see DEC-63** (owner confirmation 19 Nov 2026): no weekly scorecard in the worker app.
 
 ### Scheduling view
 

@@ -27,11 +27,6 @@ class SaudiCountryPack:
         # Friday (4) and Saturday (5)
         return (4, 5)
 
-    @property
-    def ot2_weekdays(self) -> tuple[int, ...]:
-        # Friday (4) is weekly off / OT2 day in KSA
-        return (4,)
-
     def get_public_holidays(self, year: int) -> set[date]:
         # Saudi fixed national holidays
         return {

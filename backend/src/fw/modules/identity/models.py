@@ -53,6 +53,10 @@ class User(Base):
         nullable=True,
     )
     failed_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_failed_login_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)

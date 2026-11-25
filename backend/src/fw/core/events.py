@@ -114,6 +114,18 @@ class WorkerConsentWithdrawn(DomainEvent):
     reason: str | None = None
 
 
+@dataclass
+class DeviceMismatchAttempted(DomainEvent):
+    """A mobile login was refused because the account is bound to another phone (Batch 7)."""
+
+    employee_id: UUID | None = None
+    tally_id: str = ""
+    employee_name: str = ""
+    device_model: str | None = None
+    platform: str | None = None
+    app_version: str | None = None
+
+
 SyncHandler = Callable[[Any, Any], Awaitable[None]]
 PostCommitHandler = Callable[[Any], Awaitable[None]]
 
