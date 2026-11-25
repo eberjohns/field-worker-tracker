@@ -1,6 +1,16 @@
 # Changelog
 All notable changes. Format: Keep a Changelog. Mobile-contract changes are also logged in `docs/09-mobile-sync-contract.md`.
 
+## [1.28.0] - 2026-11-25
+### Added (docs: mobile handover)
+- **`docs/mobile-handover-v1.md`:** one standalone document for the mobile team. It covers:
+  - every contract change since revision 1.1.1, with before/after bodies and what the app must do: lockout `403 ACCOUNT_LOCKED`, the error `detail` key, no push, no scorecard, gzip, template schedule items, the device-mismatch alert, value-only changes;
+  - worksite and camp boundaries as the app receives them: GeoJSON `Polygon`, `[lng, lat]`, closed rings, holes, `geofence_circle` with named keys, and a worked example;
+  - drawing a boundary with `PolygonOptions` / `LatLng` in the Google Maps SDK for Android;
+  - setting up the Maps SDK key: its own Android key restricted by package name and SHA-1 to the Maps SDK for Android, no Map ID, and the key passed in from a build variable, never committed.
+- **Runbook 08 §6:** the same Maps SDK for Android key setup.
+- The 19 Nov mobile notes and the integration guide point to the new document.
+
 ## [1.27.0] - 2026-11-25
 ### Added (Batch 7: login lockout, push and email removal, decision records)
 - **Login lockout (DEC-66), web and mobile:**
