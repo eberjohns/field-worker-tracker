@@ -1,4 +1,4 @@
-# Performance baseline (Batch 9 step 1) and after step 2, November 2026
+# Performance baseline (Batch 9 step 1) and after steps 2 and 3, November 2026
 
 Measured 24 Nov 2026 on the code of `perf/batch9-measure`. That is v1.17.0, which includes #32, #33 and #34, plus the step 1 tooling. There are no speed fixes in this step.
 
@@ -12,6 +12,8 @@ Measured 24 Nov 2026 on the code of `perf/batch9-measure`. That is v1.17.0, whic
 **Render:** pending, owner run. The Render columns below stay empty until the owner runs both scripts with `--read-only` (runbook 06).
 
 **After step 2:** measured 24 Nov 2026 on `perf/batch9-quickwins` (v1.19.0), same machine, same `fw_perf` dataset and the same scripts, one page per process. The result files are in `docs/reviews/perf-2026-11/after-step2/`; their `app_version` says 1.18.0 because the version is bumped by the commit, after measuring. The "After step 2" columns and the section [After step 2](#after-step-2-local) hold the new numbers.
+
+**After step 3:** measured 25 Nov 2026 on `perf/batch9-cache-split` (v1.24.0; the file says 1.23.2, for the same reason), same machine, dataset and scripts, one page per process. The perf API ran on port 8020 (`FW_PERF_API_PORT`), because 8000 was in use. Results: `docs/reviews/perf-2026-11/after-step3/`; see [After step 3](#after-step-3-local).
 
 ## Summary
 
@@ -62,6 +64,48 @@ What still holds the event loop is coverage's own Python work: about **0.9–1.0
 - **Reports:** the survey runs each report once, first, on a cold database. The five reports that were slow because of the occurrence load dropped 7–19 s each (job-costing 20.2 s → 1.5 s; the app's preview is usable after 1.4 s, was 21.3 s). The attendance family showed 0.2–1.3 s more than the baseline in that single cold run, with the same queries and sizes and a higher DB time; timed again warm they were back at the baseline (daily-attendance 2.3 s, late-early-departure 1.9 s). Reports move to SQL in step 4.
 - **Approvals inbox, Attendance tab** (29,382 pending rows in this dataset): page 1 of 50 rows takes 22 ms p50 and 18 KB (the whole inbox was 5.4 s and 9.8 MB); the last page 132 ms. The badge count takes 12 ms and 62 bytes.
 - **Payroll draft** (cause 8) and the bundle (cause 9) are unchanged; they are steps 4 and 3.
+
+## After step 3 (local)
+
+**What step 3 changed** (web only; no API change):
+1. **Client cache.** Every page read goes through one React Query cache (`web/src/api/apiCache.ts`), keyed by URL:
+   - data younger than 30 s (5 min for groups, zones, salary revisions, the supervisor list and the reassignment destinations) is used without a request;
+   - older data is shown at once and refreshed in the background;
+   - any successful write marks the whole cache stale; signing in, signing out and a 401 clear it.
+   Pages on it: Dashboard, Worksites, Worksite detail and its Schedule tab, both planners, Employees, Attendance, Approvals, and the approvals badge, which is now one shared, polled query. Refresh buttons skip the cache.
+2. **Code splitting.** Every page except the Dashboard and Login is its own chunk, preloaded when its menu link is hovered or focused. The map library (about 1 MB) loads only when a map is shown: Worksites and Worksite detail now load it on first use, not with the page.
+
+| Page | After step 2: cold / warm | **After step 3: cold / warm** | Static bytes, cold (step 2 → step 3) | API requests, warm (step 2 → step 3) |
+|---|---:|---:|---:|---:|
+| Dashboard | 250 / 109 ms | **359 / 0 ms** | 607 → 126 KB | 4 → 0 |
+| Worksites | 281 / 47 ms | **391 / 109 ms** | 607 → 162 KB | 5 → 0 |
+| Worksite detail | 203 / 62 ms | **296 / 0 ms** | 607 → 169 KB | 6 → 0 |
+| Worksite detail, Schedule tab | 250 / 94 ms | **359 / 0 ms** | 607 → 169 KB | 7 → 0 |
+| Base Planner | 688 / 484 ms | **735 / 0 ms** | 607 → 141 KB | 2 → 0 |
+| Operational Planner (week) | 1.4 / 1.4 s | **1.8 s / 0 ms** | 607 → 162 KB | 6 → 0 |
+| Employees | 343 / 203 ms | **375 / 125 ms** | 607 → 153 KB | 4 → 3 |
+| Attendance | 235 / 63 ms | **219 / 0 ms** | 607 → 145 KB | 2 → 0 |
+| Live Map | 954 / 750 ms | **547 / 875 ms** | 1.1 MB → 941 KB | 3 → 3 |
+| Reports | 187 / 32 ms | **203 / 31 ms** | 607 → 141 KB | 1 → 1 |
+| Approvals inbox | 172 / 31 ms | **188 / 0 ms** | 607 → 135 KB | 1 → 0 |
+
+**How to read it:**
+- **Warm 0 ms:** the page drew from the cache with no request and no spinner, so the script's "usable" moment is the navigation itself. Worksites and Employees show 109–125 ms because the script also waits for the table rows to render; Employees still asks for 3 small lists that aren't cached (hierarchy, accommodations, staff grades).
+- **Cold is 30–450 ms higher than after step 2, but not because of the web app.** The first API call starts as early as before: Dashboard at 112 ms (was 129 ms), the Operational Planner at 218 ms (was 189 ms; the page chunk adds one local round trip). The difference is server time in this run: `/dashboard/summary` 212 ms (was 97 ms), `/operational-planner/coverage` 1.59 s (was 1.2 s). Step 3 changes no backend code; this run had migration 0026 applied to `fw_perf` and the owner's own apps running.
+- **The Dashboard makes 9 calls cold** (was 6), for Batch 10 B's nine sections; they still start together (chain depth 1).
+- **Live Map** keeps live positions out of the cache on purpose, and asks for the boundary queue once the map has started (see after step 2), so its warm visit isn't faster.
+- **Bundle:** the first load is now 366 KB of JavaScript (115 KB gzipped), was 2.4 MB (597 KB). Each page's chunk is 5–91 KB; the map library is about 1 MB and loads only with a map.
+
+**Targets after step 3:**
+
+| Target | After step 3 | Met |
+|---|---|---|
+| A repeat visit to a list page shows data in < 300 ms from cache (addendum) | Worksites 109 ms, Employees 125 ms, every other list page 0 ms; the planners 0 ms. Within 30 s with no request; after that the cached data shows at once and refreshes in the background. | yes |
+| No page over 3 s cold (owner) | slowest is the Operational Planner, 1.8 s | yes |
+| Operational Planner < 3 s, Base Planner < 2 s (owner) | 1.8 s, 0.74 s | yes |
+| Chain depth ≤ 2 (addendum) | 2 at most | yes |
+
+**Not re-measured:** the endpoint replay and the report survey (`measure_api.py`): step 3 changes no endpoint, so their after-step-2 numbers stand. Reports in SQL and the payroll draft as a background job are step 4.
 
 ## Method and environment
 
@@ -214,7 +258,7 @@ The after-step-2 survey is one cold run per report; see [After step 2](#after-st
 |---|---|---|
 | List endpoints: p95 server time < 300 ms | Over: `/approvals` 5.8 s, `/worksites` 3.1 s, `/job-items/destinations` 19.5 s. All other list endpoints are under 200 ms. | Met except `/job-items/destinations` 391 ms. The badge count is 14 ms, an inbox page 23 ms, `/worksites` 16 ms. |
 | Week view / roster: p95 < 1.5 s | Over: `/operational-planner/coverage` 14.3 s, `/base-planner/worksites` 12.2 s | Met: coverage 1.4 s, Base Planner 800 ms, roster 0.65 s p50 (Admin, all 600 employees). |
-| A repeat visit to a list page shows data in < 300 ms from cache | Nothing is cached. Repeat visits fetch everything again: Worksites 3.6 s, Base Planner 18.8 s, Operational Planner 70.3 s. Employees, Attendance and Live Map are under 300 ms only because their calls are fast. | Still nothing cached (step 3). Warm visits: Worksites 47 ms, Base Planner 484 ms, Operational Planner 1.4 s. |
+| A repeat visit to a list page shows data in < 300 ms from cache | Nothing is cached. Repeat visits fetch everything again: Worksites 3.6 s, Base Planner 18.8 s, Operational Planner 70.3 s. Employees, Attendance and Live Map are under 300 ms only because their calls are fast. | Still nothing cached (step 3). Warm visits: Worksites 47 ms, Base Planner 484 ms, Operational Planner 1.4 s. **After step 3: met** (cached; 0–125 ms). |
 | No page with request chains deeper than 2 | Over: Dashboard 3 (cold and warm), Worksite detail 3 (warm) | Met: 2 at most on every page. |
 
 ## Top 10 causes, ranked by impact
@@ -325,6 +369,8 @@ The after-step-2 survey is one cold run per report; see [After step 2](#after-st
 
 **Step:** step 3.
 
+**After step 3:** done. One client cache for page reads, shared reference lists, writes mark it stale; repeat visits draw from it (0–125 ms). See [After step 3](#after-step-3-local).
+
 ### 6. Reports are computed in Python over full ORM rows
 **Pages:** Reports, and the payroll draft (cause 8).
 
@@ -378,6 +424,8 @@ At 20 Mbit/s, 9.8 MB takes about 4 s to transfer, and 1.6 MB under 1 s.
 - It costs little locally. On a slow link it is 1–3 s before anything shows.
 
 **Step:** step 2 ("anything else"): route-level splitting.
+
+**After step 3:** done. Every page except the Dashboard and Login is its own chunk; the first load is 366 KB (115 KB gzipped), and the map library loads only with a map.
 
 ### 10. Request waterfalls
 **Pages:** Dashboard, Worksite detail.

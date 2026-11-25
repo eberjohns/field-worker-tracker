@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { loadAll } from "../api/apiCache";
 import { Link } from "@tanstack/react-router";
 import {
   CheckCircle2,
@@ -61,36 +62,29 @@ export const Dashboard: React.FC = () => {
 
   useEffect(() => {
     if (!token) return;
-    const load = async () => {
-      const headers = { Authorization: `Bearer ${token}` };
-      const getJson = async (url: string) => {
-        try {
-          const res = await fetch(url, { headers });
-          return res.ok ? await res.json() : null;
-        } catch (err) {
-          console.error(`Failed to load ${url}`, err);
-          return null;
-        }
-      };
-      const has = (k: Parameters<typeof sections.has>[0]) => sections.has(k);
-      const isSupervisor = user?.role === "SUPERVISOR";
-      const n = PREVIEW_SIZE;
-      // All dashboard calls start together (Batch 9 step 2); none depends on another.
+    const has = (k: Parameters<typeof sections.has>[0]) => sections.has(k);
+    const isSupervisor = user?.role === "SUPERVISOR";
+    const n = PREVIEW_SIZE;
+    // All dashboard calls start together (Batch 9 step 2); none depends on another.
+    // Batch 9 step 3: a repeat visit shows the cached results at once, then refreshes stale ones.
+    const urls: (string | null)[] = [
+      "/api/v1/alerts",
+      "/api/v1/dashboard/summary",
+      has("boundary") ? `/api/v1/boundary-queue?status=UNSET&limit=${n}` : null,
+      // Previews: 5 items each; the counts come with the first page.
+      has("leave") ? `/api/v1/approvals?status=PENDING&type=leave&limit=${n}` : null,
+      has("reassignment") ? `/api/v1/approvals?status=PENDING&type=reassignments&limit=${n}` : null,
+      has("attendance") ? `/api/v1/approvals?status=PENDING&type=attendance&limit=${n}` : null,
+      has("pendingVisits") ? `/api/v1/pending-visits?status=OPEN&limit=${n}` : null,
+      has("unassigned") ? `/api/v1/worksites?unassigned=true&limit=${n}` : null,
+      isSupervisor ? "/api/v1/reassignment-requests" : null,
+      isSupervisor ? "/api/v1/leave-requests" : null,
+    ];
+    let cancelled = false;
+    const apply = (results: any[]) => {
+      if (cancelled) return;
       const [alertData, sumData, bData, leavePage, reassignPage, attPage, visitPage, unassigned, reassignList, leaveList] =
-        await Promise.all([
-          getJson("/api/v1/alerts"),
-          getJson("/api/v1/dashboard/summary"),
-          has("boundary") ? getJson(`/api/v1/boundary-queue?status=UNSET&limit=${n}`) : null,
-          // Previews: 5 items each; the counts come with the first page.
-          has("leave") ? getJson(`/api/v1/approvals?status=PENDING&type=leave&limit=${n}`) : null,
-          has("reassignment") ? getJson(`/api/v1/approvals?status=PENDING&type=reassignments&limit=${n}`) : null,
-          has("attendance") ? getJson(`/api/v1/approvals?status=PENDING&type=attendance&limit=${n}`) : null,
-          has("pendingVisits") ? getJson(`/api/v1/pending-visits?status=OPEN&limit=${n}`) : null,
-          has("unassigned") ? getJson(`/api/v1/worksites?unassigned=true&limit=${n}`) : null,
-          isSupervisor ? getJson("/api/v1/reassignment-requests") : null,
-          isSupervisor ? getJson("/api/v1/leave-requests") : null,
-        ]);
-
+        results;
       setAlerts(alertData || []);
       if (sumData) setDashboardSummary(sumData);
       if (bData) setBoundaryQueue({ count: bData.unset_count ?? bData.total_count ?? 0, items: bData.items || [] });
@@ -114,7 +108,10 @@ export const Dashboard: React.FC = () => {
         setMyRequests(combined.slice(0, 10));
       }
     };
-    load();
+    void loadAll(urls, (results) => apply(results));
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, user]);
 

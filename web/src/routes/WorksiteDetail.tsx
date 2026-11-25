@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { fetchApi, loadApi, peekApi, REFERENCE_STALE_MS } from "../api/apiCache";
 import { currencyForCountry, formatMoney } from "../features/format/money";
 import { RenewalLabel } from "../components/worksites/RenewalLabel";
 import { useParams, Link } from "@tanstack/react-router";
@@ -34,8 +35,8 @@ import {
   Loader2,
   Shield,
 } from "lucide-react";
-import { MapContainer, PolygonEditor, PlaceSearch } from "../features/map";
-import { Map as MapLibreMap } from "maplibre-gl";
+import { MapContainer, PolygonEditor, PlaceSearch } from "../features/map/lazy";
+import type { Map as MapLibreMap } from "maplibre-gl";
 import { JobItemModal } from "../components/jobs/JobItemModal";
 import { JobItemValidationModal } from "../components/jobs/JobItemValidationModal";
 import { CopyBoundaryModal } from "../components/jobs/CopyBoundaryModal";
@@ -311,64 +312,61 @@ export const WorksiteDetail: React.FC = () => {
 
   const fetchData = async () => {
     if (!worksiteId) return;
-    setLoading(true);
+    const path = `/api/v1/worksites/${worksiteId}`;
+    // Batch 9 step 3: a worksite seen before shows from the cache at once (refreshed if stale).
+    if (peekApi(path) === undefined) setLoading(true);
     setErrorMessage(null);
     try {
-      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+      await loadApi<WorksiteDetail>(path, (data) => applyWorksite(data));
 
-      const res = await fetch(`/api/v1/worksites/${worksiteId}`, { headers });
-      if (!res.ok) {
-        throw new Error("Failed to load worksite.");
-      }
-      const data: WorksiteDetail = await res.json();
-      setWorksite(data);
-
-      setEditName(data.job_name);
-      setEditCustomerType(data.customer_type || "");
-      setEditGroupId(data.group_id || "");
-      setEditZoneId(data.zone_id || "");
-      setEditRenewalRef(data.renewal_reference || "");
-      setEditBudget(data.budget_amount != null ? String(data.budget_amount) : "");
-      setEditSalaryRevisionCode(data.salary_revision_code || "");
-      setEditStartDate(data.start_date || "");
-      setEditEndDate(data.end_date || "");
-
-      // Groups and zones for the edit form
-      Promise.all([fetch("/api/v1/groups", { headers }), fetch("/api/v1/zones", { headers })])
-        .then(async ([g, z]) => {
-          if (g.ok) setGroups(await g.json());
-          if (z.ok) setZones(await z.json());
-        })
-        .catch((err) => console.error("Failed to fetch groups and zones", err));
-
-      // Fetch revisions
-      fetch("/api/v1/salary-revisions", { headers })
-        .then((r) => (r.ok ? r.json() : []))
-        .then((revs) => setRevisions(revs))
-        .catch((err) => console.error("Failed to fetch salary revisions", err));
-
-      // Occurrences: loaded by the Schedule tab for the month in view. A reload of the
-      // worksite after a change (items saved, occurrences generated) refreshes that month too;
-      // the first load doesn't, so the tab's first fetch runs alongside this one.
-      if (worksiteLoaded.current) setOccReload((n) => n + 1);
-      worksiteLoaded.current = true;
-
-      // Fetch assigned supervisors
-      fetch(`/api/v1/worksites/${worksiteId}/supervisors`, { headers })
-        .then((r) => (r.ok ? r.json() : []))
-        .then((sups) => setSupervisors(sups))
-        .catch((err) => console.error("Failed to fetch worksite supervisors", err));
-
-      // Fetch all supervisors for assignment dropdown
-      fetch("/api/v1/employees?role=SUPERVISOR&limit=200", { headers })
-        .then((r) => (r.ok ? r.json() : []))
-        .then((emps) => setAvailableSupervisors(emps))
-        .catch((err) => console.error("Failed to fetch supervisors list", err));
     } catch (err: any) {
-      setErrorMessage(err.message || "An error occurred.");
+      setErrorMessage(err.message || "Failed to load worksite.");
     } finally {
       setLoading(false);
     }
+
+    // Groups and zones for the edit form, revisions and supervisors: cached reference lists.
+    const ref = { staleTime: REFERENCE_STALE_MS };
+    Promise.all([fetchApi<any[]>("/api/v1/groups", ref), fetchApi<any[]>("/api/v1/zones", ref)])
+      .then(([g, z]) => {
+        setGroups(g);
+        setZones(z);
+      })
+      .catch((err) => console.error("Failed to fetch groups and zones", err));
+    fetchApi<any[]>("/api/v1/salary-revisions", ref)
+      .then((revs) => setRevisions(revs))
+      .catch((err) => console.error("Failed to fetch salary revisions", err));
+
+    // Occurrences: loaded by the Schedule tab for the month in view. A reload of the
+    // worksite after a change (items saved, occurrences generated) refreshes that month too;
+    // the first load doesn't, so the tab's first fetch runs alongside this one.
+    if (worksiteLoaded.current) setOccReload((n) => n + 1);
+    worksiteLoaded.current = true;
+
+    fetchApi<any[]>(`/api/v1/worksites/${worksiteId}/supervisors`)
+      .then((sups) => setSupervisors(sups))
+      .catch((err) => console.error("Failed to fetch worksite supervisors", err));
+    fetchApi<any[]>("/api/v1/employees?role=SUPERVISOR&limit=200", ref)
+      .then((emps) => setAvailableSupervisors(emps))
+      .catch((err) => console.error("Failed to fetch supervisors list", err));
+  };
+
+  // The edit form is filled from the worksite, but not while it is open: a background
+  // refresh must not overwrite what is being typed.
+  const isEditingRef = useRef(false);
+  isEditingRef.current = isEditingMetadata;
+  const applyWorksite = (data: WorksiteDetail) => {
+    setWorksite(data);
+    if (isEditingRef.current) return;
+    setEditName(data.job_name);
+    setEditCustomerType(data.customer_type || "");
+    setEditGroupId(data.group_id || "");
+    setEditZoneId(data.zone_id || "");
+    setEditRenewalRef(data.renewal_reference || "");
+    setEditBudget(data.budget_amount != null ? String(data.budget_amount) : "");
+    setEditSalaryRevisionCode(data.salary_revision_code || "");
+    setEditStartDate(data.start_date || "");
+    setEditEndDate(data.end_date || "");
   };
 
   const handleAssignSupervisor = async (e: React.FormEvent) => {
@@ -494,21 +492,19 @@ export const WorksiteDetail: React.FC = () => {
     const [y, m] = calendarMonth.split("-").map(Number);
     const fromDate = `${calendarMonth}-01`;
     const toDate = `${calendarMonth}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`;
-    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-    setOccLoading(true);
-    fetch(`/api/v1/worksites/${worksiteId}/occurrences?from_date=${fromDate}&to_date=${toDate}`, { headers })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (cancelled || !data) return;
-        setOccurrences(data.occurrences || []);
-        setOccSummary(data.summary || null);
-        // First load: if the current month has no visits, open the first month that has.
-        if (!occMonthChecked.current) {
-          occMonthChecked.current = true;
-          const months: string[] = data.summary?.months || [];
-          if (months.length > 0 && !months.includes(calendarMonth)) setCalendarMonth(months[0]);
-        }
-      })
+    const occPath = `/api/v1/worksites/${worksiteId}/occurrences?from_date=${fromDate}&to_date=${toDate}`;
+    if (peekApi(occPath) === undefined) setOccLoading(true);
+    loadApi<any>(occPath, (data) => {
+      if (cancelled || !data) return;
+      setOccurrences(data.occurrences || []);
+      setOccSummary(data.summary || null);
+      // First load: if the current month has no visits, open the first month that has.
+      if (!occMonthChecked.current) {
+        occMonthChecked.current = true;
+        const months: string[] = data.summary?.months || [];
+        if (months.length > 0 && !months.includes(calendarMonth)) setCalendarMonth(months[0]);
+      }
+    })
       .catch((err) => console.error("Failed to load occurrences", err))
       .finally(() => {
         if (!cancelled) setOccLoading(false);

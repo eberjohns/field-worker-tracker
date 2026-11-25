@@ -7,29 +7,37 @@ import {
 } from "@tanstack/react-router";
 import { Shell } from "./components/layout/Shell";
 import { Dashboard } from "./routes/Dashboard";
-import { LiveMap } from "./routes/LiveMap";
-import { BasePlanner } from "./routes/BasePlanner";
-import { OperationalPlanner } from "./routes/OperationalPlanner";
-import { Attendance } from "./routes/Attendance";
-import { Payroll } from "./routes/Payroll";
-import { Reports } from "./routes/Reports";
-import { Settings } from "./routes/Settings";
-import { Employees } from "./routes/Employees";
-import { EmployeeDetail } from "./routes/EmployeeDetail";
-import { UsersAdmin } from "./routes/Users";
-import { AuditLogs } from "./routes/AuditLogs";
 import { Login } from "./routes/Login";
-import { Imports } from "./routes/Imports";
-import { SalaryStructures } from "./routes/SalaryStructures";
-import { Worksites } from "./routes/Worksites";
-import { WorksiteDetail } from "./routes/WorksiteDetail";
-import { Boundaries } from "./routes/Boundaries";
-import { Approvals } from "./routes/Approvals";
-import { LeaveManagement } from "./routes/LeaveManagement";
-import { Devices } from "./routes/Devices";
-import { PendingVisits } from "./routes/PendingVisits";
-import { Documents } from "./routes/Documents";
-import { System } from "./routes/System";
+import { SkeletonText } from "./ui";
+
+// Batch 9 step 3: every page except the Dashboard (the landing page) and Login is its own chunk,
+// loaded on first visit and preloaded when a menu link is hovered or focused.
+const LiveMap = lazyRouteComponent(() => import("./routes/LiveMap"), "LiveMap");
+const BasePlanner = lazyRouteComponent(() => import("./routes/BasePlanner"), "BasePlanner");
+const OperationalPlanner = lazyRouteComponent(() => import("./routes/OperationalPlanner"), "OperationalPlanner");
+const Attendance = lazyRouteComponent(() => import("./routes/Attendance"), "Attendance");
+const Payroll = lazyRouteComponent(() => import("./routes/Payroll"), "Payroll");
+const Reports = lazyRouteComponent(() => import("./routes/Reports"), "Reports");
+const Settings = lazyRouteComponent(() => import("./routes/Settings"), "Settings");
+const Employees = lazyRouteComponent(() => import("./routes/Employees"), "Employees");
+const EmployeeDetail = lazyRouteComponent(() => import("./routes/EmployeeDetail"), "EmployeeDetail");
+const UsersAdmin = lazyRouteComponent(() => import("./routes/Users"), "UsersAdmin");
+const AuditLogs = lazyRouteComponent(() => import("./routes/AuditLogs"), "AuditLogs");
+const Imports = lazyRouteComponent(() => import("./routes/Imports"), "Imports");
+const SalaryStructures = lazyRouteComponent(() => import("./routes/SalaryStructures"), "SalaryStructures");
+const Worksites = lazyRouteComponent(() => import("./routes/Worksites"), "Worksites");
+const WorksiteDetail = lazyRouteComponent(() => import("./routes/WorksiteDetail"), "WorksiteDetail");
+const Boundaries = lazyRouteComponent(() => import("./routes/Boundaries"), "Boundaries");
+const Approvals = lazyRouteComponent(() => import("./routes/Approvals"), "Approvals");
+const LeaveManagement = lazyRouteComponent(() => import("./routes/LeaveManagement"), "LeaveManagement");
+const Devices = lazyRouteComponent(() => import("./routes/Devices"), "Devices");
+const PendingVisits = lazyRouteComponent(() => import("./routes/PendingVisits"), "PendingVisits");
+const Documents = lazyRouteComponent(() => import("./routes/Documents"), "Documents");
+const System = lazyRouteComponent(() => import("./routes/System"), "System");
+// The archive tab of Reports, as its own route.
+const GeneratedReports = lazyRouteComponent(() =>
+  import("./routes/Reports").then((m) => ({ default: () => <m.Reports initialTab="generated" /> }))
+);
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -120,7 +128,7 @@ const reportsRoute = createRoute({
 const generatedReportsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/reports/generated",
-  component: () => <Reports initialTab="generated" />,
+  component: GeneratedReports,
 });
 
 const settingsRoute = createRoute({
@@ -237,7 +245,19 @@ const routeTree = rootRoute.addChildren([
   salaryStructuresRoute,
 ]);
 
-export const router = createRouter({ routeTree });
+export const router = createRouter({
+  routeTree,
+  // Hovering or focusing a link fetches that page's code, so the click shows it at once.
+  defaultPreload: "intent",
+  // Data comes from the page's own cached queries, not route loaders: nothing to preload but code.
+  defaultPreloadStaleTime: 0,
+  defaultPendingComponent: () => (
+    <div aria-busy="true" aria-label="Loading page">
+      <SkeletonText lines={6} />
+    </div>
+  ),
+  defaultPendingMs: 150,
+});
 
 declare module "@tanstack/react-router" {
   interface Register {

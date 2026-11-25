@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { loadAll } from "../api/apiCache";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { AlertBanner, Button, Modal, problemFromBody, TextArea } from "../ui";
 import {
@@ -130,25 +131,32 @@ export const Approvals: React.FC = () => {
     error: null,
   });
 
-  const fetchInbox = async () => {
-    setLoading(true);
+  const fetchInbox = async (force: boolean = false) => {
     try {
-      const headers = { Authorization: `Bearer ${token}` };
       const params = new URLSearchParams({
         status: statusFilter,
         type: activeTab,
         limit: String(PAGE_SIZE),
         offset: String(page * PAGE_SIZE),
       });
-      const res = await fetch(`/api/v1/approvals?${params}`, { headers });
-      if (res.ok) {
-        const data = await res.json();
-        setCounts(data.counts || { leaves: 0, reassignments: 0, attendance: 0, total: 0 });
+      // Batch 9 step 3: a page seen before shows from the cache at once (refreshed if stale).
+      let applied = false;
+      const done = loadAll(
+        [`/api/v1/approvals?${params}`],
+        ([data]) => {
+          applied = true;
+          setLoading(false);
+          if (!data) return;
+          setCounts(data.counts || { leaves: 0, reassignments: 0, attendance: 0, total: 0 });
         setTotals(data.totals || { leave: 0, reassignments: 0, attendance: 0, total: 0 });
         setLeaves(data.leave_requests || []);
         setReassignments(data.reassignment_requests || []);
-        setAttendanceRows(data.attendance_rows || []);
-      }
+          setAttendanceRows(data.attendance_rows || []);
+        },
+        { force }
+      );
+      if (!applied) setLoading(true);
+      await done;
     } catch (err) {
       console.error("Failed to load approvals inbox", err);
     } finally {
@@ -294,7 +302,7 @@ export const Approvals: React.FC = () => {
             </button>
           </div>
           <button
-            onClick={fetchInbox}
+            onClick={() => fetchInbox(true)}
             disabled={loading}
             className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg border border-slate-200 transition"
             title="Refresh"

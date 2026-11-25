@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { LogOut, Menu, PanelLeftClose, PanelLeftOpen, ShieldCheck } from "lucide-react";
+import { useApi } from "../../api/apiCache";
 import { useAuth } from "../../context/AuthContext";
 import { Login } from "../../routes/Login";
 import { APP_VERSION } from "../../version";
@@ -64,32 +65,13 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   // On a narrow screen the drawer always shows labels; collapsing is a desktop choice.
   const collapsed = isCollapsed && !isNarrow;
 
-  const [pendingApprovalsCount, setPendingApprovalsCount] = useState<number>(0);
-
-  useEffect(() => {
-    const token = localStorage.getItem("fwt_token");
-    if (
-      !token ||
-      (user?.role !== "ADMIN" && user?.role !== "ENGINEER" && user?.role !== "SUPERINTENDENT")
-    )
-      return;
-    const fetchCounts = async () => {
-      try {
-        const res = await fetch("/api/v1/approvals/counts", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setPendingApprovalsCount(data?.total || 0);
-        }
-      } catch (err) {
-        console.error("Failed to fetch pending approvals count", err);
-      }
-    };
-    fetchCounts();
-    const timer = setInterval(fetchCounts, 30000);
-    return () => clearInterval(timer);
-  }, [user]);
+  // One shared, cached query for the badge (Batch 9 step 3): polled every 30 s while the app is
+  // open, and refreshed at once after any write.
+  const canApprove = user?.role === "ADMIN" || user?.role === "ENGINEER" || user?.role === "SUPERINTENDENT";
+  const countsQuery = useApi<{ total?: number }>(isAuthenticated && canApprove ? "/api/v1/approvals/counts" : null, {
+    refetchInterval: 30_000,
+  });
+  const pendingApprovalsCount = countsQuery.data?.total || 0;
 
   // The component gallery (/dev/ui) has no data, so it needs neither sign-in nor the sidebar.
   if (import.meta.env.DEV && currentPath.startsWith("/dev/")) {
