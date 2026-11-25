@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { cachedResponse, fetchApi, loadApi, peekApi, REFERENCE_STALE_MS } from "../api/apiCache";
 import { currencyForCountry, formatMoney } from "../features/format/money";
-import { Link, useRouterState } from "@tanstack/react-router";
+import { useRouterState } from "@tanstack/react-router";
 import { useAuth } from "../context/AuthContext";
 import {
   CalendarDays,
@@ -32,6 +32,7 @@ import {
   Layers,
 } from "lucide-react";
 import { usePlannerHistory } from "../hooks/usePlannerHistory";
+import { AssignmentsImportDialog } from "../features/planner/AssignmentsImportDialog";
 import {
   OperationalCoverageResponse,
   OperationalWorksiteRow,
@@ -248,6 +249,36 @@ export const OperationalPlanner: React.FC = () => {
       toast.error(err, "Failed to download Excel roster export.");
     } finally {
       setExportingRoster(false);
+    }
+  };
+
+  // Job item assignments: export the week in view, import the same layout (meeting item 6).
+  const [exportingAssignments, setExportingAssignments] = useState<boolean>(false);
+  const [assignmentsImportOpen, setAssignmentsImportOpen] = useState<boolean>(false);
+  const canEditPlanner = ["ADMIN", "ENGINEER", "SUPERINTENDENT"].includes(user?.role ?? "");
+  const handleExportAssignments = async () => {
+    setExportingAssignments(true);
+    try {
+      const start = new Date(`${weekStartDate}T00:00:00Z`);
+      const end = new Date(start.getTime() + 6 * 86400000).toISOString().slice(0, 10);
+      const res = await fetch(
+        `/api/v1/operational-planner/assignments.xlsx?from_date=${weekStartDate}&to_date=${end}`,
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+      );
+      if (!res.ok) throw new Error("Failed to export assignments.");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `assignments_${weekStartDate}_${end}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      toast.error(err, "Failed to download the assignments export.");
+    } finally {
+      setExportingAssignments(false);
     }
   };
 
@@ -1382,6 +1413,10 @@ export const OperationalPlanner: React.FC = () => {
       pool = pool.filter((c) => !activeAssignedIds.has(c.employee_id) && !stagedIds.has(c.employee_id));
     }
 
+    // 3. Workers already assigned elsewhere that day (blocked) aren't offered (19 Nov meeting
+    // item 5). Workers on leave are already left out by the server.
+    pool = pool.filter((c) => !c.is_blocked);
+
     if (filterToSupervisorCrew && selectedSupervisorId) {
       pool = pool.filter((c) => c.supervisor_id === selectedSupervisorId);
     }
@@ -1758,16 +1793,35 @@ export const OperationalPlanner: React.FC = () => {
               {exportingRoster ? "Exporting..." : "Export Roster"}
             </button>
 
-            {/* Import Schedule: Master Data Import is Admin only (DEC-61) */}
-            {user?.role === "ADMIN" && (
-              <Link
-                to="/imports"
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 shadow-2xs transition cursor-pointer"
-                title="Master Data Import (Admin)"
-              >
-                <Upload className="h-3.5 w-3.5 text-slate-500" />
-                Import Schedule
-              </Link>
+            {/* Job item assignments: export the week, import the same layout (meeting item 6) */}
+            {canEditPlanner && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleExportAssignments}
+                  disabled={exportingAssignments}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 shadow-2xs transition cursor-pointer disabled:opacity-60"
+                  title="Export this week's job item assignments (.xlsx); the import accepts the same file"
+                >
+                  <Download className="h-3.5 w-3.5 text-slate-500" />
+                  {exportingAssignments ? "Exporting..." : "Export Assignments"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAssignmentsImportOpen(true)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 shadow-2xs transition cursor-pointer"
+                  title="Add assignments from an Export Assignments file"
+                >
+                  <Upload className="h-3.5 w-3.5 text-slate-500" />
+                  Import Assignments
+                </button>
+                <AssignmentsImportDialog
+                  open={assignmentsImportOpen}
+                  onClose={() => setAssignmentsImportOpen(false)}
+                  token={token}
+                  onImported={() => fetchOperationalData(true)}
+                />
+              </>
             )}
           </div>
         </div>

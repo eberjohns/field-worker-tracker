@@ -13,6 +13,7 @@ interface UserItem {
   last_login_at: string | null;
   locked_until: string | null;
   failed_attempts: number;
+  employee_name: string | null;
   version: number;
 }
 
@@ -27,7 +28,7 @@ export const UsersAdmin: React.FC = () => {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/v1/users", {
+      const res = await fetch("/api/v1/users?limit=1000", {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -129,7 +130,7 @@ export const UsersAdmin: React.FC = () => {
           <table className="w-full text-left text-sm text-slate-600">
             <thead className="bg-slate-50 border-b border-slate-200 text-xs font-semibold uppercase text-slate-500">
               <tr>
-                <th className="p-4">Username (Tally ID)</th>
+                <th className="p-4">User</th>
                 <th className="p-4">Role</th>
                 <th className="p-4">Default Password Flag</th>
                 <th className="p-4">Last Login</th>
@@ -140,7 +141,10 @@ export const UsersAdmin: React.FC = () => {
             <tbody className="divide-y divide-slate-100">
               {users.map((u) => (
                 <tr key={u.id} className="hover:bg-slate-50 transition">
-                  <td className="p-4 font-mono font-medium text-slate-900">{u.username}</td>
+                  <td className="p-4">
+                    <div className="font-medium text-slate-900">{u.employee_name ?? "—"}</div>
+                    <div className="font-mono text-xs text-slate-500">{u.username}</div>
+                  </td>
                   <td className="p-4">
                     <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">
                       {u.role}

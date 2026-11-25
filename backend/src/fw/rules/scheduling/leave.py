@@ -170,3 +170,25 @@ def calculate_leave_taken(
             cur += timedelta(days=1)
 
     return summary
+
+
+_DOW = ("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")
+
+
+def cover_weekly_off_affected(
+    from_date: date,
+    to_date: date,
+    employee_off_day: str | None,
+    cover_off_day: str | None,
+) -> bool:
+    """True when the cover worker's weekly off falls on a leave day the original worker works.
+
+    A differing weekly off only matters on such a day: the cover would work their own day off
+    (rest-day overtime). Otherwise no warning is shown (19 Nov meeting item 5).
+    """
+    cover = normalize_day_name(cover_off_day)
+    emp = normalize_day_name(employee_off_day)
+    if cover is None or cover == emp or to_date < from_date:
+        return False
+    span = min((to_date - from_date).days + 1, 7)
+    return any(_DOW[(from_date + timedelta(days=i)).weekday()] == cover for i in range(span))

@@ -1827,6 +1827,7 @@ export const Settings: React.FC = () => {
                   <option value="AE">United Arab Emirates (AE)</option>
                   <option value="SA">Saudi Arabia (SA)</option>
                 </select>
+                <p className="mt-1 text-[11px] text-slate-500">The holiday applies to work and pay in this country only.</p>
               </div>
               <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
                 <button

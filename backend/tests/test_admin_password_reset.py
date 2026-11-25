@@ -44,7 +44,9 @@ async def test_admin_reset_password_to_default_success() -> None:
     )
 
     assert updated_user.must_change_password is True
-    assert updated_user.password_changed_at is None
+    # The reset issues the default now: the expiry window starts again (19 Nov meeting item 7).
+    assert updated_user.password_changed_at is not None
+    assert (datetime.now(UTC) - updated_user.password_changed_at).total_seconds() < 60
     assert updated_user.version == 2
     assert verify_password("DefaultPassword123!", updated_user.credential_hash)
 

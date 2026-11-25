@@ -87,7 +87,20 @@ Detailed algorithms live in docs 04, 05 and 06.
 - **BR-ST-05** **Work-period rules** (Ramadan, summer midday break, any seasonal rule) apply between two dates, per country, to all jobs or outdoor jobs only. They can change the day's working minutes, the break, and/or define a blocked window that counts as break. The scheduler's daily capacity and attendance's required time follow them **[DEC-35]**.
 
 ## 8. Countries
-Each employee, worksite, salary revision, public holiday and country-scoped setting carries a **country** (AE or SA). A **Country Rule Pack** supplies defaults for a country: rest days, OT2 weekdays, time zone, currency, gratuity formula, holiday source and time-rule templates. The pack is chosen by the record's country (the site's for scheduling and attendance, the employee's for payroll); engines never branch on country. **Each country runs as its own stack** (ADR-009): the UAE stack first, a separate Saudi stack inside the Kingdom when Saudi goes live, same code and images **[DEC-34, DEC-54]**.
+Each employee, worksite, salary revision, public holiday and country-scoped setting carries a **country** (AE or SA). A **Country Rule Pack** supplies defaults for a country: rest days, time zone, currency, gratuity formula, holiday source and time-rule templates. The pack is chosen by the record's country (the site's for scheduling and attendance, the employee's for payroll); engines never branch on country. **Each country runs as its own stack** (ADR-009): the UAE stack first, a separate Saudi stack inside the Kingdom when Saudi goes live, same code and images **[DEC-34, DEC-54]**.
+
+### 8.1 What the country selection does (19 Nov meeting item 1)
+The country picker appears on employees, worksites, public holidays, salary revisions and company settings. It decides which country's rules apply to that record. It is **not** a filter on who can see the record; access follows roles and scope (DEC-57).
+
+| Record | What its country decides |
+|---|---|
+| Worksite | The site's time zone and "today" (attendance days, the Live Map, pending visits, the template roll-out window); which public holidays make worked hours OT2 there |
+| Employee | Payroll: currency, the country's company settings (provisions, OT rates, standard hours), the salary revision used when no grade line is set, and the employee's own "today" on the phone |
+| Public holiday | Which country's calendar it belongs to; a holiday only affects work and pay in that country |
+| Salary revision | Which country's grades and salaries it holds; each country has its own active revision |
+| Company setting | Whether a value is for one country or for all (blank). A country value wins over the all-countries value |
+
+Normally every record in a deployment has the deployment's own country (`DEPLOYMENT_COUNTRY`, AE today). Each country runs as its own stack (ADR-009), so choosing SA in the UAE stack is only needed for records that really belong to Saudi Arabia.
 
 ## 9. Reports, monitoring and follow-up
 - **BR-RP-01** Every report exports to Excel (XLSX); CSV also offered; PDF for daily attendance and the payroll sheet. Reports are scope-restricted and traceable to source records (see 12).

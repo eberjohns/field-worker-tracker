@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   Calendar,
@@ -65,6 +65,28 @@ interface EmployeeOption {
   role?: string;
 }
 
+const DOW = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+
+/** True when the cover's weekly off falls on a leave day the original worker works; the
+ * off-day warning shows only then (19 Nov meeting item 5). Same rule as the server. */
+function coverOffAffected(
+  from: string,
+  to: string,
+  empOff: string | null | undefined,
+  coverOff: string | null | undefined,
+): boolean {
+  const cover = (coverOff || "").trim().toUpperCase().slice(0, 3);
+  const emp = (empOff || "").trim().toUpperCase().slice(0, 3);
+  if (!cover || cover === emp) return false;
+  if (!from || !to || to < from) return true;
+  const start = new Date(`${from}T00:00:00Z`);
+  const days = Math.min(Math.round((Date.parse(`${to}T00:00:00Z`) - start.getTime()) / 86400000) + 1, 7);
+  for (let i = 0; i < days; i++) {
+    if (DOW[(start.getUTCDay() + i) % 7] === cover) return true;
+  }
+  return false;
+}
+
 export const LeaveManagement: React.FC = () => {
   const toast = useToast();
   const dialogs = useDialogs();
@@ -97,6 +119,48 @@ export const LeaveManagement: React.FC = () => {
   const [bulkCoverSubmitting, setBulkCoverSubmitting] = useState(false);
   const [bulkCoverResult, setBulkCoverResult] = useState<string | null>(null);
   const [bulkCoverError, setBulkCoverError] = useState<string | null>(null);
+
+  // Workers who can't cover the selected dates (on leave, already covering, or on a
+  // PERMANENT job): left out of both cover dropdowns (19 Nov meeting item 5).
+  const [recordUnavailable, setRecordUnavailable] = useState<Record<string, string>>({});
+  const [bulkUnavailable, setBulkUnavailable] = useState<Record<string, string>>({});
+  const fetchCoverUnavailable = useCallback(
+    async (from: string, to: string, excludeLeaveId?: string): Promise<Record<string, string>> => {
+      if (!from || !to || to < from) return {};
+      const params = new URLSearchParams({ from_date: from, to_date: to });
+      if (excludeLeaveId) params.set("exclude_leave_id", excludeLeaveId);
+      try {
+        const res = await fetch(`/api/v1/leave-requests/cover-availability?${params}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return {};
+        const data = await res.json();
+        return data.unavailable || {};
+      } catch {
+        return {};
+      }
+    },
+    [token],
+  );
+  useEffect(() => {
+    let cancelled = false;
+    fetchCoverUnavailable(recordForm.from_date, recordForm.to_date).then((u) => {
+      if (!cancelled) setRecordUnavailable(u);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchCoverUnavailable, recordForm.from_date, recordForm.to_date]);
+  useEffect(() => {
+    if (!bulkCoverLeave) return;
+    let cancelled = false;
+    fetchCoverUnavailable(bulkCoverLeave.from_date, bulkCoverLeave.to_date, bulkCoverLeave.id).then((u) => {
+      if (!cancelled) setBulkUnavailable(u);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchCoverUnavailable, bulkCoverLeave]);
 
   const canManageCover =
     user?.role === "ADMIN" || user?.role === "ENGINEER" || user?.role === "SUPERINTENDENT";
@@ -755,7 +819,12 @@ export const LeaveManagement: React.FC = () => {
               >
                 <option value="">No pre-assigned cover worker</option>
                 {employees
-                  .filter((emp) => emp.id !== recordForm.employee_id && emp.role !== "ADMIN")
+                  .filter(
+                    (emp) =>
+                      emp.id !== recordForm.employee_id &&
+                      emp.role !== "ADMIN" &&
+                      (!recordUnavailable[emp.id] || emp.id === recordForm.cover_employee_id),
+                  )
                   .map((emp) => (
                     <option key={emp.id} value={emp.id}>
                       {emp.name} ({emp.tally_id}){emp.weekly_off_day ? ` — Off: ${emp.weekly_off_day}` : ""}
@@ -768,7 +837,7 @@ export const LeaveManagement: React.FC = () => {
                 if (
                   origEmp &&
                   covEmp &&
-                  (origEmp.weekly_off_day || "").toUpperCase() !== (covEmp.weekly_off_day || "").toUpperCase()
+                  coverOffAffected(recordForm.from_date, recordForm.to_date, origEmp.weekly_off_day, covEmp.weekly_off_day)
                 ) {
                   return (
                     <div className="mt-1.5 p-2.5 bg-amber-50 border border-amber-200 text-amber-900 rounded-lg flex items-start gap-2">
@@ -860,7 +929,12 @@ export const LeaveManagement: React.FC = () => {
                 >
                   <option value="">Choose cover worker...</option>
                   {employees
-                    .filter((emp) => emp.id !== bulkCoverLeave.employee_id && emp.role !== "ADMIN")
+                    .filter(
+                      (emp) =>
+                        emp.id !== bulkCoverLeave.employee_id &&
+                        emp.role !== "ADMIN" &&
+                        (!bulkUnavailable[emp.id] || emp.id === bulkCoverEmpId),
+                    )
                     .map((emp) => (
                       <option key={emp.id} value={emp.id}>
                         {emp.name} ({emp.tally_id}){emp.weekly_off_day ? ` — Off: ${emp.weekly_off_day}` : ""}
@@ -873,8 +947,12 @@ export const LeaveManagement: React.FC = () => {
                 const covEmp = employees.find((e) => e.id === bulkCoverEmpId);
                 if (
                   covEmp &&
-                  (bulkCoverLeave.employee_weekly_off_day || "").toUpperCase() !==
-                    (covEmp.weekly_off_day || "").toUpperCase()
+                  coverOffAffected(
+                    bulkCoverLeave.from_date,
+                    bulkCoverLeave.to_date,
+                    bulkCoverLeave.employee_weekly_off_day,
+                    covEmp.weekly_off_day,
+                  )
                 ) {
                   return (
                     <div className="p-2.5 bg-amber-50 border border-amber-200 text-amber-900 rounded-lg flex items-start gap-2">

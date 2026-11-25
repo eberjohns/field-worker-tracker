@@ -1,6 +1,28 @@
 # Changelog
 All notable changes. Format: Keep a Changelog. Mobile-contract changes are also logged in `docs/09-mobile-sync-contract.md`.
 
+## [1.30.0] - 2026-11-25
+### Fixed (19 Nov meeting items)
+- **Item 7, locked again after an Admin reset.** The default-password expiry counted from the account's creation, so an account older than the limit was locked again at the first login after a reset. It now counts from when the default was issued: a reset sets `password_changed_at` to now, and the check uses it (web and mobile login).
+- **Item 11, scheduled workers shown as "Not Scheduled".** The Live Map and the dashboard's live counts read only scheduled work. Workers planned today only by a Base Planner template had none: the template roll-out starts tomorrow, and older plans predate it. Today's template slots now count as scheduled when a worker has no scheduled work that day, the same rule the phone uses.
+- **Live Map stream.** The page listened for unnamed stream messages while the server sends named `position` events, so the list never updated while connected. It now refreshes (debounced) on each event.
+- **Item 5:**
+  - **Leave label on extra staff.** Extra staff on approved leave show the TO_BE_COVERED leave label, tagged "Extra Staff", until covered, and appear in Staffing Gaps.
+  - **Staffing Gaps template matching.** It also now follows the planner's own template rules: monthly masks, template dates, and the worker's weekly off.
+  - **Off-Day Mismatch warning** only when the leave includes the cover's weekly off day, on the server and in the leave forms.
+  - **Cover choices.** The leave screens' cover dropdowns leave out workers on leave, already covering an overlapping leave, or on a PERMANENT job in the dates (new `GET /leave-requests/cover-availability`). The planner's cover picker no longer offers workers on approved leave (the flag was always false) or workers blocked by another job that day.
+### Added
+- **Item 6, assignments export and import** (Operational Planner; Admin, Engineer, Superintendent; scope DEC-57):
+  - `GET /operational-planner/assignments.xlsx` exports the week in view;
+  - `POST /operational-planner/assignments/import` takes the same file;
+  - **Check file** first, then **Import** adds only assignments that don't exist yet, validated like planner edits. Nothing existing is changed or removed;
+  - this replaces the "Import Schedule" link, which pointed at the Master Data Import (no assignments sheet).
+- **Item 7:** the Users page shows each person's name (`employee_name` in `GET /users`), and it now asks for up to 1,000 users instead of the first 50.
+- **Item 1:** what the country selection does (docs/03 §8.1), and a one-line hint under the country pickers (worksite wizard, new employee, public holiday).
+### Notes
+- **No mobile contract change.** The phone already merged template slots into its schedule.
+- **No migration.**
+
 ## [1.29.0] - 2026-11-25
 ### Added (chore: Render setup)
 - **`render.yaml` (Render Blueprint), for new environments.** The owner sets up the existing services by hand.

@@ -1,6 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fw.core.db import get_db
@@ -13,6 +14,7 @@ from fw.modules.identity import (
     UserUpdate,
     require_role,
 )
+from fw.modules.org import Employee
 from fw.modules.settings import SettingsService
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -34,7 +36,19 @@ async def list_users(
         limit=limit,
         offset=offset,
     )
-    return [UserRead.model_validate(u) for u in users]
+    names: dict[UUID, str] = {}
+    employee_ids = [u.employee_id for u in users if u.employee_id]
+    if employee_ids:
+        rows = await session.execute(
+            select(Employee.id, Employee.name).where(Employee.id.in_(employee_ids))
+        )
+        names = {emp_id: name for emp_id, name in rows.all()}
+    out: list[UserRead] = []
+    for u in users:
+        item = UserRead.model_validate(u)
+        item.employee_name = names.get(u.employee_id) if u.employee_id else None
+        out.append(item)
+    return out
 
 
 @router.patch("/{user_id}", response_model=UserRead)

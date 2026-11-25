@@ -1,9 +1,9 @@
 {
-  "version": "1.29.1",
+  "version": "1.30.0",
   "major": 1,
-  "minor": 29,
-  "patch": 1,
-  "last_branch": "chore/render-blueprint",
-  "last_commit": "b169fb2",
-  "updated_at": "2026-11-25T14:27:45.047632+00:00"
+  "minor": 30,
+  "patch": 0,
+  "last_branch": "fix/meeting-19nov-items",
+  "last_commit": "8393bcd",
+  "updated_at": "2026-11-25T14:47:52.577648+00:00"
 }

@@ -116,7 +116,7 @@ class AuthService:
         # Check default password expiry
         if is_default_password_expired(
             user.must_change_password,
-            user.created_at,
+            user.password_changed_at or user.created_at,
             now,
             max_days=default_password_max_days,
         ):
@@ -391,7 +391,8 @@ class UserService:
 
         user.credential_hash = hash_password(default_password)
         user.must_change_password = True
-        user.password_changed_at = None
+        # The default password is issued now: the expiry window starts again from here.
+        user.password_changed_at = datetime.now(UTC)
         user.locked_until = None
         user.failed_attempts = 0
         user.last_failed_login_at = None
