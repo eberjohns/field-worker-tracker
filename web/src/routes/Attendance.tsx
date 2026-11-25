@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { loadAll } from "../api/apiCache";
 import {
   Calendar,
   RefreshCw,
@@ -44,10 +45,8 @@ export const Attendance: React.FC = () => {
   const [selectedRecord, setSelectedRecord] = useState<AttendanceRecord | null>(null);
   const [showRecalculateModal, setShowRecalculateModal] = useState<boolean>(false);
 
-  const fetchAttendance = async () => {
-    setLoading(true);
+  const fetchAttendance = async (force: boolean = false) => {
     try {
-      const headers = { Authorization: `Bearer ${token}` };
       const params = new URLSearchParams({
         from_date: fromDate,
         to_date: toDate,
@@ -62,22 +61,29 @@ export const Attendance: React.FC = () => {
         params.append("business_status", businessStatus);
       }
 
-      const res = await fetch(`/api/v1/attendance?${params.toString()}`, { headers });
-      if (res.ok) {
-        const data: AttendanceListResponse = await res.json();
-        setRecords(data.items || []);
-        setTotal(data.total || 0);
-      }
-
-      // Query exceptions badge count
-      const excRes = await fetch(
-        `/api/v1/attendance/exceptions?from_date=${fromDate}&to_date=${toDate}&limit=1`,
-        { headers }
+      // The list and the exceptions badge count, together; cached results show at once
+      // (Batch 9 step 3).
+      let applied = false;
+      const done = loadAll(
+        [
+          `/api/v1/attendance?${params.toString()}`,
+          `/api/v1/attendance/exceptions?from_date=${fromDate}&to_date=${toDate}&limit=1`,
+        ],
+        (results) => {
+          const data = results[0] as AttendanceListResponse | null;
+          const excData = results[1] as { total?: number } | null;
+          applied = true;
+          if (data) {
+            setRecords(data.items || []);
+            setTotal(data.total || 0);
+          }
+          if (excData) setExceptionsCount(excData.total || 0);
+          setLoading(false);
+        },
+        { force }
       );
-      if (excRes.ok) {
-        const excData = await excRes.json();
-        setExceptionsCount(excData.total || 0);
-      }
+      if (!applied) setLoading(true);
+      await done;
     } catch (err) {
       console.error("Failed to load attendance", err);
     } finally {
@@ -127,7 +133,7 @@ export const Attendance: React.FC = () => {
           )}
 
           <button
-            onClick={() => fetchAttendance()}
+            onClick={() => fetchAttendance(true)}
             className="p-1.5 text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100 border border-slate-200"
             title="Refresh"
           >

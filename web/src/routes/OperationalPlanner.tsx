@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import { cachedResponse, fetchApi, loadApi, peekApi, REFERENCE_STALE_MS } from "../api/apiCache";
 import { currencyForCountry, formatMoney } from "../features/format/money";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useAuth } from "../context/AuthContext";
@@ -389,7 +390,12 @@ export const OperationalPlanner: React.FC = () => {
   // Fetch Operational Data
   const fetchOperationalData = async (silent: boolean = false) => {
     const requestedWeek = weekStartDate;
-    const hasExistingData = activeLens === "COVERAGE" ? !!coverageData : !!rosterData;
+    const path =
+      activeLens === "COVERAGE"
+        ? `/api/v1/operational-planner/coverage?week_start=${requestedWeek}`
+        : `/api/v1/operational-planner/roster?week_start=${requestedWeek}`;
+    // Batch 9 step 3: a week seen before shows from the cache at once (refreshed if stale).
+    const hasExistingData = (activeLens === "COVERAGE" ? !!coverageData : !!rosterData) || peekApi(path) !== undefined;
     const shouldSilent = silent || hasExistingData;
     if (!shouldSilent) setLoading(true);
     else setIsRefreshing(true);
@@ -397,33 +403,21 @@ export const OperationalPlanner: React.FC = () => {
     scrollPosRef.current = window.scrollY;
     setError(null);
     try {
-      if (activeLens === "COVERAGE") {
-        const res = await fetch(
-          `/api/v1/operational-planner/coverage?week_start=${requestedWeek}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        if (!res.ok) throw new Error("Failed to load Operational Coverage");
-        const data: OperationalCoverageResponse = await res.json();
+      const lens = activeLens;
+      await loadApi<OperationalCoverageResponse | OperationalRosterResponse>(path, (data) => {
         if (activeWeekRef.current !== requestedWeek) return;
-        setCoverageData(data);
-      } else {
-        const res = await fetch(
-          `/api/v1/operational-planner/roster?week_start=${requestedWeek}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        if (!res.ok) throw new Error("Failed to load Operational Roster");
-        const data: OperationalRosterResponse = await res.json();
-        if (activeWeekRef.current !== requestedWeek) return;
-        setRosterData(data);
-      }
+        if (lens === "COVERAGE") setCoverageData(data as OperationalCoverageResponse);
+        else setRosterData(data as OperationalRosterResponse);
+      });
     } catch (err: any) {
       if (activeWeekRef.current === requestedWeek) {
         setError(err.message || "An error occurred");
       }
     } finally {
       if (activeWeekRef.current === requestedWeek) {
-        if (!shouldSilent) setLoading(false);
-        else setIsRefreshing(false);
+        // Always: the page starts in the loading state, and a cached visit is "silent".
+        setLoading(false);
+        setIsRefreshing(false);
       }
       requestAnimationFrame(() => {
         if (scrollPosRef.current > 0) {
@@ -436,9 +430,7 @@ export const OperationalPlanner: React.FC = () => {
   // Fetch Supervisors
   const fetchSupervisors = async () => {
     try {
-      const res = await fetch("/api/v1/employees?role=SUPERVISOR&limit=200", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await cachedResponse("/api/v1/employees?role=SUPERVISOR&limit=200", { staleTime: REFERENCE_STALE_MS });
       if (res.ok) {
         const data = await res.json();
         const items = data.items || data || [];
@@ -459,9 +451,7 @@ export const OperationalPlanner: React.FC = () => {
     try {
       const today = new Date().toISOString().split("T")[0];
       const future = new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0];
-      const res = await fetch(`/api/v1/staffing-gaps?from_date=${today}&to_date=${future}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await cachedResponse(`/api/v1/staffing-gaps?from_date=${today}&to_date=${future}`);
       if (res.ok) {
         const data = await res.json();
         setStaffingGaps(data.gaps || []);
@@ -474,9 +464,7 @@ export const OperationalPlanner: React.FC = () => {
   // Fetch all employees for reassignment dropdowns
   const fetchAllEmployees = async () => {
     try {
-      const res = await fetch("/api/v1/employees?limit=500", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await cachedResponse("/api/v1/employees?limit=500", { staleTime: REFERENCE_STALE_MS });
       if (res.ok) {
         const data = await res.json();
         const items = data.items || data || [];
@@ -490,9 +478,7 @@ export const OperationalPlanner: React.FC = () => {
   // Fetch recent temporary reassignments
   const fetchRecentReassignments = async () => {
     try {
-      const res = await fetch("/api/v1/reassignment-requests", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await cachedResponse("/api/v1/reassignment-requests");
       if (res.ok) {
         const data = await res.json();
         setRecentReassignments(data || []);
@@ -578,8 +564,7 @@ export const OperationalPlanner: React.FC = () => {
   >([]);
   useEffect(() => {
     if (!token) return;
-    fetch("/api/v1/job-items/destinations", { headers: { Authorization: `Bearer ${token}` } })
-      .then((res) => (res.ok ? res.json() : []))
+    fetchApi<any>("/api/v1/job-items/destinations", { staleTime: REFERENCE_STALE_MS })
       .then((rows) => setDestinations(Array.isArray(rows) ? rows : []))
       .catch(() => setDestinations([]));
   }, [token]);

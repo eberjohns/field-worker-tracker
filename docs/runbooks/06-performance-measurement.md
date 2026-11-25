@@ -8,7 +8,7 @@ How to rebuild the measuring dataset and measure the web app's pages and API, lo
 |---|---|
 | `PERF_TIMING_ENABLED` (backend setting) | Each response gets a `Server-Timing` header (`app`, `db` time with query count, `dbrepeat` = how often the most repeated statement ran), and each request writes one `request_timing` log line: the route template (no ids), status, duration, queries, DB time, repeats and statements slower than `PERF_SLOW_QUERY_MS` (SQL text only, never values). Off by default. Ignored when `APP_ENV=production`. |
 | `tools/perf/seed_perf_dataset.py` | Builds the scaled **mock** dataset in a separate local database `fw_perf`. |
-| `tools/perf/run_api.py` | Starts the API on `fw_perf` with timing on, on port 8000 (refuses if the port is taken). |
+| `tools/perf/run_api.py` | Starts the API on `fw_perf` with timing on, on port 8000 (refuses if the port is taken). If 8000 is busy with another API, set `FW_PERF_API_PORT` (for example 8020) and point the preview's `/api` proxy at that port. |
 | `tools/perf/measure_pages.py` | Loads the 9 pages in Chromium (Playwright), cold and warm, and records requests, chain depth, bytes, the slowest endpoint and time to usable. |
 | `tools/perf/measure_api.py` | Replays the API calls the pages made (20 samples each) for p50/p95, and locally picks the heaviest report. |
 

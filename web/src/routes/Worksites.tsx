@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { RENEWAL_HINT, RENEWAL_LABEL } from "../components/worksites/RenewalLabel";
 import { currencyForCountry, formatMoney } from "../features/format/money";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { loadAll, REFERENCE_STALE_MS } from "../api/apiCache";
 import { useAuth } from "../context/AuthContext";
 import {
   Search,
@@ -20,8 +21,8 @@ import {
   Edit2,
   PowerOff,
 } from "lucide-react";
-import { MapContainer, PolygonEditor, PlaceSearch } from "../features/map";
-import { Map as MapLibreMap } from "maplibre-gl";
+import { MapContainer, PolygonEditor, PlaceSearch } from "../features/map/lazy";
+import type { Map as MapLibreMap } from "maplibre-gl";
 import SupervisorProposalsModal from "../components/jobs/SupervisorProposalsModal";
 import { AddWorksiteWizard } from "../components/worksites/AddWorksiteWizard";
 import { ensureOk, Modal, useDialogs, useToast } from "../ui";
@@ -148,11 +149,8 @@ export const Worksites: React.FC = () => {
     }
   };
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (force: boolean = false) => {
     try {
-      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-
       // 1. Worksites
       const params = new URLSearchParams();
       if (search) params.set("q", search);
@@ -178,29 +176,29 @@ export const Worksites: React.FC = () => {
       }
 
       const accQs = accParams.toString() ? `?${accParams.toString()}` : "";
-      const [wsRes, gRes, zRes, accRes, revRes] = await Promise.all([
-        fetch(`/api/v1/worksites?${params.toString()}`, { headers }),
-        fetch("/api/v1/groups", { headers }),
-        fetch("/api/v1/zones", { headers }),
-        fetch(`/api/v1/accommodations${accQs}`, { headers }),
-        fetch("/api/v1/salary-revisions", { headers }),
-      ]);
-
-      if (wsRes.ok) {
-        setWorksites(await wsRes.json());
-      }
-      if (gRes.ok) {
-        setGroups(await gRes.json());
-      }
-      if (zRes.ok) {
-        setZones(await zRes.json());
-      }
-      if (accRes.ok) {
-        setAccommodations(await accRes.json());
-      }
-      if (revRes && revRes.ok) {
-        setRevisions(await revRes.json());
-      }
+      // Batch 9 step 3: cached results show at once; stale ones refresh in the background.
+      let applied = false;
+      const done = loadAll(
+        [
+          `/api/v1/worksites?${params.toString()}`,
+          { path: "/api/v1/groups", staleTime: REFERENCE_STALE_MS },
+          { path: "/api/v1/zones", staleTime: REFERENCE_STALE_MS },
+          `/api/v1/accommodations${accQs}`,
+          { path: "/api/v1/salary-revisions", staleTime: REFERENCE_STALE_MS },
+        ],
+        ([ws, g, z, acc, rev]) => {
+          applied = true;
+          if (ws) setWorksites(ws);
+          if (g) setGroups(g);
+          if (z) setZones(z);
+          if (acc) setAccommodations(acc);
+          if (rev) setRevisions(rev);
+          setLoading(false);
+        },
+        { force }
+      );
+      if (!applied) setLoading(true);
+      await done;
     } catch (err) {
       console.error(err);
     } finally {
@@ -541,7 +539,7 @@ export const Worksites: React.FC = () => {
         </div>
 
         <button
-          onClick={fetchData}
+          onClick={() => fetchData(true)}
           className="p-2 border border-slate-200 rounded-md hover:bg-slate-50 text-slate-600 transition"
           title="Refresh data"
         >

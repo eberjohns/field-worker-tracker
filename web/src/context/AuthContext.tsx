@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { clearApiCache, isCacheBustingWrite, markAllStale } from "../api/apiCache";
 import { problemFromBody, ApiError } from "../ui";
 
 export interface UserProfile {
@@ -37,9 +38,16 @@ if (typeof window !== "undefined" && !(window as any).__fwt_fetch_interceptor_in
       }
     }
     const response = await originalFetch(...args);
+    {
+      const req = args[0];
+      const url = typeof req === "string" ? req : req instanceof Request ? req.url : String(req);
+      const method = args[1]?.method ?? (req instanceof Request ? req.method : "GET");
+      if (isCacheBustingWrite(method, url, response.ok)) markAllStale();
+    }
     if (response.status === 401) {
       const url = typeof args[0] === "string" ? args[0] : (args[0] as Request).url;
       if (!url.includes("/auth/login")) {
+        clearApiCache();
         localStorage.removeItem("fwt_token");
         localStorage.removeItem("fwt_user");
         window.dispatchEvent(new CustomEvent("fwt:unauthorized"));
@@ -97,6 +105,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const data = await res.json();
+    clearApiCache();
     localStorage.setItem("fwt_token", data.access_token);
     localStorage.setItem("fwt_user", JSON.stringify(data.user));
     setToken(data.access_token);
@@ -136,6 +145,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.warn("Logout request failed or server unreachable", err);
       });
     }
+    clearApiCache();
     setToken(null);
     setUser(null);
   };

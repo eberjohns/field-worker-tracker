@@ -1,6 +1,21 @@
 # Changelog
 All notable changes. Format: Keep a Changelog. Mobile-contract changes are also logged in `docs/09-mobile-sync-contract.md`.
 
+## [1.24.0] - 2026-11-25
+### Changed (Batch 9 step 3: client cache and code splitting)
+- **Client cache:** page reads go through one React Query cache (`web/src/api/apiCache.ts`), keyed by URL.
+  - Data younger than 30 s is used without a request; for groups, zones, salary revisions, the supervisor list and the reassignment destinations, 5 min.
+  - Older data shows at once and refreshes in the background.
+  - Any successful write marks every cached read stale, so a page never shows data older than its own last change. Signing in, signing out and a 401 clear the cache.
+  - Pages: Dashboard, Worksites, Worksite detail and its Schedule tab, Base Planner, Operational Planner, Employees, Attendance and Approvals. Refresh buttons skip the cache.
+  - The approvals badge is one shared, cached query, polled every 30 s.
+- **Code splitting:** every page except the Dashboard and Login is its own chunk, preloaded when its menu link is hovered or focused. The first load is 366 KB of JavaScript (115 KB gzipped), was 2.4 MB (597 KB). The map library (about 1 MB) loads only when a map is shown, including on Worksites and Worksite detail.
+- **Measured** (`fw_perf`, local): repeat visits draw from the cache in 0–125 ms, so the "repeat visit < 300 ms" target is met. Static files on first load are 126–169 KB on the pages without a map, were 607 KB. See `docs/reviews/performance-baseline-2026-11.md`, "After step 3".
+- **Tools:** `tools/perf/run_api.py` takes `FW_PERF_API_PORT` when port 8000 is busy.
+
+### Fixed
+- A planner visit served from the cache stayed on "Loading…": the page's first loading state was only cleared on a non-silent load. Found while measuring, before release.
+
 ## [1.23.0] - 2026-11-25
 ### Changed (Batch 10 B: the UI uses the component layer everywhere)
 - **No browser dialogs, native date inputs or hand-made overlays are left.** The ui-rules baseline is empty, so `pnpm run lint` now refuses every new one.

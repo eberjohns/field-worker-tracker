@@ -2,7 +2,8 @@
 
     uv run --directory backend python ../tools/perf/run_api.py > backend/storage/perf/api-timing.log
 
-One worker, no reload, port 8000 (where ``vite preview`` proxies /api). Every request writes a
+One worker, no reload, port 8000 (where ``vite preview`` proxies /api), or ``FW_PERF_API_PORT``
+when 8000 is busy with another API (then point the preview's proxy there). Every request writes a
 ``request_timing`` log line (route template, status, duration, queries, DB time, repeats, slow
 SQL without values). Refuses to start when port 8000 is taken, so the preview can never reach a
 server on another database.
@@ -19,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import perf_db  # noqa: E402
 
-PORT = 8000
+PORT = int(os.environ.get("FW_PERF_API_PORT", "8000"))
 
 
 def main() -> None:

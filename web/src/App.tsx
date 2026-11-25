@@ -1,11 +1,10 @@
 import React from "react";
 import { RouterProvider } from "@tanstack/react-router";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { queryClient } from "./api/apiCache";
 import { router } from "./router";
 import { AuthProvider } from "./context/AuthContext";
 import { UiProvider } from "./ui";
-
-const queryClient = new QueryClient();
 
 export const App: React.FC = () => {
   return (

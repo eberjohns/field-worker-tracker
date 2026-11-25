@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { cachedResponse, loadApi, peekApi, REFERENCE_STALE_MS } from "../api/apiCache";
 import { currencyForCountry, formatMoney } from "../features/format/money";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -126,30 +127,27 @@ export const BasePlanner: React.FC = () => {
 
   // Fetch Base Planner Worksites
   const fetchBasePlannerData = async (silent: boolean = false) => {
+    const path = "/api/v1/base-planner/worksites";
+    // Batch 9 step 3: a repeat visit shows the cached network at once (refreshed if stale).
+    silent = silent || peekApi(path) !== undefined;
     if (!silent) setLoading(true);
     else setIsRefreshing(true);
     setError(null);
     try {
-      const res = await fetch("/api/v1/base-planner/worksites", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error("Failed to load Base Planner data");
-      const data: BasePlannerResponse = await res.json();
-      setWorksites(data.worksites || []);
+      await loadApi<BasePlannerResponse>(path, (data) => setWorksites(data.worksites || []));
     } catch (err: any) {
       setError(err.message || "An error occurred");
     } finally {
-      if (!silent) setLoading(false);
-      else setIsRefreshing(false);
+      // Always: the page starts in the loading state, and a cached visit is "silent".
+      setLoading(false);
+      setIsRefreshing(false);
     }
   };
 
   // Fetch Supervisors for crew filter
   const fetchSupervisors = async () => {
     try {
-      const res = await fetch("/api/v1/employees?role=SUPERVISOR&limit=200", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await cachedResponse("/api/v1/employees?role=SUPERVISOR&limit=200", { staleTime: REFERENCE_STALE_MS });
       if (res.ok) {
         const data = await res.json();
         const items = data.items || data || [];

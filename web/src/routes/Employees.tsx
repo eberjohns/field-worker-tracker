@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { loadAll } from "../api/apiCache";
 import { currencyForCountry } from "../features/format/money";
 import { Link } from "@tanstack/react-router";
 import { useAuth } from "../context/AuthContext";
@@ -173,7 +174,6 @@ export const Employees: React.FC = () => {
   };
 
   const fetchEmployees = async () => {
-    setLoading(true);
     try {
       const params = new URLSearchParams();
       params.set("limit", "1000");
@@ -196,15 +196,16 @@ export const Employees: React.FC = () => {
         params.set("is_active", "true");
       }
 
-      const res = await fetch(`/api/v1/employees?${params.toString()}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (res.ok) {
-        const data = await res.json();
+      // Batch 9 step 3: cached results show at once; stale ones refresh in the background.
+      let applied = false;
+      const done = loadAll([`/api/v1/employees?${params.toString()}`], ([data]) => {
+        applied = true;
         // Exclude system bootstrap ADMIN001 from operational employee views
-        const filtered = data.filter((e: any) => e.tally_id !== "ADMIN001" && e.role !== "ADMIN");
-        setEmployees(filtered);
-      }
+        if (data) setEmployees(data.filter((e: any) => e.tally_id !== "ADMIN001" && e.role !== "ADMIN"));
+        setLoading(false);
+      });
+      if (!applied) setLoading(true);
+      await done;
     } catch (err) {
       console.error(err);
     } finally {
