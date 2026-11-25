@@ -1,9 +1,9 @@
 {
-  "version": "1.29.0",
+  "version": "1.29.1",
   "major": 1,
   "minor": 29,
-  "patch": 0,
+  "patch": 1,
   "last_branch": "chore/render-blueprint",
-  "last_commit": "ad1b241",
-  "updated_at": "2026-11-25T14:19:44.401520+00:00"
+  "last_commit": "b169fb2",
+  "updated_at": "2026-11-25T14:27:45.047632+00:00"
 }

@@ -2,27 +2,28 @@
 All notable changes. Format: Keep a Changelog. Mobile-contract changes are also logged in `docs/09-mobile-sync-contract.md`.
 
 ## [1.29.0] - 2026-11-25
-### Added (chore: Render Blueprint)
-- **`render.yaml`** describes the current Render setup. The owner applies it; nothing calls Render.
-  - **Web static site** `field-worker-tracker-1`:
+### Added (chore: Render setup)
+- **`render.yaml` (Render Blueprint), for new environments.** The owner sets up the existing services by hand.
+  - **Static site `field-worker-tracker-1`:**
     - the CI build (pnpm, frozen lockfile), published from `web/dist`;
-    - rewrites in order: `/api/*` to the backend, then `/*` to `/index.html`;
-    - `VITE_GOOGLE_MAPS_API_KEY` and `VITE_GOOGLE_MAPS_MAP_ID` listed with `sync: false`;
-    - no `VITE_API_URL`, since the rewrite makes it unnecessary.
-  - **Backend** (Docker, `backend/Dockerfile`):
-    - migrations on every deploy (`preDeployCommand: uv run alembic upgrade head`), with the free-plan alternative in a comment;
+    - rewrites in order: `/api/*` → `https://field-worker-tracker-2.onrender.com/api/*`, then `/*` → `/index.html`;
+    - `VITE_GOOGLE_MAPS_API_KEY` and `VITE_GOOGLE_MAPS_MAP_ID` as `sync: false`;
+    - no `VITE_API_URL`.
+  - **Docker backend `field-worker-tracker-2`** (free plan):
+    - the start command runs `alembic upgrade head` before uvicorn, because the free plan has no pre-deploy command; the paid-plan `preDeployCommand` is kept as a comment;
     - a health check;
     - every variable `sync: false`, with no values.
   - Nothing for push, email, MapTiler or Nominatim.
 - **Runbook 09:**
-  - checking names, the URL and the build against Render first;
-  - applying the Blueprint and deleting leftover variables;
+  - the current services;
+  - the hand settings for the existing backend (Docker Command with the migration) and static site (the two rewrites, env vars, leftovers to delete);
+  - creating a new environment from the Blueprint;
   - why the rewrite order matters;
   - `VITE_` values need a rebuild;
-  - migrations on deploy, paid and free;
   - what to do when a deploy fails (`alembic current` / `heads`).
 - **Runbooks 01 and 08** point to it. Runbook 01 no longer lists a push key.
-- **`web/vercel.json`** is unchanged: it already has the same two rules in the same order.
+### Removed
+- **`web/vercel.json`:** Vercel isn't used (owner, 25 Nov 2026). The Render static site's rewrites replace it.
 
 ## [1.28.0] - 2026-11-25
 ### Added (docs: mobile handover)

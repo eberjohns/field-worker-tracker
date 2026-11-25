@@ -5,9 +5,10 @@
 # `sync: false` and no value: Render asks for it once and never reads it from this file.
 # Never put a secret value here.
 #
-# CHECK AGAINST RENDER before applying: the service names and the backend URL below come
-# from web/vercel.json and must match the existing services exactly, or Render creates new
-# ones instead of updating them.
+# Intended for NEW environments (a fresh staging or a second deployment). The owner does not
+# apply it to the existing services; they are set by hand as described in runbook 09 §2.
+# The names and URL below are the existing ones (owner, 25 Nov 2026); for a new environment,
+# rename both services and point the /api/* rewrite at the new backend's URL.
 
 services:
   # --- Web dashboard: static site ------------------------------------------------------------
@@ -22,7 +23,7 @@ services:
     routes:
       - type: rewrite
         source: /api/*
-        destination: https://fwt-backend.onrender.com/api/* # CHECK AGAINST RENDER
+        destination: https://field-worker-tracker-2.onrender.com/api/*
       - type: rewrite
         source: /*
         destination: /index.html
@@ -37,19 +38,20 @@ services:
 
   # --- Backend API: FastAPI in the repo's Dockerfile ------------------------------------------
   - type: web
-    name: fwt-backend # CHECK AGAINST RENDER (from web/vercel.json)
+    name: field-worker-tracker-2
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
-    # Start command: the Dockerfile's CMD
-    #   uv run uvicorn fw.main:app --host 0.0.0.0 --port $PORT
+    plan: free
     healthCheckPath: /health/liveness
-    # Migrations on every deploy, before the new version takes traffic. Runs in the image's
-    # /app folder, which holds alembic.ini. A failure stops the deploy; the old version keeps
-    # running.
-    # NOT AVAILABLE ON RENDER'S FREE PLAN. On free, delete preDeployCommand and use instead:
-    #   dockerCommand: sh -c "uv run alembic upgrade head && uv run uvicorn fw.main:app --host 0.0.0.0 --port $PORT"
-    preDeployCommand: uv run alembic upgrade head
+    # Free plan (owner, 25 Nov 2026): there is no pre-deploy command, so migrations run at the
+    # start of every instance, before uvicorn, in the image's /app folder (where alembic.ini
+    # is). If the migration fails, the server doesn't start and the deploy fails.
+    dockerCommand: sh -c "uv run alembic upgrade head && uv run uvicorn fw.main:app --host 0.0.0.0 --port $PORT"
+    # On a paid plan, use the pre-deploy command instead (the old version keeps serving if it
+    # fails) and drop the migration from dockerCommand (or remove dockerCommand to use the
+    # Dockerfile's CMD):
+    # preDeployCommand: uv run alembic upgrade head
     envVars:
       - key: APP_ENV # production (or staging)
         sync: false

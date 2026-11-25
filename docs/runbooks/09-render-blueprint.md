@@ -1,87 +1,105 @@
-# Runbook 09: Render Blueprint (`render.yaml`)
+# Runbook 09: Render setup and the Blueprint (`render.yaml`)
 
-`render.yaml` at the repository root describes the current Render setup as a Blueprint:
-- the web dashboard as a static site;
-- the backend API as a Docker web service.
+The current Render deployment (owner, 25 Nov 2026):
 
-The owner applies it in the Render dashboard; nothing in the repository calls Render. Runbook 01 covers the target production stack (Azure UAE); this runbook covers the Render deployment used today.
-
-## 1. Check against Render before the first apply
-Some values in `render.yaml` couldn't be read from the repository. They are marked `CHECK AGAINST RENDER`:
-
-| Item | In `render.yaml` | Where it came from | Check |
+| Part | Render service | URL | Plan |
 |---|---|---|---|
-| Backend URL in the `/api/*` rewrite | `https://fwt-backend.onrender.com` | `web/vercel.json` | Render → backend service → its `onrender.com` URL. Note: the 19 Nov handover mentions `field-worker-tracker-2.onrender.com`; if that is the backend, use it here (and in `web/vercel.json`) |
-| Backend service name | `fwt-backend` | the host name above | must equal the existing service's name |
-| Web service name | `field-worker-tracker-1` | owner | must equal the existing static site's name |
-| Web build command | `npm install -g pnpm@12.16.1 && cd web && pnpm install --frozen-lockfile && pnpm run build`, publish `web/dist` | CI (`.github/workflows`) | compare with Render → static site → Settings → Build Command / Publish Directory |
-| Backend runtime | Docker (`backend/Dockerfile`, context `backend`) | the repo's Dockerfile | Render → backend → Settings → Runtime. If it is a native **Python** service instead, change the entry to `runtime: python`, `rootDir: backend`, `buildCommand: pip install uv && uv sync --frozen --no-dev`, `startCommand: uv run uvicorn fw.main:app --host 0.0.0.0 --port $PORT` |
-| Plan | not set (Render keeps the current plan) | - | free or paid decides the migration option in section 4 |
+| Web dashboard (static site) | `field-worker-tracker-1` | its `onrender.com` URL | static |
+| Backend API (Docker web service) | `field-worker-tracker-2` | `https://field-worker-tracker-2.onrender.com` | **free** |
 
-**A name that doesn't match creates a new service**, which may be billed, instead of updating the existing one. Read Render's preview of the Blueprint before confirming: it must say *update*, not *create*, for both services.
+`render.yaml` at the repository root describes this setup as a Blueprint. Nothing in the repository calls Render.
 
-## 2. Apply the Blueprint
-1. Merge the PR so `render.yaml` is on `main`.
-2. Render → **New → Blueprint** → choose this repository and branch `main`. For an existing Blueprint, use **Blueprints → (this one) → Manual sync**.
-3. Check the preview against section 1. Render lists the `sync: false` variables:
-   - **For variables the services already have,** keep the current values. Render doesn't overwrite them.
-   - **For any variable it asks for,** enter the value in the dashboard. Values never go into `render.yaml`.
-4. Apply. Both services redeploy.
-5. **Delete leftovers by hand.** The Blueprint doesn't remove variables it doesn't list:
-   - on the static site: `VITE_API_URL`, and any `VITE_MAP_*` or MapTiler key;
-   - on the backend: `PUSH_BACKEND`, `FCM_CREDENTIALS`, `EMAIL_BACKEND`, `SMTP_HOST`, `SMTP_PORT`, `MAP_STYLE_*`, `MAP_API_KEY`.
+**The Blueprint is for new environments** (a fresh staging, or a second deployment). The owner does **not** apply it to the two existing services; those are set by hand (section 2). Runbook 01 covers the target production stack (Azure UAE).
 
-   None of them is read any more (DEC-62, DEC-64, ADR-033).
+## 1. What `render.yaml` contains
+- **Static site `field-worker-tracker-1`:**
+  - build: `npm install -g pnpm@12.16.1 && cd web && pnpm install --frozen-lockfile && pnpm run build`, the same steps as CI;
+  - publish directory `web/dist`;
+  - two rewrites, `/api/*` → `https://field-worker-tracker-2.onrender.com/api/*`, then `/*` → `/index.html` (section 4);
+  - variables `VITE_GOOGLE_MAPS_API_KEY` and `VITE_GOOGLE_MAPS_MAP_ID`.
+- **Docker web service `field-worker-tracker-2`:**
+  - built from `backend/Dockerfile` with context `backend`, on `plan: free`, with health check `/health/liveness`;
+  - start command, with the migration first because the free plan has no pre-deploy command (section 5):
+    ```sh
+    sh -c "uv run alembic upgrade head && uv run uvicorn fw.main:app --host 0.0.0.0 --port $PORT"
+    ```
+  - the paid-plan `preDeployCommand` is kept as a comment.
+- **Variables:** every one is `sync: false` with no value. Render asks for each value when the Blueprint is created and never reads one from the file. Never put a value in `render.yaml`.
+- **Not included:** push, email, MapTiler or Nominatim (DEC-62, DEC-64, ADR-033), and `VITE_API_URL` (section 4).
 
-## 3. Why the rewrite order matters
-The static site has two rewrites, and **the first match wins**:
-1. `/api/*` → `https://<backend>.onrender.com/api/*`
-2. `/*` → `/index.html`
+## 2. The existing services: set by hand
+Apply these once in the Render dashboard. Nothing here needs the Blueprint.
 
-`/*` also matches `/api/...`. If the catch-all came first, every API call would get `index.html` (status 200, HTML instead of JSON). Logins and data would fail with JSON parse errors, while the page itself still loads.
+**Backend `field-worker-tracker-2`: migrations on every deploy (free plan)**
+1. Render → `field-worker-tracker-2` → **Settings → Build & Deploy → Docker Command**.
+2. Set it to:
+   ```sh
+   sh -c "uv run alembic upgrade head && uv run uvicorn fw.main:app --host 0.0.0.0 --port $PORT"
+   ```
+   - The image's working folder is `/app`, which holds `alembic.ini`, so no `cd` is needed.
+   - If the service is a native Python service rather than Docker (Settings → Runtime), put `uv run alembic upgrade head && ` in front of the existing **Start Command** instead, run from the folder that has `alembic.ini` (`backend`).
+3. Save. Render redeploys. In the logs, the start must show `alembic.runtime.migration` lines (or nothing to upgrade), then uvicorn starting.
+4. **If you move to a paid plan later:**
+   - put `uv run alembic upgrade head` in **Pre-Deploy Command**;
+   - remove the migration part from the Docker Command, or clear it to use the Dockerfile's CMD.
+
+   The pre-deploy command is better: if it fails, the old version keeps serving.
+5. **Delete leftover variables**, none of which is read any more: `PUSH_BACKEND`, `FCM_CREDENTIALS`, `EMAIL_BACKEND`, `SMTP_HOST`, `SMTP_PORT`, `MAP_STYLE_STREETS_URL`, `MAP_STYLE_SATELLITE_URL`, `MAP_API_KEY`.
+
+**Static site `field-worker-tracker-1`**
+1. **Settings → Redirects/Rewrites.** Two rules, in this order (section 4):
+
+   | # | Source | Destination | Action |
+   |---|---|---|---|
+   | 1 | `/api/*` | `https://field-worker-tracker-2.onrender.com/api/*` | Rewrite |
+   | 2 | `/*` | `/index.html` | Rewrite |
+
+2. **Environment:**
+   - set `VITE_GOOGLE_MAPS_API_KEY` and `VITE_GOOGLE_MAPS_MAP_ID` (runbook 08);
+   - delete `VITE_API_URL` if it is set, along with any `VITE_MAP_*` or MapTiler key;
+   - then **Manual Deploy → Clear build cache & deploy**.
+3. **Build command and publish directory:** compare them with section 1. They only need to produce `web/dist` with the same steps.
+
+## 3. A new environment from the Blueprint
+1. **Edit `render.yaml` on a branch first.** Rename both services, for example `fwt-staging-web` and `fwt-staging-api`, and point the `/api/*` rewrite at the new backend's URL (`https://<new-api-name>.onrender.com/api/*`). If the names still match the existing services, Render would take those services over instead of creating new ones.
+2. Render → **New → Blueprint** → this repository and that branch.
+3. **Read the preview.** It must say *create* for both services, not *update*. Enter each `sync: false` value when asked.
+4. Create the database separately, and set `DATABASE_URL` and `DATABASE_MIGRATOR_URL` to it.
+5. The first start runs every migration on the empty database. Then sign in as `ADMIN001` (runbook 05).
+
+## 4. Why the rewrite order matters
+**The first matching rule wins**, and `/*` also matches `/api/...`. If the catch-all came first, every API call would get `index.html` (status 200, HTML instead of JSON). Sign-in and data loading would fail with JSON parse errors, while the page itself still loads.
 
 Because of rule 1, the browser calls its own origin (`/api/...`), and Render forwards the call to the backend:
-- the web build needs **no `VITE_API_URL`**; leave it unset;
+- the web build needs **no `VITE_API_URL`** (the app treats it as an optional prefix; leave it unset);
 - CORS doesn't come into play for the dashboard.
 
-`web/vercel.json` holds the same two rules in the same order, for a Vercel deployment. Keep the two files in step when the backend URL changes.
+(`web/vercel.json` held the same rules for Vercel. Vercel isn't used, so it was deleted on 25 Nov 2026.)
 
-## 4. Environment variables and redeploys
-- **`VITE_` variables** (`VITE_GOOGLE_MAPS_API_KEY`, `VITE_GOOGLE_MAPS_MAP_ID`) are written into the built files at build time.
-  - After changing one, run **Manual Deploy → Clear build cache & deploy** on the static site; a restart is not enough.
+## 5. Environment variables and redeploys
+- **`VITE_` variables** are written into the built files at build time.
+  - After changing one, run **Manual Deploy → Clear build cache & deploy** on the static site; a restart isn't enough.
   - Keys, restrictions and quotas are in runbook 08.
 - **Backend variables** apply on the next deploy or restart.
-- **Never commit a value.** Every variable in `render.yaml` is `sync: false` with no value.
-
-## 5. Migrations run on every deploy
-- **Paid plans (Starter and up):** `preDeployCommand: uv run alembic upgrade head`.
-  - It runs in the image's `/app` folder, which has `alembic.ini`, after the build and before the new version takes traffic.
-  - It uses `DATABASE_MIGRATOR_URL`, or `DATABASE_URL` when that is unset.
-  - If it fails, the deploy stops and **the old version keeps serving**.
-- **Free plan:** Render has no pre-deploy command on free.
-  - Delete `preDeployCommand` and set the start command to run the migration first:
-    ```yaml
-    dockerCommand: sh -c "uv run alembic upgrade head && uv run uvicorn fw.main:app --host 0.0.0.0 --port $PORT"
-    ```
-    For a native Python service, put `uv run alembic upgrade head && ` in front of the `startCommand` instead.
-  - Here a failing migration stops the new instance from starting. Render then keeps the previous instance only while the deploy is in progress, so check promptly (section 6).
-- Migrations are written to be additive. A deploy that only adds code runs `upgrade head` as a no-op.
+- **Migrations run on every start (free plan).** A start with nothing new to migrate is a quick no-op.
+  - If a migration fails, uvicorn never starts and the deploy fails.
+  - Free instances also start after sleeping, so a broken migration shows up on the next wake-up too.
+  - Migrations are written to be additive.
 
 ## 6. If a deploy fails
-1. Render → backend → **Events / Logs**. Find the pre-deploy (or start) output, which ends with the Alembic error.
-2. See where the database is: Render → backend → **Shell** (paid plans), then:
+1. Render → `field-worker-tracker-2` → **Logs**. Find the start output: an Alembic traceback means the migration failed.
+2. **See where the database is.** The free plan has no Render shell, so run these locally from `backend/`:
    ```sh
    uv run alembic current        # revision the database is at
    uv run alembic heads          # revision the code expects
    uv run alembic history -r -3:head
    ```
-   On the free plan (no shell), run the same commands locally against the Render database. Use the external connection string, set as `DATABASE_MIGRATOR_URL` in your shell only, never in a file, from `backend/`.
-3. **`current` is behind `heads`:** the migration failed partway or didn't run. Fix the cause shown in the log (a missing permission for the migrator role, say, or data that breaks a constraint), then redeploy.
-4. **`current` equals `heads` but the app fails:** the problem is not the migration. Check the start log and environment variables.
+   Point them at the Render database with its **external** connection string, set as `DATABASE_MIGRATOR_URL` (and `DATABASE_URL`) in that shell session only, never in a file. On a paid plan, use **Shell** on the service instead.
+3. **`current` is behind `heads`:** the migration failed partway or didn't run. Fix the cause shown in the log (for example a missing permission for the migrator role, or data that breaks a new constraint), then redeploy.
+4. **`current` equals `heads` but the app fails:** the migration isn't the problem. Check the uvicorn part of the log and the environment variables.
 5. Don't run `alembic downgrade` on the hosted database without the owner's go-ahead (runbook 01 §4).
 
 ## 7. Not in the Blueprint
-- **The database:** it is managed separately, and the Blueprint only references it through `DATABASE_URL`.
-- **The background worker** (`python -m fw.worker` in docker-compose): add it as a `type: worker` service only if it runs on Render today.
-- **Push, email, MapTiler and Nominatim:** removed (DEC-62, DEC-64, ADR-033).
-- **Local file storage** (`LOCAL_STORAGE_PATH` for generated reports and archives) is on the instance's disk. On Render that disk is wiped on every deploy unless a persistent disk is attached (paid plans).
+- **The database:** managed separately, and referenced through `DATABASE_URL`.
+- **The background worker** (`python -m fw.worker` in docker-compose): add it as a `type: worker` service only if a deployment needs it.
+- **Local file storage** (`LOCAL_STORAGE_PATH` for generated reports and archives) is on the instance's disk. On Render's free plan that disk is wiped on every deploy and restart; a persistent disk needs a paid plan.
