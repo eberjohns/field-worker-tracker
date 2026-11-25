@@ -1,5 +1,7 @@
 # Field Worker Tracker – notes for the mobile team (19 Nov 2026)
 
+> **Superseded by [`mobile-handover-v1.md`](mobile-handover-v1.md) (25 Nov 2026)**, which collects these notes and every later change. Kept for history.
+
 Backend changes coming in the next release, and what they mean for the app. Contract reference: `docs/09-mobile-sync-contract.md` (it will be updated in the same backend release).
 
 ## 1. Login lockout now enforced by the server

@@ -73,3 +73,17 @@ They end up in the browser bundle. That is expected for a Maps JavaScript key, a
 2. Update the environment and rebuild and redeploy.
 3. Run the checks in step 4.
 4. Delete the old key.
+
+## 6. Mobile app: Google Maps SDK for Android key
+The mobile app draws worksite and camp boundaries with the Google Maps SDK for Android. Its key is separate from the dashboard's. The full handover for the mobile team is in `docs/mobile-handover-v1.md` §3–4.
+
+1. **Own key.** Use the client's Google Cloud project (the same project is fine). Create credentials → API key, named `fwt-android-app`. Never reuse the web key.
+2. **Application restriction:** Android apps. Add:
+   - the **package name** with the **release SHA-1**: the **App signing key** certificate from the Play Console **App integrity** page, if Play App Signing is on;
+   - for testing, **either** the debug SHA-1 (`./gradlew signingReport`) and the upload key SHA-1, **or** a separate test key (`fwt-android-test`) restricted the same way.
+3. **API restriction:** enable and allow the **Maps SDK for Android** only.
+4. **No Map ID.** The app doesn't set a `mapId` and doesn't use cloud-based styling, so mobile map loads stay in Google's free tier. Styling, if any, is a local JSON style.
+5. **Never commit the key.** The app reads it into `AndroidManifest.xml` as `<meta-data android:name="com.google.android.geo.API_KEY" android:value="${MAPS_API_KEY}" />` through a Gradle build variable. The value comes from `~/.gradle/gradle.properties` locally, or from a CI secret (`MAPS_API_KEY`).
+6. **Quota and alerts.** The Maps SDK for Android has no per-load charge without a Map ID. Still keep the project's budget alert from §2, and add a quota alert on the Maps SDK for Android at 80 % of whatever daily cap is set.
+7. **Check.** A release build on a real phone shows the map, with no `Authorization failure` in logcat. That error means a wrong SHA-1 or package name.
+8. **Rotating.** Create the new key with the same restrictions, ship an app build with it, wait until old builds are out of use, then delete the old key.

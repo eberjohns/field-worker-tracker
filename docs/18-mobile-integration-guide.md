@@ -4,6 +4,8 @@
 This document is the hands-on onboarding and local-testing guide complementing the authoritative [Mobile Sync and Event Contract](09-mobile-sync-contract.md) and the machine-readable OpenAPI schema [`openapi-mobile.json`](../openapi-mobile.json).
 
 > If any detail here ever differs from `docs/09-mobile-sync-contract.md` or `openapi-mobile.json`, treat `09-mobile-sync-contract.md` and `openapi-mobile.json` as the source of truth.
+>
+> **What changed for v1 (25 Nov 2026):** read [`mobile-handover-v1.md`](mobile-handover-v1.md): lockout, no push, no scorecard, gzip, boundaries and the Maps SDK key.
 
 ---
 
@@ -93,7 +95,7 @@ Under UAE Personal Data Protection Law (Federal Decree-Law No. 45 of 2021), loca
 
 ## 4. Device Updates, Heartbeat & Synchronization Protocol
 
-Keep device metadata current with `PUT /api/v1/mobile/device` whenever `push_token`, `app_version`, `os_version`, or `location_permission_state` (`ALWAYS | WHILE_IN_USE | DENIED | RESTRICTED`) changes.
+Keep device metadata current with `PUT /api/v1/mobile/device` whenever `app_version`, `os_version`, or `location_permission_state` (`ALWAYS | WHILE_IN_USE | DENIED | RESTRICTED`) changes.
 
 The sync engine uses an append-only per-worker change log with monotonic global cursors:
 
