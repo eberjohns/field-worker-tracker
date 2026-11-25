@@ -1,9 +1,9 @@
 {
-  "version": "1.24.0",
+  "version": "1.25.0",
   "major": 1,
-  "minor": 24,
+  "minor": 25,
   "patch": 0,
-  "last_branch": "perf/batch9-cache-split",
-  "last_commit": "63ed9a3",
-  "updated_at": "2026-11-25T04:35:44.055810+00:00"
+  "last_branch": "perf/batch9-reports-sql",
+  "last_commit": "b1a97d8",
+  "updated_at": "2026-11-25T06:57:24.821544+00:00"
 }

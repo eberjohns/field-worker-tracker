@@ -162,6 +162,9 @@ Roles: A = Admin, E = Engineer, S = Superintendent, V = Supervisor. "scope" = li
 | GET/POST | /consent-policies | A | publish location consent notice versions (per language) |
 | GET/POST/DELETE | /public-holidays | A | per country |
 | POST | /payroll/runs | A | create or **re-run** a DRAFT for a month (increments `run_no`; auto-created `payroll_auto_run_delay_days` after month-end). Creating or re-running a draft generates the month-end draft reports once; viewing a run no longer regenerates them (v1.16.0). Each record's `snapshot.salary` stores the six salary components (`basic_salary`, `special_allowance`, `fixed_ot_amount`, `bonus`, `telephone_allowance`, `housing_transport_allowance`) that add up to `salary_portion`, and `snapshot.settings.currency` / `totals_snapshot.currency` the country's `currency` setting |
+| POST | /payroll/runs/jobs | A | the same draft as `POST /payroll/runs`, built in the background (Batch 9 step 4). `202` with the job (`BackgroundJobRead`); poll `GET /background-jobs/{id}`. When it succeeds, `result` is `{payroll_run_id, run_no}`. `409 JOB_ALREADY_RUNNING` (with `job_id`) while a draft for the same country and month is being built. The web uses this one; `POST /payroll/runs` stays for compatibility |
+| GET | /background-jobs/{id} | any | a background job's `status` (QUEUED, RUNNING, SUCCEEDED, FAILED, INTERRUPTED), `phase` (`employees`, then `reports`), `progress_done`/`progress_total`, `result`, `error_code`/`error_message`. Admins see every job, others only their own (404 otherwise). A QUEUED or RUNNING job with no heartbeat for 2 minutes (its server stopped) is reported and stored as INTERRUPTED |
+| GET | /background-jobs | any | recent jobs, newest first; `kind`, `active=true` (QUEUED or RUNNING only), `limit` (1–100, default 20). Admins see every job, others only their own |
 | GET | /payroll/runs, /payroll/runs/{id} | A | list and inspect monthly payroll runs (Admin only since Batch 5.3b, DEC-47). Each run has `currency` (AED / SAR: the stored one, else the country's). Records return the six salary components; for runs made before v1.16.0 a component missing from the snapshot comes from the salary row the run used (`salary_id`), else the employee's row in effect at `period_end` |
 | GET | /payroll/runs/{id}/issues | A | inspect blocking issues (unapproved overtime, absences pending review `PENDING_ABSENCE` with `pending_absence_count`, missing salary structures) |
 | POST | /payroll/runs/{id}/approve | A | approves the draft: freezes immutable records, locks attendance, stores final snapshots |
@@ -249,9 +252,9 @@ Writes an `attendance_approvals` row for the current calculation version and set
 
 **Payroll preview**
 ```http
-POST /api/v1/payroll/runs   { "period_start": "2026-10-01", "period_end": "2026-10-31", "country": "AE" }
+POST /api/v1/payroll/runs/jobs   { "period_start": "2026-10-01", "period_end": "2026-10-31", "country": "AE" }
 ```
-`202` -> job; `GET /payroll/runs/{id}` returns status DRAFT with totals and `issues_count`; `POST .../approve` freezes it.
+`202` -> job; poll `GET /background-jobs/{id}` until `SUCCEEDED`; `result.payroll_run_id` -> `GET /payroll/runs/{id}` returns status DRAFT with totals and `issues_count`; `POST .../approve` freezes it.
 
 ## 4. Implementation notes
 - All list endpoints apply `scope_filter(user)` in the repository layer.

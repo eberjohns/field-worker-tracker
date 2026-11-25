@@ -119,6 +119,7 @@ No-activity, stale device, sync lag, document expiry, staffing gaps. Resolve wit
 ### 3.8 Payroll and Cost (`/payroll`)   (design: `design/D4-month-end-and-reports.md`)
 - **Salary structures**: per-worker table with standard hours, salary portion, last change date and difference; history per worker; imported from the salary template.
 - **Payroll runs**: the automatic **draft** for the previous month appears `payroll_auto_run_delay_days` after month-end. Run page: totals, **issues** (attendance still pending review, workers without salary, missing standard hours), records table, **Re-run** (Admin), **Approve** (Admin). Approved runs are read-only.
+- **Generating a draft** (Batch 9 step 4): Generate and Re-run start a background job, and a progress bar shows "Calculating employees 120 / 580", then "Writing month-end reports 4 / 11". You can leave the page: the draft keeps going, and when you come back the bar is shown again. When it is ready, the new run is selected and a toast says so; if it fails, the toast gives the reason and nothing is saved. While a draft is being generated, Generate and Re-run are disabled; starting the same month from another tab shows the running job instead.
 - **Record detail**: salary portion, OT1/OT2 hours and amounts, gross/net pay (employee side) and, separately, provisions, per-month provision, total staff cost, HR OH 5% and **final total staff cost** (employer side).
 - **Job budget** (revision file) with budget vs actual per job.
 

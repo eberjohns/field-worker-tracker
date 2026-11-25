@@ -1,6 +1,6 @@
 [project]
 name = "field-worker-tracker-backend"
-version = "1.24.0"
+version = "1.25.0"
 description = "Field Worker Tracker Backend API and Worker"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
@@ -101,6 +101,7 @@ layers = [
     "fw.modules.org",
     "fw.modules.lookups",
     "fw.modules.settings | fw.modules.identity | fw.modules.audit",
+    "fw.modules.tasks",
     "fw.core",
 ]
 

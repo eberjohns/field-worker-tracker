@@ -322,6 +322,9 @@ Batch: `kind`, `filename`, `file_hash`, `uploaded_by_user_id`, `status` (UPLOADE
 ### generated_reports
 `report_key`, `country`, `period_start`, `period_end`, `kind` (MONTH_END | ON_DEMAND), `params` jsonb, `file_name` (`<Company>_<Report>_<Country>_<Period>_generated-<datetime>.xlsx`), `file_ref` (storage key), `payroll_run_id` nullable, `version_no` (re-generations), `status` (DRAFT | APPROVED), `sha256` text, `file_size_bytes` bigint, `generated_by` (system or user), `generated_at`, `visible_roles` text[]. Never deleted; every copy stays downloadable. Retention per 14.
 
+### background_jobs (on-demand jobs with progress, Batch 9 step 4)
+`kind` (e.g. `payroll_draft`), `dedupe_key` (one QUEUED or RUNNING job per key: partial unique index `uq_background_jobs_active_key`), `status` (QUEUED | RUNNING | SUCCEEDED | FAILED | INTERRUPTED), `params` jsonb, `phase`, `progress_done`, `progress_total`, `result` jsonb, `error_code`, `error_message`, `created_by_user_id` (FK users, SET NULL), `created_at`, `started_at`, `finished_at`, `heartbeat_at`. Index (`kind`, `status`). A QUEUED or RUNNING job whose `heartbeat_at` is over 2 minutes old is stored as INTERRUPTED (its process stopped). Rows are small and kept; a retention rule can come with the audit.
+
 ### report_exports (background export jobs)
 `report_key`, `format` (xlsx | csv | pdf), `status` (PENDING | PROCESSING | COMPLETED | FAILED), `filters` jsonb, `requested_by_user_id` (FK to users), `file_ref` (storage key), `file_name`, `file_size_bytes`, `sha256`, `error_message`, `created_at`, `completed_at`.
 

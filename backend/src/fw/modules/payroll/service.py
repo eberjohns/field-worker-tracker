@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fw.core.clock import site_today
 from fw.core.errors import AppError
 from fw.core.events import PayrollRunApproved, PayrollRunCreated, event_bus
+from fw.core.progress import report_progress, yield_to_loop
 from fw.modules.audit import AuditService
 from fw.modules.lookups import LookupService
 from fw.modules.org import Employee
@@ -713,9 +714,19 @@ class PayrollSalaryService:
             prov_cache[cntry] = total_prov
             return total_prov
 
+        # One salary query per as-of date (one per country at most), not one per employee.
+        emp_as_of = {e.id: as_of or site_today(e.country) for e in employees}
+        salary_by_emp: dict[UUID, Any] = {}
+        for as_of_day in set(emp_as_of.values()):
+            salary_by_emp.update(
+                await PayrollRepository.get_latest_salaries_for_employees(
+                    session, [i for i, d in emp_as_of.items() if d == as_of_day], as_of_day
+                )
+            )
+
         for emp in employees:
-            today = as_of or site_today(emp.country)
-            salary = await PayrollRepository.get_latest_salary_for_employee(session, emp.id, today)
+            today = emp_as_of[emp.id]
+            salary = salary_by_emp.get(emp.id)
             if salary:
                 portion = calculate_salary_portion(
                     basic=salary.basic_salary,
@@ -1098,10 +1109,23 @@ class PayrollService:
         t_staff_cost = Decimal("0.00")
         t_final_cost = Decimal("0.00")
 
-        for emp in employees:
-            salary = await PayrollRepository.get_latest_salary_for_employee(
-                session, emp.id, payload.period_end
-            )
+        # Salaries and worksite minutes for everyone in two queries, not two per employee
+        # (Batch 9 step 4).
+        emp_ids = [e.id for e in employees]
+        salary_by_emp = await PayrollRepository.get_latest_salaries_for_employees(
+            session, emp_ids, payload.period_end
+        )
+        minutes_by_emp = await PayrollRepository.get_allocated_minutes_per_worksite_for_employees(
+            session, emp_ids, payload.period_start, payload.period_end
+        )
+
+        total_emps = len(employees)
+        for emp_no, emp in enumerate(employees):
+            # Progress for a background job, and a turn for other requests (Batch 9 step 4).
+            if emp_no % 25 == 0:
+                await report_progress("employees", emp_no, total_emps)
+                await yield_to_loop()
+            salary = salary_by_emp.get(emp.id)
             std_hours = salary.standard_hours if salary else Decimal("8.0")
             basic_sal = salary.basic_salary if salary else Decimal("0.00")
             salary_id = salary.id if salary else None
@@ -1294,11 +1318,7 @@ class PayrollService:
             records_to_create.append(rec)
 
             # Job cost allocations: proportional allocation by worked minutes
-            worksite_minutes = (
-                await PayrollRepository.get_allocated_minutes_per_worksite_for_employee(
-                    session, emp.id, payload.period_start, payload.period_end
-                )
-            )
+            worksite_minutes = minutes_by_emp.get(emp.id, {})
             total_emp_minutes = sum(worksite_minutes.values())
             for ws_id, minutes in worksite_minutes.items():
                 if total_emp_minutes > 0:
@@ -1360,6 +1380,12 @@ class PayrollService:
             diff={"run_no": run.run_no, "country": run.country, "totals": totals_dict},
             reason=f"Draft payroll run #{run.run_no} generated",
         )
+
+        # The period's attendance, leave and schedule (about 30,000 objects for 580 employees) are
+        # not needed by the reports below; letting them go keeps the garbage collector's pauses
+        # short while the reports run (Batch 9 step 4).
+        del attendance_pairs, leave_requests, scheduled_items
+        del att_by_emp, leave_by_emp, sched_by_emp
 
         # Month-end draft reports, once per created or re-run draft (not on every read).
         await event_bus.publish(
@@ -1549,10 +1575,11 @@ class PayrollService:
 
         # 2. Employees active during period missing salary structure
         employees = await PayrollRepository.get_active_employees_for_country(session, run.country)
+        sal_by_emp = await PayrollRepository.get_latest_salaries_for_employees(
+            session, [e.id for e in employees], run.period_end
+        )
         for emp in employees:
-            sal = await PayrollRepository.get_latest_salary_for_employee(
-                session, emp.id, run.period_end
-            )
+            sal = sal_by_emp.get(emp.id)
             if not sal:
                 missing_sal_count += 1
                 issues.append(

@@ -29,8 +29,17 @@ async def fetch_job_costing(
         as_of=filters.date_to if not both else None,
     )
 
-    ws_res = await session.execute(select(Worksite))
-    ws_map = {w.id: w for w in ws_res.scalars().all()}
+    # Columns only (Batch 9 step 4): loading Worksite rows would also load every job item.
+    ws_res = await session.execute(
+        select(
+            Worksite.id,
+            Worksite.job_number,
+            Worksite.job_name,
+            Worksite.start_date,
+            Worksite.end_date,
+        )
+    )
+    ws_map = {w.id: w for w in ws_res.all()}
 
     rows: list[dict[str, Any]] = []
     for it in items:

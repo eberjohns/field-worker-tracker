@@ -28,9 +28,12 @@ from fw.modules.payroll.schemas import (
     WorkerMobilePayrollSlip,
 )
 from fw.modules.payroll.service import PayrollService
+from fw.modules.tasks import BackgroundJobRead, BackgroundJobService
 from fw.rules.lookups import GRADE_CODE
 
 router = APIRouter(tags=["payroll"])
+
+PAYROLL_DRAFT_JOB = "payroll_draft"
 
 
 # --- Payroll Runs & Approvals ---
@@ -53,6 +56,39 @@ async def generate_payroll_run(
         user_id=current_user.id,
         actor_role=current_user.role,
     )
+
+
+@router.post(
+    "/payroll/runs/jobs",
+    response_model=BackgroundJobRead,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def start_payroll_run_job(
+    payload: PayrollRunCreate,
+    current_user: User = Depends(require_role("ADMIN")),
+) -> BackgroundJobRead:
+    """Generate the DRAFT run (and its month-end reports) in the background (Batch 9 step 4).
+
+    Returns the job at once; poll ``GET /background-jobs/{id}``. When it succeeds, ``result``
+    holds ``payroll_run_id`` and ``run_no``. 409 while a draft for the same country and month is
+    being generated.
+    """
+    user_id, role = current_user.id, current_user.role
+
+    async def work(session: AsyncSession) -> dict[str, object]:
+        run = await PayrollService.generate_draft_run(
+            session=session, payload=payload, user_id=user_id, actor_role=role
+        )
+        return {"payroll_run_id": str(run.id), "run_no": run.run_no}
+
+    job = await BackgroundJobService.start(
+        kind=PAYROLL_DRAFT_JOB,
+        params=payload.model_dump(mode="json"),
+        fn=work,
+        dedupe_key=f"{PAYROLL_DRAFT_JOB}:{payload.country}:{payload.period_start.isoformat()}",
+        user_id=user_id,
+    )
+    return BackgroundJobRead.model_validate(job)
 
 
 @router.get("/payroll/runs", response_model=list[PayrollRunRead])

@@ -1,3 +1,4 @@
+import gc
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -39,9 +40,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     register_notification_handlers()
     register_reports_listeners()
     await live_position_broadcaster.start_listener()
+    # Everything loaded so far (modules, models, routes: about 265,000 objects) lives as long as
+    # the process. Freezing it keeps the garbage collector from scanning it on every full
+    # collection; during a payroll draft that cut the longest pause from 425 to 270 ms
+    # (Batch 9 step 4).
+    gc.collect()
+    gc.freeze()
     try:
         yield
     finally:
+        from fw.modules.tasks import shutdown_background_jobs
+
+        await shutdown_background_jobs()
         await live_position_broadcaster.stop_listener()
 
 

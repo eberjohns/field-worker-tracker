@@ -7,6 +7,7 @@ from uuid import UUID
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fw.core.progress import fetch_rows_in_parts, yield_every
 from fw.modules.attendance.models import AttendanceCalculation, AttendanceRecord, SiteVisit
 from fw.modules.jobs.models import Worksite
 from fw.modules.org.models import Group, Zone
@@ -21,7 +22,11 @@ async def fetch_project_attendance_summary(
     scope: AccessScope | None,
 ) -> list[dict[str, Any]]:
     """Aggregate planned vs deployed manpower and hours per project/worksite."""
-    ws_stmt = select(Worksite).where(Worksite.is_active.is_(True))
+    # Only the columns the summary uses (Batch 9 step 4): no ORM rows, so no job items, no
+    # scheduled-work relationships and no full visit rows are loaded.
+    ws_stmt = select(
+        Worksite.id, Worksite.job_number, Worksite.job_name, Worksite.group_id, Worksite.zone_id
+    ).where(Worksite.is_active.is_(True))
     if filters.worksite_id:
         ws_stmt = ws_stmt.where(Worksite.id == filters.worksite_id)
     if filters.country:
@@ -31,7 +36,7 @@ async def fetch_project_attendance_summary(
         ws_stmt = ws_stmt.where(Worksite.id.in_(list(scope.worksite_filter)))
 
     ws_res = await session.execute(ws_stmt)
-    worksites = ws_res.scalars().all()
+    worksites = ws_res.all()
     if not worksites:
         return []
 
@@ -41,15 +46,17 @@ async def fetch_project_attendance_summary(
 
     group_map: dict[UUID, str] = {}
     if group_ids:
-        gres = await session.execute(select(Group).where(Group.id.in_(group_ids)))
-        group_map = {g.id: g.name for g in gres.scalars().all()}
+        gres = await session.execute(select(Group.id, Group.name).where(Group.id.in_(group_ids)))
+        group_map = {g.id: g.name for g in gres.all()}
 
     zone_map: dict[UUID, str] = {}
     if zone_ids:
-        zres = await session.execute(select(Zone).where(Zone.id.in_(zone_ids)))
-        zone_map = {z.id: z.name for z in zres.scalars().all()}
+        zres = await session.execute(select(Zone.id, Zone.name).where(Zone.id.in_(zone_ids)))
+        zone_map = {z.id: z.name for z in zres.all()}
 
-    sched_stmt = select(ScheduledWork).where(ScheduledWork.worksite_id.in_(ws_map.keys()))
+    sched_stmt = select(ScheduledWork.worksite_id, ScheduledWork.assigned_hours).where(
+        ScheduledWork.worksite_id.in_(ws_map.keys())
+    )
     if filters.date_from:
         sched_stmt = sched_stmt.where(ScheduledWork.work_date >= filters.date_from)
     if filters.date_to:
@@ -62,12 +69,15 @@ async def fetch_project_attendance_summary(
     if sched_stmt_scope is not None:
         sched_stmt = sched_stmt.where(sched_stmt_scope)
 
-    sched_res = await session.execute(sched_stmt)
-    scheduled_items = sched_res.scalars().all()
+    scheduled_items = await fetch_rows_in_parts(session, sched_stmt)
 
-    visit_stmt = select(SiteVisit).where(
-        SiteVisit.place_type == "SITE", SiteVisit.worksite_id.in_(ws_map.keys())
-    )
+    visit_stmt = select(
+        SiteVisit.employee_id,
+        SiteVisit.work_date,
+        SiteVisit.worksite_id,
+        SiteVisit.counts_as_completed,
+        SiteVisit.duration_minutes,
+    ).where(SiteVisit.place_type == "SITE", SiteVisit.worksite_id.in_(ws_map.keys()))
     if filters.date_from:
         visit_stmt = visit_stmt.where(SiteVisit.work_date >= filters.date_from)
     if filters.date_to:
@@ -78,8 +88,7 @@ async def fetch_project_attendance_summary(
     if visit_stmt_scope is not None:
         visit_stmt = visit_stmt.where(visit_stmt_scope)
 
-    visit_res = await session.execute(visit_stmt)
-    visits = visit_res.scalars().all()
+    visits = await fetch_rows_in_parts(session, visit_stmt)
 
     # Actual man-hours count only approved days (payroll's rule: APPROVED, or not REJECTED with
     # no review reasons), the same hours the job budget uses (DEC-59).
@@ -106,18 +115,20 @@ async def fetch_project_attendance_summary(
                 ),
             )
         )
-        approved_days = {(r[0], r[1]) for r in (await session.execute(appr_stmt)).all()}
+        approved_days = {(r[0], r[1]) for r in await fetch_rows_in_parts(session, appr_stmt)}
 
     sched_by_ws = defaultdict(list)
     for s in scheduled_items:
         sched_by_ws[s.worksite_id].append(s)
 
     visits_by_ws = defaultdict(list)
-    for v in visits:
+    for v_no, v in enumerate(visits):
+        await yield_every(v_no)
         visits_by_ws[v.worksite_id].append(v)
 
     rows: list[dict[str, Any]] = []
-    for ws_id, ws in ws_map.items():
+    for ws_no, (ws_id, ws) in enumerate(ws_map.items()):
+        await yield_every(ws_no, 20)
         w_sched = sched_by_ws.get(ws_id, [])
         w_visits = visits_by_ws.get(ws_id, [])
 

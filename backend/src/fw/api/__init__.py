@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from fw.api.attendance import router as attendance_router
 from fw.api.audit import router as audit_router
 from fw.api.auth import router as auth_router
+from fw.api.background_jobs import router as background_jobs_router
 from fw.api.dashboard import router as dashboard_router
 from fw.api.documents import router as documents_router
 from fw.api.employees import router as employees_router
@@ -50,5 +51,6 @@ api_v1_router.include_router(alert_router)
 api_v1_router.include_router(reports_router)
 api_v1_router.include_router(archive_router)
 api_v1_router.include_router(retention_router)
+api_v1_router.include_router(background_jobs_router)
 
 __all__ = ["api_v1_router"]

@@ -1,14 +1,11 @@
 """Handler for Daily Attendance Report."""
 
 from typing import Any
-from uuid import UUID
 
-from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from fw.modules.attendance.models import AttendanceCalculation, AttendanceRecord
-from fw.modules.org.models import Employee
+from fw.core.progress import yield_every
+from fw.modules.reports.handlers._attendance_days import load_attendance_days
 from fw.modules.reports.schemas import ReportFilterParams
 from fw.modules.scheduling import AccessScope
 
@@ -19,54 +16,39 @@ async def fetch_daily_attendance(
     scope: AccessScope | None,
 ) -> list[dict[str, Any]]:
     """Query daily attendance data comparing 5-point planned schedule against actuals."""
-    stmt = (
-        select(AttendanceRecord)
-        .join(Employee, AttendanceRecord.employee_id == Employee.id)
-        .options(
-            selectinload(AttendanceRecord.current_calculation),
-            selectinload(AttendanceRecord.comments),
-            selectinload(AttendanceRecord.approvals),
-        )
-        .order_by(AttendanceRecord.work_date.desc(), Employee.name.asc())
+    days = await load_attendance_days(
+        session,
+        filters,
+        scope,
+        record_fields=("work_date", "business_status", "review_status"),
+        calc_fields=(
+            "planned_accommodation_departure",
+            "planned_first_site_start",
+            "planned_break_minutes",
+            "planned_last_site_end",
+            "planned_accommodation_return",
+            "planned_total_minutes",
+            "planned_worked_minutes",
+            "accommodation_departure_at",
+            "first_site_entry_at",
+            "break_minutes_used",
+            "last_site_exit_at",
+            "accommodation_return_at",
+            "shift_span_minutes",
+            "worked_minutes",
+            "ot1_minutes",
+            "ot2_minutes",
+            "flags",
+        ),
+        employee_fields=("tally_id", "name", "accommodation_id"),
+        latest_comment=True,
+        filter_sgd=True,
     )
-
-    conditions = []
-    # DEC-57 site-day rule: employee-days scheduled on my worksites (+ crew for Supt/Eng)
-    conditions_scope = (
-        scope.operations_clause(AttendanceRecord.employee_id, AttendanceRecord.work_date)
-        if scope
-        else None
-    )
-    if conditions_scope is not None:
-        conditions.append(conditions_scope)
-    if filters.employee_id:
-        conditions.append(AttendanceRecord.employee_id == filters.employee_id)
-    if filters.date_from:
-        conditions.append(AttendanceRecord.work_date >= filters.date_from)
-    if filters.date_to:
-        conditions.append(AttendanceRecord.work_date <= filters.date_to)
-    if filters.country:
-        conditions.append(Employee.country == filters.country)
-    if filters.sgd:
-        conditions.append(Employee.staff_grade_description == filters.sgd)
-
-    if conditions:
-        stmt = stmt.where(and_(*conditions))
-
-    result = await session.execute(stmt)
-    records = result.scalars().all()
-
-    # Preload employees
-    emp_ids = {r.employee_id for r in records}
-    emp_map: dict[UUID, Employee] = {}
-    if emp_ids:
-        emp_res = await session.execute(select(Employee).where(Employee.id.in_(emp_ids)))
-        emp_map = {e.id: e for e in emp_res.scalars().all()}
 
     rows: list[dict[str, Any]] = []
-    for rec in records:
-        emp = emp_map.get(rec.employee_id)
-        calc: AttendanceCalculation | None = rec.current_calculation
+    for day_no, day in enumerate(days):
+        await yield_every(day_no)
+        rec, calc, emp = day.rec, day.calc, day.emp
 
         has_acc = bool(emp and emp.accommodation_id is not None)
 
@@ -125,7 +107,7 @@ async def fetch_daily_attendance(
         ot2_hrs = round(calc.ot2_minutes / 60.0, 2) if calc else 0.0
 
         # Comments & Approval
-        latest_comment = rec.comments[-1].comment_text if rec.comments else ""
+        latest_comment = day.latest_comment
         approval_str = rec.review_status
         flags_str = ", ".join(calc.flags) if calc and calc.flags else ""
 

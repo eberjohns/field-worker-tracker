@@ -1,6 +1,39 @@
 # Changelog
 All notable changes. Format: Keep a Changelog. Mobile-contract changes are also logged in `docs/09-mobile-sync-contract.md`.
 
+## [1.25.0] - 2026-11-25
+### Changed (Batch 9 step 4: reports in SQL, payroll draft in the background)
+- **Reports read only the columns they show.**
+  - The five attendance reports (daily, monthly, utilization, transportation, late/early departure) use one shared query instead of ORM rows, calculations in chunks and every employee again.
+  - Movement, site visits, project summary and job costing select columns. They no longer load each worksite's job items.
+  - For October (AE, 580 employees): Daily Attendance 3.5 → 1.2 s, Late/Early 2.9 → 0.65 s, Monthly 1.9 → 0.65 s, Utilization 2.3 → 0.58 s, Project Summary 1.6 → 0.55 s; every report under 2 s.
+  - Output is unchanged: all 15 reports were compared row for row before and after.
+- **Payroll draft:**
+  - Salaries and worksite minutes are loaded in two queries instead of two per employee (1,206 → 48 queries); the records are byte-identical.
+  - Draft plus month-end reports: 28–30 s → 17–20 s, 1,501 → 98 queries.
+- **Payroll draft as a background job:** `POST /api/v1/payroll/runs/jobs` returns 202 with the job; `GET /api/v1/background-jobs/{id}` gives its status and progress.
+  - The Payroll page shows a progress bar, survives a reload, and disables Generate and Re-run while a draft runs.
+  - One draft per country and month at a time (409 with the running job's id).
+  - A job whose server stopped is marked INTERRUPTED within 2 minutes and can be started again.
+  - `POST /payroll/runs` still works as before, for compatibility.
+- **The API keeps answering during a draft:**
+  - large results are read in parts of 1,000 rows;
+  - long loops give other requests a turn;
+  - the month-end Excel files are written in a thread;
+  - the API freezes its start-up objects for the garbage collector (`gc.freeze()`).
+  - Other requests now wait at most about 200 ms; before these changes, 1.25 s.
+- **New module `tasks`** (`background_jobs` table, migration 0027, additive). It sits just above `fw.core` in the layers contract. See `docs/modules/tasks.md`.
+- **Cold page check (owner):** measured twice. The step 3 increase is real and has two causes:
+  - each page's own code file is one more round trip (+30–45 ms);
+  - Batch 10 B's three extra Dashboard calls (+~70 ms).
+  - The step 2 backend, run next to the current one on the same data, is not faster.
+  - Details: `docs/reviews/performance-baseline-2026-11.md`, "After step 4".
+
+### Fixed
+- **`.gitignore`:** the Python packaging patterns (`lib/`, `build/`, `dist/`, `var/`, `parts/`, `eggs/`, `env/`…) matched folders of any name anywhere. `web/src/lib` or `web/src/data` would have been silently left out of commits. They are now anchored to the repo root and `backend/`. `data/` is anchored to `/data/`, the client spreadsheets folder, which stays ignored.
+  - Checked with `git status --ignored`: nothing that should be tracked was hidden.
+  - The ignored set is local secrets (`.env`, `web/.env.local`), caches, runtime storage (`storage/`, `backend/storage/`, `backend/src/storage/`), `web/dist/`, the client files (`data/`, `docs/reference/client-files/`) and an empty `transport` folder of `__pycache__` left by a parked branch.
+
 ## [1.24.0] - 2026-11-25
 ### Changed (Batch 9 step 3: client cache and code splitting)
 - **Client cache:** page reads go through one React Query cache (`web/src/api/apiCache.ts`), keyed by URL.
