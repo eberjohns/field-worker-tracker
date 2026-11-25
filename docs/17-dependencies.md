@@ -6,12 +6,16 @@ Status: **VERIFIED** (checked), **GATE** (checked, but a compatibility test is r
 
 | Area | Dependency | Status | Verified | Notes |
 |---|---|---|---|---|
-| Map renderer | maplibre-gl 6.x | VERIFIED | 2026-10-28 | v6.15 released 18 Oct 2026; ESM-only, WebGL2 required, BSD |
+| Map provider (main) | Google Maps JavaScript API + Places API (New) (service) | VERIFIED (service) | 2026-11-25 | ADR-033; advanced markers need a Map ID; Drawing Library unavailable since May 2026 (not used); billed per map load / autocomplete session above the free usage; keys by env only |
+| Google Maps loader | @googlemaps/js-api-loader 2.1.3 | PENDING APPROVAL | 2026-11-25 | npm: 2.1.3, last published 22 Sep 2026, Apache-2.0, Google-maintained; required peer of the Terra Draw Google adapter |
+| Map drawing (Google) | terra-draw-google-maps-adapter 1.7.0 | PENDING APPROVAL | 2026-11-25 | npm: 1.7.0, last published 6 Oct 2026, MIT, same repo as terra-draw (1.40.0, 15 Nov 2026); peers terra-draw ^1, js-api-loader ^1.14.3 or ^2 |
+| Google Maps types | @types/google.maps 3.67.0 (dev) | PENDING APPROVAL | 2026-11-25 | npm: 3.67.0, published 19 Nov 2026, MIT (DefinitelyTyped) |
+| Map renderer (fallback) | maplibre-gl 6.x | VERIFIED | 2026-10-28 | v6.15 released 18 Oct 2026; ESM-only, WebGL2 required, BSD |
 | Map wrapper | react-map-gl 8.1.2 (`/maplibre`) | VERIFIED | 2026-10-28 | released 29 Jul 2026; supports MapLibre v6 |
 | Map drawing | terra-draw + terra-draw-maplibre-gl-adapter | VERIFIED | 2026-11-03 | terra-draw 1.39.0 + terra-draw-maplibre-gl-adapter 1.5.0 verified with maplibre-gl 6.16.0 (ADR-006 gate passed); polygon drawing, vertex dragging, area & kinks checks verified |
 | Geometry (web) | @turf/* 7.3.x (modular) | VERIFIED | 2026-10-28 | MIT; released through 2026; import only needed modules |
-| Basemap tiles | MapTiler Cloud (alt: Stadia Maps) | VERIFIED (service) | 2026-10-28 | planet data release cycle visible; confirm plan/pricing at purchase; satellite imagery recency unverified |
-| Place search | MapTiler Geocoding API | VERIFIED (service) | 2026-11-02 | REST forward search endpoint; query text only; domain-restricted API key; free tier 100k req/mo |
+| Basemap tiles (fallback) | MapTiler Cloud (alt: Stadia Maps) | VERIFIED (service) | 2026-10-28 | planet data release cycle visible; confirm plan/pricing at purchase; satellite imagery recency unverified |
+| Place search (fallback) | MapTiler Geocoding API | VERIFIED (service) | 2026-11-02 | REST forward search endpoint; query text only; domain-restricted API key; free tier 100k req/mo |
 | Job queue | procrastinate 3.x | VERIFIED, WATCH | 2026-10-28 | active (3.10.x); project seeks additional maintainers - keep behind `JobQueue` port; alternative adapter ready if needed |
 | Map renderer | Leaflet | **REJECTED** | - | not actively updated; do not reintroduce |
 | Backend | FastAPI, Pydantic v2, Starlette, uvicorn | VERIFIED | 2026-11-02 | FastAPI 0.162.x / Pydantic 2.14.x / Starlette 1.10.x / Uvicorn 0.54.x; MIT/BSD; pinned in uv.lock |

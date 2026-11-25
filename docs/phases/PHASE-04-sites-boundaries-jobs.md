@@ -19,7 +19,7 @@ All jobs and their items are defined, outdoor/indoor flagged, boundaries are dra
 - DEC-09, DEC-11, DEC-36
 
 ## Deliverables
-- **Map-stack compatibility gate first** (ADR-006): MapLibre + react-map-gl + Terra Draw + Turf installed together, polygon drawn/edited/saved, satellite imagery checked for Dubai/KSA; pin or fall back as the ADR says
+- **Map-stack compatibility gate first** (ADR-006): MapLibre + react-map-gl + Terra Draw + Turf installed together, polygon drawn/edited/saved, satellite imagery checked for Dubai/KSA; pin or fall back as the ADR says. *Since 25 Nov 2026 (ADR-033) Google Maps is the main provider behind a map port and this MapLibre stack is the fallback.*
 - Module `jobs`: worksites (job number format check, `is_outdoor`), job items (structured frequency, PERMANENT/REMOTE, planned grade, break override), occurrence generation (rolling horizon, idempotent), budget-only staff types excluded
 - Boundary editor with place search, validity check, area; **boundary setup queue**; **copy boundary to other jobs**; accommodation boundaries
 - Import sheets: Worksites, Job_Items (with registry/template update)

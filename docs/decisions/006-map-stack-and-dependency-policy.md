@@ -1,5 +1,5 @@
 # 006 - Map stack, tile provider and dependency policy
-Status: Accepted (version pins subject to the M3 compatibility gate)
+Status: Accepted; renderer, basemap and geocoding parts superseded by [ADR-033](033-google-maps-web-map-stack.md) (this stack stays as the fallback). The dependency policy still applies.
 Date: 2026-10-28
 
 ## Context
