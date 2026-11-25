@@ -312,7 +312,7 @@ export const ReportsHub: React.FC = () => {
                             label="From Date"
                             value={filterParams.date_from || ""}
                             onChange={(iso) => setFilterParams((prev) => ({ ...prev, date_from: iso }))}
-                            size="sm"
+                            size="lg"
                           />
                         </div>
                         <div>
@@ -320,7 +320,7 @@ export const ReportsHub: React.FC = () => {
                             label="To Date"
                             value={filterParams.date_to || ""}
                             onChange={(iso) => setFilterParams((prev) => ({ ...prev, date_to: iso }))}
-                            size="sm"
+                            size="lg"
                           />
                         </div>
                       </>

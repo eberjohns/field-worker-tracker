@@ -496,7 +496,7 @@ export const AddWorksiteWizard: React.FC<AddWorksiteWizardProps> = ({
                   id="wz-start"
                   value={startDate}
                   onChange={(iso) => setStartDate(iso)}
-                  size="sm"
+                  size="lg"
                 />
               </div>
               <div>
@@ -507,7 +507,7 @@ export const AddWorksiteWizard: React.FC<AddWorksiteWizardProps> = ({
                   id="wz-end"
                   value={endDate}
                   onChange={(iso) => setEndDate(iso)}
-                  size="sm"
+                  size="lg"
                 />
               </div>
               <div>

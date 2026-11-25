@@ -1941,7 +1941,7 @@ export const Employees: React.FC = () => {
                     label="Join Date"
                     value={createFormData.join_date}
                     onChange={(iso) => setCreateFormData({ ...createFormData, join_date: iso })}
-                    size="sm"
+                    size="lg"
                   />
                 </div>
   
@@ -2170,7 +2170,7 @@ export const Employees: React.FC = () => {
                           label="Effective Date"
                           value={initialSalaryData.effective_from || createFormData.join_date}
                           onChange={(iso) => setInitialSalaryData({ ...initialSalaryData, effective_from: iso })}
-                          size="sm"
+                          size="lg"
                         />
                       </div>
                     </div>
@@ -2259,7 +2259,7 @@ export const Employees: React.FC = () => {
                 label="Effective From Date"
                 value={supervisorBreakEffectiveFrom}
                 onChange={(iso) => setSupervisorBreakEffectiveFrom(iso)}
-                size="sm"
+                size="lg"
               />
               <p className="text-[11px] text-slate-400 mt-1">
                 Creates or updates effective-dated salary records from this date. Unlocked past attendance will be recalculated automatically.

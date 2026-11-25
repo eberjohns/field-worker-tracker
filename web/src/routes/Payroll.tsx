@@ -1291,13 +1291,13 @@ export const Payroll: React.FC = () => {
                 label="From"
                 value={budgetFrom}
                 onChange={(iso) => setBudgetFrom(iso)}
-                size="sm"
+                size="lg"
               />
               <DatePicker
                 label="To"
                 value={budgetTo}
                 onChange={(iso) => setBudgetTo(iso)}
-                size="sm"
+                size="lg"
               />
               {(budgetFrom || budgetTo) && (
                 <button
@@ -1513,7 +1513,7 @@ export const Payroll: React.FC = () => {
                 <div className="flex justify-between">
                   <span>Missed Hours ({Number(selectedRecord.missed_hours || 0).toFixed(1)}h @ Basic/208):</span>
                   <span className="font-mono font-bold">
-                    {money(-Number(selectedRecord.missed_hours_deduction || 0))}
+                    {money(-Number(selectedRecord.missed_hours_deduction || 0) || 0) /* "|| 0": no "-0.00" */}
                   </span>
                 </div>
                 <div className="flex justify-between border-t border-rose-200/60 pt-1 font-bold text-sm text-indigo-900">
@@ -1611,7 +1611,7 @@ export const Payroll: React.FC = () => {
                   label="Period Start"
                   value={genPeriodStart}
                   onChange={(iso) => setGenPeriodStart(iso)}
-                  size="sm"
+                  size="lg"
                 />
               </div>
               <div>
@@ -1619,7 +1619,7 @@ export const Payroll: React.FC = () => {
                   label="Period End"
                   value={genPeriodEnd}
                   onChange={(iso) => setGenPeriodEnd(iso)}
-                  size="sm"
+                  size="lg"
                 />
               </div>
             </div>
@@ -1767,7 +1767,7 @@ export const Payroll: React.FC = () => {
                   label="Effective From Date"
                   value={targetEffectiveDate}
                   onChange={(iso) => setTargetEffectiveDate(iso)}
-                  size="sm"
+                  size="lg"
                 />
               </div>
             </div>

@@ -682,7 +682,7 @@ export const Settings: React.FC = () => {
         </div>
 
         {/* Global Controls */}
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg p-1 text-xs">
             <span className="px-2 font-medium text-slate-500">Country:</span>
             {["ALL", "AE", "SA"].map((c) => (
@@ -701,8 +701,9 @@ export const Settings: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg p-1 text-xs">
-            <span className="px-2 font-medium text-slate-500">As Of:</span>
+            <span className="px-2 font-medium text-slate-500 whitespace-nowrap">As Of:</span>
             <DatePicker
+              fieldClassName="w-36"
               aria-label="As of date"
               value={asOfDate}
               onChange={(iso) => setAsOfDate(iso)}
@@ -1005,7 +1006,7 @@ export const Settings: React.FC = () => {
                   label="Work Date"
                   value={checkDate}
                   onChange={(iso) => setCheckDate(iso)}
-                  size="sm"
+                  size="lg"
                 />
               </div>
 
@@ -1517,7 +1518,7 @@ export const Settings: React.FC = () => {
                   label="Effective From Date"
                   value={settingEffectiveFrom}
                   onChange={(iso) => setSettingEffectiveFrom(iso)}
-                  size="sm"
+                  size="lg"
                 />
               </div>
 
@@ -1671,7 +1672,7 @@ export const Settings: React.FC = () => {
                     required
                     value={newRuleForm.start_date}
                     onChange={(iso) => setNewRuleForm({ ...newRuleForm, start_date: iso })}
-                    size="sm"
+                    size="lg"
                   />
                 </div>
                 <div>
@@ -1679,7 +1680,7 @@ export const Settings: React.FC = () => {
                     label="End Date (optional)"
                     value={newRuleForm.end_date}
                     onChange={(iso) => setNewRuleForm({ ...newRuleForm, end_date: iso })}
-                    size="sm"
+                    size="lg"
                   />
                 </div>
               </div>
@@ -1808,7 +1809,7 @@ export const Settings: React.FC = () => {
                   required
                   value={newHoliday.holiday_date}
                   onChange={(iso) => setNewHoliday({ ...newHoliday, holiday_date: iso })}
-                  size="sm"
+                  size="lg"
                 />
               </div>
               <div>

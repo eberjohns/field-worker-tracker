@@ -122,7 +122,7 @@ export const YearPlanView: React.FC<YearPlanViewProps> = ({
                 label="Effective End Date"
                 value={endDateInput}
                 onChange={(iso) => setEndDateInput(iso)}
-                size="sm"
+                size="lg"
               />
             </div>
 

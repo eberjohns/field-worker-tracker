@@ -382,7 +382,7 @@ export const Dashboard: React.FC = () => {
             <ShieldAlert className="h-5 w-5 text-amber-500" />
             <h3 className="text-base font-bold text-slate-900">Pending Actions & Alerts</h3>
           </div>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
             {visible.map((x) => (
               <React.Fragment key={x.key}>{sectionNodes[x.key]}</React.Fragment>
             ))}

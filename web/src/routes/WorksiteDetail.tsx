@@ -582,7 +582,7 @@ export const WorksiteDetail: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Top Breadcrumb & Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 pb-4">
+      <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-center 2xl:justify-between border-b border-slate-200 pb-4">
         <div>
           <Link
             to="/worksites"
@@ -591,7 +591,7 @@ export const WorksiteDetail: React.FC = () => {
             <ArrowLeft className="h-3.5 w-3.5" />
             <span>Worksites & Jobs</span>
           </Link>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 [&>span]:whitespace-nowrap">
             <h1 className="text-2xl font-bold tracking-tight text-slate-900 font-mono">
               {worksite.job_number}
             </h1>
@@ -874,7 +874,7 @@ export const WorksiteDetail: React.FC = () => {
                       label="Contract Start Date"
                       value={editStartDate}
                       onChange={(iso) => setEditStartDate(iso)}
-                      size="sm"
+                      size="lg"
                     />
                   </div>
                   <div>
@@ -882,7 +882,7 @@ export const WorksiteDetail: React.FC = () => {
                       label="Contract End Date"
                       value={editEndDate}
                       onChange={(iso) => setEditEndDate(iso)}
-                      size="sm"
+                      size="lg"
                     />
                   </div>
                 </div>
@@ -2062,7 +2062,7 @@ export const WorksiteDetail: React.FC = () => {
                     label="Effective Date (Optional — defaults to Today)"
                     value={lifecycleEffectiveDate}
                     onChange={(iso) => setLifecycleEffectiveDate(iso)}
-                    size="sm"
+                    size="lg"
                   />
                   <p className="text-[11px] text-slate-500 mt-1">
                     Future worker shifts &amp; occurrences on or after this date will be cancelled, immediately freeing assigned workers&apos; capacity.

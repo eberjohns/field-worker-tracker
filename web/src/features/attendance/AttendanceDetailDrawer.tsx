@@ -380,7 +380,7 @@ export const AttendanceDetailDrawer: React.FC<AttendanceDetailDrawerProps> = ({
             {/* Immutability & Calculation Provenance */}
             <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-slate-500 font-mono text-[11px] space-y-1">
               <div>Version: v{calc?.version_no} (Engine {calc?.engine_version})</div>
-              <div>Input Hash: {calc?.input_hash}</div>
+              <div className="break-all">Input Hash: {calc?.input_hash}</div>
               <div>Calculated: {calc?.calculated_at}</div>
               <div>Reason: {calc?.reason}</div>
             </div>

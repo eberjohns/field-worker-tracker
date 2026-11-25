@@ -1560,7 +1560,7 @@ export const EmployeeDetail: React.FC = () => {
                   required
                   value={newDocExpiry}
                   onChange={(iso) => setNewDocExpiry(iso)}
-                  size="sm"
+                  size="lg"
                 />
               </div>
 
@@ -1812,7 +1812,7 @@ export const EmployeeDetail: React.FC = () => {
                 label="Effective Date (Optional — defaults to Today)"
                 value={deactivateEffectiveDate}
                 onChange={(iso) => setDeactivateEffectiveDate(iso)}
-                size="sm"
+                size="lg"
               />
               <p className="text-[11px] text-slate-500 mt-1">
                 Only schedules on or after this date will be cancelled and marked as <strong>Needs Cover</strong>. Past attendance and payroll stay untouched.

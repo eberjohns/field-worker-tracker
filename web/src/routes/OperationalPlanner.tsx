@@ -1559,10 +1559,13 @@ export const OperationalPlanner: React.FC = () => {
 
   return (
     // One scroller (Batch 10 B): the page fills the shell; the roster table, or else <main>, scrolls.
-    <div className="flex flex-col flex-1 min-h-0 bg-slate-50">
+    // Below lg (phones, small tablets) the page flows and the shell scrolls; the roster
+    // table then scrolls sideways only, so the controls never squeeze it to nothing.
+    <div className="flex flex-col lg:flex-1 lg:min-h-0 bg-slate-50">
       {/* Top Controls Bar - Light Enterprise Styling */}
-      <header className="bg-white border-b border-slate-200 px-6 py-4 sticky top-0 z-20">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      <header className="bg-white border-b border-slate-200 px-4 py-4 md:px-6 lg:sticky lg:top-0 z-20">
+        {/* The title gets its own row until the screen is wide enough for title and controls side by side. */}
+        <div className="flex flex-col 2xl:flex-row 2xl:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
               <CalendarDays className="h-6 w-6 text-indigo-600" />
@@ -1989,7 +1992,7 @@ export const OperationalPlanner: React.FC = () => {
                   required
                   value={reassignDateFrom}
                   onChange={(iso) => setReassignDateFrom(iso)}
-                  size="sm"
+                  size="lg"
                 />
               </div>
               <div>
@@ -1998,7 +2001,7 @@ export const OperationalPlanner: React.FC = () => {
                   required
                   value={reassignDateTo}
                   onChange={(iso) => setReassignDateTo(iso)}
-                  size="sm"
+                  size="lg"
                 />
               </div>
             </div>
@@ -2206,8 +2209,10 @@ export const OperationalPlanner: React.FC = () => {
 
       {/* Main Grid Content */}
       <main
-        className={`flex-1 min-h-0 p-6 ${
-          activeLens === "ROSTER" && rosterData && !loading ? "flex flex-col overflow-hidden" : "overflow-auto fw-scroll space-y-6"
+        className={`lg:flex-1 lg:min-h-0 p-4 md:p-6 ${
+          activeLens === "ROSTER" && rosterData && !loading
+            ? "lg:flex lg:flex-col lg:overflow-hidden"
+            : "lg:overflow-auto fw-scroll space-y-6"
         }`}
       >
         {loading ? (
@@ -2534,7 +2539,7 @@ export const OperationalPlanner: React.FC = () => {
           </div>
         ) : activeLens === "ROSTER" && rosterData ? (
           /* Worker Roster View */
-          <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col flex-1 min-h-0">
+          <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col lg:flex-1 lg:min-h-0">
             {/* Worker Roster Toolbar */}
             <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-3">
@@ -2601,7 +2606,7 @@ export const OperationalPlanner: React.FC = () => {
             </div>
 
             {/* Persistent Header Table */}
-            <div className="flex-1 min-h-0 overflow-auto fw-scroll">
+            <div className="overflow-x-auto lg:overflow-auto lg:flex-1 lg:min-h-0 fw-scroll">
               <table className="w-full text-left text-xs border-collapse">
                 <thead className="sticky top-0 z-10 bg-slate-100 shadow-sm border-b border-slate-200">
                   <tr className="text-slate-600">
@@ -3327,7 +3332,7 @@ export const OperationalPlanner: React.FC = () => {
                   required
                   value={reassignDateFrom}
                   onChange={(iso) => setReassignDateFrom(iso)}
-                  size="sm"
+                  size="lg"
                 />
               </div>
               <div>
@@ -3336,7 +3341,7 @@ export const OperationalPlanner: React.FC = () => {
                   required
                   value={reassignDateTo}
                   onChange={(iso) => setReassignDateTo(iso)}
-                  size="sm"
+                  size="lg"
                 />
               </div>
             </div>

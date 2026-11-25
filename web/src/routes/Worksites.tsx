@@ -318,7 +318,7 @@ export const Worksites: React.FC = () => {
   });
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-6">
+    <div className="w-full max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
@@ -331,7 +331,7 @@ export const Worksites: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3 [&>button]:whitespace-nowrap">
           {user?.role === "ADMIN" && (
             <button
               onClick={() => setShowProposals(true)}
@@ -415,7 +415,7 @@ export const Worksites: React.FC = () => {
       {/* Filter Bar */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-wrap gap-4 items-center justify-between">
         <div className="flex flex-wrap items-center gap-3 flex-1 min-w-[280px]">
-          <div className="relative flex-1 max-w-xs">
+          <div className="relative flex-1 min-w-[12rem] max-w-xs">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
             <input
               type="text"
@@ -508,7 +508,7 @@ export const Worksites: React.FC = () => {
               <select
                 value={revisionFilter}
                 onChange={(e) => setRevisionFilter(e.target.value)}
-                className="text-sm border border-slate-300 rounded-md py-1.5 px-3 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                className="max-w-full text-sm border border-slate-300 rounded-md py-1.5 px-3 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
               >
                 <option value="">All Revisions</option>
                 <option value="UNASSIGNED">Unassigned (Default)</option>

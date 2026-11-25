@@ -96,7 +96,7 @@ export const RecalculateModal: React.FC<RecalculateModalProps> = ({
               required
               value={fromDate}
               onChange={(iso) => setFromDate(iso)}
-              size="sm"
+              size="lg"
             />
           </div>
           <div>
@@ -105,7 +105,7 @@ export const RecalculateModal: React.FC<RecalculateModalProps> = ({
               required
               value={toDate}
               onChange={(iso) => setToDate(iso)}
-              size="sm"
+              size="lg"
             />
           </div>
         </div>

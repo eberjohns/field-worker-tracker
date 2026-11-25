@@ -41,11 +41,11 @@ export const Field: React.FC<FieldProps> = ({ label, hint, error, required, html
 );
 
 /** Shared look of text-like controls (input, select, the date picker's field). */
-export function controlClass(opts: { invalid?: boolean; disabled?: boolean; size?: "sm" | "md" } = {}): string {
+export function controlClass(opts: { invalid?: boolean; disabled?: boolean; size?: "sm" | "md" | "lg" } = {}): string {
   return cn(
     "w-full rounded-fw-md border bg-fw-surface text-fw-text placeholder:text-fw-text-subtle",
     "focus:outline-none focus:ring-2 focus:ring-fw-focus/40 focus:border-fw-focus",
-    opts.size === "sm" ? "h-7 px-2 text-fw-xs" : "h-8 px-2.5 text-fw-sm",
+    opts.size === "sm" ? "h-7 px-2 text-fw-xs" : opts.size === "lg" ? "h-9 px-3 text-fw-sm" : "h-8 px-2.5 text-fw-sm",
     opts.invalid ? "border-fw-danger" : "border-fw-border-strong",
     opts.disabled && "cursor-not-allowed bg-fw-muted text-fw-text-muted",
   );

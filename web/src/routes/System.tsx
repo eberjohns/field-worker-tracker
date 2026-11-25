@@ -111,7 +111,7 @@ export const System: React.FC = () => {
   const isEngineerOrAdmin = user?.role === "ADMIN" || user?.role === "ENGINEER";
 
   return (
-    <div className="p-8 max-w-6xl mx-auto space-y-8">
+    <div className="w-full max-w-6xl mx-auto space-y-8">
       {/* Page Header */}
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">System & Account</h1>

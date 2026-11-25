@@ -20,6 +20,25 @@ All notable changes. Format: Keep a Changelog. Mobile-contract changes are also 
   - the job page boundary map no longer captures the page's scroll (cooperative gestures) and fits the window;
   - the Reports pages show an EmptyState instead of an empty scroll box.
 - **API:** `GET /pending-visits` takes an optional `limit`, used by the dashboard preview. Without it, the response is unchanged.
+### Fixed (screenshot review on the demo data, 1440×900 and 390×844)
+- **Phones:**
+  - the sidebar covered most of the screen; below 768 px it is now a drawer opened from a menu button in the top bar, and it closes when you pick a page;
+  - page padding is smaller on small screens.
+- **Operational Planner:**
+  - on phones the controls squeezed the roster to nothing; below 1024 px the page now flows normally and the roster scrolls sideways;
+  - on desktop the title no longer wraps into four lines.
+- **Date fields:**
+  - in forms they were shorter than the inputs beside them; they now match, using the new DatePicker size `lg` (36 px);
+  - clicking in a date field now opens the calendar; before, only the small calendar icon did.
+- **Worksite page:** the header no longer squeezes the job name and badges.
+- **Worksites:** the header buttons and filters wrap instead of running off the screen, and the search box keeps a usable width.
+- **Settings:** the "As of" date no longer overflows on phones.
+- **Padding:** Documents, Pending Visits, System and Worksites no longer add their own padding on top of the page's.
+- **Dashboard:** sections no longer stretch to the tallest one in their row.
+- **Dialog descriptions** are now a `div`. A `p` could not hold the Add Worksite step list, which was invalid HTML and logged a React warning.
+- **Small fixes:**
+  - the attendance detail's input hash wraps;
+  - the payroll breakdown shows "AED 0.00", not "AED -0.00".
 
 ## [1.22.0] - 2026-11-25
 ### Added (owner decisions of 25 Nov 2026)

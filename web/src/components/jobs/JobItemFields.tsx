@@ -119,7 +119,7 @@ export const JobItemFields: React.FC<JobItemFieldsProps> = ({
           id={`${idPrefix}-start`}
           label="Start Date"
           required
-          size="sm"
+          size="lg"
           value={draft.start_date}
           onChange={(iso) => onChange({ start_date: iso })}
           error={errorField === "start_date" ? "Check the start date" : undefined}
@@ -127,7 +127,7 @@ export const JobItemFields: React.FC<JobItemFieldsProps> = ({
         <DatePicker
           id={`${idPrefix}-end`}
           label="End Date"
-          size="sm"
+          size="lg"
           value={draft.end_date}
           min={draft.start_date || undefined}
           onChange={(iso) => onChange({ end_date: iso })}

@@ -701,7 +701,7 @@ export const LeaveManagement: React.FC = () => {
                   required
                   value={recordForm.from_date}
                   onChange={(iso) => setRecordForm({ ...recordForm, from_date: iso })}
-                  size="sm"
+                  size="lg"
                 />
               </div>
               <div className="space-y-1">
@@ -710,7 +710,7 @@ export const LeaveManagement: React.FC = () => {
                   required
                   value={recordForm.to_date}
                   onChange={(iso) => setRecordForm({ ...recordForm, to_date: iso })}
-                  size="sm"
+                  size="lg"
                 />
               </div>
             </div>

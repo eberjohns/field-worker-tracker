@@ -694,7 +694,7 @@ export const SalaryStructures: React.FC = () => {
                   min={new Date(Date.now() + 86400000).toISOString().slice(0, 10)}
                   value={editRevForm.effective_from}
                   onChange={(iso) => setEditRevForm({ ...editRevForm, effective_from: iso })}
-                  size="sm"
+                  size="lg"
                 />
               </div>
 
@@ -862,7 +862,7 @@ export const SalaryStructures: React.FC = () => {
                   label="Effective From (Blank = 1st of upcoming month)"
                   value={formData.effective_from}
                   onChange={(iso) => setFormData({ ...formData, effective_from: iso })}
-                  size="sm"
+                  size="lg"
                 />
               </div>
 
