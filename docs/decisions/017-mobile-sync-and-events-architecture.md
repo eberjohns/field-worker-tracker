@@ -64,7 +64,7 @@ Key architectural requirements and client decisions (DEC-13, DEC-14, DEC-15, DEC
 3. **Location Events Ingestion**:
    - `POST /api/v1/mobile/events/batch` validates timestamps ($< 30$ days old, $\le 5$ min future skew), coordinate bounds ($[-90, 90], [-180, 180]$), and idempotency, persisting into `mobile_event_logs`.
 4. **Push Adapter**:
-   - `PushProvider` protocol with `NullPushProvider` (default) and `FcmPushProvider`.
+   - `PushProvider` protocol with `NullPushProvider` (default) and `FcmPushProvider`. *Update 25 Nov 2026 (DEC-64): push is not used in v1; `FcmPushProvider` and its settings were removed and `get_push_provider()` always returns the null provider.*
 5. **Contract Export & Verification**:
    - `tools/export_openapi.py --tag mobile` generates `openapi-mobile.json`.
    - CI step validates `openapi-mobile.json` is clean and up to date.

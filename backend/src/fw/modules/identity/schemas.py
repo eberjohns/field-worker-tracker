@@ -19,6 +19,8 @@ class UserRead(BaseModel):
     is_active: bool
     must_change_password: bool
     last_login_at: datetime | None = None
+    locked_until: datetime | None = None
+    failed_attempts: int = 0
     version: int
 
 

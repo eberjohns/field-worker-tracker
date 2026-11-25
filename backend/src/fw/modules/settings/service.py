@@ -97,35 +97,37 @@ class SettingsService:
         unit: str | None = None,
         created_by_user_id: UUID | None = None,
     ) -> CompanySettingValue:
-        """Insert a new effective-dated setting row and close previous row on new_date - 1 day."""
+        """Insert an effective-dated value; the timeline of (key, country) stays non-overlapping.
+
+        - A value on a date that already has one replaces it (same row).
+        - The row covering the new date is closed the day before it.
+        - A back-dated value (an import of the 2026-01-01 defaults after a later change, say)
+          ends the day before the next later value instead of staying open beside it.
+        """
         eff_from = effective_from or datetime.now(UTC).date()
 
-        # Close existing active rows if any (inclusive non-overlapping date boundary)
-        query = select(CompanySettingValue).where(
-            CompanySettingValue.setting_key == key,
-            CompanySettingValue.effective_to.is_(None),
-        )
+        query = select(CompanySettingValue).where(CompanySettingValue.setting_key == key)
         if country is not None:
             query = query.where(CompanySettingValue.country == country)
         else:
             query = query.where(CompanySettingValue.country.is_(None))
+        rows = list((await session.execute(query)).scalars().all())
 
-        res = await session.execute(query)
-        prev_rows = list(res.scalars().all())
-
-        matched_same_day = False
-        for prev in prev_rows:
-            if prev.effective_from < eff_from:
-                prev.effective_to = eff_from - timedelta(days=1)
-            elif prev.effective_from == eff_from:
-                prev.value = value
-                if unit is not None:
-                    prev.unit = unit
-                matched_same_day = True
-
-        if matched_same_day and prev_rows:
+        same_day = next((r for r in rows if r.effective_from == eff_from), None)
+        if same_day is not None:
+            same_day.value = value
+            if unit is not None:
+                same_day.unit = unit
             await session.flush()
-            return prev_rows[0]
+            return same_day
+
+        for prev in rows:
+            if prev.effective_from < eff_from and (
+                prev.effective_to is None or prev.effective_to >= eff_from
+            ):
+                prev.effective_to = eff_from - timedelta(days=1)
+        later = [r.effective_from for r in rows if r.effective_from > eff_from]
+        eff_to = min(later) - timedelta(days=1) if later else None
 
         row = CompanySettingValue(
             setting_key=key,
@@ -133,6 +135,7 @@ class SettingsService:
             value=value,
             unit=unit,
             effective_from=eff_from,
+            effective_to=eff_to,
             created_by_user_id=created_by_user_id,
         )
         session.add(row)

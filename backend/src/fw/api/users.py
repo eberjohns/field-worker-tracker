@@ -62,6 +62,27 @@ async def update_user(
     return UserRead.model_validate(user)
 
 
+@router.post("/{user_id}/unlock", response_model=UserRead)
+async def unlock_user(
+    user_id: UUID,
+    current_user: User = Depends(require_role("ADMIN")),
+    session: AsyncSession = Depends(get_db),
+) -> UserRead:
+    """Clear a sign-in lock and the failed-attempt count (Batch 7, DEC-66)."""
+    user, before = await UserService.unlock(session=session, user_id=user_id)
+    await AuditService.log_action(
+        session=session,
+        action="UNLOCK_ACCOUNT",
+        entity_type="user",
+        entity_id=str(user.id),
+        diff=before,
+        actor_user_id=current_user.id,
+        actor_role=current_user.role,
+        reason="Admin unlocked the account",
+    )
+    return UserRead.model_validate(user)
+
+
 @router.post("/{user_id}/reset-password", response_model=ResetPasswordResponse)
 async def reset_password(
     user_id: UUID,

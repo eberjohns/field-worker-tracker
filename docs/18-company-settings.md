@@ -27,7 +27,6 @@ When resolving a setting for a worker, worksite, or process:
 | `standard_ot_divisor_hours` | decimal | `208` | hours | Global | GIVEN_BY_CLIENT | Monthly standard hours divisor used to derive hourly base rate for overtime calculations (`basic_salary / 208`). |
 | `ot1_multiplier` | decimal | `1.25` | ratio | Global | GIVEN_BY_CLIENT | Overtime multiplier applied to normal working day excess hours (`1.25x`). |
 | `ot2_multiplier` | decimal | `1.50` | ratio | Global | GIVEN_BY_CLIENT | Overtime multiplier applied to weekly rest day (OT2 weekday) and public holiday hours (`1.50x`). |
-| `ot2_weekdays` | JSON array | `["SUNDAY"]` (AE), `["FRIDAY"]` (SA) | list | Country | GIVEN_BY_CLIENT | Calendar weekdays that qualify for statutory weekend overtime rate (OT2). |
 | `hr_overhead_rate` | decimal | `0.05` | fraction | Global | GIVEN_BY_CLIENT | Corporate HR management and administrative overhead applied to total labor cost in job costing (5%). |
 | `provision_visa` | decimal | `132.00` | currency/mo | Global | GIVEN_BY_CLIENT | Monthly amortized visa and residency permit accrual provision per employee. |
 | `provision_air_ticket` | decimal | `65.00` | currency/mo | Global | GIVEN_BY_CLIENT | Monthly air ticket allowance provision per employee for annual repatriation travel. |
@@ -84,6 +83,8 @@ When resolving a setting for a worker, worksite, or process:
 | `company_name` | string | `FWT` | text | Global | PROPOSED_DEFAULT | Short company name prefix used in generated report filenames (`<Company>_<Report>_<Country>_<Period>.xlsx`). |
 | `default_password` | string | `Welcome@123` | text | Global | PROPOSED_DEFAULT | **Single unified** initial password assigned to all operational accounts (web dashboard and mobile worker first-login provisioning) upon onboarding, import, or Admin password reset (DEC-53). |
 | `default_password_max_days` | integer | `7` | days | Global | PROPOSED_DEFAULT | Maximum number of days an auto-provisioned default password remains valid before mandatory password change is enforced. |
+| `login_max_failed_attempts` | integer | `5` | attempts | Global | GIVEN_BY_CLIENT | Wrong passwords in a row (web and mobile) before the account is locked (DEC-66). |
+| `login_lockout_minutes` | integer | `15` | minutes | Global | GIVEN_BY_CLIENT | How long the sign-in lock lasts; Admin can unlock earlier (DEC-66). |
 | `schedule_sync_window_days` | integer | `30` | days | Global | PROPOSED_DEFAULT | Future time horizon in days synchronized down to worker mobile devices during cursor synchronization. |
 | `live_active_window_minutes` | integer | `15` | minutes | Global | PROPOSED_DEFAULT | Time window in minutes within which the latest worker location ping is rendered as "Active/Online" on Live Map. |
 | `document_expiry_lead_days` | integer | `30` | days | Global | PROPOSED_DEFAULT | Advance notification window before passport, residency visa, or driving license expiration triggers an HR alert. |

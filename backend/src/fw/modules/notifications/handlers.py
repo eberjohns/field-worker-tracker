@@ -5,7 +5,10 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fw.core.clock import get_country_timezone
+from fw.core.config import get_settings
 from fw.core.events import (
+    DeviceMismatchAttempted,
     DomainEvent,
     LocationDisabledRecorded,
     LocationEnabledRecorded,
@@ -154,6 +157,60 @@ async def handle_worker_consent_withdrawn(event: DomainEvent, session: AsyncSess
     )
 
 
+async def handle_device_mismatch(event: DomainEvent, session: AsyncSession) -> None:
+    """Admin alert DEVICE_MISMATCH_ATTEMPT: one open alert per employee per site-local day;
+    later attempts that day update its count and last attempt."""
+    assert isinstance(event, DeviceMismatchAttempted)
+    if not event.employee_id:
+        return
+    tz = get_country_timezone(get_settings().DEPLOYMENT_COUNTRY)
+    local = event.occurred_at.astimezone(tz)
+    day_start = local.replace(hour=0, minute=0, second=0, microsecond=0)
+    attempt = {
+        "at": event.occurred_at.isoformat(),
+        "device_model": event.device_model,
+        "platform": event.platform,
+        "app_version": event.app_version,
+    }
+    existing = (
+        (
+            await session.execute(
+                select(Alert).where(
+                    Alert.alert_type == "DEVICE_MISMATCH_ATTEMPT",
+                    Alert.employee_id == event.employee_id,
+                    Alert.status == "OPEN",
+                    Alert.created_at >= day_start,
+                )
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if existing:
+        details = dict(existing.details or {})
+        details["attempts"] = int(details.get("attempts", 1)) + 1
+        details["last_attempt"] = attempt
+        existing.details = details
+        await session.flush()
+        return
+    who = f"{event.employee_name} ({event.tally_id})" if event.employee_name else event.tally_id
+    await NotificationService.create_alert(
+        session=session,
+        alert_type="DEVICE_MISMATCH_ATTEMPT",
+        title=f"Sign-in from another phone: {who}",
+        message=(
+            f"{who} tried to sign in on a phone that isn't their registered device "
+            f"({event.device_model or 'unknown model'}, {local:%d %b %Y %H:%M} site time). "
+            "If the worker changed phones, reset the device binding on the Devices page."
+        ),
+        ref_type="EMPLOYEE",
+        ref_id=None,
+        employee_id=event.employee_id,
+        target_role="ADMIN",
+        details={"employee_id": str(event.employee_id), "attempts": 1, "last_attempt": attempt},
+    )
+
+
 _HANDLERS_REGISTERED = False
 
 
@@ -170,3 +227,4 @@ def register_notification_handlers() -> None:
     event_bus.subscribe_sync(LocationDisabledRecorded, handle_location_disabled)  # type: ignore
     event_bus.subscribe_sync(LocationEnabledRecorded, handle_location_enabled)  # type: ignore
     event_bus.subscribe_sync(WorkerConsentWithdrawn, handle_worker_consent_withdrawn)  # type: ignore
+    event_bus.subscribe_sync(DeviceMismatchAttempted, handle_device_mismatch)  # type: ignore

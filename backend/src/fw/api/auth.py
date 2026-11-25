@@ -1,3 +1,5 @@
+from typing import Any
+
 from fastapi import APIRouter, Cookie, Depends, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -5,7 +7,10 @@ from fw.core.db import get_db
 from fw.core.errors import AppError
 from fw.modules.audit import AuditService
 from fw.modules.identity import (
+    SETTING_LOCKOUT_MINUTES,
+    SETTING_MAX_FAILED_ATTEMPTS,
     AuthService,
+    LockoutPolicy,
     LoginRequest,
     PasswordChangeRequest,
     TokenResponse,
@@ -31,10 +36,27 @@ async def login(
         key="default_password_max_days",
         default=7,
     )
+    policy = LockoutPolicy.from_values(
+        await SettingsService.get_setting(session, key=SETTING_MAX_FAILED_ATTEMPTS),
+        await SettingsService.get_setting(session, key=SETTING_LOCKOUT_MINUTES),
+    )
+
+    async def audit(user: User, action: str, diff: dict[str, Any], reason: str) -> None:
+        await AuditService.log_action(
+            session=session,
+            action=action,
+            entity_type="user",
+            entity_id=str(user.id),
+            diff=diff,
+            reason=reason,
+        )
+
     user, access_token, raw_refresh_token = await AuthService.authenticate(
         session=session,
         request=request,
+        audit=audit,
         default_password_max_days=int(max_days),
+        policy=policy,
     )
 
     # Set httpOnly refresh cookie

@@ -106,7 +106,6 @@ Effective-dated values in `company_setting_values` (country-scoped where noted).
 |---|---|---|---|
 | `currency` | AED (AE) / SAR (SA) | - | proposed |
 | `default_weekly_off_day` | SUNDAY | - | from client schedule |
-| `ot2_weekdays` | SUNDAY | list | client |
 | `standard_ot_divisor_hours` | 208 | h | client |
 | `ot1_multiplier` / `ot2_multiplier` | 1.25 / 1.5 | x | client |
 | `hr_overhead_rate` | 0.05 | fraction | client |
@@ -130,6 +129,7 @@ Effective-dated values in `company_setting_values` (country-scoped where noted).
 | `pending_visit_reminder_hours` / `day_close_delay_minutes` | 24 / 120 | h / min | proposed |
 | `occurrence_horizon_months` | 13 | months | proposed |
 | `default_password_max_days` | 7 | days | proposed (lock if default not changed) |
+| `login_max_failed_attempts` / `login_lockout_minutes` | 5 / 15 | attempts / min | client (DEC-66) |
 | `budget_only_staff_types` | list | - | chosen by Admin from the staff types found in job items |
 | `max_location_accuracy_m`, `clock_skew_tolerance_s`, `event_future_tolerance_s`, `event_max_age_days`, `no_activity_alert_after_minutes`, `stale_device_hours`, `location_policy_version` | 100, 120, 300, 7, 60, 24, 1 | - | proposed |
 The default password itself is entered in the system by Admin (never in a file). Planned times and seasons live in **time rules** (`design/D3-time-rules-and-attendance-report.md`).

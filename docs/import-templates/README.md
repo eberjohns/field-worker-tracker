@@ -1,6 +1,6 @@
 # Import template (v1.0)
 
-`FieldWorkerTracker_Import_Template_v1.0.xlsx` is the workbook the client fills in: 15 data tabs (header row 4, data from row 5, grey EXAMPLE rows with fictional or sample values), plus README, Lists, SGD_Aliases and Field_Dictionary (every column, its rule and the client file column it comes from).
+`FieldWorkerTracker_Import_Template_v1.0.xlsx` is the workbook the client fills in: 15 data tabs (header row 4, data from row 5, grey EXAMPLE rows with fictional or sample values; **Company_Settings is the exception**: its rows are the real current defaults, unmarked, so a fresh import sets them. Edit a value or delete a row before importing. `ot2_weekdays` is gone, Batch 7), plus README, Lists, SGD_Aliases and Field_Dictionary (every column, its rule and the client file column it comes from).
 
 Tabs: Groups, Zones, Accommodations, Employees, Employee_Reporting, Employee_Salary, Worksites, Job_Items, Worksite_Supervisors (who sees which worksite, DEC-57), Leave (optional; read since v1.22.0, optional `status` APPROVED or PENDING at the end, blank = APPROVED), Public_Holidays (optional), Salary_Revisions and Salary_Revision_Lines (job budget only; optional `telephone_allowance` and `housing_transport_allowance` at the end of the lines sheet, blank = 0), Company_Settings, Time_Rules.
 

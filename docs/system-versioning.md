@@ -72,3 +72,4 @@ Field Worker Tracker follows semantic versioning `v<MAJOR>.<MINOR>.<PATCH>`:
 | **v1.26.0** | 2026-11-25 | `feat/batch8-google-maps` | `128088c` | New branch 'feat/batch8-google-maps' |
 | **v1.26.1** | 2026-11-25 | `feat/batch8-google-maps` | `9c080fb` | Commit on 'feat/batch8-google-maps' |
 | **v1.26.2** | 2026-11-25 | `feat/batch8-google-maps` | `89c5aac` | Commit on 'feat/batch8-google-maps' |
+| **v1.27.0** | 2026-11-25 | `fix/batch7-auth-and-decisions` | `07df65f` | New branch 'fix/batch7-auth-and-decisions' |

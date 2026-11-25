@@ -1,6 +1,34 @@
 # Changelog
 All notable changes. Format: Keep a Changelog. Mobile-contract changes are also logged in `docs/09-mobile-sync-contract.md`.
 
+## [1.27.0] - 2026-11-25
+### Added (Batch 7: login lockout, push and email removal, decision records)
+- **Login lockout (DEC-66), web and mobile:**
+  - 5 wrong passwords in a row lock the account for 15 minutes (company settings `login_max_failed_attempts`, `login_lockout_minutes`).
+  - While locked, every login, even with the right password, gets `403 ACCOUNT_LOCKED` with `reason`, `locked_until` and the unlock time in site time.
+  - A successful login resets the count; once a lock has expired the count starts again.
+  - An unknown user name gets the same reply and the same password-hashing work as a wrong password.
+  - The count and the lock are committed even though the login fails.
+  - Migration 0029 adds `users.last_failed_login_at` (the count reuses `users.failed_attempts`) and the two settings.
+- **Admin "Unlock account"** on the Users page (`POST /users/{id}/unlock`), with a **Locked** badge. Every lock (`LOCK_ACCOUNT`, including the default-password-expiry lock), unlock (`UNLOCK_ACCOUNT`) and reset is audited. `GET /users` shows `locked_until` and `failed_attempts`.
+- **Device mismatch alert:** a mobile login refused with `DEVICE_MISMATCH` raises the Admin alert `DEVICE_MISMATCH_ATTEMPT`. There is one open alert per worker per site-local day; later attempts add to its count. It appears with the device alerts on the dashboard.
+- **Decision register:** DEC-62 (no email notifications), DEC-63 (no weekly scorecard), DEC-64 (no push in v1), DEC-65 (fixed import template only), DEC-66 (login lockout). "Superseded" notes were added in the requirements at §11, §16, §18 step 2 and §20; the client text is unchanged.
+### Changed
+- **Push is not used in v1:** `FcmPushProvider`, `PUSH_BACKEND` and `FCM_CREDENTIALS` are removed, and the null provider sends nothing and says so. The empty email adapter, `EMAIL_BACKEND`, `SMTP_*` and the Mailpit service in docker-compose are removed too. Existing `.env` files with these keys still load.
+- **Mobile contract rev 1.2.0** (`docs/09`):
+  - lockout is `403 ACCOUNT_LOCKED` (`429 RATE_LIMITED` and `Retry-After` are removed);
+  - §7.4 push is "not used in v1";
+  - the scorecard endpoint and the `SCORECARD` entity are removed;
+  - gzip is documented;
+  - the error example now shows `detail`, which the server has always sent, instead of `message`.
+- **Import template:** Company_Settings rows are the real current defaults (from `DEFAULT_COMPANY_SETTINGS`), not EXAMPLE rows, so a fresh import sets them. `ot2_weekdays` is removed from the template, the defaults and the country rules (unused since OT2 became holidays plus the worker's own weekly off day).
+### Fixed
+- **Effective-dated settings:**
+  - A back-dated value (for example the 2026-01-01 defaults imported after a later change) now ends the day before the next value instead of staying open beside it.
+  - A value on a date that already has a closed row replaces it instead of failing on the unique key.
+### For the mobile team
+- See `docs/09` §14 (1.2.0) and the mobile handover document. The app should show the `ACCOUNT_LOCKED` `detail`, must not register for push, and must not call the scorecard.
+
 ## [1.26.0] - 2026-11-25
 ### Changed (Batch 8: Google Maps is the dashboard's only map provider)
 - **ADR-033 (revised 25 Nov, owner):** Google Maps only. MapLibre, MapTiler, Nominatim, `maplibre-gl`, `react-map-gl`, `terra-draw-maplibre-gl-adapter` and `VITE_MAP_PROVIDER` are removed. ADR-006's renderer, basemap and geocoding parts are superseded.

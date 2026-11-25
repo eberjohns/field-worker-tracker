@@ -32,6 +32,8 @@ class SheetDef:
     commit_order: int
     is_in_scope_phase_03: bool = True
     examples: list[dict[str, Any]] = field(default_factory=list)
+    # True: the template's rows are real values that a fresh import loads (not EXAMPLE rows).
+    rows_are_defaults: bool = False
 
 
 SHEET_REGISTRY: dict[str, SheetDef] = {
@@ -1032,6 +1034,7 @@ SHEET_REGISTRY: dict[str, SheetDef] = {
         description="Effective-dated settings values (overtime rates, provisions, grace periods).",
         primary_key=["setting_key", "country", "effective_from"],
         commit_order=13,
+        rows_are_defaults=True,
         is_in_scope_phase_03=True,
         columns=[
             ColumnDef(
@@ -1129,24 +1132,6 @@ SHEET_REGISTRY: dict[str, SheetDef] = {
                 "effective_from": "2026-01-01",
                 "status": "GIVEN_BY_CLIENT",
                 "description": "Default weekly rest day in KSA",
-            },
-            {
-                "setting_key": "ot2_weekdays",
-                "value": '["SUNDAY"]',
-                "unit": "list",
-                "country": "AE",
-                "effective_from": "2026-01-01",
-                "status": "GIVEN_BY_CLIENT",
-                "description": "Rest days qualifying for OT2 overtime in UAE",
-            },
-            {
-                "setting_key": "ot2_weekdays",
-                "value": '["FRIDAY"]',
-                "unit": "list",
-                "country": "SA",
-                "effective_from": "2026-01-01",
-                "status": "GIVEN_BY_CLIENT",
-                "description": "Rest days qualifying for OT2 overtime in KSA",
             },
             {
                 "setting_key": "standard_ot_divisor_hours",
