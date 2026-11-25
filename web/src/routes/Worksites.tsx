@@ -22,7 +22,8 @@ import {
   PowerOff,
 } from "lucide-react";
 import { MapContainer, PolygonEditor, PlaceSearch } from "../features/map/lazy";
-import type { Map as MapLibreMap } from "maplibre-gl";
+import type { MapPort } from "../features/map/port";
+import { BoundaryThumbnail } from "../features/map/BoundaryThumbnail";
 import SupervisorProposalsModal from "../components/jobs/SupervisorProposalsModal";
 import { AddWorksiteWizard } from "../components/worksites/AddWorksiteWizard";
 import { ensureOk, Modal, useDialogs, useToast } from "../ui";
@@ -98,7 +99,7 @@ export const Worksites: React.FC = () => {
 
   // Accommodation boundary modal
   const [drawingAccommodation, setDrawingAccommodation] = useState<AccommodationItem | null>(null);
-  const [mapInstance, setMapInstance] = useState<MapLibreMap | null>(null);
+  const [mapInstance, setMapInstance] = useState<MapPort | null>(null);
   const [savingAccommodationBoundary, setSavingAccommodationBoundary] = useState(false);
 
   // Edit Accommodation modal state
@@ -765,9 +766,12 @@ export const Worksites: React.FC = () => {
                       </td>
                       <td className="py-3.5 px-4">
                         {acc.has_boundary ? (
+                          <span className="inline-flex items-center gap-2">
+                            <BoundaryThumbnail polygon={acc.boundary_geojson} size={32} title={`Boundary of ${acc.accommodation_code}`} />
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
                             <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
                             Boundary Set
+                          </span>
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">

@@ -1,5 +1,5 @@
 # 006 - Map stack, tile provider and dependency policy
-Status: Accepted (version pins subject to the M3 compatibility gate)
+Status: Renderer, basemap, clustering and geocoding parts superseded by [ADR-033](033-google-maps-web-map-stack.md) (Google Maps only; MapLibre, MapTiler and Nominatim removed 25 Nov 2026). The dependency policy and the Turf choice still apply.
 Date: 2026-10-28
 
 ## Context

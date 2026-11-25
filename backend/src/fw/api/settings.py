@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fw.core.config import get_settings
 from fw.core.db import get_db
 from fw.core.errors import AppError
 from fw.modules.audit import AuditService
@@ -23,6 +24,9 @@ from fw.modules.settings import (
     CompanySettingUpdate,
     ConsentPolicyCreate,
     ConsentPolicyRead,
+    MapUsageIncrement,
+    MapUsageService,
+    MapUsageSummary,
     MatchedRuleExplanationRead,
     PublicHolidayCreate,
     PublicHolidayRead,
@@ -37,6 +41,29 @@ from fw.rules.lookups import STAFF_GRADE_DESCRIPTION
 from fw.rules.time_rules import WorkerContext
 
 router = APIRouter(tags=["settings"])
+
+
+# --- Google Maps usage (Batch 8, ADR-033) ---
+
+
+@router.post("/map-usage", status_code=status.HTTP_204_NO_CONTENT)
+async def record_map_usage(
+    payload: MapUsageIncrement,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> None:
+    """The browser reports a Google map it created or a place search it sent."""
+    await MapUsageService.record(session, get_settings().APP_ENV, payload.kind, payload.count)
+
+
+@router.get("/map-usage", response_model=MapUsageSummary)
+async def get_map_usage(
+    months: int = Query(6, ge=1, le=24),
+    current_user: User = Depends(require_role("ADMIN")),
+    session: AsyncSession = Depends(get_db),
+) -> MapUsageSummary:
+    """Map loads and place searches per month for this environment, with the soft limits."""
+    return await MapUsageService.summary(session, get_settings().APP_ENV, months)
 
 
 # --- Company Settings ---

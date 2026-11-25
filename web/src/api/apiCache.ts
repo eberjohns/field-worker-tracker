@@ -145,7 +145,8 @@ const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 export function isCacheBustingWrite(method: string | undefined, url: string, ok: boolean): boolean {
   if (!ok || !WRITE_METHODS.has((method ?? "GET").toUpperCase())) return false;
   if (!url.includes("/api/")) return false;
-  if (/\/api\/v1\/(auth\/|live\/stream-ticket)/.test(url)) return false;
+  // Auth, the live-stream ticket and the map usage counter change nothing a page shows.
+  if (/\/api\/v1\/(auth\/|live\/stream-ticket|map-usage)/.test(url)) return false;
   // Previews compute without saving (reassignment preview, import preview).
   return !/\/preview(\?|$)/.test(url);
 }

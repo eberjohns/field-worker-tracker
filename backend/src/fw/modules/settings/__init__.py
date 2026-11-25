@@ -1,6 +1,17 @@
 """Public interface for settings module."""
 
-from fw.modules.settings.models import CompanySettingValue, ConsentPolicy, PublicHoliday, TimeRule
+from fw.modules.settings.map_usage import (
+    MapUsageIncrement,
+    MapUsageService,
+    MapUsageSummary,
+)
+from fw.modules.settings.models import (
+    CompanySettingValue,
+    ConsentPolicy,
+    MapUsageCounter,
+    PublicHoliday,
+    TimeRule,
+)
 from fw.modules.settings.schemas import (
     CompanySettingRead,
     CompanySettingUpdate,
@@ -24,6 +35,10 @@ __all__ = [
     "ConsentPolicy",
     "ConsentPolicyCreate",
     "ConsentPolicyRead",
+    "MapUsageCounter",
+    "MapUsageIncrement",
+    "MapUsageService",
+    "MapUsageSummary",
     "MatchedRuleExplanationRead",
     "PublicHoliday",
     "PublicHolidayCreate",

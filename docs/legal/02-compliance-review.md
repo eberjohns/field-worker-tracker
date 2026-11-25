@@ -29,7 +29,7 @@ Prepared 30 Oct 2026 from public sources. **This is a working compliance review,
 | 6 | Breach handling | Runbook drafted (05), 72-hour target in both countries | Needs named incident owner | Company |
 | 7 | Impact assessment | DPIA drafted (04) | Needs sign-off | Counsel/DPO |
 | 8 | Records of processing | Data inventory drafted (04) | Keep updated | Company |
-| 9 | Processors and third parties | Hosting, push, email, map/tile/geocoding providers need data-processing terms; the map provider only sees the area viewed, never worker coordinates | **Contracts to verify/sign** | Company |
+| 9 | Processors and third parties | Hosting, push, email, map/tile/geocoding providers need data-processing terms; the map provider only sees the area viewed and search text, never worker coordinates (they are drawn as overlays in the browser). Dashboard map provider: Google Maps Platform only (ADR-033; Google Cloud data-processing terms; no storing geocoding content except place IDs; no reverse geocoding of worker positions) | **Contracts to verify/sign** | Company |
 | 10 | Cross-border transfers and residency | UAE: in-country regions plus any off-country backup subject to legal OK. KSA: plan in-Kingdom storage | **Needs decision (see 3)** | Company + counsel |
 | 11 | Registration, DPO | KSA registration and DPO threshold check at Saudi go-live; UAE DPO triggers undefined | At KSA go-live | Company |
 | 12 | Employee transparency | In-app notice plus a clause in the employment contract/handbook | **Contract clause needed** | HR + counsel |

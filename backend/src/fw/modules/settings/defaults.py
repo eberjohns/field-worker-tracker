@@ -58,6 +58,8 @@ DEFAULT_COMPANY_SETTINGS: list[tuple[str, str | None, Any, str | None]] = [
     ("clock_skew_tolerance_s", None, 120, "s"),
     ("event_future_tolerance_s", None, 300, "s"),
     ("event_max_age_days", None, 7, "days"),
+    ("map_loads_soft_limit_month", None, 7200, "per month"),
+    ("geocodes_soft_limit_month", None, 2400, "per month"),
     ("no_activity_alert_after_minutes", None, 60, "min"),
     ("stale_device_hours", None, 24, "h"),
     ("location_policy_version", None, 1, None),

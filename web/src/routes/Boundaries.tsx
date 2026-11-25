@@ -16,7 +16,8 @@ import {
   FileText,
 } from "lucide-react";
 import { MapContainer, PolygonEditor, PlaceSearch } from "../features/map";
-import { Map as MapLibreMap } from "maplibre-gl";
+import type { MapPort } from "../features/map/port";
+import { BoundaryThumbnail } from "../features/map/BoundaryThumbnail";
 import { ensureOk, Modal } from "../ui";
 
 interface QueueItem {
@@ -144,7 +145,7 @@ export const Boundaries: React.FC = () => {
 
   // Accommodation boundary modal
   const [drawingAccommodation, setDrawingAccommodation] = useState<QueueItem | null>(null);
-  const [mapInstance, setMapInstance] = useState<MapLibreMap | null>(null);
+  const [mapInstance, setMapInstance] = useState<MapPort | null>(null);
   const [savingBoundary, setSavingBoundary] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -537,9 +538,12 @@ export const Boundaries: React.FC = () => {
                 </td>
                 <td className="px-5 py-3.5 text-center">
                   {item.has_boundary ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      <CheckCircle2 className="h-3 w-3" />
-                      Boundary Set
+                    <span className="inline-flex items-center gap-2">
+                      <BoundaryThumbnail polygon={item.boundary_geojson} size={32} title={`Boundary of ${item.code}`} />
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <CheckCircle2 className="h-3 w-3" />
+                        Boundary Set
+                      </span>
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
@@ -619,6 +623,7 @@ export const Boundaries: React.FC = () => {
             <PolygonEditor
               map={mapInstance}
               initialPolygon={drawingAccommodation.boundary_geojson as GeoJSON.Polygon | null}
+              country={drawingAccommodation.country}
               onSave={handleSaveAccommodationBoundary}
               isSaving={savingBoundary}
             />

@@ -1,17 +1,19 @@
+// The map component pages render (ADR-033): a Google map from the pool (google/mapPool.ts),
+// handed to the page as a MapPort when ready. If the key is missing, refused or over its quota,
+// it shows "Map unavailable today" in place of the map; the rest of the page keeps working.
+
 import React, { useEffect, useRef, useState } from "react";
-import { Map as MapLibreMap, NavigationControl, setWorkerUrl } from "maplibre-gl";
-import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
-import "maplibre-gl/dist/maplibre-gl.css";
-import { AlertTriangle } from "lucide-react";
+import { MapPinOff } from "lucide-react";
+import type { MapPort } from "./port";
+import { googleConfig, loadGoogleMaps, mapFailure, onMapFailure, reportMapFailure, type MapFailure } from "./google/loader";
+import { acquireMap, releaseMap, type PooledMap } from "./google/mapPool";
+import { GoogleMapsAdapter } from "./google/GoogleMapsAdapter";
 
-// Ensure MapLibre Web Worker loads correctly in Vite development and production builds
-setWorkerUrl(maplibreWorkerUrl);
-
-interface MapContainerProps {
+export interface MapViewProps {
   initialCenter?: [number, number]; // [lng, lat]
   initialZoom?: number;
-  onMapReady?: (map: MapLibreMap) => void;
-  /** Called just before the map is destroyed (style switch or unmount). Use to null-out any stored map reference. */
+  onMapReady?: (map: MapPort) => void;
+  /** Called just before the map is handed back (unmount). Use to null-out any stored map reference. */
   onMapUnmount?: () => void;
   className?: string;
   /**
@@ -23,28 +25,27 @@ interface MapContainerProps {
 }
 
 const DEFAULT_CENTER: [number, number] = [55.2708, 25.2048]; // Dubai
-const FALLBACK_STYLE = {
-  version: 8,
-  sources: {
-    osm: {
-      type: "raster",
-      tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-      tileSize: 256,
-      attribution: "&copy; OpenStreetMap Contributors",
-    },
-  },
-  layers: [
-    {
-      id: "osm-layer",
-      type: "raster",
-      source: "osm",
-      minzoom: 0,
-      maxzoom: 19,
-    },
-  ],
-};
 
-export const MapContainer: React.FC<MapContainerProps> = ({
+export const MapUnavailable: React.FC<{ reason: MapFailure }> = ({ reason }) => (
+  <div
+    role="status"
+    className="absolute inset-0 z-30 flex items-center justify-center bg-slate-50 p-6 text-center"
+  >
+    <div className="max-w-sm space-y-2">
+      <MapPinOff className="mx-auto h-8 w-8 text-slate-400" />
+      <p className="text-sm font-semibold text-slate-800">
+        {reason === "not_configured" ? "Map not configured" : "Map unavailable today (usage limit reached)"}
+      </p>
+      <p className="text-xs text-slate-600">
+        {reason === "not_configured"
+          ? "The Google Maps key or Map ID is not set for this build (runbook 08)."
+          : "Google Maps refused this request (daily limit or key restriction). Everything else on this page still works; try the map again tomorrow or ask an Admin."}
+      </p>
+    </div>
+  </div>
+);
+
+export const MapContainer: React.FC<MapViewProps> = ({
   initialCenter = DEFAULT_CENTER,
   initialZoom = 14,
   onMapReady,
@@ -54,172 +55,69 @@ export const MapContainer: React.FC<MapContainerProps> = ({
   children,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<MapLibreMap | null>(null);
-  const currentCenterRef = useRef<[number, number]>(initialCenter);
-  const currentZoomRef = useRef<number>(initialZoom);
-  const [mapStyle, setMapStyle] = useState<"streets" | "satellite" | "osm">("satellite");
-  const apiKey = (import.meta as any).env?.VITE_MAP_API_KEY;
+  const portRef = useRef<GoogleMapsAdapter | null>(null);
+  const [failure, setFailure] = useState<MapFailure | null>(() => (googleConfig() ? mapFailure() : "not_configured"));
+  const [ready, setReady] = useState(false);
+  const startRef = useRef({ center: initialCenter, zoom: initialZoom });
 
-  const getStyleUrl = (style: "streets" | "satellite" | "osm"): any => {
-    if (style === "osm" || !apiKey) {
-      return FALLBACK_STYLE;
-    }
-    if (style === "satellite") {
-      return `https://api.maptiler.com/maps/satellite/style.json?key=${apiKey}`;
-    }
-    return `https://api.maptiler.com/maps/streets-v2/style.json?key=${apiKey}`;
-  };
+  useEffect(() => onMapFailure(setFailure), []);
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (failure) return;
+    let cancelled = false;
+    let pooled: PooledMap | null = null;
+    let observer: MutationObserver | null = null;
 
-    const initialStyleUrl = getStyleUrl(mapStyle);
-    const map = new MapLibreMap({
-      container: containerRef.current,
-      style: initialStyleUrl,
-      center: currentCenterRef.current,
-      zoom: currentZoomRef.current,
-      attributionControl: { compact: true },
-      maxTileCacheSize: 200,
-      cooperativeGestures,
-    });
-
-    map.addControl(new NavigationControl({ showCompass: true }), "top-right");
-
-    map.on("moveend", () => {
-      const c = map.getCenter();
-      currentCenterRef.current = [c.lng, c.lat];
-      currentZoomRef.current = map.getZoom();
-    });
-
-    map.on("error", (e) => {
-      console.warn("MapLibre error:", e);
-      if (mapStyle === "streets" && e?.error?.message?.includes("Failed to fetch")) {
-        setMapStyle("osm");
-      }
-    });
-
-    map.on("load", () => {
-      mapRef.current = map;
-      (window as any).__map = map;
-      map.resize();
-      setTimeout(() => map.resize(), 100);
-      setTimeout(() => map.resize(), 500);
-      if (onMapReady) {
-        onMapReady(map);
-      }
-    });
+    loadGoogleMaps()
+      .then((libs) => {
+        if (cancelled || !containerRef.current) return;
+        const cfg = googleConfig();
+        if (!cfg) return;
+        const { center, zoom } = startRef.current;
+        pooled = acquireMap(libs.maps, containerRef.current, cfg.mapId, {
+          center: { lng: center[0], lat: center[1] },
+          zoom,
+          gestureHandling: cooperativeGestures ? "cooperative" : "greedy",
+        });
+        // Google replaces the map with its own error box on quota or referrer errors.
+        const div = pooled.div;
+        observer = new MutationObserver(() => {
+          if (div.querySelector(".gm-err-container")) reportMapFailure("unavailable");
+        });
+        observer.observe(div, { childList: true, subtree: true });
+        const port = new GoogleMapsAdapter(libs, pooled.map);
+        portRef.current = port;
+        setReady(true);
+        onMapReady?.(port);
+      })
+      .catch(() => {
+        // loadGoogleMaps() already reported the failure; the panel shows.
+      });
 
     return () => {
-      // Notify parent BEFORE destroying the map so it can null-out any stored reference
-      // (e.g. PolygonEditor's map prop). This prevents Terra Draw from re-initializing
-      // against an already-destroyed map instance.
-      if (onMapUnmount) {
-        onMapUnmount();
+      cancelled = true;
+      observer?.disconnect();
+      if (portRef.current) {
+        onMapUnmount?.();
+        portRef.current.dispose();
+        portRef.current = null;
       }
-      map.remove();
-      mapRef.current = null;
+      if (pooled) releaseMap(pooled);
+      setReady(false);
     };
-  }, [mapStyle, apiKey]);
+    // The map is created once per mount; later prop changes move it (below), never rebuild it.
+  }, [failure]);
 
-  // If initialCenter changes (e.g. worksite data arrives after initial render), fly to it
+  // When the page's centre arrives after the first render (worksite data), move there.
   useEffect(() => {
-    if (mapRef.current && initialCenter) {
-      currentCenterRef.current = initialCenter;
-      currentZoomRef.current = initialZoom;
-      mapRef.current.flyTo({
-        center: initialCenter,
-        zoom: initialZoom,
-        essential: true,
-      });
-    }
+    startRef.current = { center: initialCenter, zoom: initialZoom };
+    if (ready) portRef.current?.flyTo(initialCenter, initialZoom);
   }, [initialCenter[0], initialCenter[1], initialZoom]);
-
-  const handleStyleChange = (nextStyle: "streets" | "satellite" | "osm") => {
-    if (nextStyle !== mapStyle) {
-      setMapStyle(nextStyle);
-    }
-  };
 
   return (
     <div className={`relative rounded-lg overflow-hidden border border-slate-200 ${className}`}>
-      {/* Map API Key Missing Prompt Banner */}
-      {!apiKey && (
-        <div className="absolute top-3 left-3 right-3 z-30 bg-amber-50 border border-amber-300 rounded-md p-3 text-xs text-amber-900 shadow-md flex items-start gap-2.5">
-          <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-          <div className="space-y-1">
-            <span className="font-semibold text-amber-950">
-              Map API Key Missing (VITE_MAP_API_KEY)
-            </span>
-            <p className="text-amber-800 leading-relaxed">
-              Using public OpenStreetMap fallback. For high-resolution satellite imagery and search
-              in Dubai/KSA:
-            </p>
-            <ol className="list-decimal list-inside space-y-0.5 text-amber-800">
-              <li>
-                Sign up for free at{" "}
-                <a
-                  href="https://cloud.maptiler.com"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="underline font-medium hover:text-amber-950"
-                >
-                  cloud.maptiler.com
-                </a>
-              </li>
-              <li>
-                Add <code className="bg-amber-100 px-1 py-0.5 rounded">VITE_MAP_API_KEY=your_key</code>{" "}
-                to <code className="bg-amber-100 px-1 py-0.5 rounded">web/.env.local</code>
-              </li>
-              <li>Restart Vite dev server</li>
-            </ol>
-          </div>
-        </div>
-      )}
-
-      {/* Satellite / Street Switcher Button */}
-      <div className="absolute top-3 left-3 z-20 flex items-center bg-white/95 backdrop-blur-sm border border-slate-300 rounded shadow-sm overflow-hidden text-xs font-medium">
-        <button
-          type="button"
-          onClick={() => handleStyleChange("satellite")}
-          className={`px-2.5 py-1.5 transition ${
-            mapStyle === "satellite"
-              ? "bg-indigo-600 text-white font-semibold"
-              : "text-slate-700 hover:bg-slate-100"
-          }`}
-        >
-          Satellite
-        </button>
-        <button
-          type="button"
-          onClick={() => handleStyleChange("streets")}
-          className={`px-2.5 py-1.5 border-l border-slate-200 transition ${
-            mapStyle === "streets"
-              ? "bg-indigo-600 text-white font-semibold"
-              : "text-slate-700 hover:bg-slate-100"
-          }`}
-        >
-          Vector Streets
-        </button>
-        <button
-          type="button"
-          onClick={() => handleStyleChange("osm")}
-          className={`px-2.5 py-1.5 border-l border-slate-200 transition ${
-            mapStyle === "osm"
-              ? "bg-indigo-600 text-white font-semibold"
-              : "text-slate-700 hover:bg-slate-100"
-          }`}
-          title="OpenStreetMap Standard Raster (Reliable fallback)"
-        >
-          OSM Streets
-        </button>
-      </div>
-
-      {/* Map Canvas */}
       <div ref={containerRef} className="w-full h-full" />
-
-      {/* Child Overlay Components (e.g. Toolbar, PlaceSearch) */}
-      {children}
+      {failure ? <MapUnavailable reason={failure} /> : children}
     </div>
   );
 };

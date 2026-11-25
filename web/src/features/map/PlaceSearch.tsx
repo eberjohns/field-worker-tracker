@@ -1,112 +1,84 @@
-import React, { useState } from "react";
-import { Map as MapLibreMap } from "maplibre-gl";
+import React, { useMemo, useState } from "react";
 import { Search, MapPin, Loader2 } from "lucide-react";
+import type { MapPort, PlaceResult } from "./port";
 
 interface PlaceSearchProps {
-  map: MapLibreMap | null;
+  map: MapPort | null;
 }
 
-interface PlaceResult {
-  place_name: string;
-  center: [number, number]; // [lng, lat]
-}
-
+/**
+ * Place search (ADR-033, owner 25 Nov): one geocode per press of Search (or Enter), never while
+ * typing. Picking a result only moves the map; nothing from the result is stored.
+ */
 export const PlaceSearch: React.FC<PlaceSearchProps> = ({ map }) => {
+  const service = useMemo(() => map?.placeSearch() ?? null, [map]);
   const [query, setQuery] = useState<string>("");
   const [results, setResults] = useState<PlaceResult[]>([]);
+  const [message, setMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isOpen, setIsOpen] = useState<boolean>(false);
-  const apiKey = (import.meta as any).env?.VITE_MAP_API_KEY;
 
-  const handleSearch = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!query.trim()) return;
-
+    if (!service || isLoading || query.trim().length < 2) return;
     setIsLoading(true);
     setIsOpen(true);
+    setMessage(null);
     try {
-      if (apiKey) {
-        const url = `https://api.maptiler.com/geocoding/${encodeURIComponent(
-          query.trim()
-        )}.json?key=${apiKey}&limit=5`;
-        const res = await fetch(url);
-        if (res.ok) {
-          const data = await res.json();
-          const features = data.features || [];
-          if (features.length > 0) {
-            setResults(
-              features.map((f: any) => ({
-                place_name: f.place_name,
-                center: f.center,
-              }))
-            );
-            return;
-          }
-        }
-      }
-
-      // Fallback to OpenStreetMap Nominatim (works worldwide including Kerala, India, Dubai without API key)
-      const nomUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-        query.trim()
-      )}&limit=5`;
-      const nomRes = await fetch(nomUrl, {
-        headers: { "Accept-Language": "en" },
-      });
-      if (nomRes.ok) {
-        const nomData = await nomRes.json();
-        setResults(
-          nomData.map((item: any) => ({
-            place_name: item.display_name,
-            center: [parseFloat(item.lon), parseFloat(item.lat)],
-          }))
-        );
-      }
+      const found = await service.search(query);
+      setResults(found);
+      if (found.length === 0) setMessage("No place found.");
     } catch (err) {
-      console.error("Geocoding search failed:", err);
+      setResults([]);
+      setMessage(err instanceof Error && /unavailable/i.test(err.message) ? err.message : "Search failed. Try again.");
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleSelectPlace = (place: PlaceResult) => {
-    if (map) {
-      map.flyTo({
-        center: place.center,
-        zoom: 16,
-        essential: true,
-      });
-    }
     setIsOpen(false);
+    if (!map) return;
+    if (place.bbox) map.fitBounds(place.bbox, { padding: 40, maxZoom: 17 });
+    else map.flyTo(place.center, 16);
   };
 
   return (
-    <div className="absolute top-3 left-64 z-20 w-72">
-      <form onSubmit={handleSearch} className="relative">
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search place worldwide (e.g. Dubai, Riyadh, Kerala)..."
-          className="w-full pl-8 pr-8 py-1.5 bg-white/95 backdrop-blur-sm border border-slate-300 rounded shadow-sm text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-        />
-        <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
-        {isLoading && (
-          <Loader2 className="absolute right-2.5 top-2 h-3.5 w-3.5 text-slate-400 animate-spin" />
-        )}
+    <div className="absolute top-3 left-3 sm:left-64 z-20 w-72 max-w-[calc(100%-1.5rem)]">
+      <form onSubmit={handleSubmit} className="flex items-stretch gap-1">
+        <div className="relative flex-1">
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Place or address (UAE / KSA)"
+            aria-label="Search place"
+            className="w-full pl-8 pr-2 py-1.5 bg-white/95 backdrop-blur-sm border border-slate-300 rounded shadow-sm text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          />
+          <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
+        </div>
+        <button
+          type="submit"
+          disabled={!service || isLoading || query.trim().length < 2}
+          className="px-2.5 py-1.5 rounded border border-indigo-600 bg-indigo-600 text-white text-xs font-semibold shadow-sm disabled:opacity-50 inline-flex items-center gap-1"
+        >
+          {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+          Search
+        </button>
       </form>
 
-      {/* Results dropdown */}
-      {isOpen && results.length > 0 && (
+      {isOpen && (results.length > 0 || message) && (
         <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-48 overflow-y-auto z-30">
-          {results.map((r, i) => (
+          {message && <p className="px-3 py-2 text-xs text-slate-600">{message}</p>}
+          {results.map((r) => (
             <button
-              key={i}
+              key={r.id}
               type="button"
               onClick={() => handleSelectPlace(r)}
               className="w-full text-left px-3 py-2 text-xs hover:bg-indigo-50 flex items-start gap-2 border-b border-slate-100 last:border-b-0"
             >
               <MapPin className="h-3.5 w-3.5 text-indigo-600 shrink-0 mt-0.5" />
-              <span className="text-slate-700 leading-tight line-clamp-2">{r.place_name}</span>
+              <span className="text-slate-700 leading-tight line-clamp-2">{r.label}</span>
             </button>
           ))}
         </div>
@@ -114,4 +86,3 @@ export const PlaceSearch: React.FC<PlaceSearchProps> = ({ map }) => {
     </div>
   );
 };
-

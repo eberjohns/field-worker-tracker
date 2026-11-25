@@ -1,6 +1,26 @@
 # Changelog
 All notable changes. Format: Keep a Changelog. Mobile-contract changes are also logged in `docs/09-mobile-sync-contract.md`.
 
+## [1.26.0] - 2026-11-25
+### Changed (Batch 8: Google Maps is the dashboard's only map provider)
+- **ADR-033 (revised 25 Nov, owner):** Google Maps only. MapLibre, MapTiler, Nominatim, `maplibre-gl`, `react-map-gl`, `terra-draw-maplibre-gl-adapter` and `VITE_MAP_PROVIDER` are removed. ADR-006's renderer, basemap and geocoding parts are superseded.
+  - New dependencies (owner-approved): `@googlemaps/js-api-loader` 2.1.3, `terra-draw-google-maps-adapter` 1.7.0, `@types/google.maps` 3.67.0 (dev).
+  - Keys only from `VITE_GOOGLE_MAPS_API_KEY` and `VITE_GOOGLE_MAPS_MAP_ID` (read at build time). Without them: "Map not configured".
+  - Runbook 08: billing, Maps JavaScript API plus Geocoding API, referrer restrictions (`localhost:5173`, the Render web URL), daily quotas of 300 map loads and 100 geocodes, a quota alert at 80 %, a budget alert, and a rebuild on Render after changing `VITE_` values.
+- **One map interface** (`web/src/features/map/port.ts`), with the Google implementation in `features/map/google/`.
+  - The script loads once, lazily, only on pages with a map.
+  - One map per page, pooled and reused across tabs, dialogs and in-app navigation. Markers (`AdvancedMarkerElement`) and polygons are updated in place. The Live Map doesn't reload the map on refresh or stream reconnect.
+  - Every map opens on the road map; satellite and hybrid come from Google's own control.
+  - Worker clusters use a small grid clusterer (`gridCluster.ts`); clicking a cluster zooms into it.
+- **Boundary editor:** Terra Draw with its Google adapter. The instant checks are in `geo.ts` (WKT to and from GeoJSON, holes, ring closing and orientation, 7 decimals, too few points, out of range, swapped longitude/latitude, self-crossing). The paste box also accepts `SRID=`, Z and single-polygon `MULTIPOLYGON` WKT.
+- **Boundary thumbnails:** lists and previews (Boundaries queue, accommodations, the worksite header) show a small SVG outline. The worksite header's **Show on map** opens the Boundary tab.
+- **Place search:** Google Geocoding, only when Search is pressed (or Enter). No autocomplete, no reverse geocoding, nothing stored. A refused search says so in the search box; the map stays.
+- **Failure panel:** if Google refuses the key or a quota is used up, the map area shows "Map unavailable today (usage limit reached)" and the rest of the page works.
+- **Usage counter:** the browser reports each map created and each search to `POST /api/v1/map-usage`. Settings > **System** (Admin) shows map loads and searches per month for this environment against soft limits (company settings, 7,200 and 2,400 a month), with a warning when one is reached. Migration 0028 adds `map_usage_counters` and the two settings.
+- **Backend:** the unused `MAP_STYLE_STREETS_URL`, `MAP_STYLE_SATELLITE_URL` and `MAP_API_KEY` settings are removed. Existing `.env` files with them still load.
+### Measured
+- A normal session on the demo data (Dashboard, Live Map with a refresh, Worksites, a worksite's Boundary tab with a map type switch, drawing and editing a boundary, one search, Live Map again, Settings > System) costs **1 Google script load, 1 map load and 1 geocode**.
+
 ## [1.25.0] - 2026-11-25
 ### Changed (Batch 9 step 4: reports in SQL, payroll draft in the background)
 - **Reports read only the columns they show.**
