@@ -1,9 +1,9 @@
 {
-  "version": "1.28.0",
+  "version": "1.30.0",
   "major": 1,
-  "minor": 28,
+  "minor": 30,
   "patch": 0,
-  "last_branch": "docs/mobile-handover-v1",
-  "last_commit": "34d8c27",
-  "updated_at": "2026-11-25T14:11:12.329582+00:00"
+  "last_branch": "fix/meeting-19nov-items",
+  "last_commit": "8393bcd",
+  "updated_at": "2026-11-25T14:47:52.577648+00:00"
 }

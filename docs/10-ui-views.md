@@ -97,9 +97,12 @@ Each widget links to the filtered list.
 ### 3.5 Planner (`/planner`)   (full design: `design/D1-planner.md`, `design/D2-leave-and-reassignment.md`)
 - **Roster** (default): workers down, days across (Mon-Sat plus Sunday), each cell a list of **site chips with hours** or a marker (SKIPPED holiday, WEEKLY_OFF, ON_LEAVE, TO_BE_COVERED, FREE). Row totals show allocated vs standard hours; filters by supervisor, engineer, group, staff type; compact and expanded modes; **export to Excel in the client's layout**.
 - **Coverage** view: job-centred (worksite > item > day cells with assigned/required, TO_BE_COVERED slots).
+- **Extra staff on leave** (19 Nov meeting item 5): a worker added in the Operational Planner (not from a template) who is on approved leave shows the same **TO_BE_COVERED / Leave Gap** label as a base-planned worker, tagged "Extra Staff", and appears in Staffing Gaps until covered. The cover picker leaves out workers on leave and workers already on a conflicting job that day.
+- **Export Assignments / Import Assignments** (Operational Planner header, Admin, Engineer, Superintendent; meeting item 6): export the week in view as .xlsx. The import takes the same file, runs **Check file** first (what would be added, what already exists, row errors), then **Import** adds only new assignments. Nothing existing is changed or removed. It replaces the old "Import Schedule" link to the Master Data Import, which has no assignments sheet.
 - **Year plan**: standing assignments by job item with date range and weekday pattern; the **workers side panel** lists workers with allocated hours this week/month against standard hours and leave, ranked by grade group (exact staff type first).
 - Assign by click or drag with a button alternative; warnings (over standard hours, weekly off, grade-group mismatch) in a confirmation dialog.
 - **Leave** and **temporary reassignment** open from any cell or slot; requests go to the Approvals inbox.
+- **Leave screen cover dropdowns** (record leave, bulk cover; 19 Nov meeting item 5): workers on leave, already covering another leave, or on a PERMANENT job in the dates are left out (`/leave-requests/cover-availability`). The **Off-Day Mismatch** warning shows only when the leave includes the cover's weekly off day; a different off day outside the leave dates doesn't matter.
 
 ### 3.6 Attendance   (daily table layout: `design/D3-time-rules-and-attendance-report.md`)
 **List** (`/attendance`): date range, supervisor, employee, review status, business status, flags. Columns: date, employee, planned vs actual first entry/last exit, break, worked, variation (signed), OT, assigned/completed, business chip, review chip, flags.
@@ -134,7 +137,7 @@ Banner on every change: "affects dates from <start date>; earlier days and appro
 Upload -> **Preview** (counts per sheet: create/update/unchanged, warnings, errors; filterable row table with stable codes) -> Commit -> Result summary; download error report; history of batches with rollback where allowed. Link to download the template.
 
 ### 3.12 Users, Devices and Audit (Admin)
-Users list (invite, resend, deactivate). A **Locked** badge shows on an account locked after 5 wrong passwords (hover: until when), with an **Unlock account** button next to **Reset to Default** (Batch 7, DEC-66). Devices list with sync lag and last seen, revoke. Audit log with filters.
+Users list (invite, resend, deactivate). Each row shows the person's name with the username (Tally ID) under it (19 Nov meeting item 7). A **Locked** badge shows on an account locked after 5 wrong passwords (hover: until when), with an **Unlock account** button next to **Reset to Default** (Batch 7, DEC-66). Devices list with sync lag and last seen, revoke. Audit log with filters.
 A mobile login refused with `DEVICE_MISMATCH` raises the Admin alert **Sign-in from another phone** (`DEVICE_MISMATCH_ATTEMPT`, one per worker per day, with the device model and the number of attempts), listed with the device and tracking alerts on the dashboard.
 
 ### 3.15 Documents (`/documents`)
@@ -144,6 +147,7 @@ Admin's expiry section (also visible read-only to other roles in scope): documen
 Near-real-time view of in-scope workers' **last known verified position** (not a continuous GPS stream; see `12-reports.md` section 4).
 - Map with streets/satellite toggle. Layers: worksite polygons and geofence circles (today's sites emphasised), accommodation polygons, **worker markers** coloured by state (ACTIVE / OFFLINE / tracking disabled) with a "last seen n min ago" label, accuracy circle on selection, clustering at low zoom.
 - Side list with search and filters (supervisor, group, zone, state, SGD); click a worker to centre the map and open a card: name, supervisor, today's assignments, last event and age, tracking state, link to today's attendance timeline.
+- **Scheduled** means scheduled work today, or a Base Planner template slot for today when no scheduled work exists for the worker that day (the phone does the same). Before 19 Nov meeting item 11 such workers showed as "Not Scheduled". The list refreshes from the live stream (debounced) as positions arrive.
 - Updates arrive over the SSE stream with a polling fallback; a connection indicator shows "live" or "refreshing every 30 s".
 - Each worker card shows **two ages**: the position's age (event time) and the device's last contact, so "last location 3 h ago, last contact 25 min ago" is distinguishable from a phone that has been offline for days (events may be uploaded a day or more later). Stale positions are visibly dimmed. Scope-filtered like everything else.
 

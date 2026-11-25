@@ -23,7 +23,7 @@ from fw.modules.identity import User, get_current_user
 from fw.modules.jobs import JobsService, Worksite
 from fw.modules.notifications.models import Alert
 from fw.modules.org import EmployeeDocument
-from fw.modules.scheduling import AccessScope
+from fw.modules.scheduling import AccessScope, unmaterialised_template_slots
 from fw.modules.scheduling.models import LeaveRequest, ReassignmentRequest, ScheduledWork
 
 logger = structlog.get_logger(__name__)
@@ -125,12 +125,24 @@ async def get_dashboard_summary(
     recorded_emp_ids = {a.employee_id for a in att_records}
     not_started_count = max(0, len(scheduled_emp_ids - recorded_emp_ids))
 
-    # 3. Live workers
+    # 3. Live workers. Like the Live Map, a worker planned today only by a Base Planner template
+    # counts as scheduled (19 Nov meeting item 11). Attendance counts above stay on scheduled
+    # work, which is what attendance is measured against.
+    live_scheduled_ids = set(scheduled_emp_ids)
+    for slot in await unmaterialised_template_slots(session, local_today, scoped_ids):
+        live_scheduled_ids.add(slot.employee_id)
+        today_assignments_by_emp.setdefault(slot.employee_id, []).append(
+            {
+                "worksite_id": str(slot.worksite_id),
+                "worksite_name": slot.worksite_name or "Unknown Worksite",
+                "assigned_hours": float(slot.assigned_hours),
+            }
+        )
     live_resp = await EventsService.get_live_positions(
         session=session,
         user=current_user,
         scoped_employee_ids=scoped_ids,
-        scheduled_employee_ids=scheduled_emp_ids,
+        scheduled_employee_ids=live_scheduled_ids,
         today_assignments_by_emp=today_assignments_by_emp,
         as_of=now,
     )

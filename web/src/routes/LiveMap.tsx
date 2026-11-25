@@ -132,6 +132,7 @@ export const LiveMap: React.FC = () => {
   // 2. Setup SSE stream with 30s polling fallback
   useEffect(() => {
     let isCancelled = false;
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
     const setupStream = async () => {
       try {
@@ -155,25 +156,17 @@ export const LiveMap: React.FC = () => {
           if (!isCancelled) setConnectionMode("LIVE");
         };
 
-        es.onmessage = (event) => {
-          try {
-            const payload = JSON.parse(event.data);
-            if (payload.type === "UPDATE" && payload.data) {
-              const updatedItem: LiveWorker = payload.data;
-              setWorkers((prev) => {
-                const idx = prev.findIndex((w) => w.employee_id === updatedItem.employee_id);
-                if (idx >= 0) {
-                  const next = [...prev];
-                  next[idx] = { ...next[idx], ...updatedItem };
-                  return next;
-                }
-                return [updatedItem, ...prev];
-              });
-            }
-          } catch (e) {
-            console.error("Failed to parse SSE payload", e);
-          }
+        // The server sends named events ("position", "state"), which onmessage never
+        // receives. A position carries no live state, so refetch the list (debounced) and
+        // let the server work out each worker's state.
+        const scheduleRefresh = () => {
+          if (refreshTimer) clearTimeout(refreshTimer);
+          refreshTimer = setTimeout(() => {
+            if (!isCancelled) fetchPositions();
+          }, 2000);
         };
+        es.addEventListener("position", scheduleRefresh);
+        es.addEventListener("state", scheduleRefresh);
 
         es.onerror = () => {
           console.warn("SSE connection error, falling back to 30s polling");
@@ -205,6 +198,7 @@ export const LiveMap: React.FC = () => {
 
     return () => {
       isCancelled = true;
+      if (refreshTimer) clearTimeout(refreshTimer);
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
         eventSourceRef.current = null;

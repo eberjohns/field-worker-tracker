@@ -1,5 +1,6 @@
 """Public interface for scheduling module."""
 
+from fw.modules.scheduling.day_plan import TemplateSlot, unmaterialised_template_slots
 from fw.modules.scheduling.events import (
     LeaveApprovedEvent,
     LeaveCancelledEvent,
@@ -79,6 +80,8 @@ from fw.modules.scheduling.service import SchedulingService
 from fw.modules.scheduling.worksite_supervisors import WorksiteSupervisorProposalService
 
 __all__: list[str] = [
+    "TemplateSlot",
+    "unmaterialised_template_slots",
     "AccessScope",
     "ApprovalsCounts",
     "ApprovalsInboxResponse",

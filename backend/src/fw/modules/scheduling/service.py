@@ -136,6 +136,7 @@ from fw.rules.scheduling import (
     validate_reassignment_notice,
 )
 from fw.rules.scheduling.blueprint import is_entry_matching_date, is_same_weekday
+from fw.rules.scheduling.leave import cover_weekly_off_affected
 from fw.rules.time_rules import (
     TimeRuleAppliesTo,
     TimeRuleDefinition,
@@ -1311,6 +1312,24 @@ class SchedulingService:
 
         candidate_ids = [emp.id for emp in employees]
         base_std_map = await self.get_employees_base_standard_hours(candidate_ids, t_date)
+        # Workers on approved leave that day are never offered (19 Nov meeting item 5).
+        on_leave_ids: set[UUID] = set()
+        if candidate_ids:
+            on_leave_ids = set(
+                (
+                    await self.session.execute(
+                        select(LeaveRequest.employee_id).where(
+                            LeaveRequest.employee_id.in_(candidate_ids),
+                            LeaveRequest.status == "APPROVED",
+                            LeaveRequest.is_active.is_(True),
+                            LeaveRequest.from_date <= t_date,
+                            LeaveRequest.to_date >= t_date,
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
 
         candidates: list[CandidateWorker] = []
         for emp in employees:
@@ -1413,7 +1432,7 @@ class SchedulingService:
                     staff_grade_description=emp.staff_grade_description,
                     weekly_off_day=emp.weekly_off_day,
                     standard_hours=base_std,
-                    is_on_leave=False,
+                    is_on_leave=emp.id in on_leave_ids,
                     is_budget_only=is_budget,
                     worked_at_site_recently=emp.id in recent_emp_ids,
                     shares_supervisor=is_same_site_group,
@@ -3754,8 +3773,8 @@ class SchedulingService:
     def _build_leave_response(leave: LeaveRequest) -> LeaveRequestResponse:
         emp_off = leave.employee.weekly_off_day if leave.employee else None
         cov_off = leave.cover_employee.weekly_off_day if leave.cover_employee else None
-        wo_mismatch = bool(
-            leave.cover_employee is not None and (emp_off or "").upper() != (cov_off or "").upper()
+        wo_mismatch = leave.cover_employee is not None and cover_weekly_off_affected(
+            leave.from_date, leave.to_date, emp_off, cov_off
         )
         return LeaveRequestResponse(
             id=leave.id,
@@ -5282,6 +5301,85 @@ class SchedulingService:
             (orig, d, item) for orig, d, item in (await self.session.execute(stmt)).all() if orig
         }
 
+    async def get_cover_unavailable(
+        self,
+        from_date: date,
+        to_date: date,
+        exclude_leave_id: UUID | None = None,
+    ) -> dict[UUID, str]:
+        """Workers who can't cover a leave over these dates, with the reason (meeting item 5).
+
+        - ON_LEAVE: approved or requested leave overlapping the dates;
+        - ALREADY_COVERING: named as cover on another overlapping open leave;
+        - ASSIGNED: a PERMANENT job on a date in the range, from scheduled work or a
+          template (a PERMANENT job fills the whole day; owner, 18-19 Nov).
+        """
+        out: dict[UUID, str] = {}
+        if to_date < from_date:
+            return out
+        open_statuses = ("APPROVED", "REQUESTED")
+        overlap = (
+            LeaveRequest.is_active.is_(True),
+            LeaveRequest.status.in_(open_statuses),
+            LeaveRequest.from_date <= to_date,
+            LeaveRequest.to_date >= from_date,
+        )
+        if exclude_leave_id is not None:
+            overlap = (*overlap, LeaveRequest.id != exclude_leave_id)
+
+        # Assigned: PERMANENT scheduled work, then PERMANENT template entries.
+        sw_rows = await self.session.execute(
+            select(ScheduledWork.employee_id)
+            .join(JobItem, ScheduledWork.job_item_id == JobItem.id)
+            .where(
+                ScheduledWork.status == "ACTIVE",
+                ScheduledWork.work_date >= from_date,
+                ScheduledWork.work_date <= to_date,
+                JobItem.deployment_type == "PERMANENT",
+            )
+            .distinct()
+        )
+        for (emp_id,) in sw_rows.all():
+            out[emp_id] = "ASSIGNED"
+        tmpl_rows = await self.session.execute(
+            select(BaseRosterEntry.employee_id, BaseRosterEntry.weekday_mask, BaseRosterTemplate)
+            .join(BaseRosterTemplate, BaseRosterEntry.template_id == BaseRosterTemplate.id)
+            .join(JobItem, BaseRosterTemplate.job_item_id == JobItem.id)
+            .where(
+                BaseRosterTemplate.is_active.is_(True),
+                BaseRosterTemplate.start_date <= to_date,
+                (BaseRosterTemplate.end_date.is_(None))
+                | (BaseRosterTemplate.end_date >= from_date),
+                JobItem.is_active.is_(True),
+                JobItem.deployment_type == "PERMANENT",
+            )
+        )
+        days = [
+            from_date + timedelta(days=i) for i in range(min((to_date - from_date).days + 1, 62))
+        ]
+        for emp_id, mask, tmpl in tmpl_rows.all():
+            if emp_id in out:
+                continue
+            for d in days:
+                if tmpl.start_date <= d and (tmpl.end_date is None or d <= tmpl.end_date):
+                    if is_entry_matching_date(mask or "", d):
+                        out[emp_id] = "ASSIGNED"
+                        break
+
+        covering = await self.session.execute(
+            select(LeaveRequest.cover_employee_id).where(
+                *overlap, LeaveRequest.cover_employee_id.is_not(None)
+            )
+        )
+        for (emp_id,) in covering.all():
+            if emp_id is not None:
+                out[emp_id] = "ALREADY_COVERING"
+
+        on_leave = await self.session.execute(select(LeaveRequest.employee_id).where(*overlap))
+        for (emp_id,) in on_leave.all():
+            out[emp_id] = "ON_LEAVE"
+        return out
+
     async def get_staffing_gaps(
         self,
         from_date: date,
@@ -5341,6 +5439,25 @@ class SchedulingService:
 
             # Existing active covers in the range, in one query.
             leave_covers = await self._active_cover_keys(leave_emp_ids, from_date, to_date)
+            seen_gap_keys: set[tuple[UUID, date, UUID]] = set()
+
+            # Extra staff (Operational Planner rows, not from a template) of workers on leave
+            # need cover too (19 Nov meeting item 5).
+            extra_stmt = (
+                select(ScheduledWork)
+                .where(
+                    ScheduledWork.employee_id.in_(leave_emp_ids),
+                    ScheduledWork.status == "ACTIVE",
+                    ScheduledWork.source.in_(("DIRECT", "EXCEPTION")),
+                    ScheduledWork.original_employee_id.is_(None),
+                    ScheduledWork.work_date >= from_date,
+                    ScheduledWork.work_date <= to_date,
+                )
+                .options(selectinload(ScheduledWork.job_item).selectinload(JobItem.worksite))
+            )
+            extra_by_emp: dict[UUID, list[ScheduledWork]] = defaultdict(list)
+            for sw in (await self.session.execute(extra_stmt)).scalars().all():
+                extra_by_emp[sw.employee_id].append(sw)
 
             for leave in approved_leaves:
                 emp = leave.employee
@@ -5352,12 +5469,20 @@ class SchedulingService:
 
                 while cur <= end:
                     dow = INT_TO_WEEKDAY[cur.weekday()]
+                    if is_same_weekday(emp.weekly_off_day, dow):
+                        cur += timedelta(days=1)
+                        continue
 
-                    # Find any template entry matching this worker
+                    # Find any template entry matching this worker (same rules as the planner:
+                    # monthly masks and the template's own dates)
                     for t, e in entries_by_emp.get(emp.id, []):
-                        if e.weekday_mask in ("ALL", dow):
+                        if t.start_date > cur or (t.end_date is not None and t.end_date < cur):
+                            continue
+                        if is_entry_matching_date(e.weekday_mask or "", cur):
                             # Check if already covered by an active operational shift
-                            if (emp.id, cur, t.job_item_id) not in leave_covers:
+                            key = (emp.id, cur, t.job_item_id)
+                            if key not in leave_covers and key not in seen_gap_keys:
+                                seen_gap_keys.add(key)
                                 days_to_go = (cur - today).days
                                 gaps.append(
                                     StaffingGapSlot(
@@ -5377,6 +5502,34 @@ class SchedulingService:
                                     )
                                 )
                     cur += timedelta(days=1)
+
+                for sw in extra_by_emp.get(emp.id, []):
+                    if not (leave.from_date <= sw.work_date <= leave.to_date):
+                        continue
+                    item = sw.job_item
+                    if not item or not item.worksite:
+                        continue
+                    key = (emp.id, sw.work_date, sw.job_item_id)
+                    if key in leave_covers or key in seen_gap_keys:
+                        continue
+                    seen_gap_keys.add(key)
+                    gaps.append(
+                        StaffingGapSlot(
+                            work_date=sw.work_date,
+                            job_item_id=sw.job_item_id,
+                            worksite_id=item.worksite_id,
+                            job_number=item.worksite.job_number,
+                            job_name=item.worksite.job_name,
+                            staff_grade_description=item.staff_grade_description,
+                            required_hours=sw.assigned_hours,
+                            original_employee_id=emp.id,
+                            original_employee_name=emp.name,
+                            reason=f"Approved {leave.leave_type} Leave (extra staff)",
+                            gap_type="LEAVE",
+                            leave_id=leave.id,
+                            days_to_go=(sw.work_date - today).days,
+                        )
+                    )
 
         # 3. Include uncovered WORKER_DEACTIVATED future cancelled shifts as staffing gaps
         deact_stmt = (

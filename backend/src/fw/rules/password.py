@@ -17,14 +17,19 @@ class PasswordPolicyViolation(Exception):
 
 def is_default_password_expired(
     must_change_password: bool,
-    user_created_at: datetime | None,
+    default_issued_at: datetime | None,
     current_time_utc: datetime,
     max_days: int = 7,
 ) -> bool:
-    """Return True if the user is still on the default password and has exceeded max_days."""
-    if not must_change_password or user_created_at is None:
+    """Return True if the user is still on the default password and has exceeded max_days.
+
+    `default_issued_at` is when the current default password was given: the last Admin reset
+    (`password_changed_at`), else the account's creation. Counting from creation alone locked
+    an old account again straight after a reset (19 Nov meeting item 7).
+    """
+    if not must_change_password or default_issued_at is None:
         return False
-    elapsed_seconds = (current_time_utc - user_created_at).total_seconds()
+    elapsed_seconds = (current_time_utc - default_issued_at).total_seconds()
     return elapsed_seconds > (max_days * 86400)
 
 

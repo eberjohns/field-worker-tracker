@@ -50,6 +50,10 @@ from fw.modules.scheduling import (
     ValidationReportRead,
     WorkerAllocationResponse,
 )
+from fw.modules.scheduling.assignments_io import (
+    export_assignments_xlsx,
+    import_assignments_xlsx,
+)
 
 router = APIRouter(tags=["scheduling"])
 
@@ -443,6 +447,27 @@ async def get_leave_taken_summary(
     )
 
 
+@router.get("/leave-requests/cover-availability")
+async def get_cover_availability(
+    from_date: date = Query(...),
+    to_date: date = Query(...),
+    exclude_leave_id: UUID | None = Query(
+        None, description="The leave being covered, so its own cover worker isn't excluded"
+    ),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> dict[str, dict[str, str]]:
+    """Workers who can't be picked as cover for these dates: `{unavailable: {employee_id: reason}}`.
+
+    Reasons: ON_LEAVE, ALREADY_COVERING, ASSIGNED (a PERMANENT job on a date in the range).
+    """
+    if (to_date - from_date).days > 366:
+        raise HTTPException(status_code=400, detail="The range can be at most 366 days.")
+    service = SchedulingService(session)
+    unavailable = await service.get_cover_unavailable(from_date, to_date, exclude_leave_id)
+    return {"unavailable": {str(k): v for k, v in unavailable.items()}}
+
+
 @router.get("/leave-requests/template.xlsx")
 async def download_leave_template(
     current_user: User = Depends(require_role("ADMIN")),
@@ -466,6 +491,12 @@ async def import_leaves_excel(
 ) -> dict[str, Any]:
     """Import leaves from Excel spreadsheet (Admin only)."""
     service = SchedulingService(session)
+    file_bytes = await _uploaded_file_bytes(request)
+    return await service.import_leaves_from_excel(file_bytes, current_user)
+
+
+async def _uploaded_file_bytes(request: Request) -> bytes:
+    """The uploaded file from a raw body or the first file part of a multipart form."""
     content_type = request.headers.get("content-type", "")
     body = await request.body()
     if not body:
@@ -489,8 +520,44 @@ async def import_leaves_excel(
                 elif isinstance(raw_payload, str):
                     file_bytes = raw_payload.encode()
                 break
+    return file_bytes
 
-    return await service.import_leaves_from_excel(file_bytes, current_user)
+
+@router.get("/operational-planner/assignments.xlsx", response_model=None)
+async def export_planner_assignments(
+    from_date: date = Query(...),
+    to_date: date = Query(...),
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERINTENDENT")),
+    session: AsyncSession = Depends(get_db),
+) -> Response:
+    """Job item assignments in the range (at most 92 days), on the user's worksites (DEC-57).
+
+    The same layout is accepted by the import below (19 Nov meeting item 6).
+    """
+    content = await export_assignments_xlsx(session, current_user, from_date, to_date)
+    filename = f"assignments_{from_date.isoformat()}_{to_date.isoformat()}.xlsx"
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/operational-planner/assignments/import")
+async def import_planner_assignments(
+    request: Request,
+    dry_run: bool = Query(True, description="Check only; nothing is written"),
+    current_user: User = Depends(require_role("ADMIN", "ENGINEER", "SUPERINTENDENT")),
+    session: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Add the sheet's assignments that don't exist yet, as planner shifts (DIRECT).
+
+    Existing assignments are never changed or removed. Each row is validated like a planner
+    edit; rows with errors are skipped and listed. Run with `dry_run=true` first.
+    """
+    content = await _uploaded_file_bytes(request)
+    result = await import_assignments_xlsx(session, current_user, content, dry_run)
+    return result.as_dict()
 
 
 @router.get("/leave-requests", response_model=list[LeaveRequestResponse])

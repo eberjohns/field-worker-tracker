@@ -47,7 +47,7 @@ Never write the values into a tracked file, a doc, a commit or a PR.
 | Where | How |
 |---|---|
 | Local | `web/.env.local` (git-ignored): `VITE_GOOGLE_MAPS_API_KEY=...` and `VITE_GOOGLE_MAPS_MAP_ID=...`, then restart `pnpm dev` |
-| Render (web service) | Environment → add `VITE_GOOGLE_MAPS_API_KEY` and `VITE_GOOGLE_MAPS_MAP_ID`, then **Manual Deploy → Clear build cache & deploy** |
+| Render (web service) | Environment → add `VITE_GOOGLE_MAPS_API_KEY` and `VITE_GOOGLE_MAPS_MAP_ID` (listed in `render.yaml` as `sync: false`, runbook 09), then **Manual Deploy → Clear build cache & deploy** |
 | Owner's naming | the owner may hand them over as `GOOGLE_MAPS_API_KEY` and `GOOGLE_MAPS_MAP_ID`; the web build reads them with the `VITE_` prefix |
 
 **`VITE_` variables are read at build time**, not run time. Vite writes them into the built files, so changing them on Render needs a rebuild and redeploy; a restart is not enough.

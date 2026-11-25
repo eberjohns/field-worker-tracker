@@ -487,6 +487,7 @@ export const AddWorksiteWizard: React.FC<AddWorksiteWizardProps> = ({
                   <option value="AE">UAE (AE)</option>
                   <option value="SA">Saudi Arabia (SA)</option>
                 </select>
+                <p className="mt-1 text-[11px] text-slate-500">Decides which country's time zone, public holidays, currency and pay rules apply. It doesn't limit who can see it.</p>
               </div>
               <div>
                 <label className={label} htmlFor="wz-start">

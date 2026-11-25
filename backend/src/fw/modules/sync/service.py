@@ -243,7 +243,7 @@ class SyncService:
         # Check default password expiry
         if is_default_password_expired(
             user.must_change_password,
-            user.created_at,
+            user.password_changed_at or user.created_at,
             now,
             max_days=default_password_max_days,
         ):

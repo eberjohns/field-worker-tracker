@@ -21,6 +21,7 @@ class UserRead(BaseModel):
     last_login_at: datetime | None = None
     locked_until: datetime | None = None
     failed_attempts: int = 0
+    employee_name: str | None = None
     version: int
 
 

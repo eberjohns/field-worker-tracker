@@ -248,6 +248,28 @@ def resolve_operational_cell(
         if direct.employee_id in [r.employee_id for r in resolved]:
             continue
 
+        if direct.employee_id in approved_leave_worker_ids:
+            # Extra staff on approved leave get the same label as base-planned workers
+            # (19 Nov meeting item 5). Once covered, the cover is shown instead (step 2).
+            if direct.employee_id in replacements_by_orig_worker:
+                continue
+            resolved.append(
+                ResolvedOperationalCellWorker(
+                    employee_id=direct.employee_id,
+                    assigned_hours=direct.assigned_hours,
+                    sequence=direct.sequence,
+                    display_type="TO_BE_COVERED",
+                    opacity_class="warning",
+                    original_employee_id=direct.employee_id,
+                    shift_id=direct.id,
+                    reason="Approved Leave - Cover Required",
+                    is_public_holiday=is_public_holiday,
+                    is_rest_day=False,
+                    tags=["Leave Gap", "Needs Cover", "Extra Staff"],
+                )
+            )
+            continue
+
         dir_off = is_same_weekday(off_days.get(direct.employee_id), dow)
         tags = ["Operational Shift"]
         if is_public_holiday:

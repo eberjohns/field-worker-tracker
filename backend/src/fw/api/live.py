@@ -28,7 +28,7 @@ from fw.modules.events.live_publisher import (
 from fw.modules.identity import User, get_current_user
 from fw.modules.jobs import Worksite
 from fw.modules.org import Group, Zone
-from fw.modules.scheduling import AccessScope
+from fw.modules.scheduling import AccessScope, unmaterialised_template_slots
 from fw.modules.scheduling.models import ScheduledWork
 
 logger = structlog.get_logger(__name__)
@@ -206,6 +206,35 @@ async def get_live_positions(
                 "zone_name": z_name,
             }
         )
+
+    # 4b. Workers planned today only by a Base Planner template (no scheduled work row yet) are
+    # scheduled too, as on the phone (19 Nov meeting item 11).
+    slots = await unmaterialised_template_slots(session, local_today)
+    if slots:
+        group_ids = {s.group_id for s in slots if s.group_id}
+        zone_ids = {s.zone_id for s in slots if s.zone_id}
+        group_names: dict[UUID, str] = {}
+        zone_names: dict[UUID, str] = {}
+        if group_ids:
+            rows = await session.execute(
+                select(Group.id, Group.name).where(Group.id.in_(group_ids))
+            )
+            group_names = {gid: gname for gid, gname in rows.all()}
+        if zone_ids:
+            rows = await session.execute(select(Zone.id, Zone.name).where(Zone.id.in_(zone_ids)))
+            zone_names = {zid: zname for zid, zname in rows.all()}
+        for slot in slots:
+            scheduled_employee_ids.add(slot.employee_id)
+            today_assignments_by_emp.setdefault(slot.employee_id, []).append(
+                {
+                    "worksite_id": str(slot.worksite_id),
+                    "worksite_name": slot.worksite_name or "Unknown Worksite",
+                    "assigned_hours": float(slot.assigned_hours),
+                    "group_id": slot.group_id,
+                    "group_name": group_names.get(slot.group_id) if slot.group_id else None,
+                    "zone_name": zone_names.get(slot.zone_id) if slot.zone_id else None,
+                }
+            )
 
     # 5. Query live positions
     return await EventsService.get_live_positions(
